@@ -278,5 +278,5 @@ if __name__ == "__main__":
 
     # print(result)
 
-    # asyncio.run(extractor.extract_persona_vector(trait='sarcastic'))
+    asyncio.run(extractor.extract_persona_vector(trait='sarcastic'))
     extractor.compute_persona_vector('sarcastic')
