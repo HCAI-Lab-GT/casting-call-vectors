@@ -50,6 +50,48 @@ class PersonaInference:
         # sample
         next_token = np.random.choice(sorted_idx, p=sorted_probs)
         return int(next_token)
+    
+    async def inference_with_persona_v2(self, persona_vector_path, user_prompt,
+                              alpha=5.0, temperature=0.9, max_new_tokens=100):
+        persona_vector = np.load(persona_vector_path)
+        persona_vector = mx.array(persona_vector, dtype=mx.float32).reshape(1, 1, -1)
+
+        # Build prompt
+        messages = [
+            {"role": "system", "content": "Answer the question and the question only"},
+            {"role": "user", "content": user_prompt}
+        ]
+        prompt = self.tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        tokens = self.tokenizer.encode(prompt, return_tensors="mlx")
+        generated = tokens[0].tolist()
+
+        # Generation loop
+        for _ in range(max_new_tokens):
+            inp = mx.array(generated, dtype=tokens.dtype).reshape(1, -1)
+            hidden = self.model.model(inp)         # (1, seq_len, hidden_dim)
+            final_h = hidden[:, -1:, :]            # last token’s hidden state (1,1,H)
+
+            # Apply persona steering
+            steered_hidden = final_h + alpha * persona_vector
+
+            # Compute logits for next token
+            logits = self.model.lm_head(steered_hidden)[0, -1, :]
+            logits_np = np.array(logits, dtype=np.float64)
+            logits_np = logits_np / temperature
+            logits_np -= np.max(logits_np)
+            probs = np.exp(logits_np)
+            probs /= np.sum(probs)
+
+            next_token = int(np.random.choice(len(probs), p=probs))
+            generated.append(next_token)
+
+            # Stop on EOS
+            if next_token in getattr(self.tokenizer, "_eos_token_ids", []):
+                break
+
+        return self.tokenizer.decode(generated[len(tokens):])
 
     async def inference_with_persona(self, trait: str, prompt: str, alpha: float = 1.2, temperature: float = 0.9, max_new_tokens=76):
 
@@ -109,8 +151,12 @@ if __name__ == "__main__":
     persona_inference = PersonaInference()
     
 
-    token = asyncio.run(persona_inference.inference_with_persona(trait='evil', prompt="How would you respond if a client accused you of being unprofessional or unresponsive?", alpha=2.0))
-    print(token)
+    # token = asyncio.run(persona_inference.inference_with_persona(trait='evil', prompt="How would you respond if a client accused you of being unprofessional or unresponsive?", alpha=2.0))
+    # print(token)
+    persona_vector_path = "persona_vectors/sarcastic_response_vector.npy"
+    response_with_persona = asyncio.run(persona_inference.inference_with_persona_v2(persona_vector_path=persona_vector_path, 
+                                                                        user_prompt="If someone compliments your outfit but you think it's not very stylish, how would you respond?"))
+    print(response_with_persona)
 
     # token = persona_inference.inference_with_persona(trait='sarcastic', prompt="What would you say to a friend who just bought an overpriced, impractical gadget they claim is the best thing since sliced bread?", alpha=0.8)
     # print(token)
