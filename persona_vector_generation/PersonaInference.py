@@ -3,160 +3,158 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 import asyncio
 
-import mlx.core as mx
-from mlx_lm import load
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 import json
 from pathlib import Path
 from data_generation.TraitGenerator import TraitGenerator
 from persona_vector_generation.ActivationExtractor import ActivationExtractor
 import numpy as np
+from tqdm import tqdm
 
 
 class PersonaInference:
-
-    def __init__(self, model_id: str = "mlx-community/Qwen2.5-7B-Instruct-4bit"):
+    def __init__(self, trait: str, model_id: str = "Qwen/Qwen2.5-32B-Instruct", trait_file: str = None):
         self.model_id = model_id
-        self.model, self.tokenizer = load(model_id)
-        print(self.tokenizer._eos_token_ids)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            device_map="auto" if torch.cuda.is_available() else None,
+            output_hidden_states=True
+        )
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        if not torch.cuda.is_available():
+            print('No cuda avail!')
+            self.model = self.model.to(self.device)
+        
+        if trait_file is not None:
+            with open(trait_file, 'r') as f:
+                trait_data = json.load(f)
+            self.persona_vector = np.array(trait_data['persona_vector'])
+        else:
+            persona_extractor = ActivationExtractor(self.model, self.tokenizer, model_id=self.model_id)
+            self.persona_vector, _, _ = asyncio.run(persona_extractor.extract_persona_vector(trait))
+        
+        print("EOS token IDs:", self.tokenizer.eos_token_id)
+        self.eos_token_ids = [self.tokenizer.eos_token_id] if isinstance(self.tokenizer.eos_token_id, int) else self.tokenizer.eos_token_id
+
     
     def stable_softmax(self, x, temperature=1.0):
+        """Compute stable softmax using PyTorch"""
+        x = torch.from_numpy(x) if isinstance(x, np.ndarray) else x
         x = x / temperature
-        x = x - mx.max(x)  # <-- this prevents overflow
-        exp_x = mx.exp(x)
-        return exp_x / mx.sum(exp_x)
-    
-    def top_p_sample(self, logits, temperature=0.9, top_p=0.9):
-        # convert to numpy
-        logits = np.array(logits, dtype=np.float64)
-        logits /= temperature
-        logits -= np.max(logits)
+        x = x - torch.max(x)  # prevent overflow
+        exp_x = torch.exp(x)
+        return (exp_x / torch.sum(exp_x)).numpy()
 
-        probs = np.exp(logits)
-        probs /= np.sum(probs)
+    def top_p_sample(self, logits, top_p=0.9, temperature=1.0): 
+        # Calculate probabilities from logits
+        logits = logits / temperature
+        probs = torch.nn.functional.softmax(logits, dim=-1)
 
-        # sort tokens by probability
-        sorted_idx = np.argsort(probs)[::-1]
-        sorted_probs = probs[sorted_idx]
+        # Sort probabilities in descending order
+        sorted_probs, sorted_indices = torch.sort(probs, descending=True)
+        cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
 
-        # cumulative distribution
-        cdf = np.cumsum(sorted_probs)
-        cutoff = np.searchsorted(cdf, top_p) + 1
-
-        # keep only top_p portion
-        sorted_idx = sorted_idx[:cutoff]
-        sorted_probs = sorted_probs[:cutoff]
-        sorted_probs /= np.sum(sorted_probs)
-
-        # sample
-        next_token = np.random.choice(sorted_idx, p=sorted_probs)
-        return int(next_token)
-    
-    async def inference_with_persona_v2(self, persona_vector_path, user_prompt,
-                              alpha=5.0, temperature=0.9, max_new_tokens=100):
-        persona_vector = np.load(persona_vector_path)
-        persona_vector = mx.array(persona_vector, dtype=mx.float32).reshape(1, 1, -1)
-
-        # Build prompt
-        messages = [
-            {"role": "system", "content": "Answer the question and the question only"},
-            {"role": "user", "content": user_prompt}
-        ]
-        prompt = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-        tokens = self.tokenizer.encode(prompt, return_tensors="mlx")
-        generated = tokens[0].tolist()
-
-        # Generation loop
-        for _ in range(max_new_tokens):
-            inp = mx.array(generated, dtype=tokens.dtype).reshape(1, -1)
-            hidden = self.model.model(inp)         # (1, seq_len, hidden_dim)
-            final_h = hidden[:, -1:, :]            # last token’s hidden state (1,1,H)
-
-            # Apply persona steering
-            steered_hidden = final_h + alpha * persona_vector
-
-            # Compute logits for next token
-            logits = self.model.lm_head(steered_hidden)[0, -1, :]
-            logits_np = np.array(logits, dtype=np.float64)
-            logits_np = logits_np / temperature
-            logits_np -= np.max(logits_np)
-            probs = np.exp(logits_np)
-            probs /= np.sum(probs)
-
-            next_token = int(np.random.choice(len(probs), p=probs))
-            generated.append(next_token)
-
-            # Stop on EOS
-            if next_token in getattr(self.tokenizer, "_eos_token_ids", []):
-                break
-
-        return self.tokenizer.decode(generated[len(tokens):])
-
-    async def inference_with_persona(self, trait: str, prompt: str, alpha: float = 1.2, temperature: float = 0.9, max_new_tokens=76):
-
-        persona_extractor = ActivationExtractor(self.model, self.tokenizer, model_id=self.model_id)
-
-        loaded_vector_map = persona_extractor.load_persona_data(trait)
-        if loaded_vector_map:
-            persona_vector = loaded_vector_map[0]
-        else:
-            persona_vector, _, _ = await persona_extractor.extract_persona_vector(trait)
+        # Find the cutoff index - keep tokens until cumulative probability exceeds top_p
+        # Shift cumulative_probs by 1 to include at least the first token
+        cutoff_mask = cumulative_probs - sorted_probs <= top_p
         
+        # Ensure at least one token is included
+        cutoff_mask[0] = True
+        
+        # Get nucleus probabilities and renormalize
+        nucleus_probs = sorted_probs.clone()
+        nucleus_probs[~cutoff_mask] = 0.0
+        nucleus_probs = nucleus_probs / nucleus_probs.sum()
+
+        # Sample from the nucleus
+        sampled_index = torch.multinomial(nucleus_probs, num_samples=1)
+
+        # Map back to the original indices
+        original_index = sorted_indices.gather(-1, sampled_index)
+
+        return original_index.item()  # Convert tensor to integer
+
+    def inference_with_persona(self, prompt: str, alpha: float = 2, temperature: float = 1, max_new_tokens=200):
         messages = [
-            {'role': "system", "content": "Only respond to the question at hand and simply provide an answer to the question."},
             {"role": "user", "content": prompt}
         ]
 
-        prompt = self.tokenizer.apply_chat_template(
+        formatted_prompt = self.tokenizer.apply_chat_template(
             messages,
             tokenize=False,
             add_generation_prompt=True
         )
 
-        tokens = self.tokenizer.encode(prompt, return_tensors="mlx")
-        generated = tokens[0].tolist()
+        # Tokenize
+        inputs = self.tokenizer(formatted_prompt, return_tensors="pt")
+        input_ids = inputs['input_ids'].to(self.device)
+        generated = input_ids[0].tolist()
 
-        persona_reshaped = persona_vector.reshape(1, 1, -1)
+        # Convert persona vector to torch tensor
+        persona_tensor = torch.from_numpy(self.persona_vector).to(self.device).to(
+            torch.float16 if torch.cuda.is_available() else torch.float32
+        )
+        persona_reshaped = persona_tensor.reshape(1, 1, -1)
 
-        for _ in range(max_new_tokens):
+        # Get EOS token(s)
+
+        for _ in tqdm(range(max_new_tokens), desc="Generating with persona steering"):
+
+            if alpha == 0:
+                # Standard generation without persona steering
+                with torch.no_grad():
+                    outputs = self.model(
+                        input_ids=torch.tensor([generated], dtype=torch.long).to(self.device)
+                    )
+                logits = outputs.logits[0, -1, :]
+
+                # Convert to numpy for sampling
+                # logits_np = logits.cpu().detach().numpy().astype(np.float64)
+
+                # Sample next token
+                next_token = self.top_p_sample(logits, temperature=temperature, top_p=0.99)
+                generated.append(next_token)
+
+                if next_token in self.eos_token_ids:
+                    break
+                continue
             
-            inputs = mx.array(generated, dtype=tokens.dtype).reshape(1, -1)
-            outputs = self.model.model(inputs)
-            final_activation = outputs[:, -1, :]
+            # Convert to tensor and forward pass
+            input_tensor = torch.tensor([generated], dtype=torch.long).to(self.device)
             
+            with torch.no_grad():
+                outputs = self.model(
+                    input_ids=input_tensor,
+                    output_hidden_states=True
+                )
+            
+            # Get final hidden state
+            final_activation = outputs.hidden_states[-1][:, -1, :]
+            
+            # Apply persona steering
             steered_hidden = final_activation + alpha * persona_reshaped
 
+            # Get logits from language model head
             logits = self.model.lm_head(steered_hidden)[0, -1, :]
 
-            logits_np = np.array(logits, dtype=np.float64)
+            # Convert to numpy for sampling
+            logits_np = logits.cpu().detach().numpy().astype(np.float64)
 
-            logits_np = logits_np / temperature
-            logits_np = logits_np - np.max(logits_np)
-            exp_x = np.exp(logits_np)
-            probs = exp_x / np.sum(exp_x)
-            probs = np.nan_to_num(probs)
-            probs = probs / np.sum(probs) 
-
-            next_token = self.top_p_sample(logits_np, temperature=temperature, top_p=0.9)
+            # Sample next token
+            next_token = self.top_p_sample(logits, temperature=temperature, top_p=0.99)
             generated.append(next_token)
 
-            if next_token in self.tokenizer._eos_token_ids:
+            if next_token in self.eos_token_ids:
                 break
 
-        return self.tokenizer.decode(generated[len(tokens):])
+        # Decode only the generated part (skip the input)
+        return self.tokenizer.decode(generated[len(input_ids[0]):], skip_special_tokens=True)
 
         
 if __name__ == "__main__":
-    persona_inference = PersonaInference()
-    
-
-    # token = asyncio.run(persona_inference.inference_with_persona(trait='evil', prompt="How would you respond if a client accused you of being unprofessional or unresponsive?", alpha=2.0))
-    # print(token)
-    persona_vector_path = "persona_vectors/sarcastic_response_vector.npy"
-    response_with_persona = asyncio.run(persona_inference.inference_with_persona_v2(persona_vector_path=persona_vector_path, 
-                                                                        user_prompt="If someone compliments your outfit but you think it's not very stylish, how would you respond?"))
-    print(response_with_persona)
-
-    # token = persona_inference.inference_with_persona(trait='sarcastic', prompt="What would you say to a friend who just bought an overpriced, impractical gadget they claim is the best thing since sliced bread?", alpha=0.8)
-    # print(token)
+    persona_inference = PersonaInference(trait='sarcastic', trait_file='persona_vectors/sarcastic_persona_vector.json')
+    token = asyncio.run(persona_inference.inference_with_persona(prompt="Hey do you like my hat", alpha=0.5, temperature=0.8, max_new_tokens=100))
+    print(token)
