@@ -8,6 +8,7 @@ from typing import List, Tuple, Dict, Optional
 import os
 from openai import OpenAI
 import re
+from TraitPair import TraitPair
 
 class PersonaDataset:
 
@@ -112,6 +113,29 @@ class PersonaDataset:
         filepath = self.save_dataset_to_json()
         
         return pos_neg_pairs, questions, evaluation_prompt, filepath
+    
+    def extract_pos_neg_question_pairs(self):
+        """
+        Extract pairs of (positive, negative, question) from trait data.
+        Returns a list of objects with pos, neg, and question attributes.
+        """
+        from collections import namedtuple
+        
+        Pair = namedtuple('Pair', ['pos', 'neg', 'question'])
+        pairs = []
+        
+        
+        # Create pairs by pairing each instruction pair with each question
+        for instruction_pair in self.positive_negative_pairs:
+            for question in self.questions:
+                pair = Pair(
+                    pos=instruction_pair[0],
+                    neg=instruction_pair[1],
+                    question=question
+                )
+                pairs.append(pair)
+        
+        return pairs
     
     def save_dataset_to_json(self, filepath: str = "./persona_dataset/"):
         filepath += f"{self.trait}_dataset.json"
