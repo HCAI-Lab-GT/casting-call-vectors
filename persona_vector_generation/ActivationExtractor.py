@@ -12,6 +12,8 @@ import numpy as np
 import dill as pickle
 from tqdm import tqdm
 
+
+
 class ActivationExtractor:
     def __init__(self, model = None, tokenizer = None, model_id: str='Qwen/Qwen2.5-7B-Instruct'):
         if model is not None and tokenizer is not None:

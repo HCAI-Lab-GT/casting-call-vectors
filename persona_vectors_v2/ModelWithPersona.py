@@ -1,4 +1,5 @@
-import tqdm
+import asyncio
+from tqdm import tqdm
 from Dataset import PersonaDataset
 import json
 from pathlib import Path
@@ -10,7 +11,7 @@ from typing import List, Tuple, Dict, Optional
 import os
 from openai import OpenAI
 import re
-import datetime
+from datetime import datetime
 
 class ModelWithPersona:
 
@@ -28,7 +29,6 @@ class ModelWithPersona:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         if not torch.cuda.is_available() :
             self.model = self.model.to(self.device)
-        self.target_model_id = target_model_id
         self.eos_token_ids = [self.tokenizer.eos_token_id] if isinstance(self.tokenizer.eos_token_id, int) else self.tokenizer.eos_token_id
         _, _ = self.extract_persona_vector()
         self.save_initialization_to_json()
@@ -151,7 +151,7 @@ class ModelWithPersona:
         hidden_activation_sum = None
         count = 0
 
-        for _ in tqdm(range(max_new_tokens), desc="Generating with persona steering"):
+        for _ in tqdm(range(max_new_tokens), desc="Generating Prompt and Response Average"):
             input_tensor = torch.tensor([generated], dtype=torch.long).to(self.device)
             
             with torch.no_grad():
@@ -296,5 +296,5 @@ class ModelWithPersona:
 if __name__ == "__main__":
 
     dataset = PersonaDataset.load_dataset_from_json(trait="sarcastic")
-    model_with_persona = ModelWithPersona(target_model_id="Qwen/Qwen2.5-32B-Instruct", dataset=dataset, layer=14)
+    model_with_persona = ModelWithPersona(target_model_id="Qwen/Qwen2.5-7B-Instruct", dataset=dataset, layer=14)
 
