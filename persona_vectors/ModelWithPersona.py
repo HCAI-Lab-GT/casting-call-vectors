@@ -95,7 +95,7 @@ class ModelWithPersona:
     def save_initialization_to_json(self, filepath: str = "./model_with_persona/"):
         """Save the persona vectors and initialization config to JSON"""
         
-        filepath += f"{self.dataset.trait}_persona_initialization.json"
+        filepath += f"{self.dataset.trait}_persona_initialization_{self.target_model_id}.json"
         
         # Convert tensors to lists for JSON serialization
         initialization_data = {
@@ -105,6 +105,7 @@ class ModelWithPersona:
             "device": self.device,
             "prompt_persona_vector": self.prompt_persona_vector.tolist(),
             "response_persona_vector": self.response_persona_vector.tolist(),
+            "response_average_all_layers": self.response_persona_vector_all_layers.tolist(),
             "prompt_persona_vector_shape": list(self.prompt_persona_vector.shape),
             "response_persona_vector_shape": list(self.response_persona_vector.shape),
             "created_at": datetime.now().isoformat(),
@@ -121,6 +122,54 @@ class ModelWithPersona:
         
         print(f"✅ Initialization saved to: {filepath}")
         return filepath
+    @classmethod
+    def load_from_json(cls, filepath: str):
+        """Load ModelWithPersona from a saved JSON file"""
+        
+        # Load the JSON data
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+        
+        print(f"Loading ModelWithPersona from: {filepath}")
+        print(f"Original trait: {data.get('trait', 'Unknown')}")
+        print(f"Created: {data.get('created_at', 'Unknown')}")
+        
+        # Create instance without running extract_persona_vector
+        instance = cls.__new__(cls)  # Create instance without calling __init__
+        
+        # Set basic attributes
+        instance.target_model_id = data["target_model_id"]
+        instance.layer_steering = data["layer_steering"]
+        instance.device = "cuda" if torch.cuda.is_available() else "cpu"  # Use current device
+        
+        # Load model and tokenizer
+        print(f"Loading model: {instance.target_model_id}")
+        instance.tokenizer = AutoTokenizer.from_pretrained(instance.target_model_id)
+        instance.model = AutoModelForCausalLM.from_pretrained(
+            instance.target_model_id,
+            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            device_map="auto" if torch.cuda.is_available() else None
+        )
+        
+        if not torch.cuda.is_available():
+            instance.model = instance.model.to(instance.device)
+        
+        instance.eos_token_ids = [instance.tokenizer.eos_token_id] if isinstance(instance.tokenizer.eos_token_id, int) else instance.tokenizer.eos_token_id
+        
+        # Load persona vectors from JSON
+        instance.prompt_persona_vector = torch.tensor(data["prompt_persona_vector"]).to(instance.device)
+        instance.response_persona_vector = torch.tensor(data["response_persona_vector"]).to(instance.device)
+        
+        # Set dataset to None (since we're loading from JSON)
+        dataset_trait = data["dataset_info"]["trait"]
+        dataset = PersonaDataset.load_dataset_from_json(trait=dataset_trait)
+        instance.dataset = dataset
+        
+        print(f"✅ ModelWithPersona loaded successfully!")
+        print(f"Prompt persona vector shape: {instance.prompt_persona_vector.shape}")
+        print(f"Response persona vector shape: {instance.response_persona_vector.shape}")
+        
+        return instance
     
     def extract_hidden_layer_activations(self, system_prompt: str, user_prompt: str, layer: int = -1):
         messages = [
@@ -215,6 +264,7 @@ class ModelWithPersona:
         prompt_last_activation = outputs.hidden_states[self.layer_steering][:, -1, :]
 
         hidden_activation_sum = None
+        hidden_activation_sum_per_layer = None
         count = 0
 
         # Optimization #1: Remove tqdm (no progress bar in this loop)
@@ -233,10 +283,15 @@ class ModelWithPersona:
             past_key_values = outputs.past_key_values  # Optimization #3: Update cache
             final_activation = outputs.hidden_states[self.layer_steering][:, -1, :]
 
+
+            # print(f"Computed Final Activation - Iteration {iteration}")
+
             if hidden_activation_sum is None:
                 hidden_activation_sum = torch.zeros_like(final_activation)
+                hidden_activation_sum_per_layer = torch.zeros_like(all_layers_last_token)
             
             hidden_activation_sum += final_activation
+            hidden_activation_sum_per_layer += all_layers_last_token
             count += 1
 
             logits = outputs.logits[0, -1, :]
@@ -255,7 +310,7 @@ class ModelWithPersona:
                                           device=self.device, 
                                           dtype=torch.float16 if torch.cuda.is_available() else torch.float32)
         
-        return prompt_last_activation, response_average
+        return prompt_last_activation, response_average, response_average_all_layers
 
     def extract_persona_vector(self, temperature: float = 0.9, max_new_tokens: int = 200):
 
@@ -290,9 +345,12 @@ class ModelWithPersona:
         all_response_avg_pos = []
         all_response_avg_neg = []
 
+        all_layers_response_avg_pos = []
+        all_layers_response_avg_neg = []
+
         for i, pair in tqdm(enumerate(trait_pairs), total=len(trait_pairs), desc=f"Extracting activations for trait {self.dataset.trait}"):
-            prompt_last_pos, response_avg_pos = self.get_prompt_last_and_response_average(system_prompt=pair.pos, user_prompt=pair.question, temperature=temperature, max_new_tokens=max_new_tokens)
-            prompt_last_neg, response_avg_neg = self.get_prompt_last_and_response_average(system_prompt=pair.neg, user_prompt=pair.question, temperature=temperature, max_new_tokens=max_new_tokens)
+            prompt_last_pos, response_avg_pos, response_avg_all_layers_pos = self.get_prompt_last_and_response_average(system_prompt=pair.pos, user_prompt=pair.question, temperature=temperature, max_new_tokens=max_new_tokens)
+            prompt_last_neg, response_avg_neg, response_avg_all_layers_neg = self.get_prompt_last_and_response_average(system_prompt=pair.neg, user_prompt=pair.question, temperature=temperature, max_new_tokens=max_new_tokens)
 
             all_prompt_last_pos.append(prompt_last_pos)
             all_prompt_last_neg.append(prompt_last_neg)
@@ -305,13 +363,21 @@ class ModelWithPersona:
         stacked_response_avg_pos = torch.stack(all_response_avg_pos, dim=0)
         stacked_response_avg_neg = torch.stack(all_response_avg_neg, dim=0)
 
+        stacked_all_layers_response_avg_pos = torch.stack(all_layers_response_avg_pos, dim=0)
+        stacked_all_layers_response_avg_neg = torch.stack(all_layers_response_avg_neg, dim=0)
+
         prompt_last_pos_mean = torch.mean(stacked_prompt_last_pos, dim=0)
         prompt_last_neg_mean = torch.mean(stacked_prompt_last_neg, dim=0)
         response_avg_pos_mean = torch.mean(stacked_response_avg_pos, dim=0)
         response_avg_neg_mean = torch.mean(stacked_response_avg_neg, dim=0)
+
+        all_layers_response_avg_pos_mean = torch.mean(stacked_all_layers_response_avg_pos)
+        all_layers_response_avg_neg_mean = torch.mean(stacked_all_layers_response_avg_neg)
+
         
         prompt_persona_vector = prompt_last_pos_mean - prompt_last_neg_mean
         response_persona_vector = response_avg_pos_mean - response_avg_neg_mean
+        all_layers_response_persona_vector = all_layers_response_avg_pos_mean - all_layers_response_avg_neg_mean
 
         # Optimization #6: Move to CPU only at the end for storage
         self.prompt_persona_vector = prompt_persona_vector.cpu()
@@ -321,7 +387,7 @@ class ModelWithPersona:
         print(f"Prompt persona vector shape: {prompt_persona_vector.shape}")
         print(f"Response persona vector shape: {response_persona_vector.shape}")
         
-        return prompt_persona_vector, response_persona_vector
+        return prompt_persona_vector, response_persona_vector, all_layers_response_persona_vector
 
 
     def inference_with_persona(self, prompt: str, alpha: float, max_new_tokens: int = 200, temperature: float = 0.9):
