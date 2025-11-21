@@ -3,12 +3,16 @@ from .PersonaDataset import PersonaDataset
 import json
 from pathlib import Path
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers.utils import logging as transformers_logging
 import torch
 torch.set_float32_matmul_precision('high')
 from typing import List, Tuple, Dict, Optional
 from openai import OpenAI
 from datetime import datetime
-import random 
+import random
+
+# Disable transformers progress bars to avoid cluttering output
+transformers_logging.set_verbosity_error() 
 
 class ModelWithPersona:
 
