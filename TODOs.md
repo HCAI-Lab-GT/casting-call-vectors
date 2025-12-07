@@ -11,3 +11,4 @@
 - all outputs from language models should be saved like chain of thoughts etc
 - need to get a custom score/solver etc as needed for BigBench-Hard and BigBench-ExtraHard
 - get things running on PACE
+- evaluate BBEH with evalchemy vs inspect-ai (check BBEH/bbeh, MrLight/bbeh-eval, mlfoundations-dev/BBEH_evalchemy)
