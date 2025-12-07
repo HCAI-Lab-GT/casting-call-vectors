@@ -31,10 +31,9 @@ from typing import Dict, List, Optional, Tuple
 
 import torch
 from openai import OpenAI
+from pvx import Heartbeat, setup_logging
 from tqdm.auto import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
-
-from persona_vectors_evals import Heartbeat, setup_logging
 
 from . import prompts
 
