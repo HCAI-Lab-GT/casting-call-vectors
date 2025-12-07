@@ -2,6 +2,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
 import sys
+from persona_vectors_evals import setup_logging, Heartbeat
 
 # --- CONFIGURATION FOR APPLE SILICON ---
 MODEL_ID = "Qwen/Qwen2.5-1.5B-Instruct"
@@ -11,9 +12,11 @@ GENERATE_LEN = 30
 BATCH_SIZE = 4   # Increase to 8 or 16 if you have 24GB+ RAM
 DTYPE = torch.float16 
 
+logger = setup_logging(name="persona-vector-extract")
+
 # Check for Apple Silicon availability
 if not torch.backends.mps.is_available():
-    print("❌ Error: MPS (Metal) not found. This script is optimized for Mac M-series chips.")
+    logger.error("MPS (Metal) not found. This script is optimized for Mac M-series chips.")
     sys.exit(1)
 device = "mps"
 
@@ -35,7 +38,7 @@ data = {
 }
 
 def main():
-    print(f"🚀 Loading {MODEL_ID} on Apple M4 (MPS)...")
+    logger.info("Loading %s on Apple M4 (MPS)...", MODEL_ID)
     
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
     tokenizer.pad_token = tokenizer.eos_token # Qwen needs this for batching
@@ -52,7 +55,7 @@ def main():
     neg_sum = torch.zeros(model.config.hidden_size, device=device, dtype=DTYPE)
     total_samples = 0
 
-    print(f"⚡ Extracting vectors from Layer {LAYER_ID}...")
+    logger.info("Extracting vectors from Layer %s", LAYER_ID)
 
     # --- THE FAST HOOK ---
     # Captures only the generated tokens (seq_len=1), ignoring the prompt
@@ -77,51 +80,52 @@ def main():
             
     # --- PROCESSING LOOP ---
     # tqdm will show you the speed (it/s)
-    for i in tqdm(range(0, len(tasks), BATCH_SIZE), unit="batch"):
-        batch = tasks[i : i + BATCH_SIZE]
-        
-        # 1. POSITIVE RUN
-        prompts = [
-            tokenizer.apply_chat_template([{"role":"system","content":p}, {"role":"user","content":q}], tokenize=False, add_generation_prompt=True)
-            for (q, p, _) in batch
-        ]
-        
-        # Tokenize and move to MPS
-        inputs = tokenizer(prompts, return_tensors="pt", padding=True, padding_side="left").to(device)
-        
-        current_batch_acts = [] # Reset hook buffer
-        model.generate(**inputs, max_new_tokens=GENERATE_LEN, min_new_tokens=GENERATE_LEN, use_cache=True)
-        
-        # Stack and Sum on GPU
-        if current_batch_acts:
-            stacked = torch.stack(current_batch_acts) # [Gen_Len, Batch, Hidden]
-            mean_acts = stacked.mean(dim=0)           # [Batch, Hidden]
-            pos_sum += mean_acts.sum(dim=0)           # Add to global accumulator
-        
-        # 2. NEGATIVE RUN
-        prompts_neg = [
-            tokenizer.apply_chat_template([{"role":"system","content":n}, {"role":"user","content":q}], tokenize=False, add_generation_prompt=True)
-            for (q, _, n) in batch
-        ]
-        inputs_neg = tokenizer(prompts_neg, return_tensors="pt", padding=True, padding_side="left").to(device)
-        
-        current_batch_acts = []
-        model.generate(**inputs_neg, max_new_tokens=GENERATE_LEN, min_new_tokens=GENERATE_LEN, use_cache=True)
-        
-        if current_batch_acts:
-            stacked = torch.stack(current_batch_acts)
-            mean_acts = stacked.mean(dim=0)
-            neg_sum += mean_acts.sum(dim=0)
+    with Heartbeat(logger, "extracting vectors...", interval=30):
+        for i in tqdm(range(0, len(tasks), BATCH_SIZE), unit="batch"):
+            batch = tasks[i : i + BATCH_SIZE]
+            
+            # 1. POSITIVE RUN
+            prompts = [
+                tokenizer.apply_chat_template([{"role":"system","content":p}, {"role":"user","content":q}], tokenize=False, add_generation_prompt=True)
+                for (q, p, _) in batch
+            ]
+            
+            # Tokenize and move to MPS
+            inputs = tokenizer(prompts, return_tensors="pt", padding=True, padding_side="left").to(device)
+            
+            current_batch_acts = [] # Reset hook buffer
+            model.generate(**inputs, max_new_tokens=GENERATE_LEN, min_new_tokens=GENERATE_LEN, use_cache=True)
+            
+            # Stack and Sum on GPU
+            if current_batch_acts:
+                stacked = torch.stack(current_batch_acts) # [Gen_Len, Batch, Hidden]
+                mean_acts = stacked.mean(dim=0)           # [Batch, Hidden]
+                pos_sum += mean_acts.sum(dim=0)           # Add to global accumulator
+            
+            # 2. NEGATIVE RUN
+            prompts_neg = [
+                tokenizer.apply_chat_template([{"role":"system","content":n}, {"role":"user","content":q}], tokenize=False, add_generation_prompt=True)
+                for (q, _, n) in batch
+            ]
+            inputs_neg = tokenizer(prompts_neg, return_tensors="pt", padding=True, padding_side="left").to(device)
+            
+            current_batch_acts = []
+            model.generate(**inputs_neg, max_new_tokens=GENERATE_LEN, min_new_tokens=GENERATE_LEN, use_cache=True)
+            
+            if current_batch_acts:
+                stacked = torch.stack(current_batch_acts)
+                mean_acts = stacked.mean(dim=0)
+                neg_sum += mean_acts.sum(dim=0)
 
-        total_samples += len(batch)
-        
-        # Optional: Clear MPS cache periodically if you crash (uncomment if needed)
-        # torch.mps.empty_cache()
+            total_samples += len(batch)
+            
+            # Optional: Clear MPS cache periodically if you crash (uncomment if needed)
+            # torch.mps.empty_cache()
 
     handle.remove()
 
     # --- FINALIZE ---
-    print("Computing difference and saving...")
+    logger.info("Computing difference and saving...")
     
     # Calculate Mean
     mean_pos = pos_sum / total_samples
@@ -132,7 +136,7 @@ def main():
     vec = vec / torch.norm(vec)
     
     torch.save(vec, OUTPUT_FILE)
-    print(f"✅ Success! Optimized vector saved to {OUTPUT_FILE}")
+    logger.info("Success! Optimized vector saved to %s", OUTPUT_FILE)
 
 if __name__ == "__main__":
     main()

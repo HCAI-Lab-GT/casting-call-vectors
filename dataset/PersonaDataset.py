@@ -23,6 +23,7 @@ Environment Variables:
 """
 
 import json
+import logging
 from pathlib import Path
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
@@ -33,6 +34,7 @@ PROMPTS = prompts.PROMPTS
 from openai import OpenAI
 import re
 import warnings
+from persona_vectors_evals import setup_logging, Heartbeat
 
 BACKENDS = ("openai", "vllm", "hf_local")
 
@@ -128,6 +130,8 @@ class PersonaDataset:
         self.torch_dtype = torch_dtype
         self._hf_model = None
         self._hf_tokenizer = None
+        # Initialize logger once per process
+        self.logger = setup_logging(name="persona-dataset")
     
     def inference_with_client(self, messages: List[Dict[str, str]], temperature: float = 0.9) -> Tuple[Optional[str], str]:
         """
@@ -199,7 +203,9 @@ class PersonaDataset:
                 )
                 return (None, chat_response.choices[0].message.content)
         except Exception as e:
-            print(f'[red]util/inference :: messages: {messages}\nbackend: {self.backend}\nmodel: {self.model}, temp: {temperature}[/]')
+            self.logger.exception(
+                "inference failed | backend=%s model=%s temp=%s", self.backend, self.model, temperature
+            )
             raise e
     
     def _init_local_model(self):
@@ -315,7 +321,9 @@ class PersonaDataset:
             >>> print(f"Dataset saved to: {path}")
         """
         trait_description = self.generate_trait_description()
+        self.logger.info("Generated trait description for %s", self.trait)
         question_instruction = self.generate_question_instruction()
+        self.logger.info("Generated question instruction for %s", self.trait)
 
         system_prompt = "You are an expert AI evaluator and dataset designer."
         user_prompt = PROMPTS["generate_trait"].format(
@@ -330,7 +338,8 @@ class PersonaDataset:
             {"role": "user", "content": user_prompt}
         ]
 
-        _, response = self.inference_with_client(messages=messages)
+        with Heartbeat(self.logger, f"Generating dataset for {self.trait}", interval=30):
+            _, response = self.inference_with_client(messages=messages)
 
         pos_neg_pairs, questions, evaluation_prompt = self.parse_dataset_output(response=response)
         self.positive_negative_pairs = pos_neg_pairs
@@ -423,7 +432,7 @@ class PersonaDataset:
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(dataset_dict, f, indent=2, ensure_ascii=False)
         
-        print(f"Dataset saved to: {filepath}")
+        self.logger.info("Dataset saved to: %s", filepath)
         return filepath
 
     def parse_dataset_output(self, response: str) -> Tuple[List[Tuple[str, str]], List[str], str]:
@@ -550,7 +559,8 @@ class PersonaDataset:
         dataset.questions = data["questions"]
         dataset.evaluation_prompt = data["evaluation_prompt"]
         
-        print(f"Dataset loaded from: {filepath}")
+        logger = setup_logging(name="persona-dataset")
+        logger.info("Dataset loaded from: %s", filepath)
         return dataset
 
 
