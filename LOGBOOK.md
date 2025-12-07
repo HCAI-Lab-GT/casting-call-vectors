@@ -101,3 +101,11 @@ Context: User wanted dead-code cleanup without over-pruning.
 Action: Deleted personas/extract_vector_m4 (unused Apple-only script). Pruned older eval logs under logs/boardgame_qa and logs/bbeh_smoke (kept top-level boardgame logs).
 
 Result: Reduced clutter; only recent top-level boardgame evals remain; bbeh_smoke and boardgame_qa subdirectories cleared.
+
+[2025-12-07 06:35] Added Inspect WandB integration dependency and docs
+
+Context: Need telemetry hook via WandB for evals.
+
+Action: Added inspect-wandb>=0.2.0 to pyproject; updated uv.lock; installed into .venv; documented usage in README with auth/env notes and link to docs.
+
+Result: Inspect AI can emit runs to WandB with no code changes once WANDB_API_KEY and project/entity are set.
