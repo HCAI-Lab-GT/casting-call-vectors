@@ -93,3 +93,11 @@ Context: User asked to delete legacy_code as it was outdated/duplicate persona a
 Action: Deleted legacy_code/ directory recursively from repo root.
 
 Result: legacy_code removed; working tree reflects deletion.
+
+[2025-12-07 00:23] Pruned logs and removed extract_vector script
+
+Context: User wanted dead-code cleanup without over-pruning.
+
+Action: Deleted personas/extract_vector_m4 (unused Apple-only script). Pruned older eval logs under logs/boardgame_qa and logs/bbeh_smoke (kept top-level boardgame logs).
+
+Result: Reduced clutter; only recent top-level boardgame evals remain; bbeh_smoke and boardgame_qa subdirectories cleared.
