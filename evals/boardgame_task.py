@@ -1,3 +1,4 @@
+import os
 from inspect_ai import Task, task
 from inspect_ai.dataset import Sample, hf_dataset
 from inspect_ai.scorer import model_graded_fact, match
@@ -17,11 +18,13 @@ def record_to_sample(record):
     
 @task
 def boardgame_loader():
+    limit = os.environ.get("BOARDGAME_LIMIT")
+    split = "test" if not limit else f"test[:{limit}]"
     return Task(
         # Load from Hugging Face: tasksource/Boardgame-QA
         dataset=hf_dataset(
             path="tasksource/Boardgame-QA",
-            split="test",  # We use the test split for evaluation
+            split=split,  # Allow limiting samples for quick smoke tests
             sample_fields=record_to_sample,
             trust=True     # Required for some HF loading scripts
         ),
