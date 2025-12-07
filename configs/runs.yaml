@@ -1,0 +1,31 @@
+# Run presets for common smoke/regression flows
+# Each entry names tasks, model preset (see models.yaml), limits, and log dir.
+
+runs:
+  - name: bbeh-mini-qwen1.5b
+    task: inspect_evals/bbeh_mini
+    model_ref: qwen1.5b
+    limit: 2
+    log_dir: logs/bbeh_smoke
+
+  - name: bbeh-mini-qwen3-1.7b
+    task: inspect_evals/bbeh_mini
+    model_ref: qwen3-1.7b
+    limit: 2
+    log_dir: logs/bbeh_smoke
+
+  - name: boardgame-qa-qwen1.5b
+    task: evals/boardgame_task.py:boardgame_loader
+    model_ref: qwen1.5b
+    limit: 50
+    log_dir: logs/boardgame_smoke
+
+# Usage hint:
+#   TASK=$(yq '.runs[] | select(.name=="bbeh-mini-qwen3-1.7b").task' configs/runs.yaml)
+#   MODEL=$(yq '.runs[] | select(.name=="bbeh-mini-qwen3-1.7b").model_ref' configs/runs.yaml)
+#   LIMIT=$(yq '.runs[] | select(.name=="bbeh-mini-qwen3-1.7b").limit' configs/runs.yaml)
+#   LOGDIR=$(yq '.runs[] | select(.name=="bbeh-mini-qwen3-1.7b").log_dir' configs/runs.yaml)
+#   MODEL_ID=$(yq '.models[] | select(.name==strenv(MODEL)).model' configs/models.yaml)
+#   TEMP=$(yq '.models[] | select(.name==strenv(MODEL)).generate.temperature' configs/models.yaml)
+#   MAXTOK=$(yq '.models[] | select(.name==strenv(MODEL)).generate.max_tokens' configs/models.yaml)
+#   uv run inspect eval "$TASK" --model "$MODEL_ID" --limit "$LIMIT" --log-dir "$LOGDIR" -S temperature="$TEMP" -S max_tokens="$MAXTOK"
