@@ -11,6 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pvx import Heartbeat, setup_logging
 from run_eval_helpers import (
     DEFAULT_MODELS,
@@ -25,6 +26,7 @@ from run_eval_helpers import (
 
 
 def main() -> None:
+    load_dotenv()
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", help="Run preset name from runs.yaml")
     ap.add_argument("--task", help="Override task (inspect task path)")
