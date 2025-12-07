@@ -32,3 +32,16 @@ I recommend installing the Inspect AI VS Code extension (Marketplace ID `ukaisi.
   MAXTOK=$(yq '.models[] | select(.name==strenv(MODEL_REF)).generate.max_tokens' configs/models.yaml)
   uv run inspect eval "$TASK" --model "$MODEL_ID" --limit "$LIMIT" --log-dir "$LOGDIR" -S temperature="$TEMP" -S max_tokens="$MAXTOK"
   ```
+
+## CLI runner
+- Use `scripts/run_eval.py` to launch evals from presets.
+- Examples:
+  - `python scripts/run_eval.py --run bbeh-mini-qwen3-1.7b`
+  - `python scripts/run_eval.py --run bbeh-mini-qwen3-1.7b --limit 5 --model qwen1.5b`
+  - `python scripts/run_eval.py --task inspect_evals/bbeh_mini --model-id hf/Qwen/Qwen3-1.7B --limit 1`
+- Flags:
+  - `--run NAME` selects a run from `configs/runs.yaml`
+  - `--model NAME` overrides the model preset; or `--model-id` to bypass presets
+  - `--limit`, `--log-dir` override per-run values
+  - `--model-arg key=value` and `--solver-arg key=value` (repeatable) map to `-M` / `-S` in `inspect eval`
+  - `--dry-run` prints the command only
