@@ -1,9 +1,9 @@
 # pvx
 
-This repository contains persona dataset generation and evaluation utilities built around Inspect AI. Use the Inspect tasks in `evals/` and datasets in `dataset/`.
+This repository contains persona dataset generation and evaluation utilities built around Inspect AI. Library code lives under `src/pvx/` (datasets, helpers, tasks).
 
 ## Quick start
-- Create a virtual environment and install with `uv sync`.
+- Create a virtual environment and install with `uv sync` (or set `PYTHONPATH=src` for local runs).
 - Run a smoke evaluation, for example: `uv run inspect eval inspect_evals/bbeh_mini --model hf/Qwen/Qwen2.5-1.5B-Instruct --limit 2 --log-dir logs/bbeh_smoke`.
 - View logs with `uv run inspect view --log-dir logs`.
 

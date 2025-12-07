@@ -229,3 +229,11 @@ Context: User wants WandB on by default and optional chain-of-thought prompting;
 Action: Updated scripts/run_eval.py to load .env, default WandB on unless --no-wandb, require WANDB_API_KEY, and add --cot flag to set prompt_type=chain_of_thought. Created local .env with WANDB_API_KEY (not committed). Packaging left unchanged; presets unchanged.
 
 Result: Runs now load env defaults, emit WandB unless disabled, and allow CoT toggle via CLI task args.
+
+[2025-12-07 15:28] Ran bbeh smoke test with WandB default on
+
+Context: Verify new default WandB + CoT flag and env loading.
+
+Action: Ran PYTHONPATH=src .venv/bin/python scripts/run_eval.py --run bbeh-mini-qwen1.5b --limit 1. WandB auth via .env (entity glennmatlin).
+
+Result: Run succeeded; .eval stored under logs/bbeh_smoke; WandB run visible in persona-vectors project.
