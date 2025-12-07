@@ -221,3 +221,11 @@ Context: Align code layout with src/ convention and short pvx codename.
 Action: Moved PersonaDataset/prompts into src/pvx; moved boardgame task into src/pvx/tasks; deleted old dataset and evals dirs; updated configs to new task path; adjusted packaging to include pvx and pvx.tasks; README kept examples; imports already using pvx.
 
 Result: Code now lives under src/, tasks load via src path, packaging metadata points to pvx.* modules.
+
+[2025-12-07 15:20] Enabled default WandB and added CoT helper
+
+Context: User wants WandB on by default and optional chain-of-thought prompting; store secret locally via .env.
+
+Action: Updated scripts/run_eval.py to load .env, default WandB on unless --no-wandb, require WANDB_API_KEY, and add --cot flag to set prompt_type=chain_of_thought. Created local .env with WANDB_API_KEY (not committed). Packaging left unchanged; presets unchanged.
+
+Result: Runs now load env defaults, emit WandB unless disabled, and allow CoT toggle via CLI task args.
