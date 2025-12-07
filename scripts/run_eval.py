@@ -1,94 +1,26 @@
 #!/usr/bin/env python3
-"""
-Lightweight runner to launch Inspect AI evals using YAML presets.
-
-Defaults:
-  - Model presets: configs/models.yaml
-  - Run presets:   configs/runs.yaml
-
-Examples:
-  # Use run preset
-  python scripts/run_eval.py --run bbeh-mini-qwen3-1.7b
-
-  # Override model and limit
-  python scripts/run_eval.py --run bbeh-mini-qwen3-1.7b --limit 5 --model qwen1.5b
-
-  # Direct task/model without presets
-  python scripts/run_eval.py --task inspect_evals/bbeh_mini --model-id hf/Qwen/Qwen3-1.7B --limit 1
-"""
+"""Run Inspect AI evals from YAML presets with optional WandB and heartbeats."""
 
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, Tuple
 
-import yaml
+from run_eval_helpers import (
+    DEFAULT_MODELS,
+    DEFAULT_RUNS,
+    build_command,
+    default_log_dir,
+    load_yaml,
+    lookup_model,
+    lookup_run,
+    parse_kv_list,
+)
 
-ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MODELS = ROOT / "configs" / "models.yaml"
-DEFAULT_RUNS = ROOT / "configs" / "runs.yaml"
-
-
-def load_yaml(path: Path) -> Dict[str, Any]:
-    with path.open("r", encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
-
-
-def lookup_model(models: Dict[str, Any], name: str) -> Tuple[str, Dict[str, Any]]:
-    for entry in models.get("models", []):
-        if entry.get("name") == name:
-            return entry["model"], entry.get("generate", {}) or {}
-    raise SystemExit(f"Unknown model preset: {name}")
-
-
-def lookup_run(runs: Dict[str, Any], name: str) -> Dict[str, Any]:
-    for entry in runs.get("runs", []):
-        if entry.get("name") == name:
-            return entry
-    raise SystemExit(f"Unknown run preset: {name}")
-
-
-def parse_kv_list(pairs: list[str]) -> Dict[str, str]:
-    kv = {}
-    for item in pairs:
-        if "=" not in item:
-            raise SystemExit(f"Expected key=value, got: {item}")
-        k, v = item.split("=", 1)
-        kv[k] = v
-    return kv
-
-
-def build_command(
-    task: str,
-    model_id: str,
-    limit: int | None,
-    log_dir: str | None,
-    solver_args: Dict[str, Any],
-    model_args: Dict[str, Any],
-) -> list[str]:
-    cmd = [
-        "uv",
-        "run",
-        "--python",
-        ".venv/bin/python",
-        "inspect",
-        "eval",
-        task,
-        "--model",
-        model_id,
-    ]
-    if limit is not None:
-        cmd += ["--limit", str(limit)]
-    if log_dir:
-        cmd += ["--log-dir", log_dir]
-    for k, v in solver_args.items():
-        cmd += ["-S", f"{k}={v}"]
-    for k, v in model_args.items():
-        cmd += ["-M", f"{k}={v}"]
-    return cmd
+from persona_vectors_evals import Heartbeat, setup_logging
 
 
 def main() -> None:
@@ -107,6 +39,30 @@ def main() -> None:
     ap.add_argument(
         "--solver-arg", action="append", default=[], help="Extra solver arg key=value (repeatable)"
     )
+    ap.add_argument(
+        "--task-arg",
+        action="append",
+        default=[],
+        help="Task arg key=value (repeatable) passed with -T",
+    )
+    ap.add_argument(
+        "--temperature", type=float, help="Override generation temperature (passed to inspect eval)"
+    )
+    ap.add_argument("--wandb", action="store_true", help="Enable WandB via inspect-wandb")
+    ap.add_argument("--wandb-project", help="Override WANDB_PROJECT")
+    ap.add_argument("--wandb-entity", help="Override WANDB_ENTITY")
+    ap.add_argument(
+        "--wandb-tag",
+        action="append",
+        default=[],
+        help="Tag to add to WandB run (repeatable)",
+    )
+    ap.add_argument(
+        "--heartbeat-interval",
+        type=int,
+        default=30,
+        help="Seconds between heartbeat logs (0 disables)",
+    )
     ap.add_argument("--dry-run", action="store_true", help="Print command only")
     args = ap.parse_args()
 
@@ -118,12 +74,12 @@ def main() -> None:
         task = args.task or run["task"]
         model_name = args.model or run["model_ref"]
         limit = args.limit if args.limit is not None else run.get("limit")
-        log_dir = args.log_dir or run.get("log_dir")
+        log_dir = args.log_dir or run.get("log_dir") or default_log_dir(task)
     else:
         task = args.task
         model_name = args.model
         limit = args.limit
-        log_dir = args.log_dir
+        log_dir = args.log_dir or (default_log_dir(task) if task else None)
     if not task:
         raise SystemExit("task is required (via --task or run preset)")
 
@@ -138,12 +94,40 @@ def main() -> None:
     solver_args = dict(default_generate)
     solver_args.update(parse_kv_list(args.solver_arg))
     model_args = parse_kv_list(args.model_arg)
+    task_args = parse_kv_list(args.task_arg)
 
-    cmd = build_command(task, model_id, limit, log_dir, solver_args, model_args)
+    if args.run:
+        run_task_args = run.get("task_args", {})
+        task_args = {**run_task_args, **task_args}
+
+    cmd = build_command(
+        task,
+        model_id,
+        limit,
+        log_dir,
+        solver_args,
+        model_args,
+        task_args,
+        args.temperature,
+    )
+    env = os.environ.copy()
+    if args.wandb:
+        env["INSPECT_WANDB_ENABLED"] = "1"
+        if args.wandb_project:
+            env["WANDB_PROJECT"] = args.wandb_project
+        if args.wandb_entity:
+            env["WANDB_ENTITY"] = args.wandb_entity
+        if args.wandb_tag:
+            env["WANDB_TAGS"] = ",".join(args.wandb_tag)
     print(" ".join(cmd))
     if args.dry_run:
         return
-    result = subprocess.run(cmd)
+    logger = setup_logging(name="run-eval")
+    if args.heartbeat_interval > 0:
+        with Heartbeat(logger, f"running inspect eval {task}", interval=args.heartbeat_interval):
+            result = subprocess.run(cmd, env=env)
+    else:
+        result = subprocess.run(cmd, env=env)
     sys.exit(result.returncode)
 
 

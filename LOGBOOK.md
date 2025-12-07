@@ -125,3 +125,67 @@ Context: Need an easy entry point to launch evals from YAML presets with overrid
 Action: Added scripts/run_eval.py (argparse, uses models.yaml and runs.yaml; supports overrides for task, model, limit, log dir, solver/model args, dry-run). Documented usage in README. Added PyYAML dep and locked/installed it.
 
 Result: One-command execution of common evals; presets plus overrides available; dependency recorded.
+
+[2025-12-07 12:16] Reviewed TODOs status
+
+Context: Assess outstanding items in TODOs.md per user request.
+
+Action: Read TODOs.md; inspected dataset/PersonaDataset.py backend support and heartbeat usage; scanned repo for wandb/tqdm/heartbeat mentions; reviewed logs structure and sample .eval contents; listed generated persona datasets; checked git log for recent features (inspect-wandb, YAML presets, runner).
+
+Result: Confirmed ollama replacement with openai/vllm/hf_local; wandb integration available via inspect-wandb dependency and wandb_utils though unused in code; Heartbeat implemented and used in dataset generation; tqdm dependency present but unused; logging outputs partly hierarchical (logs/* directories) but some .eval files at root; metadata present in persona dataset JSON and inspect start.json; PACE support, custom BBEH scorers, tqdm visuals, evalchemy comparison remain unresolved.
+
+[2025-12-07 12:32] Cleared old datasets and reorganized logs
+
+Context: User requested removal of old persona datasets and hierarchical organization of outputs.
+
+Action: Deleted dataset/persona_dataset (all pre-generated trait JSONs). Created logs/boardgame_smoke and moved four boardgame-loader .eval archives from logs/ root into that subdirectory for consistent hierarchy.
+
+Result: No persona dataset artifacts remain; log outputs now nested under task-specific folders (bbeh_smoke*, big-bench-hard, boardgame_smoke).
+
+[2025-12-07 12:35] Updated TODO statuses
+
+Context: Marked completed items per latest decisions (drop evalchemy; hierarchical logs; metadata confirmed).
+
+Action: Edited TODOs.md to mark output hierarchy and metadata items done; marked evalchemy comparison done with decision to stay on Inspect AI.
+
+Result: TODOs.md reflects current scope; open items remain for WandB wiring, tqdm visuals, heartbeats during evals, chain-of-thought capture, custom scorers, PACE setup.
+
+[2025-12-07 12:50] Added WandB/heartbeat support to run_eval
+
+Context: Implement user request to wire telemetry and live reporting into eval runner and ensure hierarchical log defaults.
+
+Action: Refactored scripts/run_eval.py to use helper module; added optional --wandb flags that set INSPECT_WANDB_ENABLED and WANDB_* envs for subprocess; added heartbeat logging around eval subprocess; default log dir now falls back to logs/<task>.
+
+Result: Eval runs can emit WandB telemetry when enabled; heartbeats provide liveness logs; outputs default into per-task folders without manual log-dir.
+
+[2025-12-07 12:51] Added tqdm progress for persona pair extraction
+
+Context: Cover TODO for logging visuals by surfacing progress when combining persona instructions and questions.
+
+Action: Imported tqdm.auto in dataset/PersonaDataset.py and wrapped outer loop in extract_pos_neg_question_pairs to emit a progress bar during pair generation.
+
+Result: Calls to extract_pos_neg_question_pairs now show a progress bar, providing basic visual feedback during dataset postprocessing.
+
+[2025-12-07 13:18] Switched BBH to official inspect-evals and scoped boardgame as extra
+
+Context: Align tasks with inspect-evals built-ins, keep BoardgameQA as optional extra, and ensure run presets use hierarchical logs and task args.
+
+Action: Removed custom evals/big_bench_hard_task.py; moved boardgame task to evals/extras/boardgame_task.py. Added run_eval task-arg plumbing (-T) and defaults. Updated runs.yaml to use inspect_evals/bbh with dataset_name/prompt_type; added extras boardgame preset with separate log dir. Tweaked README examples; clarified TODO note.
+
+Result: BBH runs now call official inspect-evals task; BoardgameQA remains available as an extra. Runner supports task args for dataset selection. Logs default into task-specific directories.
+
+[2025-12-07 13:55] Smoke-tested BBH/BBEH and fixed run_eval temperature/path issues
+
+Context: Confirm official inspect-evals BBH/BBEH work without custom scorers; ensure boardgame extra runs; address task path and temperature overrides.
+
+Action: Added Path import and temperature passthrough to run_eval; extended build_command to forward --temperature. Ran BBH sample via inspect-evals with subset_name=logical_deduction_five_objects using qwen3-0.6B and --temperature 0.2 (log: logs/bbh_smoke/2025-12-07T18-45-14+00-00_bbh_ZqnuFahc45ySNBvGT4etoC.eval). Ran BBEH mini sample with same model/temperature (log: logs/bbeh_smoke/2025-12-07T18-46-19+00-00_bbeh-mini_8AwS5cUyLVVxo3vpnDNDJ9.eval). Discovered boardgame task path needed @ notation; executed successfully with qwen3-0.6B limit=1 (log: logs/extras/boardgame_smoke/2025-12-07T18-48-01+00-00_boardgame-loader_Tf9x3hUgx3Hha9a9FCz7Ji.eval). Updated runs.yaml boardgame preset to @ path.
+
+Result: BBH/BBEH run end-to-end using built-in scorers (accuracy/grouped). Boardgame extra runs via @ path. run_eval now supports --temperature to override tasks like BBH that default to 0.
+
+[2025-12-07 14:10] Added BBH preset temperature override
+
+Context: Avoid HF generation error from inspect-evals BBH default temperature=0.
+
+Action: Set solver_args.temperature=0.2 in configs/runs.yaml for bbh-logical-deduction-qwen1.5b preset.
+
+Result: BBH preset now runs without manual temperature flag while remaining compatible with inspect-evals.
