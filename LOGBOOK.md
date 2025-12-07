@@ -205,3 +205,19 @@ Context: Shorten project name to avoid repetition and align with new helper pack
 Action: Updated pyproject project.name to "pvx" with concise description; renamed README title to pvx.
 
 Result: Packaging metadata and docs use short codename; package remains importable as pvx from src layout.
+
+[2025-12-07 14:50] Removed TODOs.md per user request
+
+Context: User stated all TODOs considered finished and requested deletion of TODOs.md.
+
+Action: Deleted TODOs.md from repo root.
+
+Result: TODOs file removed. Outstanding work items must now be tracked elsewhere (LOGBOOK/README).
+
+[2025-12-07 14:57] Moved code under src layout
+
+Context: Align code layout with src/ convention and short pvx codename.
+
+Action: Moved PersonaDataset/prompts into src/pvx; moved boardgame task into src/pvx/tasks; deleted old dataset and evals dirs; updated configs to new task path; adjusted packaging to include pvx and pvx.tasks; README kept examples; imports already using pvx.
+
+Result: Code now lives under src/, tasks load via src path, packaging metadata points to pvx.* modules.
