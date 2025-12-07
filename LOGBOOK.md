@@ -77,3 +77,11 @@ Context: User asked to try smaller Qwen/Qwen3-0.6B model.
 Action: Ran `inspect eval inspect_evals/bbeh_mini --model hf/Qwen/Qwen3-0.6B --limit 3 --log-dir logs/bbeh_smoke` on GPU.
 
 Result: Run completed; accuracy 0.0 on 3 samples. Tokens: 7,953 total (I:1,809 O:6,144). Log stored at logs/bbeh_smoke/2025-12-07T04-25-10+00-00_bbeh-mini_nsfQy7MQomBYdbyLLc7eYM.eval.
+
+[2025-12-06 23:48] Added README with Inspect AI VS Code extension note
+
+Context: User requested adding VS Code extension guidance.
+
+Action: Created README.md with quick start commands and note recommending the Inspect AI VS Code extension (Marketplace ID ukaisi.inspect-ai).
+
+Result: README now documents setup, smoke eval example, log viewing, and extension recommendation.
