@@ -13,25 +13,44 @@ Key Features:
     - Extraction of paired training data
 
 Dependencies:
-    - ollama: For local model inference
-    - openai: For API-based model inference
+    - openai/vLLM (OpenAI-compatible HTTP): For remote inference
+    - Hugging Face transformers: For local inference
     - transformers: For model and tokenizer utilities
     
 Environment Variables:
-    - LITELLM_API_KEY: Required when using OpenAI-compatible endpoints
+    - LITELLM_API_KEY or OPENAI_API_KEY: Required when using OpenAI/vLLM endpoints
+    - VLLM_API_URL (optional): Base URL for vLLM OpenAI-compatible server
 """
 
 import json
 from pathlib import Path
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
-import ollama
 from typing import List, Tuple, Dict, Optional
 import os
 from . import prompts
 PROMPTS = prompts.PROMPTS
 from openai import OpenAI
 import re
+import warnings
+
+BACKENDS = ("openai", "vllm", "hf_local")
+
+def messages_to_prompt(messages: List[Dict[str, str]]) -> str:
+    """
+    Flatten chat messages into a single prompt string for decoder-only HF models.
+    Format: "<system>\\n\\n<user>\\n\\nAssistant:"
+    """
+    system_parts = [m["content"] for m in messages if m["role"] == "system"]
+    user_parts = [m["content"] for m in messages if m["role"] == "user"]
+    system_block = "\\n".join(system_parts)
+    user_block = "\\n\\n".join(user_parts)
+    prompt = ""
+    if system_block:
+        prompt += f"{system_block}\\n\\n"
+    prompt += user_block
+    prompt += "\\n\\nAssistant:"
+    return prompt
 
 class PersonaDataset:
     """
@@ -39,8 +58,8 @@ class PersonaDataset:
     
     This class facilitates the creation of datasets containing positive/negative
     instruction pairs, questions, and evaluation prompts for specific personality
-    traits. It supports multiple inference backends (Ollama and OpenAI-compatible APIs)
-    and provides methods for dataset persistence and retrieval.
+    traits. It supports multiple inference backends (OpenAI/vLLM HTTP or local
+    Hugging Face transformers) and provides methods for dataset persistence and retrieval.
     
     Attributes:
         trait (str): The personality trait being modeled (e.g., "sarcastic", "verbose")
@@ -50,20 +69,30 @@ class PersonaDataset:
         questions (List[str]): List of evaluation questions
         evaluation_prompt (str): The evaluation prompt for assessing the trait
         model (str): The name/identifier of the LLM model to use
-        client (Optional[ollama.Client]): Ollama client for local inference, or None 
-            for API-based inference
+        backend (str): Inference backend ("openai", "vllm", "hf_local")
     
     Example:
         >>> dataset = PersonaDataset(
         ...     trait="sarcastic", 
         ...     num_questions=5, 
-        ...     client=None,
-        ...     model='openai/gpt-4'
+        ...     backend="openai",
+        ...     model="gpt-4o"
         ... )
         >>> pairs, questions, eval_prompt, filepath = dataset.generate_dataset()
     """
 
-    def __init__(self, trait: str, num_questions: int, client: Optional[ollama.Client] = None, model: str="qwen2.5:7b-instruct"):
+    def __init__(
+        self,
+        trait: str,
+        num_questions: int,
+        backend: str = "openai",
+        model: str = "qwen2.5:7b-instruct",
+        base_url: Optional[str] = None,
+        api_key_env: str = "LITELLM_API_KEY",
+        local_model: Optional[str] = None,
+        device: Optional[str] = None,
+        torch_dtype: torch.dtype = torch.float16,
+    ):
         """
         Initialize a PersonaDataset instance.
         
@@ -71,11 +100,16 @@ class PersonaDataset:
             trait (str): The personality trait to generate data for (e.g., "sarcastic",
                 "verbose", "analytical")
             num_questions (int): The number of questions to generate for evaluation
-            client (Optional[ollama.Client], optional): An Ollama client instance for
-                local model inference. If None, will use OpenAI-compatible API endpoint.
-                Defaults to None.
-            model (str, optional): The model identifier to use for generation.
-                Defaults to "qwen2.5:7b-instruct".
+            backend (str): One of {"openai", "vllm", "hf_local"}.
+                - "openai": Use OpenAI-compatible HTTP endpoint.
+                - "vllm":  Use OpenAI-compatible HTTP endpoint (base_url from VLLM_API_URL).
+                - "hf_local": Use local transformers model.
+            model (str): Model identifier (HF repo id for hf_local; model name for openai/vllm).
+            base_url (str, optional): Override base URL for OpenAI/vLLM endpoints.
+            api_key_env (str): Environment variable name for API key (openai/vllm).
+            local_model (str, optional): HF model id/path for hf_local. Falls back to `model` if None.
+            device (str, optional): Device for hf_local ("cuda", "mps", "cpu"). Auto-detect if None.
+            torch_dtype (torch.dtype): Dtype for hf_local model load (default float16).
         
         Returns:
             None
@@ -86,15 +120,21 @@ class PersonaDataset:
         self.questions: List[str] = []
         self.evaluation_prompt = ""
         self.model = model
-
-        self.client = client
+        self.backend = backend if backend in BACKENDS else "openai"
+        self.base_url = base_url
+        self.api_key_env = api_key_env
+        self.local_model = local_model or model
+        self.device = device
+        self.torch_dtype = torch_dtype
+        self._hf_model = None
+        self._hf_tokenizer = None
     
     def inference_with_client(self, messages: List[Dict[str, str]], temperature: float = 0.9) -> Tuple[Optional[str], str]:
         """
-        Perform LLM inference using either Ollama or OpenAI-compatible API.
+        Perform LLM inference using either OpenAI/vLLM HTTP or local HF transformers.
         
-        This method abstracts away the differences between local (Ollama) and
-        remote (OpenAI-compatible) inference, providing a unified interface.
+        This method abstracts away the differences between local HF inference and
+        remote OpenAI/vLLM-compatible endpoints.
         
         Args:
             messages (List[Dict[str, str]]): A list of message dictionaries with
@@ -109,34 +149,47 @@ class PersonaDataset:
                 chain-of-thought reasoning; otherwise it's None.
         
         Raises:
-            ValueError: If LITELLM_API_KEY environment variable is not set when
-                using OpenAI-compatible API (client is None)
+            ValueError: If required API key is not set for OpenAI/vLLM backends
             Exception: Re-raises any exception from the underlying API call after
                 logging the error details
         
-        Example:
-            >>> messages = [
-            ...     {"role": "system", "content": "You are a helpful assistant."},
-            ...     {"role": "user", "content": "Hello!"}
-            ... ]
-            >>> thinking, response = dataset.inference_with_client(messages)
+            Example:
+                >>> messages = [
+                ...     {"role": "system", "content": "You are a helpful assistant."},
+                ...     {"role": "user", "content": "Hello!"}
+                ... ]
+                >>> thinking, response = dataset.inference_with_client(messages)
         """
         try:
-            if self.client is not None:
-                response = self.client.chat(
-                    model=self.model,
-                    messages=messages,
-                    options={'temperature': temperature}
-                ).message
-                if hasattr(response, 'thinking'):
-                    return (response.thinking, response.content)
-                else:
-                    return (None, response.content)
+            if self.backend == "hf_local":
+                if self._hf_model is None or self._hf_tokenizer is None:
+                    self._init_local_model()
+                prompt = messages_to_prompt(messages)
+                inputs = self._hf_tokenizer(
+                    prompt,
+                    return_tensors="pt",
+                    padding=True
+                ).to(self._hf_model.device)
+                generated = self._hf_model.generate(
+                    **inputs,
+                    do_sample=True,
+                    temperature=temperature,
+                    max_new_tokens=256,
+                )
+                decoded = self._hf_tokenizer.decode(
+                    generated[0][inputs["input_ids"].shape[-1]:],
+                    skip_special_tokens=True
+                )
+                return (None, decoded.strip())
             else:
-                base_url = "https://glados.ctisl.gtri.org"
-                if "LITELLM_API_KEY" not in os.environ:
-                    raise ValueError("LITELLM_API_KEY environment variable not set")
-                api_key = os.environ["LITELLM_API_KEY"]
+                base_url = self.base_url
+                if self.backend == "vllm" and base_url is None:
+                    base_url = os.environ.get("VLLM_API_URL")
+                if base_url is None:
+                    base_url = "https://glados.ctisl.gtri.org"
+                api_key = os.environ.get(self.api_key_env) or os.environ.get("OPENAI_API_KEY")
+                if api_key is None:
+                    raise ValueError(f"{self.api_key_env} or OPENAI_API_KEY environment variable not set")
                 openai_client = OpenAI(api_key=api_key, base_url=base_url)
 
                 chat_response = openai_client.chat.completions.create(
@@ -146,8 +199,36 @@ class PersonaDataset:
                 )
                 return (None, chat_response.choices[0].message.content)
         except Exception as e:
-            print(f'[red]util/inference :: messages: {messages}\nclient: {self.client is not None}\nmodel: {self.model}, temp: {temperature}[/]')
+            print(f'[red]util/inference :: messages: {messages}\nbackend: {self.backend}\nmodel: {self.model}, temp: {temperature}[/]')
             raise e
+    
+    def _init_local_model(self):
+        """
+        Lazily load a HF transformers causal LM for local inference.
+        """
+        if self.backend != "hf_local":
+            return
+        # Device selection
+        if self.device:
+            device = self.device
+        else:
+            if torch.cuda.is_available():
+                device = "cuda"
+            elif torch.backends.mps.is_available():
+                device = "mps"
+            else:
+                device = "cpu"
+                warnings.warn("Using CPU for local inference; generation will be slow.")
+        tokenizer = AutoTokenizer.from_pretrained(self.local_model)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        model = AutoModelForCausalLM.from_pretrained(
+            self.local_model,
+            torch_dtype=self.torch_dtype if device != "cpu" else None,
+            device_map=device,
+        )
+        self._hf_model = model
+        self._hf_tokenizer = tokenizer
     
     def generate_trait_description(self) -> str:
         """
@@ -305,7 +386,7 @@ class PersonaDataset:
         Save the dataset to a JSON file.
         
         Serializes the dataset including all generated content (instruction pairs,
-        questions, evaluation prompt) and metadata (trait, model, client type) to
+        questions, evaluation prompt) and metadata (trait, model, backend) to
         a JSON file. The directory structure is created automatically if it doesn't exist.
         
         Args:
@@ -325,14 +406,13 @@ class PersonaDataset:
         """
         filepath += f"{self.trait}_dataset.json"
         
-        # Convert client to string representation
-        client_type = "ollama" if self.client is not None else "other"
-        
         dataset_dict = {
             "trait": self.trait,
             "num_questions": self.num_questions,
             "model": self.model,
-            "client": client_type,
+            "backend": self.backend,
+            "base_url": self.base_url,
+            "local_model": self.local_model,
             "positive_negative_pairs": self.positive_negative_pairs,
             "questions": self.questions,
             "evaluation_prompt": self.evaluation_prompt
@@ -416,7 +496,7 @@ class PersonaDataset:
         
         This static method reconstructs a PersonaDataset instance from a saved
         JSON file, including all generated content and metadata. It automatically
-        configures the appropriate client type (Ollama or API-based) based on
+        configures the appropriate backend (openai / vllm / hf_local) based on
         the saved metadata.
         
         Args:
@@ -448,15 +528,24 @@ class PersonaDataset:
             data = json.load(f)
     
         num_questions = data["num_questions"]
-        client = data["client"]
         model = data["model"]
+        backend = data.get("backend")
+        base_url = data.get("base_url")
+        local_model = data.get("local_model")
 
-        if client == 'ollama':
-            client_type = ollama.Client()
-        else:
-            client_type = None
+        # Backward compatibility with older files that stored "client"
+        if backend is None and "client" in data:
+            client = data["client"]
+            backend = "hf_local" if client == "ollama" else "openai"
 
-        dataset = PersonaDataset(trait=trait, num_questions=num_questions, client=client_type, model=model)
+        dataset = PersonaDataset(
+            trait=trait,
+            num_questions=num_questions,
+            backend=backend or "openai",
+            model=model,
+            base_url=base_url,
+            local_model=local_model,
+        )
         dataset.positive_negative_pairs = data["positive_negative_pairs"]
         dataset.questions = data["questions"]
         dataset.evaluation_prompt = data["evaluation_prompt"]
@@ -481,7 +570,12 @@ if __name__ == "__main__":
         "cautious",
     ]
 
-    dataset: PersonaDataset = PersonaDataset(trait="sarcastic", num_questions=100, client=None, model='openai/gpt-oss-120b')
+    dataset: PersonaDataset = PersonaDataset(
+        trait="sarcastic",
+        num_questions=100,
+        backend="openai",
+        model='openai/gpt-oss-120b'
+    )
     
     pos_neg_pairs, questions, evaluation_prompt, _ = dataset.generate_dataset()
     print(pos_neg_pairs)

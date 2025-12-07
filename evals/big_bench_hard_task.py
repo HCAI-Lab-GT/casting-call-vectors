@@ -12,8 +12,7 @@ Key Features:
     - We score with the 'match' scorer which checks if the actual answer is within the model's answer.
 
 Dependencies:
-    - ollama: For local model inference
-    - openai: For API-based model inference
+    - vLLM/OpenAI-compatible endpoint or HF models via inspect-ai solver stack
     - inspect-ai: Evaluation Framework for loading dataset and performing model evaluation
     
 Environment Variables:
