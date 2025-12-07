@@ -22,10 +22,11 @@ from dotenv import load_dotenv
 from huggingface_hub import snapshot_download
 
 
-# Model aliases to repo_ids
+# Model aliases to repo_ids (official releases only)
 MODEL_MAP = {
-    "qwen1.7b": "rd211/Qwen3-1.7B-Instruct",
-    "qwen2b": "Qwen/Qwen2-1.5B-Instruct",
+    "qwen1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
+    "qwen0.5b": "Qwen/Qwen2-0.5B",
+    "qwen7b": "Qwen/Qwen2-7B-Instruct",
     "gpt-oss-20b": "openai/gpt-oss-20b",
     "gpt-oss-7b": "openai/gpt-oss-7b",
 }
@@ -86,8 +87,8 @@ def parse_args():
         "--models",
         nargs="*",
         choices=list(MODEL_MAP.keys()),
-        default=["qwen1.7b"],
-        help="Which model aliases to download (default: qwen1.7b).",
+        default=["qwen1.5b"],
+        help="Which model aliases to download (default: qwen1.5b).",
     )
     parser.add_argument(
         "--datasets",
