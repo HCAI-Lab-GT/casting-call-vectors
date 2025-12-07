@@ -109,3 +109,11 @@ Context: Need telemetry hook via WandB for evals.
 Action: Added inspect-wandb>=0.2.0 to pyproject; updated uv.lock; installed into .venv; documented usage in README with auth/env notes and link to docs.
 
 Result: Inspect AI can emit runs to WandB with no code changes once WANDB_API_KEY and project/entity are set.
+
+[2025-12-07 01:38] Added YAML config presets for models and runs
+
+Context: Provide structured presets for models and common smoke runs.
+
+Action: Added configs/models.yaml with model presets (Qwen variants, API 4o-mini) and default generation params; added configs/runs.yaml mapping tasks to model presets, limits, and log dirs; updated README with usage example using yq; marked TODOs.yaml-config item complete.
+
+Result: Users can parameterize eval commands via YAML without hardcoding model IDs or limits; documentation reflects new workflow.
