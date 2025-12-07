@@ -117,3 +117,11 @@ Context: Provide structured presets for models and common smoke runs.
 Action: Added configs/models.yaml with model presets (Qwen variants, API 4o-mini) and default generation params; added configs/runs.yaml mapping tasks to model presets, limits, and log dirs; updated README with usage example using yq; marked TODOs.yaml-config item complete.
 
 Result: Users can parameterize eval commands via YAML without hardcoding model IDs or limits; documentation reflects new workflow.
+
+[2025-12-07 01:40] Added CLI runner for eval presets
+
+Context: Need an easy entry point to launch evals from YAML presets with overrides.
+
+Action: Added scripts/run_eval.py (argparse, uses models.yaml and runs.yaml; supports overrides for task, model, limit, log dir, solver/model args, dry-run). Documented usage in README. Added PyYAML dep and locked/installed it.
+
+Result: One-command execution of common evals; presets plus overrides available; dependency recorded.
