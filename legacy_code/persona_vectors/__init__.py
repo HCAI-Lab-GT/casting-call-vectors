@@ -1,2 +1,0 @@
-from .prompts import PROMPTS
-

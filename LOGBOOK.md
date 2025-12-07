@@ -85,3 +85,11 @@ Context: User requested adding VS Code extension guidance.
 Action: Created README.md with quick start commands and note recommending the Inspect AI VS Code extension (Marketplace ID ukaisi.inspect-ai).
 
 Result: README now documents setup, smoke eval example, log viewing, and extension recommendation.
+
+[2025-12-07 00:04] Removed legacy_code directory
+
+Context: User asked to delete legacy_code as it was outdated/duplicate persona and BBHE work.
+
+Action: Deleted legacy_code/ directory recursively from repo root.
+
+Result: legacy_code removed; working tree reflects deletion.
