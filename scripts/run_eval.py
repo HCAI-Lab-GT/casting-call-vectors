@@ -9,6 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from pvx import Heartbeat, setup_logging
 from run_eval_helpers import (
     DEFAULT_MODELS,
     DEFAULT_RUNS,
@@ -19,8 +20,6 @@ from run_eval_helpers import (
     lookup_run,
     parse_kv_list,
 )
-
-from persona_vectors_evals import Heartbeat, setup_logging
 
 
 def main() -> None:

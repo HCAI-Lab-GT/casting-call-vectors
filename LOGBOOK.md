@@ -189,3 +189,11 @@ Context: Avoid HF generation error from inspect-evals BBH default temperature=0.
 Action: Set solver_args.temperature=0.2 in configs/runs.yaml for bbh-logical-deduction-qwen1.5b preset.
 
 Result: BBH preset now runs without manual temperature flag while remaining compatible with inspect-evals.
+
+[2025-12-07 14:25] Renamed helper package to pvx and moved to src layout
+
+Context: Shorten package name and align structure for research code usability.
+
+Action: Moved persona_vectors_evals to src/pvx; updated imports (PersonaDataset, run_eval) and pyproject to package src/pvx. Added hatch wheel package path.
+
+Result: Helpers import as pvx; editable installs reference src layout.
