@@ -1,4 +1,4 @@
-# persona-vectors-evals
+# pvx
 
 This repository contains persona dataset generation and evaluation utilities built around Inspect AI. Use the Inspect tasks in `evals/` and datasets in `dataset/`.
 

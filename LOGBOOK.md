@@ -197,3 +197,11 @@ Context: Shorten package name and align structure for research code usability.
 Action: Moved persona_vectors_evals to src/pvx; updated imports (PersonaDataset, run_eval) and pyproject to package src/pvx. Added hatch wheel package path.
 
 Result: Helpers import as pvx; editable installs reference src layout.
+
+[2025-12-07 14:34] Renamed project to pvx codename
+
+Context: Shorten project name to avoid repetition and align with new helper package codename.
+
+Action: Updated pyproject project.name to "pvx" with concise description; renamed README title to pvx.
+
+Result: Packaging metadata and docs use short codename; package remains importable as pvx from src layout.
