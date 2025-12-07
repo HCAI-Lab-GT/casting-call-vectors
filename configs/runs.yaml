@@ -14,11 +14,22 @@ runs:
     limit: 2
     log_dir: logs/bbeh_smoke
 
-  - name: boardgame-qa-qwen1.5b
-    task: evals/boardgame_task.py:boardgame_loader
+  - name: bbh-logical-deduction-qwen1.5b
+    task: inspect_evals/bbh
+    model_ref: qwen1.5b
+    limit: 25
+    log_dir: logs/bbh/logical_deduction_five_objects
+    task_args:
+      dataset_name: logical_deduction_five_objects
+      prompt_type: chain_of_thought
+    solver_args:
+      temperature: 0.2
+
+  - name: extras-boardgame-qa-qwen1.5b
+    task: evals/extras/boardgame_task.py@boardgame_loader
     model_ref: qwen1.5b
     limit: 50
-    log_dir: logs/boardgame_smoke
+    log_dir: logs/extras/boardgame_smoke
 
 # Usage hint:
 #   TASK=$(yq '.runs[] | select(.name=="bbeh-mini-qwen3-1.7b").task' configs/runs.yaml)

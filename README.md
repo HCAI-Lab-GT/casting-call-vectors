@@ -4,7 +4,7 @@ This repository contains persona dataset generation and evaluation utilities bui
 
 ## Quick start
 - Create a virtual environment and install with `uv sync`.
-- Run a smoke evaluation, for example: `uv run inspect eval inspect_evals/bbeh_mini --model hf/Qwen/Qwen2.5-1.5B-Instruct --limit 2 --log-dir logs`.
+- Run a smoke evaluation, for example: `uv run inspect eval inspect_evals/bbeh_mini --model hf/Qwen/Qwen2.5-1.5B-Instruct --limit 2 --log-dir logs/bbeh_smoke`.
 - View logs with `uv run inspect view --log-dir logs`.
 
 ## VS Code
@@ -37,8 +37,8 @@ I recommend installing the Inspect AI VS Code extension (Marketplace ID `ukaisi.
 - Use `scripts/run_eval.py` to launch evals from presets.
 - Examples:
   - `python scripts/run_eval.py --run bbeh-mini-qwen3-1.7b`
-  - `python scripts/run_eval.py --run bbeh-mini-qwen3-1.7b --limit 5 --model qwen1.5b`
-  - `python scripts/run_eval.py --task inspect_evals/bbeh_mini --model-id hf/Qwen/Qwen3-1.7B --limit 1`
+  - `python scripts/run_eval.py --run bbh-logical-deduction-qwen1.5b`
+  - `python scripts/run_eval.py --run extras-boardgame-qa-qwen1.5b --limit 10`
 - Flags:
   - `--run NAME` selects a run from `configs/runs.yaml`
   - `--model NAME` overrides the model preset; or `--model-id` to bypass presets
