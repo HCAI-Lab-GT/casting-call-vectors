@@ -11,11 +11,33 @@ DEFAULT_RUNS = ROOT / "configs" / "runs.yaml"
 
 
 def load_yaml(path: Path) -> Dict[str, Any]:
+    '''
+    Load YAML file from path.
+    
+    Args:
+        path (Path): Path to YAML file.
+        
+    Returns:
+        Dictionary representation of the YAML file.
+    '''
     with path.open("r", encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 
 def lookup_model(models: Dict[str, Any], name: str) -> Tuple[str, Dict[str, Any]]:
+    '''
+    Lookup model preset by name.
+    
+    Args:
+        models (Dict[str, Any]): Models configuration dictionary.
+        name (str): Name of the model preset to look up.
+        
+    Returns:
+        Tuple of model id and generation arguments dictionary.
+        
+    Raises:
+        SystemExit: If the model preset is not found.
+    '''
     for entry in models.get("models", []):
         if entry.get("name") == name:
             return entry["model"], entry.get("generate", {}) or {}
@@ -23,6 +45,19 @@ def lookup_model(models: Dict[str, Any], name: str) -> Tuple[str, Dict[str, Any]
 
 
 def lookup_run(runs: Dict[str, Any], name: str) -> Dict[str, Any]:
+    '''
+    Lookup run preset by name.
+    
+    Args:
+        runs (Dict[str, Any]): Runs configuration dictionary.
+        name (str): Name of the run preset to look up.
+        
+    Returns:
+        Dictionary of the run preset.
+        
+    Raises:
+        SystemExit: If the run preset is not found.
+    '''
     for entry in runs.get("runs", []):
         if entry.get("name") == name:
             return entry
@@ -30,6 +65,15 @@ def lookup_run(runs: Dict[str, Any], name: str) -> Dict[str, Any]:
 
 
 def parse_kv_list(pairs: list[str]) -> Dict[str, str]:
+    '''
+    Parse list of key=value strings into dictionary.
+    
+    Args:
+        pairs (list[str]): List of strings in key=value format.
+        
+    Returns:
+        Dictionary of parsed key-value pairs.
+    '''
     kv: Dict[str, str] = {}
     for item in pairs:
         if "=" not in item:
@@ -40,6 +84,15 @@ def parse_kv_list(pairs: list[str]) -> Dict[str, str]:
 
 
 def default_log_dir(task: str) -> str:
+    '''
+    Get default log directory for a task.
+    
+    Args:
+        task (str): Task name.
+        
+    Returns:
+        Default log directory path as string.
+    '''
     base = task.split(":", 1)[0].replace("/", "_")
     return str(ROOT / "logs" / base)
 
@@ -54,6 +107,23 @@ def build_command(
     task_args: Dict[str, Any],
     temperature: float | None,
 ) -> list[str]:
+    '''
+    Build uv command for eval.
+    Ran by subprocess in run_eval.py.
+    
+    Args:
+        task (str): Task name.
+        model_id (str): Model identifier.
+        limit (int | None): Sample limit.
+        log_dir (str | None): Log directory.
+        solver_args (Dict[str, Any]) : Solver arguments.
+        model_args (Dict[str, Any]): Model arguments.
+        task_args (Dict[str, Any]): Task arguments.
+        temperature (float | None): Generation temperature.
+        
+    Returns:
+        List of command words for command line.
+    '''
     cmd = [
         "uv",
         "run",

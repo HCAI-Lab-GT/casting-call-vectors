@@ -12,7 +12,6 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-from pvx import Heartbeat, setup_logging
 from run_eval_helpers import (
     DEFAULT_MODELS,
     DEFAULT_RUNS,
@@ -23,8 +22,13 @@ from run_eval_helpers import (
     lookup_run,
     parse_kv_list,
 )
+from pvx import Heartbeat, setup_logging
 
 def main() -> None:
+    '''
+    Main function to run Inspect AI evals based on command-line arguments and presets.
+    Supports WandB integration and heartbeat logging.
+    '''
     load_dotenv()
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", help="Run preset name from runs.yaml")
@@ -73,43 +77,60 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true", help="Print command only")
     args = ap.parse_args()
 
+    # load configs
     models_cfg = load_yaml(Path(args.model_config))
     runs_cfg = load_yaml(Path(args.run_config))
 
+    # preset run
     if args.run:
+        # load preset
         run = lookup_run(runs_cfg, args.run)
+
+        # allow for override
         task = args.task or run["task"]
         model_name = args.model or run["model_ref"]
         limit = args.limit if args.limit is not None else run.get("limit")
         log_dir = args.log_dir or run.get("log_dir") or default_log_dir(task)
+
+    # custom run
     else:
         task = args.task
         model_name = args.model
         limit = args.limit
         log_dir = args.log_dir or (default_log_dir(task) if task else None)
+
     if not task:
         raise SystemExit("task is required (via --task or run preset)")
 
+    # explicit model id
     if args.model_id:
         model_id = args.model_id
         default_generate = {}
+
+    # preset model
     else:
         if not model_name:
             raise SystemExit("model is required (via --model, --model-id, or run preset)")
         model_id, default_generate = lookup_model(models_cfg, model_name)
 
+    # build args for solvers
     solver_args = dict(default_generate)
     solver_args.update(parse_kv_list(args.solver_arg))
+
+    # build args for model and task
     model_args = parse_kv_list(args.model_arg)
     task_args = parse_kv_list(args.task_arg)
 
+    # merge in run task args
     if args.run:
         run_task_args = run.get("task_args", {})
         task_args = {**run_task_args, **task_args}
 
+    # chain-of-thought prompt if requested
     if args.cot and "prompt_type" not in task_args:
         task_args["prompt_type"] = "chain_of_thought"
 
+    # build uv run python command
     cmd = build_command(
         task,
         model_id,
@@ -120,7 +141,10 @@ def main() -> None:
         task_args,
         args.temperature,
     )
+
     env = os.environ.copy()
+
+    # configure WandB
     wandb_enabled = not args.no_wandb
     if wandb_enabled:
         if not env.get("WANDB_API_KEY"):
@@ -138,15 +162,20 @@ def main() -> None:
             env["WANDB_TAGS"] = ",".join(args.wandb_tag)
     else:
         env.pop("INSPECT_WANDB_ENABLED", None)
+
     print(" ".join(cmd))
     if args.dry_run:
         return
+
     logger = setup_logging(name="run-eval")
+
+    # run with heartbeats if requested, otherwise normal run via subprocess
     if args.heartbeat_interval > 0:
         with Heartbeat(logger, f"running inspect eval {task}", interval=args.heartbeat_interval):
             result = subprocess.run(cmd, env=env)
     else:
         result = subprocess.run(cmd, env=env)
+
     sys.exit(result.returncode)
 
 
