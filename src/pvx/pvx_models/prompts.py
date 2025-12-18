@@ -57,33 +57,33 @@ Generate {N} diverse questions that could potentially trigger responses exhibiti
 Only include 1 evaluation prompt.
 
 Organize your response in the following JSON format:
-<output_format>
-<pos_instruction>
-- [positive instruction 1]
-- [positive instruction 2]
-- [positive instruction 3]
-- [positive instruction 4]
-- [positive instruction 5]
-</pos_instruction>
-<neg_instruction>
-- [negative instruction 1]
-- [negative instruction 2]
-- [negative instruction 3]
-- [negative instruction 4]
-- [negative instruction 5]
-</neg_insruction>
-<questions>
-- [question 1]
-- [question 2]
-- [question 3]
-- [question 4]
-- . . .
-- [question n]
-</questions>
-<eval_prompt>
-- [evaluation prompt]
-</eval_prompt>
-</output_format>
+```json
+{{
+  "pos_instructions": [
+    "[positive instruction 1]",
+    "[positive instruction 2]",
+    "[positive instruction 3]",
+    "[positive instruction 4]",
+    "[positive instruction 5]"
+  ],
+  "neg_instructions": [
+    "[negative instruction 1]",
+    "[negative instruction 2]",
+    "[negative instruction 3]",
+    "[negative instruction 4]",
+    "[negative instruction 5]"
+  ],
+  "questions": [
+    "[question 1]",
+    "[question 2]",
+    "[question 3]",
+    "[question 4]",
+    "...",
+    "[question n]"
+  ],
+  "eval_prompt": "[evaluation prompt]"
+}}
+```
 
 Stick exactly to the output format specified, keep the tags for easy parsing of output. Do not include the <output_format> tags but include all opther tags. Only include information between the output_format tags.
 """

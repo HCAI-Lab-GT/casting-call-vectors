@@ -15,8 +15,6 @@ def record_to_sample(record):
         # We store the ID to track specific cases (like the Squirrel ones later)
         metadata={"id": record.get("idx", "unknown")},
     )
-
-
 @task
 def boardgame_loader():
     limit = os.environ.get("BOARDGAME_LIMIT")
