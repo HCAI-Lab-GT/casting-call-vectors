@@ -24,22 +24,19 @@ Environment Variables:
 
 import json
 import os
-import re
 import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from collections import namedtuple
 from itertools import product
+import argparse
 
 import torch
 from openai import OpenAI
-from tqdm.auto import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from pvx import Heartbeat, setup_logging
 from pvx.pvx_models import prompts
-
-import argparse
 
 PROMPTS = prompts.PROMPTS
 BACKENDS = ("openai", "vllm", "hf_local")
@@ -263,7 +260,7 @@ class PersonaDataset:
         # Generate trait description and question instruction
         trait_description: str = self._generate_trait_description()
         self.logger.info("Generated trait description for %s", self.trait)
-        
+
         question_instruction: str = self._generate_question_instruction()
         self.logger.info("Generated question instruction for %s", self.trait)
 
@@ -283,14 +280,14 @@ class PersonaDataset:
         ]
         with Heartbeat(self.logger, f"Generating dataset for {self.trait}", interval=30):
             _, response = self._inference_with_client(messages=messages)
-        
+
         # Parse the response into structured dataset components, retry maximum max_tries times if failed
-        pos_neg_pairs, questions, evaluation_prompt = None
+        pos_neg_pairs, questions, evaluation_prompt = None, None, None
         for _ in range(max_tries):
             try:
                 pos_neg_pairs, questions, evaluation_prompt = self._parse_dataset_output(response=response)
                 break
-            except:
+            except json.JSONDecodeError as e:
                 continue
         else:
             raise ValueError("Failed to parse dataset output after multiple attempts")
@@ -299,7 +296,8 @@ class PersonaDataset:
         self.questions = questions
         self.evaluation_prompt = evaluation_prompt
 
-        if save_to_json == True:
+        filepath = None
+        if save_to_json is True:
             # Save dataset to JSON
             filepath = self.save_dataset_to_json()
 
@@ -425,19 +423,19 @@ class PersonaDataset:
                 warnings.warn(
                     "Using CPU for local inference; generation will be slow.", stacklevel=2
                 )
-                
+
         # Load model and tokenizer
         tokenizer = AutoTokenizer.from_pretrained(self.local_model)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
-        
+
         # Load model with device map
         model = AutoModelForCausalLM.from_pretrained(
             self.local_model,
             dtype=self.dtype if device != "cpu" else None,
             device_map=device,
         )
-        
+
         self._hf_model = model
         self._hf_tokenizer = tokenizer
 
@@ -483,7 +481,7 @@ class PersonaDataset:
         ]
 
         # Generate response using the helper method
-        _, response = self._inference_with_client(messages=messages)
+        _, response = self._inference_with_client(messages=messages, max_new_tokens=2**13)
 
         return response
 
@@ -503,18 +501,21 @@ class PersonaDataset:
                 - pos_neg_pairs: List of (positive, negative) instruction tuples
                 - questions: List of evaluation questions
                 - eval_prompt: The evaluation prompt (concatenated if multi-line)
+                
+        Raises:
+            json.JSONDecodeError: If the response does not contain valid JSON
         """
         json_text = "\n".join(response.split("\n")[1:-1])  # Remove ```json and ```
         response_dict = json.loads(json_text)
-        
+
         # Extract components
         pos_instructions = response_dict['pos_instructions']
         neg_instructions = response_dict['neg_instructions']
         questions = response_dict['questions']
         eval_prompt = response_dict['eval_prompt']
-        
+
         return list(zip(pos_instructions, neg_instructions)), questions, eval_prompt
-    
+
     @staticmethod
     def _messages_to_prompt(messages: List[Dict[str, str]]) -> str:
         """
@@ -541,7 +542,7 @@ if __name__ == "__main__":
     ap.add_argument('-l', '--local_model', default='Qwen/Qwen2.5-1.5B-Instruct', help='Local HF model to use for hf_local backend')
     ap.add_argument('-N', '--num_questions', type=int, default=100, help='Number of questions to generate per trait')
     args = ap.parse_args()
-    
+
     trait_list = args.traits or [
         "sarcastic",
         "verbose",
@@ -556,11 +557,11 @@ if __name__ == "__main__":
         "brave",
         "cautious",
     ]
-    
+
     for trait in trait_list:
         try:
             PersonaDataset.from_json(trait=trait, dirpath=args.dirpath)
-        except:
+        except Exception as e:
             dataset: PersonaDataset = PersonaDataset(
                 trait=trait, 
                 num_questions=args.num_questions, 
