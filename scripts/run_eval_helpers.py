@@ -68,13 +68,17 @@ def lookup_run(runs: Dict[str, Any], name: str) -> Dict[str, Any]:
 def parse_kv_list(pairs: list[str]) -> Dict[str, str]:
     '''
     Parse list of key=value strings into dictionary.
+    IF no pairs, return empty dict.
     
     Args:
-        pairs (list[str]): List of strings in key=value format.
+        pairs (list[str] | None): List of strings in key=value format.
         
     Returns:
         Dictionary of parsed key-value pairs.
     '''
+    if pairs is None:
+        return {}
+    
     kv: Dict[str, str] = {}
     for item in pairs:
         if "=" not in item:
@@ -106,7 +110,8 @@ def build_command(
     solver_args: Dict[str, Any],
     model_args: Dict[str, Any],
     task_args: Dict[str, Any],
-    temperature: float | None,
+    gen_config: Dict[str, Any],
+    no_display: bool = False
 ) -> list[str]:
     '''
     Build uv command for eval.
@@ -120,7 +125,8 @@ def build_command(
         solver_args (Dict[str, Any]) : Solver arguments.
         model_args (Dict[str, Any]): Model arguments.
         task_args (Dict[str, Any]): Task arguments.
-        temperature (float | None): Generation temperature.
+        gen_config (Dict[str, Any]): Generate arguments.
+        no_display (bool = False): Disable Inspect UI
         
     Returns:
         List of command words for command line.
@@ -135,19 +141,25 @@ def build_command(
         task,
         "--model",
         model_id,
-        "--display",
-        "none"
     ]
     if limit is not None:
-        cmd += ["--limit", str(limit)]
+        cmd.extend(["--limit", str(limit)])
     if log_dir:
-        cmd += ["--log-dir", log_dir]
-    if temperature is not None:
-        cmd += ["--temperature", str(temperature)]
-    for k, v in solver_args.items():
-        cmd += ["-S", f"{k}={v}"]
+        cmd.extend(["--log-dir", log_dir])
+        
+    # temperature, max_token, etc
+    for k, v in gen_config.items():
+        cmd.extend([f"--{k.replace('_', '-')}", str(v)])
+        
+    # pass args
     for k, v in model_args.items():
-        cmd += ["-M", f"{k}={v}"]
+        cmd.extend(["-M", f"{k}={v}"])
+    for k, v in solver_args.items():
+        cmd.extend(["-S", f"{k}={v}"])
     for k, v in task_args.items():
-        cmd += ["-T", f"{k}={v}"]
+        cmd.extend(["-T", f"{k}={v}"])
+        
+    if no_display:
+        cmd.extend(["--display", "none"])
+        
     return cmd

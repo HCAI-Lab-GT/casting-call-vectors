@@ -2,23 +2,52 @@
 # Each entry names tasks, model preset (see models.yaml), limits, and log dir.
 
 runs:
+  - name: example
+    task: src/pvx/tasks/boardgame.py@boardgame_loader
+    model_ref: pvx-qwen1.5b
+    limit: 2
+    log_dir: logs/smoketest
+    generate_args:
+      temperature: 0.2
+      max_tokens: 2048
+    task_args:
+      dataset_name: logical_deduction_five_objects
+      prompt_type: chain_of_thought
+    solver_args:
+      temperature: 0.2
+    # optional per-run overrides to model construction (-M / --model-config)
+    model_args_override:
+      alpha: 2
+
   - name: smoketest
     task: src/pvx/tasks/boardgame.py@boardgame_loader
     model_ref: pvx-qwen1.5b
     limit: 2
     log_dir: logs/smoketest
+    generate_args:
+      temperature: 0.2
+      max_tokens: 2048
+    model_args_override:
+      trait: humorous
+      alpha: 1
 
   - name: bbeh-mini-qwen1.5b
     task: inspect_evals/bbeh_mini
     model_ref: qwen1.5b
     limit: 2
     log_dir: logs/bbeh_smoke
+    generate_args:
+      temperature: 0.2
+      max_tokens: 2048
 
   - name: bbeh-mini-qwen3-1.7b
     task: inspect_evals/bbeh_mini
     model_ref: qwen3-1.7b
     limit: 2
     log_dir: logs/bbeh_smoke
+    generate_args:
+      temperature: 0.2
+      max_tokens: 2048
 
   - name: bbh-logical-deduction-qwen1.5b
     task: inspect_evals/bbh

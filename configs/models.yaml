@@ -7,41 +7,26 @@
 models:
   - name: pvx-qwen1.5b
     model: pvx/Qwen/Qwen2.5-1.5B-Instruct
-    args: {
-      trait: humorous,
+    args:
+      # default params, typically overriden in runs.yaml per run
+      trait: humorous
       alpha: 1
-    }
-    generate:
-      temperature: 0.2
-      max_tokens: 2048
 
   - name: qwen1.5b
     model: hf/Qwen/Qwen2.5-1.5B-Instruct
     args: {}
-    generate:
-      temperature: 0.2
-      max_tokens: 2048
 
   - name: qwen3-0.6b
     model: hf/Qwen/Qwen3-0.6B
     args: {}
-    generate:
-      temperature: 0.2
-      max_tokens: 2048
 
   - name: qwen3-1.7b
     model: hf/Qwen/Qwen3-1.7B
     args: {}
-    generate:
-      temperature: 0.2
-      max_tokens: 2048
 
   - name: api-4o-mini
     model: openai/gpt-4o-mini
     args: {}
-    generate:
-      temperature: 0.2
-      max_tokens: 2048
 
 # Example usage:
 # uv run inspect eval inspect_evals/bbeh_mini --model $(yq '.models[] | select(.name=="qwen3-1.7b").model' configs/models.yaml) -S temperature=$(yq '.models[] | select(.name=="qwen3-1.7b").generate.temperature' configs/models.yaml)
