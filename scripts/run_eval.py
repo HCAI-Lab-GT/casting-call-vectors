@@ -81,6 +81,10 @@ def main() -> None:
     models_cfg = load_yaml(Path(args.model_config))
     runs_cfg = load_yaml(Path(args.run_config))
 
+    # build args for model and task
+    model_args = parse_kv_list(args.model_arg)
+    task_args = parse_kv_list(args.task_arg)
+
     # preset run
     if args.run:
         # load preset
@@ -105,25 +109,30 @@ def main() -> None:
     # explicit model id
     if args.model_id:
         model_id = args.model_id
+        default_args = {}
         default_generate = {}
 
     # preset model
     else:
         if not model_name:
             raise SystemExit("model is required (via --model, --model-id, or run preset)")
-        model_id, default_generate = lookup_model(models_cfg, model_name)
+        model = lookup_model(models_cfg, model_name)
+
+        model_id = model.get('model')
+        default_args = model.get('args')
+        default_generate = model.get('generate', {})
+
+    # print(f'{default_args=}')
+    # print(f'{default_generate=}')
 
     # build args for solvers
     solver_args = dict(default_generate)
     solver_args.update(parse_kv_list(args.solver_arg))
 
-    # build args for model and task
-    model_args = parse_kv_list(args.model_arg)
-    task_args = parse_kv_list(args.task_arg)
-
     # merge in run task args
     if args.run:
         run_task_args = run.get("task_args", {})
+        model_args.update(default_args)
         task_args = {**run_task_args, **task_args}
 
     # chain-of-thought prompt if requested

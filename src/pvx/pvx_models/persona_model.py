@@ -8,12 +8,11 @@ from contextlib import contextmanager, nullcontext
 import argparse
 from tqdm import tqdm
 
-
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.utils import logging as transformers_logging
 
-from pvx import setup_logging #, Heartbeat
+from pvx import setup_logging, Heartbeat
 from pvx.pvx_models.persona_dataset import PersonaDataset
 
 torch.set_float32_matmul_precision('high')
@@ -30,7 +29,9 @@ class PersonaModel:
     def __init__(self,
                  target_model_id: str = "qwen2.5:7b-instruct",
                  dataset: Optional[PersonaDataset] = None,
+                 trait: str = None,
                  layer: float = 14,
+                 default_alpha: float = 3.0,
                  from_json: bool = False):
         '''
         Initialize the PersonaModel with a target model and dataset for persona extraction.
@@ -42,9 +43,9 @@ class PersonaModel:
             from_json (bool): Whether to load persona vectors from JSON file.
         '''
         self.target_model_id = target_model_id
-        self.dataset = dataset
         self.layer_steering = layer
-
+        self.default_alpha = default_alpha
+        
         # Load model and tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(target_model_id)
         self.model = AutoModelForCausalLM.from_pretrained(
@@ -80,6 +81,10 @@ class PersonaModel:
         if from_json:
             return
         
+        # load dataset from file if provided
+        self.dataset = dataset if dataset else PersonaDataset.from_json(trait)
+        self.trait = self.dataset.trait
+        
         # Extract persona vectors
         _, _, _ = self.extract_persona_vector()
         
@@ -99,6 +104,8 @@ class PersonaModel:
         """
         with open(json_filepath, 'r') as f:
             data = json.load(f)
+        
+        logger.info("Loading PersonaModel from: %s", json_filepath)
         
         # Create instance without extracting vectors
         instance = cls(
@@ -127,6 +134,41 @@ class PersonaModel:
         logger.info("   Response persona vector shape: %s", str(tuple(instance.response_persona_vector.shape)))
 
         return instance
+    
+    @classmethod
+    def load_or_create(cls,
+                       target_model_id: str = "qwen2.5:7b-instruct",
+                       dataset: Optional[PersonaDataset] = None,
+                       trait: str = None, # alternate to dataset for loading
+                       layer: float = 14,
+                       json_filepath: str = None) -> 'PersonaModel':
+        """
+        Load a PersonaModel instance from a JSON file if it exists, otherwise create a new one.
+        
+        Args:
+            json_filepath (str): Path to the JSON file containing the saved initialization data
+            
+        Returns:
+            PersonaModel: A new instance with the loaded persona vectors or a newly created one
+        """
+        json_filepath = json_filepath if json_filepath else f"./model_with_persona/{trait}_persona_initialization_{target_model_id}.json"
+        
+        try:
+            logger.error(json_filepath)
+            
+            if Path(json_filepath).exists():
+                return cls.from_json(json_filepath)
+            
+        except Exception as e:
+            logger.warning("⚠️ Failed to load from JSON: %s. Creating a new PersonaModel instance.", e)
+            pass
+        
+        return cls(
+            target_model_id=target_model_id,
+            dataset=dataset,
+            trait=trait,
+            layer=layer,
+        )
 
     def save_to_json(self, filepath: str = "./model_with_persona/") -> str:
         """
@@ -166,7 +208,7 @@ class PersonaModel:
         # Save to JSON file
         with open(filepath, 'w') as f:
             json.dump(initialization_data, f, indent=2)
-        
+
         logger.info("✅ Initialization saved to: %s", filepath)
         return filepath
 
@@ -296,17 +338,19 @@ class PersonaModel:
         return prompt_persona_vector, response_persona_vector, all_layers_response_persona_vector
 
     @torch.inference_mode()
-    def inference_with_persona(self,
-                               prompt: str,
-                               alpha: float,
-                               max_new_tokens: int = 200,
-                               temperature: float = 0.9,
-                               top_p=.99) -> str:
+    def generate(self,
+                 prompt: str | None = None,
+                 messages: list[str] | None = None,
+                 alpha: float | None = 3,
+                 max_new_tokens: int = 2000,
+                 temperature: float = 0.9,
+                 top_p=.99) -> str:
         '''
         Generate a response to the prompt with persona steering.
         
         Args:
             prompt: The user prompt string.
+            messages: Optional list of messages in chat format.
             alpha: Steering strength for persona vector.
             max_new_tokens: Maximum number of tokens to generate.
             temperature: Sampling temperature.
@@ -314,12 +358,17 @@ class PersonaModel:
         Returns:
             str: persona influenced response
         '''
+        if prompt is None and messages is None:
+            raise ValueError("Prompt and Messages cannot both be None")
+      
         self.model.eval()
 
-        # Prepare messages in chat format
-        messages = [
-            {"role": "user", "content": prompt}
-        ]
+        if messages is None:
+            # Prepare messages in chat format
+            messages = [
+                {"role": "user", "content": prompt}
+            ]
+
         formatted = self.tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
@@ -337,7 +386,6 @@ class PersonaModel:
         )
 
         need_steer = (alpha != 0)
-
 
         steer_ctx = nullcontext()  # default: no steering
             
@@ -385,23 +433,24 @@ class PersonaModel:
             gen_ids.append(tok)
             last_token = torch.tensor([[tok]], device=self.device, dtype=torch.long)
                 
-            # Decode loop (KV-cache)
-            for _ in range(max_new_tokens - 1):
-                out = self.model(
-                    input_ids=last_token,
-                    past_key_values=past,
-                    use_cache=True,
-                )
-                past = out.past_key_values # update kv cache
+            with Heartbeat(logger, "generating output...", interval=30):
+                # Decode loop (KV-cache)
+                for _ in range(max_new_tokens - 1):
+                    out = self.model(
+                        input_ids=last_token,
+                        past_key_values=past,
+                        use_cache=True,
+                    )
+                    past = out.past_key_values # update kv cache
 
-                # Sample index of next token
-                logits = out.logits[0, -1, :]
-                tok = self._top_p_sample(logits, temperature=temperature, top_p=top_p)
-                if tok in eos_ids:
-                    break
+                    # Sample index of next token
+                    logits = out.logits[0, -1, :]
+                    tok = self._top_p_sample(logits, temperature=temperature, top_p=top_p)
+                    if tok in eos_ids:
+                        break
 
-                gen_ids.append(tok)
-                last_token.fill_(tok)
+                    gen_ids.append(tok)
+                    last_token.fill_(tok)
         
         return self.tokenizer.decode(gen_ids, skip_special_tokens=True)
     
@@ -411,7 +460,7 @@ class PersonaModel:
                          input_ids: torch.Tensor, 
                          attention_mask: torch.Tensor | None,
                          temperature: float = .9,
-                         max_new_tokens: int = 200,
+                         max_new_tokens: int = 20000,
                          ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         '''
         Generate response and extract prompt last activation, response average activation, and response average activations all layers.
@@ -645,30 +694,44 @@ class PersonaModel:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Generate Persona Dataset")
-    ap.add_argument("-t", "--trait", type=str, default="verbose", help="Trait of the persona dataset")
-    ap.add_argument("-n", "--max_new_tokens", type=int, default=500, help="Max tokens to generate")
+    ap.add_argument("-t", "--trait", type=str, default="humorous", help="Trait of the persona dataset")
+    ap.add_argument("-n", "--max_new_tokens", type=int, default=2000, help="Max tokens to generate")
     ap.add_argument("-a", "--alpha", type=float, default=3.0, help="Alpha value for persona steering")
     ap.add_argument("--temperature", type=float, default=0.9, help="Temperature for sampling")
     ap.add_argument("-q", "--question", type=str, default="What is the theory of relativity?", help="Question to generate response for")
     
     args = ap.parse_args()
-    
-    try:
-        dataset = PersonaDataset.from_json(trait=args.trait)
-    except Exception as e:
-        logger.error("Failed to load dataset: %s", str(e))
-        raise e
-    
-    try:
-        persona_model = PersonaModel.from_json(
-            f"model_with_persona/{args.trait}_persona_initialization_Qwen/Qwen2.5-1.5B-Instruct.json"
-        )
-    except Exception as e:
-        persona_model = PersonaModel(
-            target_model_id="Qwen/Qwen2.5-1.5B-Instruct",
-            dataset=dataset,
-            layer=14
-        )
+
+    # try:
+    #     dataset = PersonaDataset.from_json(trait=args.trait)
+    # except Exception as e:
+    #     logger.error("Failed to load dataset: %s", str(e))
+    #     raise e
+
+    # try:
+    #     persona_model = PersonaModel.from_json(
+    #         f"model_with_persona/{args.trait}_persona_initialization_Qwen/Qwen2.5-1.5B-Instruct.json"
+    #     )
+    # except Exception as e:
+    #     persona_model = PersonaModel(
+    #         target_model_id="Qwen/Qwen2.5-1.5B-Instruct",
+    #         dataset=dataset,
+    #         layer=14
+    #     )
+
+    # persona_model = PersonaModel(
+    #     target_model_id="Qwen/Qwen2.5-1.5B-Instruct",
+    #     dataset=dataset,
+    #     layer=14
+    # )
+
+    persona_model = PersonaModel.load_or_create(
+        target_model_id="Qwen/Qwen2.5-1.5B-Instruct",
+        # dataset=dataset,
+        trait=args.trait,
+        layer=14,
+        json_filepath=f"model_with_persona/{args.trait}_persona_initialization_Qwen/Qwen2.5-1.5B-Instruct.json"
+    )
             
     # Example 1: Create new PersonaModel from dataset (extracts vectors)
     # dataset = PersonaDataset.from_json(trait="humorous")
@@ -678,13 +741,13 @@ if __name__ == "__main__":
     # persona_model = PersonaModel.from_json(
     #     "model_with_persona/verbose_persona_initialization_Qwen/Qwen2.5-1.5B-Instruct.json"
     # )
-    response = persona_model.inference_with_persona(
+    response = persona_model.generate(
         prompt=args.question,
         alpha=0,
         max_new_tokens=args.max_new_tokens,
         temperature=args.temperature
     )
-    steer_response = persona_model.inference_with_persona(
+    steer_response = persona_model.generate(
         prompt=args.question,
         alpha=args.alpha,
         max_new_tokens=args.max_new_tokens,
@@ -693,7 +756,9 @@ if __name__ == "__main__":
 
     logger.info("=== Question ===")
     logger.info(args.question)
+    logger.info('')
     logger.info("=== Non-Steered Answer ===")
     logger.info(response)
+    logger.info('')
     logger.info("=== %s Steered Answer ===", args.trait)
     logger.info(steer_response)
