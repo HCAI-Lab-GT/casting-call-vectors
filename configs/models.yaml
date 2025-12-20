@@ -5,6 +5,16 @@
 # - generate: default solver overrides (passed with -S)
 
 models:
+  - name: pvx-qwen1.5b
+    model: pvx/Qwen/Qwen2.5-1.5B-Instruct
+    args: {
+      trait: humorous,
+      alpha: 1
+    }
+    generate:
+      temperature: 0.2
+      max_tokens: 2048
+
   - name: qwen1.5b
     model: hf/Qwen/Qwen2.5-1.5B-Instruct
     args: {}

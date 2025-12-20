@@ -33,6 +33,10 @@ I recommend installing the Inspect AI VS Code extension (Marketplace ID `ukaisi.
   uv run inspect eval "$TASK" --model "$MODEL_ID" --limit "$LIMIT" --log-dir "$LOGDIR" -S temperature="$TEMP" -S max_tokens="$MAXTOK"
   ```
 
+## Setup Persona Models
+- Use `scripts/pvx/pvx_models/persona_dataset.py` to build persona traits
+- Use `scripts/pvx/pvx_models/persona_model.py` to test the persona model core
+
 ## CLI runner
 - Use `scripts/run_eval.py` to launch evals from presets.
 - Examples:

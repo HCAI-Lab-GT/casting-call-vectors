@@ -27,7 +27,7 @@ def boardgame_loader():
             sample_fields=record_to_sample,
             trust=True,  # Required for some HF loading scripts
         ),
-        # Placeholders (we aren't running a model yet)
+        
         solver=[
             system_message(
                 "You are a helpful logic assistant. "

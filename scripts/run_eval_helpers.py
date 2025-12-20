@@ -24,7 +24,7 @@ def load_yaml(path: Path) -> Dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
-def lookup_model(models: Dict[str, Any], name: str) -> Tuple[str, Dict[str, Any]]:
+def lookup_model(models: Dict[str, Any], name: str) -> Dict[str, Any]:
     '''
     Lookup model preset by name.
     
@@ -40,7 +40,8 @@ def lookup_model(models: Dict[str, Any], name: str) -> Tuple[str, Dict[str, Any]
     '''
     for entry in models.get("models", []):
         if entry.get("name") == name:
-            return entry["model"], entry.get("generate", {}) or {}
+            return entry
+            # return entry["model"], entry.get("generate", {}) or {}
     raise SystemExit(f"Unknown model preset: {name}")
 
 
@@ -134,6 +135,8 @@ def build_command(
         task,
         "--model",
         model_id,
+        "--display",
+        "none"
     ]
     if limit is not None:
         cmd += ["--limit", str(limit)]

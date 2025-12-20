@@ -2,6 +2,12 @@
 # Each entry names tasks, model preset (see models.yaml), limits, and log dir.
 
 runs:
+  - name: smoketest
+    task: src/pvx/tasks/boardgame.py@boardgame_loader
+    model_ref: pvx-qwen1.5b
+    limit: 2
+    log_dir: logs/smoketest
+
   - name: bbeh-mini-qwen1.5b
     task: inspect_evals/bbeh_mini
     model_ref: qwen1.5b
