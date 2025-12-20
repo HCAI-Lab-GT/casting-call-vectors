@@ -452,6 +452,8 @@ class PersonaModel:
                     gen_ids.append(tok)
                     last_token.fill_(tok)
         
+        logger.info("Generated output!")
+        
         return self.tokenizer.decode(gen_ids, skip_special_tokens=True)
     
 

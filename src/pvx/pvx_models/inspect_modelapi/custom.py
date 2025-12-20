@@ -85,12 +85,13 @@ class PVXModelAPI(ModelAPI):
         # optional params
         opt_params = {
             'alpha': self.alpha,
-            # 'temperature': config.temperature,
-            # 'max_new_tokens': config.max_tokens,
-            # 'top_p': config.top_p
+            'temperature': config.temperature,
+            'max_new_tokens': config.max_tokens,
+            'top_p': config.top_p
         }
         
-        params = {k: v for k, v in opt_params.items() if v is not None}
+        # only keep non-null params
+        nonnull_params = {k: v for k, v in opt_params.items() if v is not None}
         
         # Run sync inference off the event loop (Inspect is async, AnyIO-based)
         # so you do not block parallel execution. :contentReference[oaicite:1]{index=1}
@@ -99,8 +100,7 @@ class PVXModelAPI(ModelAPI):
             partial(
                 self.pvx.generate,
                 messages=prompt,
-                max_new_tokens=3000,
-                **params
+                **nonnull_params
             )
         )
         dt = time.perf_counter() - t0

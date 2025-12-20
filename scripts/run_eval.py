@@ -35,30 +35,45 @@ def main() -> None:
     ap.add_argument("--task", help="Override task (inspect task path)")
     ap.add_argument("--model", help="Model preset name from models.yaml")
     ap.add_argument("--model-id", help="Explicit model id (hf/... or api)")
-    ap.add_argument("--limit", type=int, help="Override sample limit")
     ap.add_argument("--log-dir", help="Override log dir")
+    ap.add_argument("--limit", type=int, help="Override sample limit")
+
+    # generated configs
+    ap.add_argument("--max_tokens", type=int, help="Override max_token limit")
+    ap.add_argument(
+        "--temperature", type=float, help="Override generation temperature (passed to inspect eval)"
+    )
+
+    # config files
     ap.add_argument("--model-config", default=str(DEFAULT_MODELS), help="Path to models.yaml")
     ap.add_argument("--run-config", default=str(DEFAULT_RUNS), help="Path to runs.yaml")
     ap.add_argument(
-        "--model-arg", action="append", default=[], help="Extra model arg key=value (repeatable)"
+        "-M",
+        "--model-arg", 
+        action="append",
+        default=[],
+        help="Extra model arg key=value (repeatable) passed with -M"
     )
     ap.add_argument(
-        "--solver-arg", action="append", default=[], help="Extra solver arg key=value (repeatable)"
-    )
-    ap.add_argument(
+        "-T",
         "--task-arg",
         action="append",
         default=[],
         help="Task arg key=value (repeatable) passed with -T",
     )
     ap.add_argument(
+        "-S",
+        "--solver-arg",
+        action="append",
+        default=[],
+        help="Extra solver arg key=value (repeatable) passed with -S"
+    )
+    ap.add_argument(
         "--cot",
         action="store_true",
         help="Force prompt_type=chain_of_thought when supported (e.g. BBH)",
     )
-    ap.add_argument(
-        "--temperature", type=float, help="Override generation temperature (passed to inspect eval)"
-    )
+    ap.add_argument("--no-display", action="store_true", help="Disable Inspect UI (enabled by default)")
     ap.add_argument("--no-wandb", action="store_true", help="Disable WandB (enabled by default)")
     ap.add_argument("--wandb-project", help="Override WANDB_PROJECT")
     ap.add_argument("--wandb-entity", help="Override WANDB_ENTITY")
@@ -81,59 +96,46 @@ def main() -> None:
     models_cfg = load_yaml(Path(args.model_config))
     runs_cfg = load_yaml(Path(args.run_config))
 
-    # build args for model and task
-    model_args = parse_kv_list(args.model_arg)
-    task_args = parse_kv_list(args.task_arg)
+    # Load run if specified
+    run = lookup_run(runs_cfg, args.run) if args.run else {}
 
-    # preset run
-    if args.run:
-        # load preset
-        run = lookup_run(runs_cfg, args.run)
+    # Param Priorities: CLI > Run > None
+    task        =   args.task       or run.get('task')
+    model_name  =   args.model      or run.get('model_ref')
+    limit       =   args.limit      or run.get('limit')
+    log_dir     =   args.log_dir    or run.get('log_dir', default_log_dir(task) if task else None)
 
-        # allow for override
-        task = args.task or run["task"]
-        model_name = args.model or run["model_ref"]
-        limit = args.limit if args.limit is not None else run.get("limit")
-        log_dir = args.log_dir or run.get("log_dir") or default_log_dir(task)
-
-    # custom run
-    else:
-        task = args.task
-        model_name = args.model
-        limit = args.limit
-        log_dir = args.log_dir or (default_log_dir(task) if task else None)
-
+    # Task is required
     if not task:
         raise SystemExit("task is required (via --task or run preset)")
 
-    # explicit model id
-    if args.model_id:
-        model_id = args.model_id
-        default_args = {}
-        default_generate = {}
+    # One of model_id or model_name must be specified
+    if not args.model_id and not model_name:
+        raise SystemExit("model is required (via --model, --model-id, or run preset)")
 
-    # preset model
-    else:
-        if not model_name:
-            raise SystemExit("model is required (via --model, --model-id, or run preset)")
-        model = lookup_model(models_cfg, model_name)
-
-        model_id = model.get('model')
-        default_args = model.get('args')
-        default_generate = model.get('generate', {})
-
-    # print(f'{default_args=}')
-    # print(f'{default_generate=}')
-
-    # build args for solvers
-    solver_args = dict(default_generate)
+    # Load task and solver configs
+        # run.yaml
+    task_args = run.get('task_args', {})
+    solver_args = run.get('solver_args', {})
+    
+        # CLI
+    task_args.update(parse_kv_list(args.task_arg))
     solver_args.update(parse_kv_list(args.solver_arg))
 
-    # merge in run task args
-    if args.run:
-        run_task_args = run.get("task_args", {})
-        model_args.update(default_args)
-        task_args = {**run_task_args, **task_args}
+    # Load generate config (will be unpacked later in build_command)
+    generate_configs = run.get('generate_args', {})
+    generate_fields = ['max_tokens', 'temperature', 'top_p', 'top_k']
+    generate_configs.update({field: getattr(args, field) for field in generate_fields
+                             if hasattr(args, field) and getattr(args, field) is not None})
+
+    # Load model via if specified
+    model = lookup_model(models_cfg, model_name) if model_name is not None else {}
+    
+    # Param Priorities: Arguments > Run > None, args
+    model_id = args.model_id or model.get('model')
+    model_args = model.get('args', {}) # models.yaml: args
+    model_args.update(run.get('model_args_override', {})) # runs.yaml: model_args_override
+    model_args.update(parse_kv_list(args.model_arg)) # CLI -M args
 
     # chain-of-thought prompt if requested
     if args.cot and "prompt_type" not in task_args:
@@ -141,14 +143,15 @@ def main() -> None:
 
     # build uv run python command
     cmd = build_command(
-        task,
-        model_id,
-        limit,
-        log_dir,
-        solver_args,
-        model_args,
-        task_args,
-        args.temperature,
+        task=task,
+        model_id=model_id,
+        limit=limit,
+        log_dir=log_dir,
+        model_args=model_args,
+        solver_args=solver_args,
+        task_args=task_args,
+        gen_config=generate_configs,
+        no_display=args.no_display
     )
 
     env = os.environ.copy()
@@ -172,11 +175,11 @@ def main() -> None:
     else:
         env.pop("INSPECT_WANDB_ENABLED", None)
 
-    print(" ".join(cmd))
+    logger = setup_logging(name="run-eval")
+    logger.info("Running `%s`", " ".join(cmd))
+
     if args.dry_run:
         return
-
-    logger = setup_logging(name="run-eval")
 
     # run with heartbeats if requested, otherwise normal run via subprocess
     if args.heartbeat_interval > 0:
