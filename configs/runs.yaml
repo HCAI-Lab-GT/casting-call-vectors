@@ -20,16 +20,34 @@ runs:
       alpha: 2
 
   - name: smoketest
-    task: src/pvx/tasks/boardgame.py@boardgame_loader
+    task: src/pvx/tasks/boardgame_qa/boardgame.py@boardgame_loader
     model_ref: pvx-qwen1.5b
     limit: 2
     log_dir: logs/smoketest
     generate_args:
       temperature: 0.2
       max_tokens: 2048
+    task_args:
+      prompt_type: chain_of_thought
+      limit: 10
     model_args_override:
       trait: humorous
       alpha: 1
+  
+  - name: worftest
+    task: src/pvx/tasks/worfbench/worfbench.py@worfbench_task
+    model_ref: qwen1.5b
+    limit: 2
+    log_dir: logs/extras/worfbench_smoke
+    generate_args:
+      temperature: 0.2
+      max_tokens: 2048
+    task_args:
+      nshot: 2
+      limit: 10
+      eval_type: graph
+    solver_args: # when launched from --solver
+      eval_type: node
 
   - name: bbeh-mini-qwen1.5b
     task: inspect_evals/bbeh_mini
@@ -61,10 +79,16 @@ runs:
       temperature: 0.2
 
   - name: extras-boardgame-qa-qwen1.5b
-    task: src/pvx/tasks/boardgame.py@boardgame_loader
+    task: src/pvx/tasks/boardgame_qa/boardgame.py@boardgame_loader
     model_ref: qwen1.5b
     limit: 50
     log_dir: logs/extras/boardgame_smoke
+
+  - name: extras-boardgame-qa-qwen1.5b
+    task: src/pvx/tasks/worfbench/worfbench.py@worfbench_loader
+    model_ref: qwen1.5b
+    limit: 50
+    log_dir: logs/extras/worfbench_smoke
 
 # Usage hint:
 #   TASK=$(yq '.runs[] | select(.name=="bbeh-mini-qwen3-1.7b").task' configs/runs.yaml)
