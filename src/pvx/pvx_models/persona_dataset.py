@@ -81,7 +81,7 @@ class PersonaDataset:
         local_model: Optional[str] = None,
         device: Optional[str] = None,
         dtype: torch.dtype = torch.float16,
-        dirpath: str = "./persona_dataset/",
+        dirpath: str = "./persona_data/trait_datasets/",
     ):
         """
         Initialize a PersonaDataset instance.
@@ -125,7 +125,7 @@ class PersonaDataset:
         self.logger = setup_logging(name="persona-dataset")
 
     @staticmethod
-    def from_json(trait: str, dirpath: str = "./persona_dataset/") -> "PersonaDataset":
+    def from_json(trait: str, dirpath: str = "./persona_data/trait_datasets") -> "PersonaDataset":
         """
         Load a previously saved dataset from a JSON file.
 
@@ -138,7 +138,7 @@ class PersonaDataset:
             trait (str): The personality trait name (used to construct filename)
             dirpath (str, optional): Directory path where the dataset is saved.
                 The filename is assumed to be "{trait}_dataset.json".
-                Defaults to "./persona_dataset/".
+                Defaults to "./persona_data/trait_datasets/".
 
         Returns:
             PersonaDataset: A fully initialized PersonaDataset instance with all
@@ -536,7 +536,7 @@ class PersonaDataset:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Generate Persona Dataset")
     ap.add_argument('-t','--traits', nargs='+', help='<Optional> Select traits', required=False)
-    ap.add_argument('-f', '--dirpath', default='./persona_dataset/', help='Directory filepath to save generated datasets')
+    ap.add_argument('-f', '--dirpath', default='./persona_data/trait_datasets/', help='Directory filepath to save generated datasets')
     ap.add_argument('-b', '--backend', default='hf_local', help='Backend to use: openai, vllm, hf_local')
     ap.add_argument('-m', '--model', default='openai/gpt-oss-120b', help='Model to use for openai/vllm backend')
     ap.add_argument('-l', '--local_model', default='Qwen/Qwen2.5-1.5B-Instruct', help='Local HF model to use for hf_local backend')

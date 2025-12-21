@@ -151,7 +151,7 @@ class PersonaModel:
         Returns:
             PersonaModel: A new instance with the loaded persona vectors or a newly created one
         """
-        json_filepath = json_filepath if json_filepath else f"./model_with_persona/{trait}_persona_initialization_{target_model_id}.json"
+        json_filepath = json_filepath if json_filepath else f"./persona_data/model_inits/{trait}_persona_initialization_{target_model_id}.json"
         
         try:
             logger.error(json_filepath)
@@ -170,7 +170,7 @@ class PersonaModel:
             layer=layer,
         )
 
-    def save_to_json(self, filepath: str = "./model_with_persona/") -> str:
+    def save_to_json(self, filepath: str = "./persona_data/model_inits/") -> str:
         """
         Save the persona vectors and initialization config to JSON
         
@@ -712,7 +712,7 @@ if __name__ == "__main__":
 
     # try:
     #     persona_model = PersonaModel.from_json(
-    #         f"model_with_persona/{args.trait}_persona_initialization_Qwen/Qwen2.5-1.5B-Instruct.json"
+    #         f"persona_data/model_inits/{args.trait}_persona_initialization_Qwen/Qwen2.5-1.5B-Instruct.json"
     #     )
     # except Exception as e:
     #     persona_model = PersonaModel(
@@ -732,7 +732,7 @@ if __name__ == "__main__":
         # dataset=dataset,
         trait=args.trait,
         layer=14,
-        json_filepath=f"model_with_persona/{args.trait}_persona_initialization_Qwen/Qwen2.5-1.5B-Instruct.json"
+        json_filepath=f"persona_data/model_inits/{args.trait}_persona_initialization_Qwen/Qwen2.5-1.5B-Instruct.json"
     )
             
     # Example 1: Create new PersonaModel from dataset (extracts vectors)
@@ -741,7 +741,7 @@ if __name__ == "__main__":
 
     # Example 2: Load existing PersonaModel from JSON (skips vector extraction)
     # persona_model = PersonaModel.from_json(
-    #     "model_with_persona/verbose_persona_initialization_Qwen/Qwen2.5-1.5B-Instruct.json"
+    #     "persona_data/model_inits/verbose_persona_initialization_Qwen/Qwen2.5-1.5B-Instruct.json"
     # )
     response = persona_model.generate(
         prompt=args.question,
