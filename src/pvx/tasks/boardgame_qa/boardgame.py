@@ -5,7 +5,10 @@ from inspect_ai.dataset import Sample, hf_dataset
 from inspect_ai.solver import chain_of_thought, generate, system_message
 from inspect_ai.scorer import pattern
 
+from pvx import setup_logging
 from pvx.utils.inspect_utils import print_sample_input
+
+logger = setup_logging(name="boardgame-qa")
 
 HF_PATH = "tasksource/Boardgame-QA"
 @task
@@ -19,16 +22,17 @@ def boardgame_loader(limit: int, prompt_type: str='') -> Task:
     Returns:
         inspect_ai.Task
     '''
+    logger.info("Constructing Boardgame_QA task")
     split = "test" if not limit else f"test[:{limit}]"
+    
+    dataset = hf_dataset(path=HF_PATH,
+                         split=split,  # Allow limiting samples for quick smoke tests
+                         sample_fields=record_to_sample)
+    logger.info("Loaded Boardgame_QA dataset")
     
     return Task(
         # Load from Hugging Face: tasksource/Boardgame-QA
-        dataset=hf_dataset(
-            path=HF_PATH,
-            split=split,  # Allow limiting samples for quick smoke tests
-            sample_fields=record_to_sample,
-            trust=True,  # Required for some HF loading scripts
-        ),
+        dataset=dataset,
         solver=[
             system_message(
                 "You are a helpful logic assistant. "
@@ -39,7 +43,6 @@ def boardgame_loader(limit: int, prompt_type: str='') -> Task:
             *([chain_of_thought()] if prompt_type == 'chain_of_thought' else []),
             generate(),
         ],
-        # scorer=model_graded_fact(),
         scorer=pattern(
             pattern="\\b(proved|disproved|unknown)\\b",
         )
@@ -52,8 +55,10 @@ def record_to_sample(record):
         # The model is graded against this answer
         target=record["label"],
         # We store the ID to track specific cases (like the Squirrel ones later)
-        metadata={},
-        id=record.get("idx", "unknown")
+        metadata={
+            'id': record.get("idx", "unknown")
+        },
+        # id=record.get("idx", "unknown") this breaks if id not unique and often huggingface datasets are stupid
     )
 
 # 3. VERIFICATION BLOCK (Run this file directly to test)

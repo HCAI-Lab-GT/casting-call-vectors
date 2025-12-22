@@ -154,8 +154,6 @@ class PersonaModel:
         json_filepath = json_filepath if json_filepath else f"./persona_data/model_inits/{trait}_persona_initialization_{target_model_id}.json"
         
         try:
-            logger.error(json_filepath)
-            
             if Path(json_filepath).exists():
                 return cls.from_json(json_filepath)
             
@@ -478,7 +476,6 @@ class PersonaModel:
                 - Tensor: response_average
                 - Tensor: response_average_all_layers
         '''
-        
         # prompt forward (KV cache)
         out = self.model(
             input_ids=input_ids,

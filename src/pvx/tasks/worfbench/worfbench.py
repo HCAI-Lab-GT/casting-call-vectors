@@ -17,6 +17,7 @@ from inspect_ai.dataset import Dataset, Sample, hf_dataset
 from inspect_ai.solver import chain_of_thought, generate, TaskState
 from inspect_ai.scorer import scorer, Score, Scorer, Target, mean, stderr
 
+from pvx.utils.logging_utils import setup_logging
 from pvx.utils.inspect_utils import dicts_to_chatmessages, print_sample_input
 
 from pvx.tasks.worfbench.eval_prompt import one_shot_example, two_shot_example
@@ -24,6 +25,8 @@ from pvx.tasks.worfbench.graph_evaluator import t_eval_nodes, t_eval_graph
 
 from sentence_transformers import SentenceTransformer
 sentence_model = SentenceTransformer("all-mpnet-base-v2")
+
+logger = setup_logging(name="worfbench")
 
 HELD_OUT_TASKS = ['intercodesql', 'seal_tools']
 
@@ -44,6 +47,8 @@ shot_maps = {
     2: two_shot_example
 }
 
+ANSWER_PATTERN_WORD = re.compile(r"(?i)ANSWER\s*:\s*(\w+)(?:\n|$)")
+
 @task
 def worfbench_task(split: str = 'test',
                    limit: int = None,
@@ -62,15 +67,20 @@ def worfbench_task(split: str = 'test',
     Returns:
         inspect.Task: 
     '''
+    logger.info("Constructing WorfBench task")
+    
+    dataset = build_dataset(split, limit, nshot)
+    logger.info('Loaded WorfBench dataset')
+    
     return Task(
-        dataset=build_dataset(split, limit, nshot),
+        dataset=dataset,
         solver=[
             *([chain_of_thought()] if prompt_type == 'chain_of_thought' else []),
             generate(),
         ],
-        scorer=worfbench_solver(eval_type=eval_type)
+        scorer=worfbench_scorer(prompt_type=prompt_type, eval_type=eval_type)
     )
-    
+  
 @scorer(
     metrics={
         "precision": [mean(), stderr()],
@@ -79,18 +89,23 @@ def worfbench_task(split: str = 'test',
         # or: "*": [mean(), stderr()]  # applies to all keys :contentReference[oaicite:1]{index=1}
     }
 )
-def worfbench_solver(eval_type: str = 'node') -> Scorer:
+def worfbench_scorer(prompt_type: str, eval_type: str = 'node') -> Scorer:
     '''
-    Custom Solver for Worfbench.
+    Custom Scorer for Worfbench.
     
     Args:
         eval_type (str): 'node' or 'graph'
     
     Returns:
-        inspect_ai.Solver
+        inspect_ai.Scorer
     '''
     async def score(state: TaskState, target: Target) -> Score:
         answer = state.output.completion
+        
+        # if prompt_type == 'chain_of_thought':
+        #     match = re.search(ANSWER_PATTERN_WORD, state.output.completion)
+            
+        #     answer = match.groups()[0] if match else ''
 
         ### logic from WorfBench/evaluator/node_eval.py:eval_workflow() ###
         gold_plan = target.text
@@ -143,9 +158,9 @@ def build_dataset(split: str='test', limit: int=None, nshot: int=2) -> Dataset:
 
     # Load from Hugging Face: zjunlp/FBench_test
     worf_test_all: Dataset = hf_dataset(path=HF_PATHS[split],
-                               split=split + (f'[:{limit}]' if limit else ''),  # Allow limiting samples for quick smoke tests
-                               sample_fields=nshot_record_to_sample,
-                               trust=True)  # Required for some HF loading scripts
+                                        split=split + (f'[:{limit}]' if limit else ''),  # Allow limiting samples for quick smoke tests
+                                        sample_fields=nshot_record_to_sample,
+                                        trust=True)  # Required for some HF loading scripts
 
     worf_test_filtered: Dataset = worf_test_all.filter(
         lambda s: s.metadata["source"] not in HELD_OUT_TASKS, name="worfbench_filtered"
