@@ -21,9 +21,9 @@ runs:
 
   - name: smoketest
     task: src/pvx/tasks/boardgame_qa/boardgame.py@boardgame_loader
-    model_ref: pvx-qwen1.5b
+    model_ref: pvx-qwen7b
     limit: 2
-    log_dir: logs/smoketest
+    log_dir: logs/extras/smoketest_smoke
     generate_args:
       temperature: 0.2
       max_tokens: 2048
@@ -36,13 +36,14 @@ runs:
   
   - name: worftest
     task: src/pvx/tasks/worfbench/worfbench.py@worfbench_task
-    model_ref: qwen1.5b
+    model_ref: qwen7b
     limit: 2
     log_dir: logs/extras/worfbench_smoke
     generate_args:
-      temperature: 0.2
+      temperature: 0.5
       max_tokens: 2048
     task_args:
+      # prompt_type: chain_of_thought
       nshot: 2
       limit: 10
       eval_type: graph
@@ -84,10 +85,22 @@ runs:
     limit: 50
     log_dir: logs/extras/boardgame_smoke
 
+  - name: extras-boardgame-qa-qwen7b
+    task: src/pvx/tasks/boardgame_qa/boardgame.py@boardgame_loader
+    model_ref: qwen7b
+    limit: 2 # 50
+    log_dir: logs/extras/boardgame_smoke_7b
+    task_args:
+      prompt_type: chain_of_thought
+      limit: 10
+
   - name: extras-boardgame-qa-qwen1.5b
     task: src/pvx/tasks/worfbench/worfbench.py@worfbench_loader
-    model_ref: qwen1.5b
-    limit: 50
+    model_ref: qwen7b #qwen1.5b
+    limit: 2
+    task_args:
+      prompt_type: chain_of_thought
+      limit: 2
     log_dir: logs/extras/worfbench_smoke
 
 # Usage hint:

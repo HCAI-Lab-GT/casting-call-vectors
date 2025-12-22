@@ -5,13 +5,18 @@ from __future__ import annotations
 
 # ruff: noqa: I001
 
-import argparse
 import os
-import subprocess
 import sys
+import subprocess
 from pathlib import Path
+from urllib.parse import urlparse, unquote
+import argparse
 
 from dotenv import load_dotenv
+
+from inspect_ai.log import list_eval_logs, read_eval_log, convert_eval_logs
+import wandb
+
 from run_eval_helpers import (
     DEFAULT_MODELS,
     DEFAULT_RUNS,
@@ -23,6 +28,7 @@ from run_eval_helpers import (
     parse_kv_list,
 )
 from pvx import Heartbeat, setup_logging
+
 
 def main() -> None:
     '''
@@ -188,8 +194,44 @@ def main() -> None:
     else:
         result = subprocess.run(cmd, env=env)
 
-    sys.exit(result.returncode)
+    if result.returncode == 0 and wandb_enabled:
 
+        logs = list_eval_logs(log_dir)  # newest first by default :contentReference[oaicite:4]{index=4}
+        latest = logs[0]
+        latest_path = Path(log_dir) / os.path.basename(unquote(urlparse(latest.name).path))
+
+        # read header to get Inspect run_id
+        hdr = read_eval_log(latest_path, header_only=True)  # :contentReference[oaicite:5]{index=5}
+        run_id = hdr.eval.run_id  # run_id identifies the W&B Run :contentReference[oaicite:6]{index=6}
+
+        ## Code if .json in separate location not same as .eval
+        # out_dir = Path(...)
+        # out_dir.mkdir(parents=True, exist_ok=True)
+        # convert_eval_logs(str(latest_path), to="json", output_dir=str(out_dir), stream=True)  # :contentReference[oaicite:7]{index=7}
+        # json_path = out_dir / latest_path.with_suffix(".json").name
+
+        convert_eval_logs(str(latest_path), to="json", output_dir=log_dir, stream=True)  # :contentReference[oaicite:7]{index=7}
+        json_path = os.path.join(log_dir, latest_path.with_suffix(".json").name)
+
+        with wandb.init(
+            project=env.get("WANDB_PROJECT"),
+            entity=env.get("WANDB_ENTITY"),
+            id=run_id,
+            resume="allow",
+        ) as run:  # :contentReference[oaicite:8]{index=8}
+
+            # # Save as Artifact
+            # art = wandb.Artifact(
+            #     name=f"inspect_eval__task={hdr.eval.task}__model={hdr.eval.model}",
+            #     type="eval",
+            # )
+            # art.add_file(str(json_path))
+            # run.log_artifact(art)
+
+            ## Save as File
+            run.save(json_path, log_dir)
+
+    sys.exit(result.returncode)
 
 if __name__ == "__main__":
     main()
