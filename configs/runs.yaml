@@ -6,7 +6,7 @@ runs:
     task: src/pvx/tasks/boardgame.py@boardgame_loader
     model_ref: pvx-qwen1.5b
     limit: 2
-    log_dir: logs/smoketest
+    log_dir: logs/smokes/smoketest
     generate_args:
       temperature: 0.2
       max_tokens: 2048
@@ -22,14 +22,14 @@ runs:
   - name: smoketest
     task: src/pvx/tasks/boardgame_qa/boardgame.py@boardgame_loader
     model_ref: pvx-qwen7b
-    limit: 2
-    log_dir: logs/extras/smoketest_smoke
-    generate_args:
-      temperature: 0.2
-      max_tokens: 2048
+    limit: 50
+    log_dir: logs/smokes/smoketest/smoketest_smoke
+    # generate_args:
+    #   temperature: 0.2
+    #   max_tokens: 2048
     task_args:
       prompt_type: chain_of_thought
-      limit: 10
+      limit: 50
     model_args_override:
       trait: humorous
       alpha: 1
@@ -38,10 +38,7 @@ runs:
     task: src/pvx/tasks/worfbench/worfbench.py@worfbench_task
     model_ref: qwen7b
     limit: 2
-    log_dir: logs/extras/worfbench_smoke
-    generate_args:
-      temperature: 0.5
-      max_tokens: 2048
+    log_dir: logs/smokes/smoketest/worfbench_smoke
     task_args:
       # prompt_type: chain_of_thought
       nshot: 2
@@ -50,11 +47,39 @@ runs:
     solver_args: # when launched from --solver
       eval_type: node
 
+  - name: chainsmoke_test
+    tasks: 
+    - task: src/pvx/tasks/boardgame_qa/boardgame.py@boardgame_loader
+      model_ref: pvx-qwen7b
+      # model_ref: qwen7b
+      log_dir: logs/smokes/smoketest/smoketest_smoke
+      # generate_args:
+      #   temperature: 0.2
+      #   max_tokens: 2048
+      task_args:
+        prompt_type: chain_of_thought
+        limit: 50
+      model_args_override:
+        trait: 
+          - humorous
+          - brave
+          - cautious
+          - creative
+          # - empathetic
+          # - evil
+          # - humorous
+          # - kind
+          # - optimistic
+          # - pessimistic
+          # - sarcastic
+          # - verbose
+        alpha: 1
+
   - name: bbeh-mini-qwen1.5b
     task: inspect_evals/bbeh_mini
     model_ref: qwen1.5b
     limit: 2
-    log_dir: logs/bbeh_smoke
+    log_dir: logs/smoke/bbeh/bbeh-mini-qwen1.5b
     generate_args:
       temperature: 0.2
       max_tokens: 2048
@@ -63,7 +88,7 @@ runs:
     task: inspect_evals/bbeh_mini
     model_ref: qwen3-1.7b
     limit: 2
-    log_dir: logs/bbeh_smoke
+    log_dir: logs/smokes/bbeh/bbeh-mini-qwen3-1.7b
     generate_args:
       temperature: 0.2
       max_tokens: 2048
@@ -72,36 +97,39 @@ runs:
     task: inspect_evals/bbh
     model_ref: qwen1.5b
     limit: 25
-    log_dir: logs/bbh/logical_deduction_five_objects
+    log_dir: logs/smokes/bbh/logical_deduction_five_objects
     task_args:
       dataset_name: logical_deduction_five_objects
       prompt_type: chain_of_thought
     solver_args:
       temperature: 0.2
 
-  - name: extras-boardgame-qa-qwen1.5b
+  - name: boardgame-qa-qwen1.5b
     task: src/pvx/tasks/boardgame_qa/boardgame.py@boardgame_loader
     model_ref: qwen1.5b
-    limit: 50
-    log_dir: logs/extras/boardgame_smoke
+    # limit: 50
+    log_dir: logs/smokes/boardgameqa/boardgame-qa-qwen1.5b
+    task_args:
+      prompt_type: chain_of_thought
+      limit: 50
 
-  - name: extras-boardgame-qa-qwen7b
+  - name: boardgame-qa-qwen7b
     task: src/pvx/tasks/boardgame_qa/boardgame.py@boardgame_loader
     model_ref: qwen7b
-    limit: 2 # 50
-    log_dir: logs/extras/boardgame_smoke_7b
+    # limit: 10 # 50
+    log_dir: logs/smokes/boardgameqa/boardgame-qa-qwen7b
     task_args:
       prompt_type: chain_of_thought
-      limit: 10
+      limit: 50
 
-  - name: extras-boardgame-qa-qwen1.5b
+  - name: boardgame-qa-qwen14b
     task: src/pvx/tasks/worfbench/worfbench.py@worfbench_loader
-    model_ref: qwen7b #qwen1.5b
-    limit: 2
+    model_ref: qwen14b
+    # limit: 10
     task_args:
       prompt_type: chain_of_thought
-      limit: 2
-    log_dir: logs/extras/worfbench_smoke
+      limit: 50
+    log_dir: logs/smokes/boardgameqa/boardgame-qa-qwen14b
 
 # Usage hint:
 #   TASK=$(yq '.runs[] | select(.name=="bbeh-mini-qwen3-1.7b").task' configs/runs.yaml)

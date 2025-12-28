@@ -4,6 +4,8 @@ import random
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+import threading
+import contextvars
 from contextlib import contextmanager, nullcontext
 import argparse
 from tqdm import tqdm
@@ -19,6 +21,9 @@ torch.set_float32_matmul_precision('high')
 
 # Disable transformers progress bars to avoid cluttering output
 transformers_logging.set_verbosity_error()
+
+# request-local steering state (per concurrent generate call)
+_STEER_DELTA = contextvars.ContextVar("steer_delta", default=None)  # Tensor (1,H) or None
 
 logger = setup_logging(name="persona-model")
 
@@ -58,7 +63,7 @@ class PersonaModel:
         
         # Save initialization (with extracted persona vector) to JSON
         self.save_to_json()
-    
+
         
     @classmethod
     def base_model(cls,
@@ -88,7 +93,7 @@ class PersonaModel:
         instance = cls.__new__(cls)
         instance._init_base(target_model_id=target_model_id, layer=layer, default_alpha=default_alpha)
         return instance
-    
+
     def _init_base(self, target_model_id, layer, default_alpha):
         
         """
@@ -113,7 +118,7 @@ class PersonaModel:
         self.target_model_id = target_model_id
         self.layer_steering = layer
         self.default_alpha = default_alpha
-        
+
         # Load model and tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(target_model_id)
         self.model = AutoModelForCausalLM.from_pretrained(
@@ -121,15 +126,15 @@ class PersonaModel:
             dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
             device_map="auto" if torch.cuda.is_available() else None
         )
-        
+
         # Set device
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         if not torch.cuda.is_available():
             self.model = self.model.to(self.device)
-            
+
         # Set EOD token id
         self.eos_token_ids = [self.tokenizer.eos_token_id] if isinstance(self.tokenizer.eos_token_id, int) else self.tokenizer.eos_token_id
-        
+
         # Optimization #7: Use torch.compile if available (PyTorch 2.0+)
         # Note: Disabled by default due to compatibility issues with transformers + CUDA graphs
         # To enable, set environment variable: ENABLE_TORCH_COMPILE=1
@@ -142,8 +147,18 @@ class PersonaModel:
                 logger.error(f"⚠️ torch.compile failed: %s", str(e))
                 logger.error("   Continuing without compilation...")
         
-        # Optimization #2: Cache for persona vector reshape
-        self._persona_reshaped_cache = None
+        # # Optimization #2: Cache for persona vector reshape
+        # self._persona_reshaped_cache = None
+        
+        # persistent steering hook + cached base vector (on steered block's device/dtype)
+        self._steer_hook_handle = None
+        self._steer_block = None
+        self._persona_base = None          # Tensor (1, H) on block device/dtype
+        self._persona_base_key = None      # (device, dtype)
+        self._persona_base_lock = threading.Lock()
+
+        # install hook once
+        self._install_steer_hook(layer_idx=self.layer_steering)
         
     @classmethod
     def from_json(cls, json_filepath: str) -> 'PersonaModel':
@@ -173,8 +188,8 @@ class PersonaModel:
         instance.prompt_persona_vector = torch.tensor(data["prompt_persona_vector"])
         instance.response_persona_vector = torch.tensor(data["response_persona_vector"])
 
-        # Optimization #2: Initialize cache for persona vector reshape
-        instance._persona_reshaped_cache = None
+        # # Optimization #2: Initialize cache for persona vector reshape
+        # instance._persona_reshaped_cache = None
 
         # Store additional metadata
         if "dataset_info" in data and data["dataset_info"]:
@@ -188,7 +203,7 @@ class PersonaModel:
         logger.info("   Response persona vector shape: %s", str(tuple(instance.response_persona_vector.shape)))
 
         return instance
-    
+
     @classmethod
     def load_or_create(cls,
                        target_model_id: str = "qwen2.5:7b-instruct",
@@ -205,16 +220,17 @@ class PersonaModel:
         Returns:
             PersonaModel: A new instance with the loaded persona vectors or a newly created one
         """
-        json_filepath = json_filepath if json_filepath else f"./persona_data/model_inits/{trait}_persona_initialization_{target_model_id}.json"
-        
+        print(target_model_id)
+        json_filepath = json_filepath if json_filepath else f"./persona_data/model_inits/{trait}_persona_initialization/{target_model_id}.json"
+
         try:
             if Path(json_filepath).exists():
                 return cls.from_json(json_filepath)
-            
+
         except Exception as e:
             logger.warning("⚠️ Failed to load from JSON: %s. Creating a new PersonaModel instance.", e)
             pass
-        
+
         return cls(
             target_model_id=target_model_id,
             dataset=dataset,
@@ -233,7 +249,7 @@ class PersonaModel:
             str: Path to the saved JSON file
         """
 
-        filepath += f"{self.dataset.trait}_persona_initialization_{self.target_model_id}.json"
+        filepath += f"{self.dataset.trait}_persona_initialization/{self.target_model_id}.json"
 
         # Convert tensors to lists for JSON serialization
         initialization_data = {
@@ -412,7 +428,7 @@ class PersonaModel:
         '''
         if prompt is None and messages is None:
             raise ValueError("Prompt and Messages cannot both be None")
-      
+        
         self.model.eval()
 
         if messages is None:
@@ -437,36 +453,39 @@ class PersonaModel:
             else {int(self.eos_token_ids)}
         )
 
-        need_steer = (alpha != 0)
+        # need_steer = (alpha != 0)
 
-        steer_ctx = nullcontext()  # default: no steering
+        # steer_ctx = nullcontext()  # default: no steering
             
-        if need_steer:
-            # Only cache if cache empty or not on device
-            if (self._persona_reshaped_cache is None 
-                or self._persona_reshaped_cache.device != self.device
-                or self._persona_reshaped_cache.dtype != self.model['dtype']
-                or self._persona_reshaped_cache.shape != (1, self.prompt_persona_vector.numel())):
+        # if need_steer:
+        #     # Only cache if cache empty or not on device
+        #     if (self._persona_reshaped_cache is None 
+        #         or self._persona_reshaped_cache.device != self.device
+        #         or self._persona_reshaped_cache.dtype != self.model['dtype']
+        #         or self._persona_reshaped_cache.shape != (1, self.prompt_persona_vector.numel())):
 
-                # # reshape once and cache
-                self._persona_reshaped_cache = self.prompt_persona_vector.to(
-                    device = self.device, 
-                    dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-                ).view(1, 1, -1)
+        #         # # reshape once and cache
+        #         self._persona_reshaped_cache = self.prompt_persona_vector.to(
+        #             device = self.device, 
+        #             dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+        #         ).view(1, 1, -1)
 
-            delta = (alpha * self._persona_reshaped_cache)  # (1,1,H)
+        #     delta = (alpha * self._persona_reshaped_cache)  # (1,1,H)
 
-            # steer at specified layer
-            steer_ctx = self._steer_at_layer(
-                self.model,
-                layer_idx=self.layer_steering,  # IMPORTANT: block index (0-based)
-                delta_1x1xH=delta,
-            )
-            
+        #     # steer at specified layer
+        #     steer_ctx = self._steer_at_layer(
+        #         self.model,
+        #         layer_idx=self.layer_steering,  # IMPORTANT: block index (0-based)
+        #         delta_1x1xH=delta,
+        #     )
+
         past = None
         gen_ids: list[int] = []
 
-        with steer_ctx:
+        # with steer_ctx:
+        
+        # steering is now per-request via ContextVar; no per-call hook install/remove
+        with self._steering_delta(alpha):
             # Prefill on full prompt
             out = self.model(
                 input_ids=input_ids,
@@ -475,7 +494,7 @@ class PersonaModel:
             )
             past = out.past_key_values
 
-             # Sample first generated token from prefill logits
+            # Sample first generated token from prefill logits
             logits = out.logits[0, -1, :]
             tok = self._top_p_sample(logits, temperature=temperature, top_p=top_p)
             if tok in eos_ids:
@@ -484,7 +503,7 @@ class PersonaModel:
             # accumulate first token
             gen_ids.append(tok)
             last_token = torch.tensor([[tok]], device=self.device, dtype=torch.long)
-                
+
             with Heartbeat(logger, "generating output...", interval=30):
                 # Decode loop (KV-cache)
                 for _ in range(max_new_tokens - 1):
@@ -503,11 +522,10 @@ class PersonaModel:
 
                     gen_ids.append(tok)
                     last_token.fill_(tok)
-        
-        logger.info("Generated output!")
-        
-        return self.tokenizer.decode(gen_ids, skip_special_tokens=True)
-    
+
+        output_text = self.tokenizer.decode(gen_ids, skip_special_tokens=True)
+        return output_text
+
 
     @torch.inference_mode()
     def _get_activations(self, 
@@ -537,15 +555,15 @@ class PersonaModel:
             output_hidden_states=True,
             use_cache=True,
         )
-        
+
         # Store cache
         past = out.past_key_values
         prompt_last = out.hidden_states[self.layer_steering + 1][:, -1, :]  # (1, hidden), 0th layer init embedding
-        
+
         # generate first token
         logits0 = out.logits[0, -1, :]
         tok = self._top_p_sample(logits0, top_p=0.99, temperature=temperature)
-        
+
         # early exit if no response tokens
         if tok in self.eos_token_ids:
             # no response tokens
@@ -603,7 +621,6 @@ class PersonaModel:
                 break
             
             last_token.fill_(int(next_token_id))  # reuse (1,1) buffer
-            
 
         if count > 0:
             resp_avg = (resp_sum / count).to(prompt_last.dtype)
@@ -614,26 +631,94 @@ class PersonaModel:
 
         return prompt_last, resp_avg, resp_avg_all_layers
 
-    @contextmanager
-    def _steer_at_layer(self, model, layer_idx: int, delta_1x1xH: torch.Tensor):
-        """
-        Add delta to the last-token hidden state at the output of decoder block `layer_idx`.
-        Assumes `layer_idx` is a block index (0-based).
+    # @contextmanager
+    # def _steer_at_layer(self, model, layer_idx: int, delta_1x1xH: torch.Tensor):
+    #     """
+    #     Add delta to the last-token hidden state at the output of decoder block `layer_idx`.
+    #     Assumes `layer_idx` is a block index (0-based).
+        
+    #     Args:
+    #         model: The model instance.
+    #         layer_idx (int): Index of the decoder block to modify.
+    #         delta_1x1xH (1,1,H) Tensor:  will be moved/cast to the block output device/dtype as needed.
+    #     """
+    #     # Get the decoder blocks
+    #     blocks = self._get_decoder_blocks(model)
+
+    #     # Get the specified layer block
+    #     block = blocks[layer_idx]
+
+    #     cache = {}
+
+    #     # Define the hook function
+    #     def hook(_module, _inp, out):
+    #         '''
+    #         Hook function to add delta to the last-token hidden state at the output of the specified decoder block.
+    #         The delta is added to the last token's hidden state.
+    #         register_forward_hook is called on each forward pass of the block
+            
+    #         Args:
+    #             _module (torch.nn.Module): The module instance.
+    #             _inp (tuple): Input tensors to the module.
+    #             out (torch.Tensor | tuple): Output tensor(s) from the module.
+                
+    #         Returns:
+    #             torch.Tensor | tuple: Modified output tensor(s).
+    #         '''
+    #         def apply(hs: torch.Tensor) -> torch.Tensor:
+    #             '''
+    #             Apply the delta to the last token's hidden state.
+    #             The delta is cached for device/dtype to avoid repeated moves.
+                
+    #             Args:
+    #                 hs (torch.Tensor): Hidden state tensor.
+                    
+    #             Returns:
+    #                 torch.Tensor: Modified hidden state tensor.
+    #             '''
+    #             # Cache delta for device/dtype to avoid repeated moves
+    #             key = (hs.device, hs.dtype)
+    #             d = cache.get(key)
+
+    #             # Cache delta for device/dtype to avoid repeated moves
+    #             if d is None:
+    #                 d = delta_1x1xH.to(device=hs.device, dtype=hs.dtype)
+    #                 cache[key] = d
+
+    #             hs2 = hs.clone()
+    #             # last token steer only
+    #             hs2[:, -1, :] = hs2[:, -1, :] + d[:, 0, :]
+
+    #             return hs2
+
+    #         if isinstance(out, tuple):
+    #             hs2 = apply(out[0])
+    #             return (hs2,) + out[1:]
+    #         return apply(out)
+
+    #     # Register the hook, calls hook on forward pass
+    #     h = block.register_forward_hook(hook)
+    #     self._hook_added += 1
+
+    #     # Unregister the hook when done
+    #     try:
+    #         yield
+    #     finally:
+    #         self._hook_added -= 1
+    #         h.remove()
+    
+    def _install_steer_hook(self, layer_idx: int) -> None:
+        '''
+        Installs one persistent hook that reads per-request delta.
         
         Args:
-            model: The model instance.
-            layer_idx (int): Index of the decoder block to modify.
-            delta_1x1xH (1,1,H) Tensor:  will be moved/cast to the block output device/dtype as needed.
-        """
-        # Get the decoder blocks
-        blocks = self._get_decoder_blocks(model)
-        
-        # Get the specified layer block
+            layer_idx (int): layer to add steering hook to
+        '''
+        # Get the decoder blocks and specific target steer block
+        blocks = self._get_decoder_blocks(self.model)
         block = blocks[layer_idx]
-        
-        cache = {}
+        self._steer_block = block
 
-        # Define the hook function
         def hook(_module, _inp, out):
             '''
             Hook function to add delta to the last-token hidden state at the output of the specified decoder block.
@@ -648,45 +733,79 @@ class PersonaModel:
             Returns:
                 torch.Tensor | tuple: Modified output tensor(s).
             '''
-            def apply(hs: torch.Tensor) -> torch.Tensor:
-                '''
-                Apply the delta to the last token's hidden state.
-                The delta is cached for device/dtype to avoid repeated moves.
-                
-                Args:
-                    hs (torch.Tensor): Hidden state tensor.
-                    
-                Returns:
-                    torch.Tensor: Modified hidden state tensor.
-                '''
-                # Cache delta for device/dtype to avoid repeated moves
-                key = (hs.device, hs.dtype)
-                d = cache.get(key)
-                
-                # Cache delta for device/dtype to avoid repeated moves
-                if d is None:
-                    d = delta_1x1xH.to(device=hs.device, dtype=hs.dtype)
-                    cache[key] = d
+            d = _STEER_DELTA.get()  # (1, H) or None
+            if d is None:
+                return out
 
-                hs2 = hs.clone()
-                # last token steer only
-                hs2[:, -1, :] = hs2[:, -1, :] + d[:, 0, :]
-                
-                return hs2
-
+             # out is usually Tensor [B,T,H], sometimes tuple(Tensor, ...)
             if isinstance(out, tuple):
-                hs2 = apply(out[0])
-                return (hs2,) + out[1:]
-            return apply(out)
+                hs = out[0]
+                hs[:, -1, :] += d  # in-place add on last position
+                return (hs,) + out[1:]
+            
+            out[:, -1, :] += d
+            return out
 
-        # Register the hook, calls hook on forward pass
-        h = block.register_forward_hook(hook)
+        # register once
+        self._steer_hook_handle = block.register_forward_hook(hook)
+
+    def _get_persona_base(self) -> torch.Tensor:
+        '''
+        Cached base persona vector on the steered block device/dtype
         
-        # Unregister the hook when done
+        Returns:
+            torch.Tensor: persona vector
+        '''
+        if not hasattr(self, "prompt_persona_vector"):
+            raise RuntimeError("prompt_persona_vector not initialized")
+
+        # pick device/dtype from the steered block (works with device_map sharding)
+        try:
+            p = next(self._steer_block.parameters())
+        except StopIteration:
+            p = next(self.model.parameters())
+
+        key = (p.device, p.dtype)
+        if self._persona_base is not None and self._persona_base_key == key:
+            return self._persona_base
+
+        with self._persona_base_lock:
+            if self._persona_base is None or self._persona_base_key != key:
+                self._persona_base = (
+                    self.prompt_persona_vector.to(device=p.device, dtype=p.dtype).view(1, -1)
+                )  # (1, H)
+                self._persona_base_key = key
+        return self._persona_base
+
+     
+    @contextmanager
+    def _steering_delta(self, alpha: float):
+        '''
+        Per-request steering context (stores delta in ContextVar)
+        
+        Args:
+            alpha (float): alpha applied on runtime
+        '''
+        if alpha == 0:
+            yield
+            return
+        
+        base = self._get_persona_base()   # (1, H)
+        delta = alpha * base              # (1, H)
+        tok = _STEER_DELTA.set(delta)
+        
         try:
             yield
         finally:
-            h.remove()
+            _STEER_DELTA.reset(tok)
+
+    def close(self):
+        '''
+        Removes hooks. Typically unused
+        '''
+        if self._steer_hook_handle is not None:
+            self._steer_hook_handle.remove()
+            self._steer_hook_handle = None
 
     def _get_decoder_blocks(self, model: torch.nn.Module) -> list[torch.nn.Module]:
         '''
@@ -705,7 +824,7 @@ class PersonaModel:
             return model.transformer.h
         raise RuntimeError("Unsupported model layout: cannot locate decoder blocks.")
 
-    def _top_p_sample(self, logits: torch.Tensor, top_p: float=0.9, temperature: float=1.0) -> int: 
+    def _top_p_sample(self, logits: torch.Tensor, top_p: float=0.9, temperature: float=1.0) -> int:
         '''
         Perform nucleus (top-p) sampling from logits.
         
@@ -728,7 +847,7 @@ class PersonaModel:
         # Find the cutoff index - keep tokens until cumulative probability exceeds top_p
         # Shift cumulative_probs by 1 to include at least the first token
         cutoff_mask = cumulative_probs - sorted_probs <= top_p
-        
+
         # Ensure at least one token is included
         cutoff_mask[0] = True
         
@@ -749,41 +868,17 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Generate Persona Dataset")
     ap.add_argument("-t", "--trait", type=str, default="humorous", help="Trait of the persona dataset")
     ap.add_argument("-n", "--max_new_tokens", type=int, default=2000, help="Max tokens to generate")
-    ap.add_argument("-a", "--alpha", type=float, default=3.0, help="Alpha value for persona steering")
+    ap.add_argument("-a", "--alpha", type=float, default=1.0, help="Alpha value for persona steering")
     ap.add_argument("--temperature", type=float, default=0.9, help="Temperature for sampling")
     ap.add_argument("-q", "--question", type=str, default="What is the theory of relativity?", help="Question to generate response for")
-    
+
     args = ap.parse_args()
-
-    # try:
-    #     dataset = PersonaDataset.from_json(trait=args.trait)
-    # except Exception as e:
-    #     logger.error("Failed to load dataset: %s", str(e))
-    #     raise e
-
-    # try:
-    #     persona_model = PersonaModel.from_json(
-    #         f"persona_data/model_inits/{args.trait}_persona_initialization_Qwen/Qwen2.5-1.5B-Instruct.json"
-    #     )
-    # except Exception as e:
-    #     persona_model = PersonaModel(
-    #         target_model_id="Qwen/Qwen2.5-1.5B-Instruct",
-    #         dataset=dataset,
-    #         layer=14
-    #     )
-
-    # persona_model = PersonaModel(
-    #     target_model_id="Qwen/Qwen2.5-1.5B-Instruct",
-    #     dataset=dataset,
-    #     layer=14
-    # )
-
-    persona_model = PersonaModel.load_or_create(
-        target_model_id="Qwen/Qwen2.5-1.5B-Instruct",
-        # dataset=dataset,
+    
+    pvx = PersonaModel.load_or_create(
+        target_model_id=model_name,
         trait=args.trait,
         layer=14,
-        json_filepath=f"persona_data/model_inits/{args.trait}_persona_initialization_Qwen/Qwen2.5-1.5B-Instruct.json"
+        json_filepath=model_args.get("json_filepath"),
     )
             
     # Example 1: Create new PersonaModel from dataset (extracts vectors)
@@ -794,6 +889,7 @@ if __name__ == "__main__":
     # persona_model = PersonaModel.from_json(
     #     "persona_data/model_inits/verbose_persona_initialization_Qwen/Qwen2.5-1.5B-Instruct.json"
     # )
+    
     response = persona_model.generate(
         prompt=args.question,
         alpha=0,

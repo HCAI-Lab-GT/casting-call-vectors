@@ -93,6 +93,9 @@ class PVXModelAPI(ModelAPI):
         # only keep non-null params
         nonnull_params = {k: v for k, v in opt_params.items() if v is not None}
         
+        print()
+        logger.info(nonnull_params)
+        
         # Run sync inference off the event loop (Inspect is async, AnyIO-based)
         # so you do not block parallel execution. :contentReference[oaicite:1]{index=1}
         t0 = time.perf_counter()
