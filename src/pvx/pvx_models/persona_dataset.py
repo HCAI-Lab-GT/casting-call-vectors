@@ -180,7 +180,7 @@ class PersonaDataset:
         dataset.logger.info("Dataset loaded from: %s", filepath)
         
         return dataset
-    
+
     def save_dataset_to_json(self, dirpath: str=None) -> str:
         """
         Save the persona vector dataset to a JSON file.
@@ -225,7 +225,7 @@ class PersonaDataset:
 
         self.logger.info("Dataset saved to: %s", filepath)
         return filepath
-    
+
     def generate_dataset(self, save_to_json=True, max_tries=5) -> Tuple[List[Tuple[str, str]], List[str], str, str]:
         """
         Generate the complete persona dataset.
@@ -302,7 +302,7 @@ class PersonaDataset:
             filepath = self.save_dataset_to_json()
 
         return pos_neg_pairs, questions, evaluation_prompt, filepath
-    
+
     def extract_pos_neg_question_pairs(self) -> List[Tuple]:
         """
         Extract Cartesian product of (positive, negative, question) from positive/negative instruction pairs and
@@ -563,10 +563,10 @@ if __name__ == "__main__":
             PersonaDataset.from_json(trait=trait, dirpath=args.dirpath)
         except Exception as e:
             dataset: PersonaDataset = PersonaDataset(
-                trait=trait, 
-                num_questions=args.num_questions, 
-                backend=args.backend, 
-                local_model=args.local_model, 
+                trait=trait,
+                num_questions=args.num_questions,
+                backend=args.backend,
+                local_model=args.local_model,
                 model=args.model
             )
             dataset.generate_dataset(save_to_json=True)

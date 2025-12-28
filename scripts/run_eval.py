@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from inspect_ai.log import list_eval_logs, read_eval_log, convert_eval_logs
 import wandb
 
-from run_eval_helpers import (
+from helpers import (
     DEFAULT_MODELS,
     DEFAULT_RUNS,
     build_command,
@@ -29,6 +29,8 @@ from run_eval_helpers import (
 )
 from pvx import Heartbeat, setup_logging
 
+logger = setup_logging(name="run-eval")
+
 
 def main() -> None:
     '''
@@ -37,9 +39,9 @@ def main() -> None:
     '''
     load_dotenv()
     ap = argparse.ArgumentParser()
-    ap.add_argument("--run", help="Run preset name from runs.yaml")
-    ap.add_argument("--task", help="Override task (inspect task path)")
-    ap.add_argument("--model", help="Model preset name from models.yaml")
+    ap.add_argument("-r", "--run", help="Run preset name from runs.yaml")
+    ap.add_argument("-t", "--task", help="Override task (inspect task path)")
+    ap.add_argument("-m", "--model", help="Model preset name from models.yaml")
     ap.add_argument("--model-id", help="Explicit model id (hf/... or api)")
     ap.add_argument("--log-dir", help="Override log dir")
     ap.add_argument("--limit", type=int, help="Override sample limit")
@@ -104,32 +106,48 @@ def main() -> None:
 
     # Load run if specified
     run = lookup_run(runs_cfg, args.run) if args.run else {}
-
-    # Param Priorities: CLI > Run > None
-    task        =   args.task       or run.get('task')
-    model_name  =   args.model      or run.get('model_ref')
-    limit       =   args.limit      or run.get('limit')
-    log_dir     =   args.log_dir    or run.get('log_dir', default_log_dir(task) if task else None)
+    
+    # Convert flat task to one-item chain task
+    if 'tasks' not in run:
+        tmp = run.copy()
+        tmp.pop('name')
+        run['tasks'] = [tmp]
+        
+    logger.info("Run: %s", run)
+        
+    # Run all tasks in run
+    for task in run['tasks']:
+        run_task(args, task, models_cfg)
+    
+def run_task(args, task_cfg, models_cfg) -> None:
+    logger.info("Args Config: %s", args)
+    logger.info("Task Config: %s", task_cfg)
+    logger.info("Model Config: %s", models_cfg)
+    # Param Priorities: CLI > task > None
+    task        =   args.task       or task_cfg.get('task')
+    model_name  =   args.model      or task_cfg.get('model_ref')
+    limit       =   args.limit      or task_cfg.get('limit')
+    log_dir     =   args.log_dir    or task_cfg.get('log_dir', default_log_dir(task) if task else None)
 
     # Task is required
     if not task:
-        raise SystemExit("task is required (via --task or run preset)")
+        raise SystemExit("task is required (via --task or task preset)")
 
     # One of model_id or model_name must be specified
     if not args.model_id and not model_name:
-        raise SystemExit("model is required (via --model, --model-id, or run preset)")
+        raise SystemExit("model is required (via --model, --model-id, or task preset)")
 
     # Load task and solver configs
         # run.yaml
-    task_args = run.get('task_args', {})
-    solver_args = run.get('solver_args', {})
+    task_args = task_cfg.get('task_args', {})
+    solver_args = task_cfg.get('solver_args', {})
     
         # CLI
     task_args.update(parse_kv_list(args.task_arg))
     solver_args.update(parse_kv_list(args.solver_arg))
 
     # Load generate config (will be unpacked later in build_command)
-    generate_configs = run.get('generate_args', {})
+    generate_configs = task_cfg.get('generate_args', {})
     generate_fields = ['max_tokens', 'temperature', 'top_p', 'top_k']
     generate_configs.update({field: getattr(args, field) for field in generate_fields
                              if hasattr(args, field) and getattr(args, field) is not None})
@@ -137,99 +155,117 @@ def main() -> None:
     # Load model via if specified
     model = lookup_model(models_cfg, model_name) if model_name is not None else {}
     
-    # Param Priorities: Arguments > Run > None, args
+    # Param Priorities: Arguments > task > None, args
     model_id = args.model_id or model.get('model')
     model_args = model.get('args', {}) # models.yaml: args
-    model_args.update(run.get('model_args_override', {})) # runs.yaml: model_args_override
+    model_args.update(task_cfg.get('model_args_override', {})) # runs.yaml: model_args_override
     model_args.update(parse_kv_list(args.model_arg)) # CLI -M args
 
     # chain-of-thought prompt if requested
     if args.cot and "prompt_type" not in task_args:
         task_args["prompt_type"] = "chain_of_thought"
+        
+    if 'trait' not in model_args or isinstance(model_args['trait'], str):
+        model_args['trait'] = [model_args.get('trait')]
 
-    # build uv run python command
-    cmd = build_command(
-        task=task,
-        model_id=model_id,
-        limit=limit,
-        log_dir=log_dir,
-        model_args=model_args,
-        solver_args=solver_args,
-        task_args=task_args,
-        gen_config=generate_configs,
-        no_display=args.no_display
-    )
+    for trait in model_args['trait']:
+        single_trait_model_args = model_args.copy()
+        
+        if trait:
+            single_trait_model_args['trait'] = trait
+        else:
+            single_trait_model_args.pop('trait')
+            
+        print()
+        print()
+        logger.info("Model Config: %s", single_trait_model_args)
+        print()
+        logger.info("Task Config: %s", task_args)
 
-    env = os.environ.copy()
+        # return
+        
+        # build uv run python command
+        cmd = build_command(
+            task=task,
+            model_id=model_id,
+            limit=limit,
+            log_dir=log_dir,
+            model_args=single_trait_model_args,
+            solver_args=solver_args,
+            task_args=task_args,
+            gen_config=generate_configs,
+            no_display=args.no_display
+        )
 
-    # configure WandB
-    wandb_enabled = not args.no_wandb
-    if wandb_enabled:
-        if not env.get("WANDB_API_KEY"):
-            print(
-                "WANDB_API_KEY is required because WandB is enabled by default. Set it or pass --no-wandb.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-        env["INSPECT_WANDB_ENABLED"] = "1"
-        if args.wandb_project:
-            env["WANDB_PROJECT"] = args.wandb_project
-        if args.wandb_entity:
-            env["WANDB_ENTITY"] = args.wandb_entity
-        if args.wandb_tag:
-            env["WANDB_TAGS"] = ",".join(args.wandb_tag)
-    else:
-        env.pop("INSPECT_WANDB_ENABLED", None)
+        env = os.environ.copy()
 
-    logger = setup_logging(name="run-eval")
-    logger.info("Running `%s`", " ".join(cmd))
+        # configure WandB
+        wandb_enabled = not args.no_wandb
+        if wandb_enabled:
+            if not env.get("WANDB_API_KEY"):
+                print(
+                    "WANDB_API_KEY is required because WandB is enabled by default. Set it or pass --no-wandb.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            env["INSPECT_WANDB_ENABLED"] = "1"
+            if args.wandb_project:
+                env["WANDB_PROJECT"] = args.wandb_project
+            if args.wandb_entity:
+                env["WANDB_ENTITY"] = args.wandb_entity
+            if args.wandb_tag:
+                env["WANDB_TAGS"] = ",".join(args.wandb_tag)
+        else:
+            env.pop("INSPECT_WANDB_ENABLED", None)
 
-    if args.dry_run:
-        return
+        logger.info("Running `%s`", " ".join(cmd))
 
-    # run with heartbeats if requested, otherwise normal run via subprocess
-    if args.heartbeat_interval > 0:
-        with Heartbeat(logger, f"running inspect eval {task}", interval=args.heartbeat_interval):
+        if args.dry_run:
+            return
+
+        # run with heartbeats if requested, otherwise normal run via subprocess
+        if args.heartbeat_interval > 0:
+            with Heartbeat(logger, f"running inspect eval {task}", interval=args.heartbeat_interval):
+                result = subprocess.run(cmd, env=env)
+        else:
             result = subprocess.run(cmd, env=env)
-    else:
-        result = subprocess.run(cmd, env=env)
 
-    if result.returncode == 0 and wandb_enabled:
+        if result.returncode == 0 and wandb_enabled:
 
-        logs = list_eval_logs(log_dir)  # newest first by default :contentReference[oaicite:4]{index=4}
-        latest = logs[0]
-        latest_path = Path(log_dir) / os.path.basename(unquote(urlparse(latest.name).path))
+            logs = list_eval_logs(log_dir)  # newest first by default :contentReference[oaicite:4]{index=4}
+            latest = logs[0]
+            latest_path = Path(log_dir) / os.path.basename(unquote(urlparse(latest.name).path))
 
-        # read header to get Inspect run_id
-        hdr = read_eval_log(latest_path, header_only=True)  # :contentReference[oaicite:5]{index=5}
-        run_id = hdr.eval.run_id  # run_id identifies the W&B Run :contentReference[oaicite:6]{index=6}
+            # read header to get Inspect run_id
+            hdr = read_eval_log(latest_path, header_only=True)  # :contentReference[oaicite:5]{index=5}
+            run_id = hdr.eval.run_id  # run_id identifies the W&B Run :contentReference[oaicite:6]{index=6}
 
-        ## Code if .json in separate location not same as .eval
-        # out_dir = Path(...)
-        # out_dir.mkdir(parents=True, exist_ok=True)
-        # convert_eval_logs(str(latest_path), to="json", output_dir=str(out_dir), stream=True)  # :contentReference[oaicite:7]{index=7}
-        # json_path = out_dir / latest_path.with_suffix(".json").name
+            ## Code if .json in separate location not same as .eval
+            # out_dir = Path(...)
+            # out_dir.mkdir(parents=True, exist_ok=True)
+            # convert_eval_logs(str(latest_path), to="json", output_dir=str(out_dir), stream=True)  # :contentReference[oaicite:7]{index=7}
+            # json_path = out_dir / latest_path.with_suffix(".json").name
 
-        convert_eval_logs(str(latest_path), to="json", output_dir=log_dir, stream=True)  # :contentReference[oaicite:7]{index=7}
-        json_path = os.path.join(log_dir, latest_path.with_suffix(".json").name)
+            convert_eval_logs(str(latest_path), to="json", output_dir=log_dir, stream=True)  # :contentReference[oaicite:7]{index=7}
+            json_path = os.path.join(log_dir, latest_path.with_suffix(".json").name)
 
-        with wandb.init(
-            project=env.get("WANDB_PROJECT"),
-            entity=env.get("WANDB_ENTITY"),
-            id=run_id,
-            resume="allow",
-        ) as run:  # :contentReference[oaicite:8]{index=8}
+            with wandb.init(
+                project=env.get("WANDB_PROJECT"),
+                entity=env.get("WANDB_ENTITY"),
+                id=run_id,
+                resume="allow",
+            ) as run:  # :contentReference[oaicite:8]{index=8}
 
-            # # Save as Artifact
-            # art = wandb.Artifact(
-            #     name=f"inspect_eval__task={hdr.eval.task}__model={hdr.eval.model}",
-            #     type="eval",
-            # )
-            # art.add_file(str(json_path))
-            # run.log_artifact(art)
+                # # Save as Artifact
+                # art = wandb.Artifact(
+                #     name=f"inspect_eval__task={hdr.eval.task}__model={hdr.eval.model}",
+                #     type="eval",
+                # )
+                # art.add_file(str(json_path))
+                # run.log_artifact(art)
 
-            ## Save as File
-            run.save(json_path, log_dir)
+                ## Save as File
+                run.save(json_path, log_dir)
 
     sys.exit(result.returncode)
 
