@@ -453,37 +453,9 @@ class PersonaModel:
             else {int(self.eos_token_ids)}
         )
 
-        # need_steer = (alpha != 0)
-
-        # steer_ctx = nullcontext()  # default: no steering
-            
-        # if need_steer:
-        #     # Only cache if cache empty or not on device
-        #     if (self._persona_reshaped_cache is None 
-        #         or self._persona_reshaped_cache.device != self.device
-        #         or self._persona_reshaped_cache.dtype != self.model['dtype']
-        #         or self._persona_reshaped_cache.shape != (1, self.prompt_persona_vector.numel())):
-
-        #         # # reshape once and cache
-        #         self._persona_reshaped_cache = self.prompt_persona_vector.to(
-        #             device = self.device, 
-        #             dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-        #         ).view(1, 1, -1)
-
-        #     delta = (alpha * self._persona_reshaped_cache)  # (1,1,H)
-
-        #     # steer at specified layer
-        #     steer_ctx = self._steer_at_layer(
-        #         self.model,
-        #         layer_idx=self.layer_steering,  # IMPORTANT: block index (0-based)
-        #         delta_1x1xH=delta,
-        #     )
-
         past = None
         gen_ids: list[int] = []
 
-        # with steer_ctx:
-        
         # steering is now per-request via ContextVar; no per-call hook install/remove
         with self._steering_delta(alpha):
             # Prefill on full prompt
@@ -631,82 +603,6 @@ class PersonaModel:
 
         return prompt_last, resp_avg, resp_avg_all_layers
 
-    # @contextmanager
-    # def _steer_at_layer(self, model, layer_idx: int, delta_1x1xH: torch.Tensor):
-    #     """
-    #     Add delta to the last-token hidden state at the output of decoder block `layer_idx`.
-    #     Assumes `layer_idx` is a block index (0-based).
-        
-    #     Args:
-    #         model: The model instance.
-    #         layer_idx (int): Index of the decoder block to modify.
-    #         delta_1x1xH (1,1,H) Tensor:  will be moved/cast to the block output device/dtype as needed.
-    #     """
-    #     # Get the decoder blocks
-    #     blocks = self._get_decoder_blocks(model)
-
-    #     # Get the specified layer block
-    #     block = blocks[layer_idx]
-
-    #     cache = {}
-
-    #     # Define the hook function
-    #     def hook(_module, _inp, out):
-    #         '''
-    #         Hook function to add delta to the last-token hidden state at the output of the specified decoder block.
-    #         The delta is added to the last token's hidden state.
-    #         register_forward_hook is called on each forward pass of the block
-            
-    #         Args:
-    #             _module (torch.nn.Module): The module instance.
-    #             _inp (tuple): Input tensors to the module.
-    #             out (torch.Tensor | tuple): Output tensor(s) from the module.
-                
-    #         Returns:
-    #             torch.Tensor | tuple: Modified output tensor(s).
-    #         '''
-    #         def apply(hs: torch.Tensor) -> torch.Tensor:
-    #             '''
-    #             Apply the delta to the last token's hidden state.
-    #             The delta is cached for device/dtype to avoid repeated moves.
-                
-    #             Args:
-    #                 hs (torch.Tensor): Hidden state tensor.
-                    
-    #             Returns:
-    #                 torch.Tensor: Modified hidden state tensor.
-    #             '''
-    #             # Cache delta for device/dtype to avoid repeated moves
-    #             key = (hs.device, hs.dtype)
-    #             d = cache.get(key)
-
-    #             # Cache delta for device/dtype to avoid repeated moves
-    #             if d is None:
-    #                 d = delta_1x1xH.to(device=hs.device, dtype=hs.dtype)
-    #                 cache[key] = d
-
-    #             hs2 = hs.clone()
-    #             # last token steer only
-    #             hs2[:, -1, :] = hs2[:, -1, :] + d[:, 0, :]
-
-    #             return hs2
-
-    #         if isinstance(out, tuple):
-    #             hs2 = apply(out[0])
-    #             return (hs2,) + out[1:]
-    #         return apply(out)
-
-    #     # Register the hook, calls hook on forward pass
-    #     h = block.register_forward_hook(hook)
-    #     self._hook_added += 1
-
-    #     # Unregister the hook when done
-    #     try:
-    #         yield
-    #     finally:
-    #         self._hook_added -= 1
-    #         h.remove()
-    
     def _install_steer_hook(self, layer_idx: int) -> None:
         '''
         Installs one persistent hook that reads per-request delta.
