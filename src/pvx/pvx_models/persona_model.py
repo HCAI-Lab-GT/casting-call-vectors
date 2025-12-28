@@ -42,6 +42,74 @@ class PersonaModel:
             layer (int): Layer index for extracting hidden activations.
             from_json (bool): Whether to load persona vectors from JSON file.
         '''
+        
+        self._init_base(target_model_id, layer, default_alpha)
+        
+        # skip extraction if not loading from JSON
+        if from_json:
+            return
+        
+        # load dataset from file if provided
+        self.dataset = dataset if dataset else PersonaDataset.from_json(trait)
+        self.trait = self.dataset.trait
+        
+        # Extract persona vectors
+        _, _, _ = self.extract_persona_vector()
+        
+        # Save initialization (with extracted persona vector) to JSON
+        self.save_to_json()
+    
+        
+    @classmethod
+    def base_model(cls,
+                       target_model_id: str = "qwen2.5:7b-instruct",
+                       layer: float = 14,
+                       default_alpha: float = 3.0):
+
+        """
+        Create a trait-agnostic PersonaModel instance with only the base model and tokenizer loaded.
+
+        This class method initializes a PersonaModel without loading or generating any persona vectors
+        or trait-specific data. It is useful for scenarios where persona steering will be applied later
+        or dynamically at inference time.
+
+        Args:
+            target_model_id (str): Model identifier (HuggingFace or OpenAI).
+            layer (float): Layer index for extracting hidden activations.
+            default_alpha (float): Default alpha value for persona steering.
+
+        Returns:
+            PersonaModel: An instance of PersonaModel with only the base model and tokenizer loaded.
+
+        Example:
+            >>> model = PersonaModel.base_model(target_model_id="qwen2.5:7b-instruct", layer=14)
+        """
+        
+        instance = cls.__new__(cls)
+        instance._init_base(target_model_id=target_model_id, layer=layer, default_alpha=default_alpha)
+        return instance
+    
+    def _init_base(self, target_model_id, layer, default_alpha):
+        
+        """
+        Initialize the base model, tokenizer, and device configuration.
+
+        This internal method is used by both the main constructor and the base_model classmethod
+        to set up the core model, tokenizer, device, and related attributes. It does not load or
+        generate any persona vectors or trait-specific data.
+
+        Args:
+            target_model_id (str): Model identifier (HuggingFace or OpenAI).
+            layer (float): Layer index for extracting hidden activations.
+            default_alpha (float): Default alpha value for persona steering.
+
+        Returns:
+            None
+
+        Example:
+            >>> self._init_base(target_model_id="qwen2.5:7b-instruct", layer=14, default_alpha=3.0)
+        """
+        
         self.target_model_id = target_model_id
         self.layer_steering = layer
         self.default_alpha = default_alpha
@@ -76,20 +144,6 @@ class PersonaModel:
         
         # Optimization #2: Cache for persona vector reshape
         self._persona_reshaped_cache = None
-        
-        # skip extraction if not loading from JSON
-        if from_json:
-            return
-        
-        # load dataset from file if provided
-        self.dataset = dataset if dataset else PersonaDataset.from_json(trait)
-        self.trait = self.dataset.trait
-        
-        # Extract persona vectors
-        _, _, _ = self.extract_persona_vector()
-        
-        # Save initialization (with extracted persona vector) to JSON
-        self.save_to_json()
         
     @classmethod
     def from_json(cls, json_filepath: str) -> 'PersonaModel':
