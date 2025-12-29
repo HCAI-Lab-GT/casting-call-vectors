@@ -27,7 +27,7 @@ from helpers import (
     lookup_run,
     parse_kv_list,
 )
-from pvx import Heartbeat, setup_logging
+from pvx.utils.logging_utils import Heartbeat, setup_logging, format_object
 
 logger = setup_logging(name="run-eval")
 
@@ -108,15 +108,26 @@ def main() -> None:
     
     # Convert flat task to one-item chain task
     if 'tasks' not in run:
-        tmp = run.copy()
-        tmp.pop('name')
-        run['tasks'] = [tmp]
+        run = {
+            'name': run['name'],
+            'tasks': [{k: v for k, v in run.items() if k != 'name'}]
+        }
+        
+    logger.info(format_object(run, "Run Details: "))
         
     # Run all tasks in run
     for task in run['tasks']:
         run_task(args, task, models_cfg)
     
 def run_task(args, task_cfg, models_cfg) -> None:
+    '''
+    Runs a task with each of its traits in Inspect AI. 
+    
+    Args:
+        args (argparse.Namespace): CLI args
+        task_cfg (dict): task configs, effectively params inside runs.yaml
+        models_cfg (dict): all model configs, used to lookup configs per model per task
+    '''
     # Param Priorities: CLI > task > None
     task        =   args.task       or task_cfg.get('task')
     model_name  =   args.model      or task_cfg.get('model_ref')
@@ -169,7 +180,7 @@ def run_task(args, task_cfg, models_cfg) -> None:
             single_trait_model_args['trait'] = trait
         else:
             single_trait_model_args.pop('trait')
-            
+        
         # build uv run python command
         cmd = build_command(
             task=task,
@@ -205,6 +216,11 @@ def run_task(args, task_cfg, models_cfg) -> None:
             env.pop("INSPECT_WANDB_ENABLED", None)
 
         logger.info("Running `%s`", " ".join(cmd))
+        logger.info("Task: %s", task)
+        logger.info(format_object(single_trait_model_args, "Model Args: "))
+        logger.info(format_object(solver_args, "Solver Args: "))
+        logger.info(format_object(task_args, "Task Args: "))
+        logger.info(format_object(generate_configs, "Generatin Args: "))
 
         if args.dry_run:
             return

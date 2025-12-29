@@ -22,7 +22,7 @@ runs:
   - name: smoketest
     task: src/pvx/tasks/boardgame_qa/boardgame.py@boardgame_loader
     model_ref: pvx-qwen7b
-    limit: 50
+    limit: 10
     log_dir: logs/smokes/smoketest/smoketest_smoke
     # generate_args:
     #   temperature: 0.2
@@ -31,7 +31,7 @@ runs:
       prompt_type: chain_of_thought
       limit: 50
     model_args_override:
-      trait: humorous
+      trait: scary
       alpha: 1
   
   - name: worftest
@@ -49,7 +49,7 @@ runs:
 
   - name: chainsmoke_test
     tasks: 
-    - task: src/pvx/tasks/boardgame_qa/boardgame.py@boardgame_loader
+    - task: src/pvx/tasks/worfbench/worfbench.py@worfbench_task
       model_ref: pvx-qwen7b
       # model_ref: qwen7b
       log_dir: logs/smokes/smoketest/smoketest_smoke
@@ -57,7 +57,7 @@ runs:
       #   temperature: 0.2
       #   max_tokens: 2048
       task_args:
-        prompt_type: chain_of_thought
+        # prompt_type: chain_of_thought
         limit: 50
       model_args_override:
         trait: 
@@ -65,14 +65,14 @@ runs:
           - brave
           - cautious
           - creative
-          # - empathetic
-          # - evil
-          # - humorous
-          # - kind
-          # - optimistic
-          # - pessimistic
-          # - sarcastic
-          # - verbose
+          - empathetic
+          - evil
+          - humorous
+          - kind
+          - optimistic
+          - pessimistic
+          - sarcastic
+          - verbose
         alpha: 1
 
   - name: bbeh-mini-qwen1.5b

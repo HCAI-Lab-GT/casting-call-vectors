@@ -41,6 +41,10 @@ from pvx.pvx_models import prompts
 PROMPTS = prompts.PROMPTS
 BACKENDS = ("openai", "vllm", "hf_local")
 
+
+# Initialize logger once per process
+logger = setup_logging(name="persona-dataset")
+
 class PersonaDataset:
     """
     A dataset class for generating and managing persona-based training data.
@@ -73,12 +77,12 @@ class PersonaDataset:
     def __init__(
         self,
         trait: str,
-        num_questions: int,
-        backend: str = "openai",
+        num_questions: int = 100,
+        backend: str = "hf_local",
         model: str = "qwen2.5:7b-instruct",
         base_url: Optional[str] = None,
         api_key_env: str = "LITELLM_API_KEY",
-        local_model: Optional[str] = None,
+        local_model: Optional[str] = 'Qwen/Qwen2.5-1.5B-Instruct',
         device: Optional[str] = None,
         dtype: torch.dtype = torch.float16,
         dirpath: str = "./persona_data/trait_datasets/",
@@ -120,9 +124,6 @@ class PersonaDataset:
         self._hf_tokenizer = None
         
         self.dirpath = dirpath
-        
-        # Initialize logger once per process
-        self.logger = setup_logging(name="persona-dataset")
 
     @staticmethod
     def from_json(trait: str, dirpath: str = "./persona_data/trait_datasets") -> "PersonaDataset":
@@ -151,6 +152,14 @@ class PersonaDataset:
         """
         filepath = os.path.join(dirpath, f"{trait}_dataset.json")
 
+        if not os.path.exists(filepath):
+            logger.info("Trait dataset not found. Initializing new trait dataset...")
+            dataset = PersonaDataset(
+                trait = trait
+            )
+            dataset.generate_dataset(save_to_json=True)
+            return dataset
+            
         # Load JSON data
         with open(filepath, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -223,7 +232,7 @@ class PersonaDataset:
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(dataset_dict, f, indent=2, ensure_ascii=False)
 
-        self.logger.info("Dataset saved to: %s", filepath)
+        logger.info("Dataset saved to: %s", filepath)
         return filepath
 
     def generate_dataset(self, save_to_json=True, max_tries=5) -> Tuple[List[Tuple[str, str]], List[str], str, str]:
@@ -259,10 +268,10 @@ class PersonaDataset:
         """
         # Generate trait description and question instruction
         trait_description: str = self._generate_trait_description()
-        self.logger.info("Generated trait description for %s", self.trait)
+        logger.info("Generated trait description for %s", self.trait)
 
         question_instruction: str = self._generate_question_instruction()
-        self.logger.info("Generated question instruction for %s", self.trait)
+        logger.info("Generated question instruction for %s", self.trait)
 
         # load generation prompt
         system_prompt: str = "You are an expert AI evaluator and dataset designer."
@@ -278,7 +287,7 @@ class PersonaDataset:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
-        with Heartbeat(self.logger, f"Generating dataset for {self.trait}", interval=30):
+        with Heartbeat(logger, f"Generating dataset for {self.trait}", interval=30):
             _, response = self._inference_with_client(messages=messages)
 
         # Parse the response into structured dataset components, retry maximum max_tries times if failed
@@ -395,7 +404,7 @@ class PersonaDataset:
             return (None, chat_response.choices[0].message.content)
         
         except Exception as e:
-            self.logger.exception(
+            logger.exception(
                 "inference failed | backend=%s model=%s temp=%s",
                 self.backend,
                 self.model,

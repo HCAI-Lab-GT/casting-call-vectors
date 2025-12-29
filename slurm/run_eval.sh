@@ -1,4 +1,6 @@
 #!/bin/bash
+source .env
+
 NAME="run_eval" # name of the script (mostly for logging purposes)
 
 ###
@@ -25,15 +27,22 @@ GPU_CONFIG=gpu:h100:1
 NUM_NODES=32
 NUM_WORKERS=8
 MEM_PER_NODE=512G
-TIME=02:00:00
+TIME=04:00:00
 
 # job settings (typically do not change)
-ACCOUNT=gts-schava6-fy20phase3
+ACCOUNT="$PACE_ACCOUNT" # set from .env
 QOS=embers
 LOG_DIR="logs/slurm/$NAME"
 
 
 ### CLI ARGS VALIDATION ###
+
+# Assert run name exists
+if [ -z "$ACCOUNT" ]; then
+    echo "Error: Account is required for PACE access"
+    exit 1
+fi
+
 # Assert run name exists
 if [ -z "$RUN_NAME" ]; then
     echo "Error: Run name is required"
