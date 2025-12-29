@@ -31,7 +31,6 @@ from pvx import Heartbeat, setup_logging
 
 logger = setup_logging(name="run-eval")
 
-
 def main() -> None:
     '''
     Main function to run Inspect AI evals based on command-line arguments and presets.
@@ -113,16 +112,11 @@ def main() -> None:
         tmp.pop('name')
         run['tasks'] = [tmp]
         
-    logger.info("Run: %s", run)
-        
     # Run all tasks in run
     for task in run['tasks']:
         run_task(args, task, models_cfg)
     
 def run_task(args, task_cfg, models_cfg) -> None:
-    logger.info("Args Config: %s", args)
-    logger.info("Task Config: %s", task_cfg)
-    logger.info("Model Config: %s", models_cfg)
     # Param Priorities: CLI > task > None
     task        =   args.task       or task_cfg.get('task')
     model_name  =   args.model      or task_cfg.get('model_ref')
@@ -176,14 +170,6 @@ def run_task(args, task_cfg, models_cfg) -> None:
         else:
             single_trait_model_args.pop('trait')
             
-        print()
-        print()
-        logger.info("Model Config: %s", single_trait_model_args)
-        print()
-        logger.info("Task Config: %s", task_args)
-
-        # return
-        
         # build uv run python command
         cmd = build_command(
             task=task,
@@ -203,7 +189,7 @@ def run_task(args, task_cfg, models_cfg) -> None:
         wandb_enabled = not args.no_wandb
         if wandb_enabled:
             if not env.get("WANDB_API_KEY"):
-                print(
+                logger.error(
                     "WANDB_API_KEY is required because WandB is enabled by default. Set it or pass --no-wandb.",
                     file=sys.stderr,
                 )

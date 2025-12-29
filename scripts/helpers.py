@@ -9,6 +9,67 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MODELS = ROOT / "configs" / "models.yaml"
 DEFAULT_RUNS = ROOT / "configs" / "runs.yaml"
 
+def build_command(
+    task: str,
+    model_id: str,
+    limit: int | None,
+    log_dir: str | None,
+    solver_args: Dict[str, Any],
+    model_args: Dict[str, Any],
+    task_args: Dict[str, Any],
+    gen_config: Dict[str, Any],
+    no_display: bool = False
+) -> list[str]:
+    '''
+    Build uv command for eval.
+    Ran by subprocess in run_eval.py.
+    
+    Args:
+        task (str): Task name.
+        model_id (str): Model identifier.
+        limit (int | None): Sample limit.
+        log_dir (str | None): Log directory.
+        solver_args (Dict[str, Any]) : Solver arguments.
+        model_args (Dict[str, Any]): Model arguments.
+        task_args (Dict[str, Any]): Task arguments.
+        gen_config (Dict[str, Any]): Generate arguments.
+        no_display (bool = False): Disable Inspect UI
+        
+    Returns:
+        List of command words for command line.
+    '''
+    cmd = [
+        "uv",
+        "run",
+        "--python",
+        ".venv/bin/python",
+        "inspect",
+        "eval",
+        task,
+        "--model",
+        model_id,
+    ]
+    if limit is not None:
+        cmd.extend(["--limit", str(limit)])
+    if log_dir:
+        cmd.extend(["--log-dir", log_dir])
+        
+    # temperature, max_token, etc
+    for k, v in gen_config.items():
+        cmd.extend([f"--{k.replace('_', '-')}", str(v)])
+        
+    # pass args
+    for k, v in model_args.items():
+        cmd.extend(["-M", f"{k}={v}"])
+    for k, v in solver_args.items():
+        cmd.extend(["-S", f"{k}={v}"])
+    for k, v in task_args.items():
+        cmd.extend(["-T", f"{k}={v}"])
+        
+    if no_display:
+        cmd.extend(["--display", "none"])
+        
+    return cmd
 
 def load_yaml(path: Path) -> Dict[str, Any]:
     '''
@@ -100,66 +161,3 @@ def default_log_dir(task: str) -> str:
     '''
     base = task.split(":", 1)[0].replace("/", "_")
     return str(ROOT / "logs" / base)
-
-
-def build_command(
-    task: str,
-    model_id: str,
-    limit: int | None,
-    log_dir: str | None,
-    solver_args: Dict[str, Any],
-    model_args: Dict[str, Any],
-    task_args: Dict[str, Any],
-    gen_config: Dict[str, Any],
-    no_display: bool = False
-) -> list[str]:
-    '''
-    Build uv command for eval.
-    Ran by subprocess in run_eval.py.
-    
-    Args:
-        task (str): Task name.
-        model_id (str): Model identifier.
-        limit (int | None): Sample limit.
-        log_dir (str | None): Log directory.
-        solver_args (Dict[str, Any]) : Solver arguments.
-        model_args (Dict[str, Any]): Model arguments.
-        task_args (Dict[str, Any]): Task arguments.
-        gen_config (Dict[str, Any]): Generate arguments.
-        no_display (bool = False): Disable Inspect UI
-        
-    Returns:
-        List of command words for command line.
-    '''
-    cmd = [
-        "uv",
-        "run",
-        "--python",
-        ".venv/bin/python",
-        "inspect",
-        "eval",
-        task,
-        "--model",
-        model_id,
-    ]
-    if limit is not None:
-        cmd.extend(["--limit", str(limit)])
-    if log_dir:
-        cmd.extend(["--log-dir", log_dir])
-        
-    # temperature, max_token, etc
-    for k, v in gen_config.items():
-        cmd.extend([f"--{k.replace('_', '-')}", str(v)])
-        
-    # pass args
-    for k, v in model_args.items():
-        cmd.extend(["-M", f"{k}={v}"])
-    for k, v in solver_args.items():
-        cmd.extend(["-S", f"{k}={v}"])
-    for k, v in task_args.items():
-        cmd.extend(["-T", f"{k}={v}"])
-        
-    if no_display:
-        cmd.extend(["--display", "none"])
-        
-    return cmd
