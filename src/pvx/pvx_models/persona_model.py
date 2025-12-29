@@ -54,7 +54,7 @@ class PersonaModel:
         if from_json:
             return
         
-        # load dataset from file if provided
+        # load dataset from file if provided, if path doesnt exist, initialize new trait dataset
         self.dataset = dataset if dataset else PersonaDataset.from_json(trait)
         self.trait = self.dataset.trait
         
@@ -147,9 +147,6 @@ class PersonaModel:
                 logger.error(f"⚠️ torch.compile failed: %s", str(e))
                 logger.error("   Continuing without compilation...")
         
-        # # Optimization #2: Cache for persona vector reshape
-        # self._persona_reshaped_cache = None
-        
         # persistent steering hook + cached base vector (on steered block's device/dtype)
         self._steer_hook_handle = None
         self._steer_block = None
@@ -171,6 +168,7 @@ class PersonaModel:
         Returns:
             PersonaModel: A new instance with the loaded persona vectors
         """
+        
         with open(json_filepath, 'r') as f:
             data = json.load(f)
         
@@ -187,9 +185,6 @@ class PersonaModel:
         # Load the persona vectors directly
         instance.prompt_persona_vector = torch.tensor(data["prompt_persona_vector"])
         instance.response_persona_vector = torch.tensor(data["response_persona_vector"])
-
-        # # Optimization #2: Initialize cache for persona vector reshape
-        # instance._persona_reshaped_cache = None
 
         # Store additional metadata
         if "dataset_info" in data and data["dataset_info"]:
@@ -220,16 +215,14 @@ class PersonaModel:
         Returns:
             PersonaModel: A new instance with the loaded persona vectors or a newly created one
         """
-        print(target_model_id)
-        json_filepath = json_filepath if json_filepath else f"./persona_data/model_inits/{trait}_persona_initialization/{target_model_id}.json"
+        json_filepath = json_filepath or f"./persona_data/model_inits/{trait}_persona_initialization/{target_model_id}.json"
 
         try:
-            if Path(json_filepath).exists():
+            if Path(json_filepath).exists():                
                 return cls.from_json(json_filepath)
 
         except Exception as e:
             logger.warning("⚠️ Failed to load from JSON: %s. Creating a new PersonaModel instance.", e)
-            pass
 
         return cls(
             target_model_id=target_model_id,
@@ -294,6 +287,7 @@ class PersonaModel:
         Returns:
             Tuple of (prompt_persona_vector, response_persona_vector, response_average_all_layers)
         '''
+        
         # Get cartesian product of all positive-negative question pairs from dataset
         trait_pairs = self.dataset.extract_pos_neg_question_pairs()
 
@@ -350,6 +344,7 @@ class PersonaModel:
         sum_resp_avg_all_layers_pos = None
         sum_resp_avg_all_layers_neg = None
 
+        # track number of pairs
         n = 0
 
         # Extract activations for each pair
@@ -426,6 +421,7 @@ class PersonaModel:
         Returns:
             str: persona influenced response
         '''
+        
         if prompt is None and messages is None:
             raise ValueError("Prompt and Messages cannot both be None")
         
@@ -559,8 +555,6 @@ class PersonaModel:
         count = 0
 
         # (1,1) tensor reused
-        # last_token = input_ids[:, -1:].clone()
-
         last_token = torch.tensor([[tok]], device=input_ids.device, dtype=torch.long)
 
         # response generation loop
@@ -610,6 +604,7 @@ class PersonaModel:
         Args:
             layer_idx (int): layer to add steering hook to
         '''
+        
         # Get the decoder blocks and specific target steer block
         blocks = self._get_decoder_blocks(self.model)
         block = blocks[layer_idx]
@@ -629,6 +624,7 @@ class PersonaModel:
             Returns:
                 torch.Tensor | tuple: Modified output tensor(s).
             '''
+            
             d = _STEER_DELTA.get()  # (1, H) or None
             if d is None:
                 return out
@@ -652,6 +648,7 @@ class PersonaModel:
         Returns:
             torch.Tensor: persona vector
         '''
+        
         if not hasattr(self, "prompt_persona_vector"):
             raise RuntimeError("prompt_persona_vector not initialized")
 
@@ -682,6 +679,7 @@ class PersonaModel:
         Args:
             alpha (float): alpha applied on runtime
         '''
+        
         if alpha == 0:
             yield
             return
@@ -699,6 +697,7 @@ class PersonaModel:
         '''
         Removes hooks. Typically unused
         '''
+        
         if self._steer_hook_handle is not None:
             self._steer_hook_handle.remove()
             self._steer_hook_handle = None
@@ -713,6 +712,7 @@ class PersonaModel:
         Returns:
             list[torch.nn.Module]: List of decoder blocks.
         '''
+        
         # Common HF layouts
         if hasattr(model, "model") and hasattr(model.model, "layers"):         # LLaMA/Qwen/Mistral
             return model.model.layers
@@ -732,6 +732,7 @@ class PersonaModel:
         Returns:
             int: Sampled token index.
         '''
+        
         # Calculate probabilities from logits
         logits = logits / temperature
         probs = torch.nn.functional.softmax(logits, dim=-1)
@@ -762,37 +763,29 @@ class PersonaModel:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Generate Persona Dataset")
+    ap.add_argument("-m", "--model_name", type=str, default="Qwen/Qwen2.5-1.5B-Instruct", help="HF model typically")
     ap.add_argument("-t", "--trait", type=str, default="humorous", help="Trait of the persona dataset")
     ap.add_argument("-n", "--max_new_tokens", type=int, default=2000, help="Max tokens to generate")
     ap.add_argument("-a", "--alpha", type=float, default=1.0, help="Alpha value for persona steering")
     ap.add_argument("--temperature", type=float, default=0.9, help="Temperature for sampling")
     ap.add_argument("-q", "--question", type=str, default="What is the theory of relativity?", help="Question to generate response for")
-
+    ap.add_argument("-f", "--json_filepath", type=str, default=None, help="Filepath to model init file (not trait dataset)")
     args = ap.parse_args()
     
     pvx = PersonaModel.load_or_create(
-        target_model_id=model_name,
+        target_model_id=args.model_name,
         trait=args.trait,
         layer=14,
-        json_filepath=model_args.get("json_filepath"),
+        json_filepath=args.json_filepath
     )
-            
-    # Example 1: Create new PersonaModel from dataset (extracts vectors)
-    # dataset = PersonaDataset.from_json(trait="humorous")
-    # persona_model = PersonaModel(target_model_id="Qwen/Qwen2.5-1.5B-Instruct", dataset=dataset, layer=14)
-
-    # Example 2: Load existing PersonaModel from JSON (skips vector extraction)
-    # persona_model = PersonaModel.from_json(
-    #     "persona_data/model_inits/verbose_persona_initialization_Qwen/Qwen2.5-1.5B-Instruct.json"
-    # )
     
-    response = persona_model.generate(
+    response = pvx.generate(
         prompt=args.question,
         alpha=0,
         max_new_tokens=args.max_new_tokens,
         temperature=args.temperature
     )
-    steer_response = persona_model.generate(
+    steer_response = pvx.generate(
         prompt=args.question,
         alpha=args.alpha,
         max_new_tokens=args.max_new_tokens,
@@ -805,5 +798,5 @@ if __name__ == "__main__":
     logger.info("=== Non-Steered Answer ===")
     logger.info(response)
     logger.info('')
-    logger.info("=== %s Steered Answer ===", args.trait)
+    logger.info("=== %s Steered Answer ===", args.trait.upper())
     logger.info(steer_response)
