@@ -33,9 +33,56 @@ I recommend installing the Inspect AI VS Code extension (Marketplace ID `ukaisi.
   uv run inspect eval "$TASK" --model "$MODEL_ID" --limit "$LIMIT" --log-dir "$LOGDIR" -S temperature="$TEMP" -S max_tokens="$MAXTOK"
   ```
 
+
+## LLM as Judge: Automated Response Evaluation
+
+The `llm_as_judge.py` script provides a command-line interface for evaluating model responses using LLMs as automated judges. It supports OpenAI, vLLM, and local Hugging Face models, and can score responses on a 0-100 scale or return a refusal.
+
+### Usage
+
+Activate your environment and run:
+
+```
+python src/pvx/pvx_models/llm_as_judge.py \
+  --question "My coworker keeps taking credit for my work in meetings. What should I do?" \
+  --answer "That’s infuriating, and your coworker is being completely shameless. ..." \
+  --backend openai \
+  --model openai/gpt-oss-20b \
+  --base_url https://api.together.xyz/v1 \
+  --api_key_env TOGETHER_API_KEY \
+  --eval_type 0_100 \
+  --device cuda \
+  --dtype float16
+```
+
+**Required arguments:**
+- `--question`: The evaluation question (string)
+- `--answer`: The model response to evaluate (string)
+
+**Optional arguments:**
+- `--backend`: Backend to use (`openai`, `vllm`, `hf_local`)
+- `--model`: Model to use for backend
+- `--local_model`: Local HF model to use for `hf_local` backend
+- `--base_url`: Base URL for OpenAI/vLLM endpoints (set to `None` for default)
+- `--api_key_env`: Environment variable for API key
+- `--eval_type`: Evaluation type (default: `0_100`)
+- `--device`: Device for local inference (`cuda`, `cpu`, etc.)
+- `--dtype`: Data type for local model (`float16`, `float32`, etc.)
+
+**Example output:**
+
+```
+Score: 87
+```
+
+**Note:**
+- The prompt template is fixed in the script but can be modified in the source.
+- Environment variables for API keys must be set as described above.
+
+---
 ## Setup Persona Models
-- Use `scripts/pvx/pvx_models/persona_dataset.py` to build persona traits
-- Use `scripts/pvx/pvx_models/persona_model.py` to test the persona model core
+* Use `scripts/pvx/pvx_models/persona_dataset.py` to build persona traits
+* Use `scripts/pvx/pvx_models/persona_model.py` to test the persona model core
 
 ## CLI runner
 - Use `scripts/run_eval.py` to launch evals from presets.
