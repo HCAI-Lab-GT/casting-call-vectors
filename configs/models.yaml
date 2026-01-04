@@ -1,0 +1,43 @@
+# Default model presets for Inspect AI runs
+# - name: logical handle used in docs/commands
+# - model: inspect model id (HF repo or API name)
+# - args: optional inspect model args (passed with -M)
+# - generate: default solver overrides (passed with -S)
+
+models:
+  - name: pvx-qwen1.5b
+    model: pvx/Qwen/Qwen2.5-1.5B-Instruct
+    args:
+      # default params, typically overriden in runs.yaml per run
+      trait: humorous
+      alpha: 1
+
+  - name: pvx-qwen7b
+    model: pvx/Qwen/Qwen2.5-7B-Instruct
+    args:
+      # default params, typically overriden in runs.yaml per run
+      trait: humorous
+      alpha: 1
+
+  - name: qwen1.5b
+    model: hf/Qwen/Qwen2.5-1.5B-Instruct
+    args: {}
+
+  - name: qwen7b
+    model: hf/Qwen/Qwen2.5-7B-Instruct
+    args: {}
+
+  - name: qwen3-0.6b
+    model: hf/Qwen/Qwen3-0.6B
+    args: {}
+
+  - name: qwen3-1.7b
+    model: hf/Qwen/Qwen3-1.7B
+    args: {}
+
+  - name: api-4o-mini
+    model: openai/gpt-4o-mini
+    args: {}
+
+# Example usage:
+# uv run inspect eval inspect_evals/bbeh_mini --model $(yq '.models[] | select(.name=="qwen3-1.7b").model' configs/models.yaml) -S temperature=$(yq '.models[] | select(.name=="qwen3-1.7b").generate.temperature' configs/models.yaml)

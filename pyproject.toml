@@ -1,22 +1,47 @@
 [project]
-name = "persona-vectors"
+name = "pvx"
 version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
-requires-python = ">=3.12"
+description = "Eval helpers and persona dataset utilities (Inspect AI, HF/vLLM ready)."
+authors = [{ name = "EILab", email = "dev@eilab.example" }]
+requires-python = ">=3.12,<3.13"
 dependencies = [
-    "accelerate>=1.11.0",
-    "datasets>=4.4.1",
-    "matplotlib>=3.10.7",
-    "ollama>=0.6.0",
-    "openai>=2.8.0",
-    "pandas>=2.3.3",
-    "pathlib2>=2.3.7.post1",
-    "seaborn>=0.13.2",
-    "torch>=2.9.0",
-    "tqdm>=4.67.1",
-    "transformers>=4.57.1",
+  "transformers>=4.44.0",
+  "torch>=2.3.0",
+  "openai>=1.53.0",
+  "tqdm>=4.66.0",
+  "datasets>=3.1.0",
+  "accelerate>=1.0.0",
+  "bitsandbytes>=0.48.0",
+  "inspect-ai>=0.3.4",
+  "anthropic>=0.75.0",
+  "python-dotenv>=1.0.0",
+  "wandb>=0.18.7",
+  "vllm>=0.5.2",
+  "matplotlib>=3.9.0",
+  "nvitop>=1.6.0",
+  "inspect-evals>=0.3.102",
+  "inspect-wandb>=0.2.0",
+  "pyyaml>=6.0.2",
+  "hf-transfer>=0.1.9",
+  "anyio>=4.12.0",
+  "sentence-transformers>=5.2.0",
 ]
 
-[tool.setuptools.packages.find]
-where = ["experiments", "persona_vectors"]
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.6.0",
+]
+
+[project.entry-points.inspect_ai]
+pvx = "pvx.pvx_models.inspect_modelapi._registry"
+
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pvx"]
+
+[tool.ruff]
+line-length = 100
+extend-select = ["B", "I", "C4", "RET"]

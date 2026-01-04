@@ -1,0 +1,142 @@
+# Run presets for common smoke/regression flows
+# Each entry names tasks, model preset (see models.yaml), limits, and log dir.
+
+runs:
+  - name: example
+    task: src/pvx/tasks/boardgame.py@boardgame_loader
+    model_ref: pvx-qwen1.5b
+    limit: 2
+    log_dir: logs/smokes/smoketest
+    generate_args:
+      temperature: 0.2
+      max_tokens: 2048
+    task_args:
+      dataset_name: logical_deduction_five_objects
+      prompt_type: chain_of_thought
+    solver_args:
+      temperature: 0.2
+    # optional per-run overrides to model construction (-M / --model-config)
+    model_args_override:
+      alpha: 2
+
+  - name: smoketest
+    task: src/pvx/tasks/boardgame_qa/boardgame.py@boardgame_loader
+    model_ref: pvx-qwen7b
+    limit: 10
+    log_dir: logs/smokes/smoketest/smoketest_smoke
+    # generate_args:
+    #   temperature: 0.2
+    #   max_tokens: 2048
+    task_args:
+      prompt_type: chain_of_thought
+      limit: 50
+    model_args_override:
+      trait: scary
+      alpha: 1
+  
+  - name: worftest
+    task: src/pvx/tasks/worfbench/worfbench.py@worfbench_task
+    model_ref: qwen7b
+    limit: 2
+    log_dir: logs/smokes/smoketest/worfbench_smoke
+    task_args:
+      # prompt_type: chain_of_thought
+      nshot: 2
+      limit: 10
+      eval_type: graph
+    solver_args: # when launched from --solver
+      eval_type: node
+
+  - name: chainsmoke_test
+    tasks: 
+    - task: src/pvx/tasks/worfbench/worfbench.py@worfbench_task
+      model_ref: pvx-qwen7b
+      # model_ref: qwen7b
+      log_dir: logs/smokes/smoketest/smoketest_smoke
+      # generate_args:
+      #   temperature: 0.2
+      #   max_tokens: 2048
+      task_args:
+        # prompt_type: chain_of_thought
+        limit: 50
+      model_args_override:
+        trait: 
+          - humorous
+          - brave
+          - cautious
+          - creative
+          - empathetic
+          - evil
+          - humorous
+          - kind
+          - optimistic
+          - pessimistic
+          - sarcastic
+          - verbose
+        alpha: 1
+
+  - name: bbeh-mini-qwen1.5b
+    task: inspect_evals/bbeh_mini
+    model_ref: qwen1.5b
+    limit: 2
+    log_dir: logs/smoke/bbeh/bbeh-mini-qwen1.5b
+    generate_args:
+      temperature: 0.2
+      max_tokens: 2048
+
+  - name: bbeh-mini-qwen3-1.7b
+    task: inspect_evals/bbeh_mini
+    model_ref: qwen3-1.7b
+    limit: 2
+    log_dir: logs/smokes/bbeh/bbeh-mini-qwen3-1.7b
+    generate_args:
+      temperature: 0.2
+      max_tokens: 2048
+
+  - name: bbh-logical-deduction-qwen1.5b
+    task: inspect_evals/bbh
+    model_ref: qwen1.5b
+    limit: 25
+    log_dir: logs/smokes/bbh/logical_deduction_five_objects
+    task_args:
+      dataset_name: logical_deduction_five_objects
+      prompt_type: chain_of_thought
+    solver_args:
+      temperature: 0.2
+
+  - name: boardgame-qa-qwen1.5b
+    task: src/pvx/tasks/boardgame_qa/boardgame.py@boardgame_loader
+    model_ref: qwen1.5b
+    # limit: 50
+    log_dir: logs/smokes/boardgameqa/boardgame-qa-qwen1.5b
+    task_args:
+      prompt_type: chain_of_thought
+      limit: 50
+
+  - name: boardgame-qa-qwen7b
+    task: src/pvx/tasks/boardgame_qa/boardgame.py@boardgame_loader
+    model_ref: qwen7b
+    # limit: 10 # 50
+    log_dir: logs/smokes/boardgameqa/boardgame-qa-qwen7b
+    task_args:
+      prompt_type: chain_of_thought
+      limit: 50
+
+  - name: boardgame-qa-qwen14b
+    task: src/pvx/tasks/worfbench/worfbench.py@worfbench_loader
+    model_ref: qwen14b
+    # limit: 10
+    task_args:
+      prompt_type: chain_of_thought
+      limit: 50
+    log_dir: logs/smokes/boardgameqa/boardgame-qa-qwen14b
+
+# Usage hint:
+#   TASK=$(yq '.runs[] | select(.name=="bbeh-mini-qwen3-1.7b").task' configs/runs.yaml)
+#   MODEL=$(yq '.runs[] | select(.name=="bbeh-mini-qwen3-1.7b").model_ref' configs/runs.yaml)
+#   LIMIT=$(yq '.runs[] | select(.name=="bbeh-mini-qwen3-1.7b").limit' configs/runs.yaml)
+#   LOGDIR=$(yq '.runs[] | select(.name=="bbeh-mini-qwen3-1.7b").log_dir' configs/runs.yaml)
+#   MODEL_ID=$(yq '.models[] | select(.name==strenv(MODEL)).model' configs/models.yaml)
+#   TEMP=$(yq '.models[] | select(.name==strenv(MODEL)).generate.temperature' configs/models.yaml)
+#   MAXTOK=$(yq '.models[] | select(.name==strenv(MODEL)).generate.max_tokens' configs/models.yaml)
+#   uv run inspect eval "$TASK" --model "$MODEL_ID" --limit "$LIMIT" --log-dir "$LOGDIR" -S temperature="$TEMP" -S max_tokens="$MAXTOK"
