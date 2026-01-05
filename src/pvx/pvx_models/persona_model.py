@@ -41,6 +41,7 @@ class PersonaModel:
                  layer: float = 14,
                  default_alpha: float = 3.0,
                  judge_threshold: float = 50.0,
+                 target_pairs: int = 20,
                  from_json: bool = False):
         '''
         Initialize the PersonaModel with a target model and dataset for persona extraction.
@@ -64,6 +65,8 @@ class PersonaModel:
         
         self.judge_threshold = judge_threshold
         self.judge = LLMJudge(prompt_template=self.dataset.evaluation_prompt)
+        
+        self.target_pairs = target_pairs
         
         # Extract persona vectors
         _, _, _ = self.extract_persona_vector()
@@ -299,10 +302,10 @@ class PersonaModel:
         trait_pairs = self.dataset.extract_pos_neg_question_pairs()
 
         # Randomly subsample 20 questions
-        orig_n = len(trait_pairs)
-        if orig_n > 20:
-            trait_pairs = random.sample(trait_pairs, 20)
-            logger.info("Randomly subsampled 20 questions from %d pairs", orig_n)
+        # orig_n = len(trait_pairs)
+        # if orig_n > 20:
+        #     trait_pairs = random.sample(trait_pairs, 20)
+        #     logger.info("Randomly subsampled 20 questions from %d pairs", orig_n)
 
         # Optimization #4: Pre-tokenize and cache all prompts
         logger.info("Pre-tokenizing %d pairs...", len(trait_pairs))
@@ -353,48 +356,60 @@ class PersonaModel:
 
         # track number of pairs
         n = 0
-
-        # llm judge for positive and negative response filtering
-        judge = LLMJudge(prompt_template=self.dataset.evaluation_prompt)
+        passed_pairs = set()
+        retries = 0
+        max_retries = 2
         
-        question_pairs_passed = 0
-        
-        # Extract activations for each pair
-        for pos, neg, question in tqdm(trait_pairs,
-                         total = len(trait_pairs),
-                         desc = f"Extracting activations for trait {self.dataset.trait}"):
-            pos_ids, pos_mask = token_cache[(question, pos)]
-            neg_ids, neg_mask = token_cache[(question, neg)]
-
-            # pl: prompt hidden layer last activation
-            # ra: response hidden layer avg activation
-            # rall: response avg all activation
-            pl_pos, ra_pos, rall_pos, pos_response = self._get_activations(pos_ids, pos_mask, temperature, max_new_tokens) # positive
-            pl_neg, ra_neg, rall_neg, neg_response = self._get_activations(neg_ids, neg_mask, temperature, max_new_tokens) # negative
+        with tqdm(total=self.target_pairs, desc="Extracting activations for trait {self.dataset.trait}") as pbar:
             
-            pos_score = asyncio.run(judge(question=question, answer=pos_response))
-            neg_score = asyncio.run(judge(question=question, answer=neg_response))
-            
-            if pos_score >= self.judge_threshold and neg_score < self.judge_threshold:
-                continue
-            
-            question_pairs_passed += 1
+            while n < self.target_pairs and retries < max_retries:
+                
+                remaining = [p for p in trait_pairs if p not in passed_pairs]
+                epoch_pairs = random.sample(remaining, len(remaining))
+                made_progress = False
+                
+                for pos, neg, question in epoch_pairs:
+                    pos_ids, pos_mask = token_cache[(question, pos)]
+                    neg_ids, neg_mask = token_cache[(question, neg)]
 
-            if sum_prompt_last_pos is None:
-                sum_prompt_last_pos = torch.zeros_like(pl_pos, dtype=torch.float32)
-                sum_prompt_last_neg = torch.zeros_like(pl_neg, dtype=torch.float32)
-                sum_resp_avg_pos = torch.zeros_like(ra_pos, dtype=torch.float32)
-                sum_resp_avg_neg = torch.zeros_like(ra_neg, dtype=torch.float32)
-                sum_resp_avg_all_layers_pos = torch.zeros_like(rall_pos, dtype=torch.float32)
-                sum_resp_avg_all_layers_neg = torch.zeros_like(rall_neg, dtype=torch.float32)
+                    # pl: prompt hidden layer last activation
+                    # ra: response hidden layer avg activation
+                    # rall: response avg all activation
+                    pl_pos, ra_pos, rall_pos, pos_response = self._get_activations(pos_ids, pos_mask, temperature, max_new_tokens) # positive
+                    pl_neg, ra_neg, rall_neg, neg_response = self._get_activations(neg_ids, neg_mask, temperature, max_new_tokens) # negative
+                    
+                    pos_score = asyncio.run(self.judge(question=question, answer=pos_response))
+                    neg_score = asyncio.run(self.judge(question=question, answer=neg_response))
+                    
+                    if pos_score < self.judge_threshold and neg_score >= self.judge_threshold:
+                        continue
+                    
+                    passed_pairs.add((pos, neg, question))
+                    pbar.update(1)
+                    made_progress = True
+                    
+                    if sum_prompt_last_pos is None:
+                        sum_prompt_last_pos = torch.zeros_like(pl_pos, dtype=torch.float32)
+                        sum_prompt_last_neg = torch.zeros_like(pl_neg, dtype=torch.float32)
+                        sum_resp_avg_pos = torch.zeros_like(ra_pos, dtype=torch.float32)
+                        sum_resp_avg_neg = torch.zeros_like(ra_neg, dtype=torch.float32)
+                        sum_resp_avg_all_layers_pos = torch.zeros_like(rall_pos, dtype=torch.float32)
+                        sum_resp_avg_all_layers_neg = torch.zeros_like(rall_neg, dtype=torch.float32)
 
-            sum_prompt_last_pos += pl_pos.float()
-            sum_prompt_last_neg += pl_neg.float()
-            sum_resp_avg_pos += ra_pos.float()
-            sum_resp_avg_neg += ra_neg.float()
-            sum_resp_avg_all_layers_pos += rall_pos.float()
-            sum_resp_avg_all_layers_neg += rall_neg.float()
-            n += 1
+                    sum_prompt_last_pos += pl_pos.float()
+                    sum_prompt_last_neg += pl_neg.float()
+                    sum_resp_avg_pos += ra_pos.float()
+                    sum_resp_avg_neg += ra_neg.float()
+                    sum_resp_avg_all_layers_pos += rall_pos.float()
+                    sum_resp_avg_all_layers_neg += rall_neg.float()
+                    n += 1
+                    
+                    if n >= self.target_pairs:
+                        break
+                    
+                retries += 1
+                if not made_progress:
+                    break
 
         prompt_last_pos_mean = sum_prompt_last_pos / max(n, 1)
         prompt_last_neg_mean = sum_prompt_last_neg / max(n, 1)
@@ -417,8 +432,9 @@ class PersonaModel:
         logger.info("Prompt persona vector shape: %s", str(tuple(prompt_persona_vector.shape)))
         logger.info("Response persona vector shape: %s", str(tuple(response_persona_vector.shape)))
         logger.info("All-layers response persona vector shape: %s", str(tuple(all_layers_response_persona_vector.shape)))
-        logger.info("Percentage of Trait Question Pairs Passed: %s", str(question_pairs_passed / 20))
-
+        if n < self.target_pairs:
+            logger.warning(f"Only {len(passed_pairs)} pairs passed after {max_retries} retries.")
+        
         return prompt_persona_vector, response_persona_vector, all_layers_response_persona_vector
 
     @torch.inference_mode()
