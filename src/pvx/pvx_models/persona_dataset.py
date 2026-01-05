@@ -36,14 +36,18 @@ from openai import OpenAI
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from pvx import Heartbeat, setup_logging
-from pvx.pvx_models import prompts
+from pvx.pvx_models.prompts import PromptTemplates
 
-PROMPTS = prompts.PROMPTS
+from dotenv import load_dotenv
+
+load_dotenv()
+
 BACKENDS = ("openai", "vllm", "hf_local")
 
 
 # Initialize logger once per process
 logger = setup_logging(name="persona-dataset")
+
 
 class PersonaDataset:
     """
@@ -275,7 +279,7 @@ class PersonaDataset:
 
         # load generation prompt
         system_prompt: str = "You are an expert AI evaluator and dataset designer."
-        user_prompt: str = PROMPTS["generate_trait"].format(
+        user_prompt: str = PromptTemplates.PROMPTS["generate_trait"].format(
             TRAIT=self.trait,
             N=self.num_questions,
             trait_instruction=trait_description,
@@ -294,12 +298,14 @@ class PersonaDataset:
         pos_neg_pairs, questions, evaluation_prompt = None, None, None
         for _ in range(max_tries):
             try:
-                pos_neg_pairs, questions, evaluation_prompt = self._parse_dataset_output(response=response)
+                pos_neg_pairs, questions = self._parse_dataset_output(response=response)
                 break
             except json.JSONDecodeError as e:
                 continue
         else:
             raise ValueError("Failed to parse dataset output after multiple attempts")
+        
+        evaluation_prompt = PromptTemplates.evaluation(trait=self.trait,trait_description=trait_description)
 
         self.positive_negative_pairs = pos_neg_pairs
         self.questions = questions
@@ -459,7 +465,7 @@ class PersonaDataset:
             str: A detailed description of the personality trait
         """
         system_prompt = "You are an expert AI evaluator and dataset designer."
-        user_prompt = PROMPTS["trait_instruction"].format(TRAIT=self.trait)
+        user_prompt = PromptTemplates.PROMPTS["trait_instruction"].format(TRAIT=self.trait)
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -482,7 +488,7 @@ class PersonaDataset:
             str: Instructions for question generation
         """
         system_prompt = "You are an expert AI evaluator and dataset designer."
-        user_prompt = PROMPTS["question_instruction"].format(TRAIT=self.trait)
+        user_prompt = PromptTemplates.PROMPTS["question_instruction"].format(TRAIT=self.trait)
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -494,7 +500,7 @@ class PersonaDataset:
 
         return response
 
-    def _parse_dataset_output(self, response: str) -> Tuple[List[Tuple[str, str]], List[str], str]:
+    def _parse_dataset_output(self, response: str) -> Tuple[List[Tuple[str, str]], List[str]]:
         """
         Parse the LLM-generated JSON output into structured components.
 
@@ -521,9 +527,8 @@ class PersonaDataset:
         pos_instructions = response_dict['pos_instructions']
         neg_instructions = response_dict['neg_instructions']
         questions = response_dict['questions']
-        eval_prompt = response_dict['eval_prompt']
 
-        return list(zip(pos_instructions, neg_instructions)), questions, eval_prompt
+        return list(zip(pos_instructions, neg_instructions)), questions
 
     @staticmethod
     def _messages_to_prompt(messages: List[Dict[str, str]]) -> str:
@@ -548,6 +553,8 @@ if __name__ == "__main__":
     ap.add_argument('-f', '--dirpath', default='./persona_data/trait_datasets/', help='Directory filepath to save generated datasets')
     ap.add_argument('-b', '--backend', default='hf_local', help='Backend to use: openai, vllm, hf_local')
     ap.add_argument('-m', '--model', default='openai/gpt-oss-120b', help='Model to use for openai/vllm backend')
+    ap.add_argument('-a', '--api_key_env', default='OPENAI_API_KEY', help='Model to use for openai/vllm backend')
+    ap.add_argument('-u', '--base_url', default='https://api.together.xyz/v1', help='Model to use for openai/vllm backend')
     ap.add_argument('-l', '--local_model', default='Qwen/Qwen2.5-1.5B-Instruct', help='Local HF model to use for hf_local backend')
     ap.add_argument('-N', '--num_questions', type=int, default=100, help='Number of questions to generate per trait')
     args = ap.parse_args()
@@ -576,7 +583,8 @@ if __name__ == "__main__":
                 num_questions=args.num_questions,
                 backend=args.backend,
                 local_model=args.local_model,
-                model=args.model
+                model=args.model,
+                api_key_env=args.api_key_env
             )
             dataset.generate_dataset(save_to_json=True)
 
