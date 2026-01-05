@@ -17,6 +17,7 @@ from transformers.utils import logging as transformers_logging
 from pvx import setup_logging, Heartbeat
 from pvx.pvx_models.persona_dataset import PersonaDataset
 from pvx.pvx_models.llm_as_judge import LLMJudge
+from pvx.utils.judge_utils import JudgeConfig
 
 import asyncio
 
@@ -40,6 +41,7 @@ class PersonaModel:
                  trait: str = None,
                  layer: float = 14,
                  default_alpha: float = 3.0,
+                 judge_config: Optional[JudgeConfig] = None,
                  judge_threshold: float = 50.0,
                  target_pairs: int = 20,
                  from_json: bool = False):
@@ -64,7 +66,12 @@ class PersonaModel:
         self.trait = self.dataset.trait
         
         self.judge_threshold = judge_threshold
-        self.judge = LLMJudge(prompt_template=self.dataset.evaluation_prompt)
+        if judge_config is None:
+            judge_config = JudgeConfig(prompt_template=self.dataset.evaluation_prompt)
+        else:
+            if judge_config.prompt_template is None:
+                judge_config.prompt_template = self.dataset.evaluation_prompt
+        self.judge = LLMJudge(**judge_config.to_kwargs())
         
         self.target_pairs = target_pairs
         
