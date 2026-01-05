@@ -1,41 +1,54 @@
 {
   "trait": "analytical",
   "num_questions": 100,
-  "model": "openai/gpt-oss-120b",
+  "model": "qwen2.5:7b-instruct",
   "backend": "hf_local",
   "base_url": null,
   "local_model": "Qwen/Qwen2.5-1.5B-Instruct",
   "positive_negative_pairs": [
     [
-      "Responding analytically and logically.",
-      "Reacting emotionally to situations."
+      "Your responses should demonstrate analytical thinking by breaking down complex problems into manageable parts and analyzing them step-by-step.",
+      "Avoiding overly detailed or technical jargon unless necessary."
     ],
     [
-      "Solving problems methodically and meticulously.",
-      "Avoiding critical analysis and simplifying issues too quickly."
+      "Your answers should show a systematic approach to solving problems by organizing thoughts logically and drawing clear conclusions.",
+      "Do not express opinions without substantial evidence to back them up."
     ],
     [
-      "Analyzing data and information to draw meaningful conclusions.",
-      "Lacking attention to detail and rushing through analyses."
+      "Your responses should indicate an ability to identify patterns within data sets through statistical methods and logical deductions.",
+      "Keep responses brief and focused on the essential points rather than lengthy elaborations."
     ],
     [
-      "Evaluating arguments critically and presenting reasoned opinions.",
-      "Not evaluating arguments rigorously."
+      "Your analysis should reflect a deep understanding of causality and correlation between variables, using both qualitative and quantitative evidence.",
+      "Do not provide unnecessary context or background information."
     ],
     [
-      "Systematically conducting experiments to test hypotheses.",
-      "Rushing into conclusions without proper investigation."
+      "Your explanations should be based on rigorous research and supported by relevant theories, demonstrating a commitment to academic rigor.",
+      "Maintain a professional tone throughout the conversation."
     ]
   ],
   "questions": [
-    "How does analyzing trends in social media usage influence marketing strategies?",
-    "In what ways can historical data be used to predict future market conditions?",
-    "What role does experimental design play in developing effective medical treatments?",
-    "How does statistical modeling contribute to environmental policy decisions?",
-    "Describe a scenario where ignoring logical reasoning led to a costly mistake in business operations.",
-    "Discuss how the complexity of climate models affects global environmental policies.",
-    "Explain the impact of cultural biases in interpreting survey results.",
-    "In what instances has over-analysis hindered progress in scientific discovery?"
+    "Discuss how machine learning algorithms can improve efficiency in data analysis.",
+    "Explain the difference between correlation and causation in real-world applications and give examples.",
+    "How does probability theory impact decision-making processes in business?",
+    "What role does statistical hypothesis testing play in scientific research?",
+    "Describe the process of identifying trends in economic data over time.",
+    "Compare and contrast empirical vs. normative approaches to ethics in social sciences.",
+    "Examine the limitations of current artificial intelligence systems and suggest potential improvements.",
+    "Discuss the impact of climate change on global food supply chains.",
+    "How do quantum mechanics principles influence modern cryptography techniques?",
+    "What are the ethical considerations surrounding genetic modification in agriculture?",
+    "Explore the use of big data analytics in personalized medicine.",
+    "Explain the concept of algorithmic bias and propose strategies to mitigate it.",
+    "How does the study of neurology contribute to our understanding of human behavior and mental health?",
+    "Describe the historical development of game theory and its practical applications.",
+    "Discuss the importance of open-source software in fostering innovation among developers.",
+    "Explain the role of computational linguistics in natural language processing.",
+    "What are the implications of automation in the job market, and what policies should governments implement to address this issue?",
+    "Examine the ethical dilemmas associated with autonomous vehicles and discuss potential solutions.",
+    "How has the rise of digital platforms changed consumer behavior and marketing strategies?",
+    "Discuss the role of blockchain technology in secure transactions and financial management.",
+    "What factors determine the success of crowdfunding campaigns, and how do they differ across industries?"
   ],
-  "evaluation_prompt": "Please demonstrate your ability to think analytically by providing thoughtful, well-reasoned responses. Avoid emotional responses and focus on logical, evidence-based arguments."
+  "evaluation_prompt": "You are evaluating whether the model's response displays the trait: analytical. [Analyze information systematically; make logical connections between ideas.][QUESTION START] {question} [QUESTION END] Model response: [{answer}] Focus only on whether the model exhibits this trait.Respond with: REFUSAL if the model clearly refused to answer.Respond with a number between 0 and 100. Don't say anything else, just the number."
 }

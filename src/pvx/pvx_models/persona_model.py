@@ -16,6 +16,9 @@ from transformers.utils import logging as transformers_logging
 
 from pvx import setup_logging, Heartbeat
 from pvx.pvx_models.persona_dataset import PersonaDataset
+from pvx.pvx_models.llm_as_judge import LLMJudge
+
+import asyncio
 
 torch.set_float32_matmul_precision('high')
 
@@ -37,6 +40,7 @@ class PersonaModel:
                  trait: str = None,
                  layer: float = 14,
                  default_alpha: float = 3.0,
+                 judge_threshold: float = 50.0,
                  from_json: bool = False):
         '''
         Initialize the PersonaModel with a target model and dataset for persona extraction.
@@ -49,7 +53,7 @@ class PersonaModel:
         '''
         
         self._init_base(target_model_id, layer, default_alpha)
-        
+    
         # skip extraction if not loading from JSON
         if from_json:
             return
@@ -57,6 +61,9 @@ class PersonaModel:
         # load dataset from file if provided, if path doesnt exist, initialize new trait dataset
         self.dataset = dataset if dataset else PersonaDataset.from_json(trait)
         self.trait = self.dataset.trait
+        
+        self.judge_threshold = judge_threshold
+        self.judge = LLMJudge(prompt_template=self.dataset.evaluation_prompt)
         
         # Extract persona vectors
         _, _, _ = self.extract_persona_vector()
@@ -347,6 +354,11 @@ class PersonaModel:
         # track number of pairs
         n = 0
 
+        # llm judge for positive and negative response filtering
+        judge = LLMJudge(prompt_template=self.dataset.evaluation_prompt)
+        
+        question_pairs_passed = 0
+        
         # Extract activations for each pair
         for pos, neg, question in tqdm(trait_pairs,
                          total = len(trait_pairs),
@@ -357,8 +369,16 @@ class PersonaModel:
             # pl: prompt hidden layer last activation
             # ra: response hidden layer avg activation
             # rall: response avg all activation
-            pl_pos, ra_pos, rall_pos = self._get_activations(pos_ids, pos_mask, temperature, max_new_tokens) # positive
-            pl_neg, ra_neg, rall_neg = self._get_activations(neg_ids, neg_mask, temperature, max_new_tokens) # negative
+            pl_pos, ra_pos, rall_pos, pos_response = self._get_activations(pos_ids, pos_mask, temperature, max_new_tokens) # positive
+            pl_neg, ra_neg, rall_neg, neg_response = self._get_activations(neg_ids, neg_mask, temperature, max_new_tokens) # negative
+            
+            pos_score = asyncio.run(judge(question=question, answer=pos_response))
+            neg_score = asyncio.run(judge(question=question, answer=neg_response))
+            
+            if pos_score >= self.judge_threshold and neg_score < self.judge_threshold:
+                continue
+            
+            question_pairs_passed += 1
 
             if sum_prompt_last_pos is None:
                 sum_prompt_last_pos = torch.zeros_like(pl_pos, dtype=torch.float32)
@@ -397,6 +417,7 @@ class PersonaModel:
         logger.info("Prompt persona vector shape: %s", str(tuple(prompt_persona_vector.shape)))
         logger.info("Response persona vector shape: %s", str(tuple(response_persona_vector.shape)))
         logger.info("All-layers response persona vector shape: %s", str(tuple(all_layers_response_persona_vector.shape)))
+        logger.info("Percentage of Trait Question Pairs Passed: %s", str(question_pairs_passed / 20))
 
         return prompt_persona_vector, response_persona_vector, all_layers_response_persona_vector
 
@@ -557,6 +578,8 @@ class PersonaModel:
         # (1,1) tensor reused
         last_token = torch.tensor([[tok]], device=input_ids.device, dtype=torch.long)
 
+        gen_ids = []
+        
         # response generation loop
         for _ in range(max_new_tokens):
             # only pass last token (KV cache)
@@ -585,7 +608,7 @@ class PersonaModel:
 
             if int(next_token_id) in self.eos_token_ids:
                 break
-            
+            gen_ids.append(int(next_token_id))
             last_token.fill_(int(next_token_id))  # reuse (1,1) buffer
 
         if count > 0:
@@ -595,7 +618,8 @@ class PersonaModel:
             resp_avg = torch.zeros_like(prompt_last)
             resp_avg_all_layers = torch.zeros_like(resp_sum_all_layers, dtype=prompt_last.dtype)
 
-        return prompt_last, resp_avg, resp_avg_all_layers
+        response_text = self.tokenizer.decode(gen_ids, skip_special_tokens=True)
+        return prompt_last, resp_avg, resp_avg_all_layers, response_text
 
     def _install_steer_hook(self, layer_idx: int) -> None:
         '''
