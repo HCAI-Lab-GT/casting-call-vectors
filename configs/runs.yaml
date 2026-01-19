@@ -131,6 +131,25 @@ runs:
       limit: 50
     log_dir: logs/smokes/boardgameqa/boardgame-qa-qwen14b
 
+  - name: boardgame-qa-traits-steered-experiment-qwen7b
+    task: src/pvx/tasks/boardgame_qa/boardgame.py@boardgame_loader
+    model_ref: pvx-qwen7b
+    log_dir: logs/experiments/traits_experiment/boardgame_qa_traits_steered_7b
+    task_args:
+      prompt_type: chain_of_thought
+      limit: 75
+    model_args_override:
+      trait: 
+        - analytical
+        - creative
+        - empathetic
+        - kind
+        - optimistic
+        - pessimistic
+        - sarcastic
+        - verbose
+      alpha: 0.2
+
 # Usage hint:
 #   TASK=$(yq '.runs[] | select(.name=="bbeh-mini-qwen3-1.7b").task' configs/runs.yaml)
 #   MODEL=$(yq '.runs[] | select(.name=="bbeh-mini-qwen3-1.7b").model_ref' configs/runs.yaml)

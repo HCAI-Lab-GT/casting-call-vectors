@@ -80,6 +80,7 @@ class PersonaModel:
         
         # Save initialization (with extracted persona vector) to JSON
         self.save_to_json()
+        
 
         
     @classmethod
@@ -289,6 +290,10 @@ class PersonaModel:
 
         logger.info("✅ Initialization saved to: %s", filepath)
         return filepath
+    
+    # def extract_persona_vector_async(self,
+    #                            temperature: float = 0.9,
+    #                            max_new_tokens: int = 200) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
     @torch.inference_mode()
     def extract_persona_vector(self,
@@ -385,8 +390,16 @@ class PersonaModel:
                     pl_pos, ra_pos, rall_pos, pos_response = self._get_activations(pos_ids, pos_mask, temperature, max_new_tokens) # positive
                     pl_neg, ra_neg, rall_neg, neg_response = self._get_activations(neg_ids, neg_mask, temperature, max_new_tokens) # negative
                     
-                    pos_score = asyncio.run(self.judge(question=question, answer=pos_response))
-                    neg_score = asyncio.run(self.judge(question=question, answer=neg_response))
+                    pos_score = self.judge(question=question, answer=pos_response)
+                    neg_score = self.judge(question=question, answer=neg_response)
+                    
+                    # try:
+                    #     pos_score = asyncio.run(self.judge(question=question, answer=pos_response))
+                    #     neg_score = asyncio.run(self.judge(question=question, answer=neg_response))
+                    # except RuntimeError:
+                    #     # Fallback for already running event loop
+                    #     pos_score = asyncio.get_event_loop().run_until_complete(self.judge(question=question, answer=pos_response))
+                    #     pos_score = asyncio.get_event_loop().run_until_complete(self.judge(question=question, answer=neg_response))
                     
                     if pos_score < self.judge_threshold and neg_score >= self.judge_threshold:
                         continue
