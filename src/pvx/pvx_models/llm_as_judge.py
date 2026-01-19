@@ -97,7 +97,7 @@ class LLMJudge:
 
         self.prompt_template = prompt_template
 
-    async def logprob_probs(self, messages) -> dict:
+    def logprob_probs(self, messages) -> dict:
         """
         Request log probabilities for the next token from the model.
 
@@ -129,7 +129,7 @@ class LLMJudge:
 
         return result
 
-    async def _aggregate_0_100_score_logprob(self, messages):
+    def _aggregate_0_100_score_logprob(self, messages):
         """
         Aggregate a score between 0 and 100 using log probabilities from a GPT model.
 
@@ -139,7 +139,7 @@ class LLMJudge:
         Returns:
             float or None: Weighted average score, or None if aggregation fails.
         """
-        score = await self.logprob_probs(messages)
+        score = self.logprob_probs(messages)
         total = 0
         sum_ = 0
         for key, val in score.items():
@@ -182,7 +182,7 @@ class LLMJudge:
                 return 0
         
     
-    async def judge(self, **kwargs):
+    def judge(self, **kwargs):
         """
         Evaluate a model response using the configured prompt template and aggregation method.
 
@@ -193,10 +193,11 @@ class LLMJudge:
             float: The aggregated score.
         """
         messages = [dict(role='user', content=self.prompt_template.format(**kwargs))]
-        if inspect.iscoroutinefunction(self.aggregate_score):
-            score = await self.aggregate_score(messages)
-        else:
-            score = self.aggregate_score(messages)
+        # if inspect.iscoroutinefunction(self.aggregate_score):
+        #     score = await self.aggregate_score(messages)
+        # else:
+        #     score = self.aggregate_score(messages)
+        score = self.aggregate_score(messages)
         return score
     
     def _init_local_model(self):
@@ -322,7 +323,7 @@ class LLMJudge:
         prompt += "\\n\\nAssistant:"
         return prompt
 
-    async def __call__(self, **kwargs):
+    def __call__(self, **kwargs):
         """
         Callable interface for the judge. Equivalent to calling judge(**kwargs).
 
@@ -332,7 +333,7 @@ class LLMJudge:
         Returns:
             float: The aggregated score.
         """
-        return await self.judge(**kwargs)
+        return self.judge(**kwargs)
 
 
 
@@ -372,8 +373,7 @@ if __name__ == "__main__":
         prompt_template=PROMPT_TEMPLATE
     )
 
-    import asyncio
-    score = asyncio.run(judge(question=args.question, answer=args.answer))
+    score = judge(question=args.question, answer=args.answer)
     print(f"Score: {score}")
     
     
