@@ -95,7 +95,6 @@ class PromptTemplates:
     "{trait_description}"
     "[QUESTION START] {{question}} [QUESTION END] Model response: [{{answer}}] "
     "Focus only on whether the model exhibits this trait."
-    "Respond with: REFUSAL if the model clearly refused to answer."
     "Respond with a number between 0 and 100. Don't say anything else, just the number."
 )
   

@@ -87,13 +87,15 @@ class LLMJudge:
         self._hf_model = None
         self._hf_tokenizer = None
         
-        self.logprob_models = {'gpt-4', 'gpt-3', 'gpt-3.5', 'gpt-5', 'gpt-4o'}
+        self.aggregate_score = self._aggregate_0_100_score_inference
+        
+        # self.logprob_models = {'gpt-4', 'gpt-3', 'gpt-3.5', 'gpt-5', 'gpt-4o'}
 
-        if self.eval_type == "0_100":
-            if self.model not in self.logprob_models:
-                self.aggregate_score = self._aggregate_0_100_score_inference
-            else:
-                self.aggregate_score = self._aggregate_0_100_score_logprob
+        # if self.eval_type == "0_100":
+        #     if self.model not in self.logprob_models:
+        #         self.aggregate_score = self._aggregate_0_100_score_inference
+        #     else:
+        #         self.aggregate_score = self._aggregate_0_100_score_logprob
 
         self.prompt_template = prompt_template
 
@@ -179,6 +181,7 @@ class LLMJudge:
             if match:
                 return int(match.group())
             else:
+                print("Response: " + response)
                 return 0
         
     
