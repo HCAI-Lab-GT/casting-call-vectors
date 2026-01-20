@@ -393,13 +393,7 @@ class PersonaModel:
                     pos_score = self.judge(question=question, answer=pos_response)
                     neg_score = self.judge(question=question, answer=neg_response)
                     
-                    # try:
-                    #     pos_score = asyncio.run(self.judge(question=question, answer=pos_response))
-                    #     neg_score = asyncio.run(self.judge(question=question, answer=neg_response))
-                    # except RuntimeError:
-                    #     # Fallback for already running event loop
-                    #     pos_score = asyncio.get_event_loop().run_until_complete(self.judge(question=question, answer=pos_response))
-                    #     pos_score = asyncio.get_event_loop().run_until_complete(self.judge(question=question, answer=neg_response))
+                    print(question + " Pos: " + str(pos_score) + " Neg: " + str(neg_score))
                     
                     if pos_score < self.judge_threshold and neg_score >= self.judge_threshold:
                         continue
