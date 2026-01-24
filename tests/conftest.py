@@ -12,7 +12,7 @@ def project_root() -> Path:
     return Path(__file__).parent.parent
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def test_device() -> str:
     """Detect available compute device.
 
