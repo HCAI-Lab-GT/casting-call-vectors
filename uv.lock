@@ -1708,15 +1708,6 @@ wheels = [
 ]
 
 [[package]]
-name = "nvidia-ml-py"
-version = "13.580.82"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/dd/6c/4a533f2c0185027c465adb6063086bc3728301e95f483665bfa9ebafb2d3/nvidia_ml_py-13.580.82.tar.gz", hash = "sha256:0c028805dc53a0e2a6985ea801888197765ac2ef8f1c9e29a7bf0d3616a5efc7", size = 47999, upload-time = "2025-09-11T16:44:56.267Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/7f/96/d6d25a4c307d6645f4a9b91d620c0151c544ad38b5e371313a87d2761004/nvidia_ml_py-13.580.82-py3-none-any.whl", hash = "sha256:4361db337b0c551e2d101936dae2e9a60f957af26818e8c0c3a1f32b8db8d0a7", size = 49008, upload-time = "2025-09-11T16:44:54.915Z" },
-]
-
-[[package]]
 name = "nvidia-nccl-cu12"
 version = "2.27.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1738,21 +1729,6 @@ version = "12.8.90"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a2/eb/86626c1bbc2edb86323022371c39aa48df6fd8b0a1647bc274577f72e90b/nvidia_nvtx_cu12-12.8.90-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:5b17e2001cc0d751a5bc2c6ec6d26ad95913324a4adb86788c944f8ce9ba441f", size = 89954, upload-time = "2025-03-07T01:42:44.131Z" },
-]
-
-[[package]]
-name = "nvitop"
-version = "1.6.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
-    { name = "nvidia-ml-py" },
-    { name = "psutil" },
-    { name = "windows-curses", marker = "sys_platform == 'win32'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a5/31/c17cfdd188f01fcd9d0b2480ee56e25ff2bdc34f6ad45c251d277676410c/nvitop-1.6.0.tar.gz", hash = "sha256:f30c498e3837ea8e9debe4a980b35f6bceb6d38ef522a0591fadbf4ab0528cb2", size = 221190, upload-time = "2025-11-11T08:06:20.629Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/9c/61/39076b0b4b6124fd202e739977494a93950bc0b834d77ac9f926df2c0218/nvitop-1.6.0-py3-none-any.whl", hash = "sha256:6e0383cd6106a0ea6b4ffdbb50b53556ef9e1cc2e3d75943c741964c7596ec51", size = 214763, upload-time = "2025-11-11T08:06:17.783Z" },
 ]
 
 [[package]]
@@ -2022,18 +1998,23 @@ dependencies = [
     { name = "anyio" },
     { name = "bitsandbytes", marker = "sys_platform != 'darwin'" },
     { name = "click" },
+    { name = "coverage" },
     { name = "datasets" },
     { name = "hf-transfer" },
+    { name = "iniconfig" },
     { name = "inspect-ai" },
     { name = "inspect-evals" },
     { name = "inspect-wandb" },
     { name = "matplotlib" },
-    { name = "nvitop" },
     { name = "openai" },
     { name = "pandas" },
     { name = "plotly" },
+    { name = "pluggy" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
+    { name = "ruff" },
     { name = "scikit-learn" },
     { name = "sentence-transformers" },
     { name = "torch" },
@@ -2062,20 +2043,25 @@ requires-dist = [
     { name = "anyio", specifier = ">=4.12.0" },
     { name = "bitsandbytes", marker = "sys_platform != 'darwin'", specifier = ">=0.48.0" },
     { name = "click", specifier = ">=8.1.0" },
+    { name = "coverage", specifier = ">=7.13.1" },
     { name = "datasets", specifier = ">=3.1.0" },
     { name = "hf-transfer", specifier = ">=0.1.9" },
+    { name = "iniconfig", specifier = ">=2.3.0" },
     { name = "inspect-ai", specifier = ">=0.3.4" },
     { name = "inspect-evals", specifier = ">=0.3.102" },
     { name = "inspect-wandb", specifier = ">=0.2.0" },
     { name = "matplotlib", specifier = ">=3.9.0" },
-    { name = "nvitop", specifier = ">=1.6.0" },
     { name = "openai", specifier = ">=1.53.0" },
     { name = "pandas", specifier = ">=2.0.0" },
     { name = "plotly", specifier = ">=5.18.0" },
+    { name = "pluggy", specifier = ">=1.6.0" },
+    { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-cov", specifier = ">=7.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
+    { name = "ruff", specifier = ">=0.14.8" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6.0" },
     { name = "scikit-learn", specifier = ">=1.4.0" },
     { name = "sentence-transformers", specifier = ">=5.2.0" },
@@ -3315,15 +3301,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ff/83/de1f7709376dc3ca9b7eeb4b9a07b4526b14876b6d372a4dc62312bebee0/websockets-15.0.1-cp312-cp312-win32.whl", hash = "sha256:c338ffa0520bdb12fbc527265235639fb76e7bc7faafbb93f6ba80d9c06578a9", size = 176395, upload-time = "2025-03-05T20:02:33.017Z" },
     { url = "https://files.pythonhosted.org/packages/7d/71/abf2ebc3bbfa40f391ce1428c7168fb20582d0ff57019b69ea20fa698043/websockets-15.0.1-cp312-cp312-win_amd64.whl", hash = "sha256:fcd5cf9e305d7b8338754470cf69cf81f420459dbae8a3b40cee57417f4614a7", size = 176841, upload-time = "2025-03-05T20:02:34.498Z" },
     { url = "https://files.pythonhosted.org/packages/fa/a8/5b41e0da817d64113292ab1f8247140aac61cbf6cfd085d6a0fa77f4984f/websockets-15.0.1-py3-none-any.whl", hash = "sha256:f7a866fbc1e97b5c617ee4116daaa09b722101d4a3c170c787450ba409f9736f", size = 169743, upload-time = "2025-03-05T20:03:39.41Z" },
-]
-
-[[package]]
-name = "windows-curses"
-version = "2.4.1"
-source = { registry = "https://pypi.org/simple" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f4/99/60f34e51514c82631aa5c6d21eab88ce1701562de9844608411e39462a46/windows_curses-2.4.1-cp312-cp312-win32.whl", hash = "sha256:bdbe7d58747408aef8a9128b2654acf6fbd11c821b91224b9a046faba8c6b6ca", size = 71489, upload-time = "2025-01-11T00:26:22.726Z" },
-    { url = "https://files.pythonhosted.org/packages/62/8f/d908bcab1954375b156a9300fa86ceccb110f39457cd6fd59c72777626ab/windows_curses-2.4.1-cp312-cp312-win_amd64.whl", hash = "sha256:5c9c2635faf171a229caca80e1dd760ab00db078e2a285ba2f667bbfcc31777c", size = 81777, upload-time = "2025-01-11T00:26:25.273Z" },
 ]
 
 [[package]]
