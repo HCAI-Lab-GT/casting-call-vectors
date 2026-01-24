@@ -64,29 +64,29 @@
 
 [References](#heading=)
 
-[Inbox/Misc](#inbox/misc)
+[Inbox/Misc](#inbox-–-no-links-or-ai-generated-citations-–-double-check!!!)
 
-[Personas](#personas)
+[Personas](#language-model-personas)
 
 [Activation Steering](#activation-steering)
 
-[Linear Geometric Representations](#linear-geometric-representations)
+[Linear Geometric Representations](#linear-representations-/-geometry-of-language-models)
 
-[Bargaining](#bargaining)
+[Bargaining](#ai-social-cognition)
 
-[Personality Measurement](#personality-measurement)
+[Personality Measurement](#psychometrics)
 
 [Role Playing](#role-playing)
 
+[Sims](#heading=h.i10l2z9hjfcr)
+
 [Sims](#sims)
 
-[Sims](#sims-1)
+[Study Sims](#heading=h.m8lz62fhx6k)
 
-[Study Sims](#study-sims)
+[Society Sims](#heading=h.4hqy2dhax25)
 
-[Society Sims](#society-sims)
-
-[Game-Theoretic](#game-theoretic)
+[Game-Theoretic](#game-theory)
 
 [Appendix](#appendix)
 
@@ -96,7 +96,7 @@
 
 [example from the assistant axis](#example-from-the-assistant-axis)
 
-[Appendix B: Personality](#appendix-b:-personality)
+[Appendix B: Personality](#appendix-b:-psychometrics)
 
 [RIASEC / Holland Codes](#riasec-/-holland-codes)
 
@@ -106,7 +106,7 @@
 
 ## **Abstract**
 
-As AI agents increasingly participate in economic transactions (e.g., negotiating, bargaining, and forming coalitions) we lack methods to study how heterogeneous agent populations behave at scale. This project utilizes *persona vectors* as a mechanism to simulate large, diverse agent societies to study mechanism designs for self-alignment of multi-agent systems. We generate job-based personas from O\*NET occupational data, validate their behavioral profiles using RIASEC assessments (Holland, 1997), and map their geometric structure in activation space. Using *activation fixtures* to maintain persona-specific persistence over long horizons, we run multi-agent simulations to study cooperation dynamics, coalition formation, and adversarial robustness. This work contributes to AI safety through (1) observability tools for monitoring agent behavior along interpretable axes, (2) control interventions via activation steering, and (3) testbeds for studying alignment failure modes under competitive pressure.
+As AI agents increasingly participate in economic transactions (e.g., negotiating, bargaining, and forming coalitions) we lack methods to study how heterogeneous agent populations behave at scale. This project utilizes *persona vectors* as a mechanism to simulate large, diverse agent societies to study mechanism designs for self-alignment of multi-agent systems. We generate job-based personas from O\*NET occupational data, validate their behavioral profiles using established psychometric frameworks including, RIASEC vocational interests (Holland, 1997), HEXACO personality traits (Ashton & Lee, 2007), and Big Five facets via IPIP-NEO (Goldberg et al., 2006); all of which map to O\*NET's occupational ontology, and map their geometric structure in activation space. Using *activation fixtures* to maintain persona-specific persistence over long horizons, we run multi-agent simulations to study cooperation dynamics, coalition formation, and adversarial robustness. This work contributes to AI safety through (1) observability tools for monitoring agent behavior along interpretable axes, (2) control interventions via activation steering, and (3) testbeds for studying alignment failure modes under competitive pressure.
 
 ### **AI Safety Contributions** {#ai-safety-contributions}
 
@@ -118,7 +118,7 @@ As AI agents increasingly participate in economic transactions (e.g., negotiatin
 
 As AI agents increasingly participate in economic transactions—negotiating contracts, allocating resources, and forming coalitions—policymakers and AI safety researchers face a fundamental challenge: we lack methods to simulate and study diverse agent populations at scale. Understanding whether AI agents can sustain cooperation, resist manipulation, or coordinate effectively requires simulating heterogeneous "societies" over extended interactions. However, current approaches either rely on prompt-based personas that degrade within a few conversation turns (Li et al., 2024), or treat agents as interchangeable instances of the same model without meaningful behavioral diversity (Park et al., 2023).
 
-This project develops *persona vectors* to address this gap. We generate behaviorally diverse agents using O\*NET occupational data (U.S. Department of Labor, 2024), leveraging the rich semantic associations that LLMs have learned about different vocations, and validate their psychological profiles using RIASEC (Holland code) assessments (Holland, 1997). Critically, we move beyond prompt-only persona induction by mapping persona structure in activation space and applying *activation fixtures* to maintain identity over the long horizons required for strategic interaction. This enables simulations where a "pediatric nurse," "investment banker," and "performance artist" maintain distinct, persistent behavioral signatures across dozens of interaction rounds.
+This project develops *persona vectors* to address this gap. We generate behaviorally diverse agents using O\*NET occupational data (U.S. Department of Labor, 2024), leveraging the rich semantic associations that LLMs have learned about different vocations, and validate their psychological profiles using multiple O\*NET-mapped psychometric frameworks: RIASEC vocational interests (Holland, 1997), HEXACO personality traits including the Honesty-Humility dimension relevant to AI safety (Ashton & Lee, 2007), and Big Five facets via IPIP-NEO (Goldberg et al., 2006). Critically, we move beyond prompt-only persona induction by mapping persona structure in activation space and applying *activation fixtures* to maintain identity over the long horizons required for strategic interaction. This enables simulations where a "pediatric nurse," "investment banker," and "performance artist" maintain distinct, persistent behavioral signatures across dozens of interaction rounds.
 
 Our work contributes to AI safety on multiple fronts. First, the geometric mapping of persona axes provides *observability*: deployment systems could monitor agent behavior as movement along interpretable dimensions, detecting drift toward undesired states. Second, multi-axis activation fixtures offer improved *control*: targeted interventions can maintain aligned behavior without constant prompt engineering. Third, multi-agent simulations with adversarial personas provide a *testbed* for studying alignment failure modes—what happens when cooperative agents encounter strategically misaligned counterparts?
 
@@ -128,7 +128,7 @@ The remainder of this proposal details our methodology for persona generation an
 
 #### **H1: Geometric Structures** {#h1:-geometric-structures}
 
-O\*NET job-based persona vectors will exhibit interpretable geometric structure in activation space, with principal components corresponding to RIASEC-like axes.
+O\*NET job-based persona vectors will exhibit interpretable geometric structure in activation space, with principal components corresponding to established psychometric dimensions; whether vocational interests (RIASEC), personality traits (HEXACO, Big Five), or some combination thereof.
 
 #### **H2: Persona Persistence** {#h2:-persona-persistence}
 
@@ -154,7 +154,7 @@ We adopt the instruction stability framework from Li et al. (2024), which establ
 
 #### **Geometry Explanation (H1)** {#geometry-explanation-(h1)}
 
-We assess activation space structure using PCA on mean-centered persona vectors extracted from middle-layer residual streams. We report: (1) the number of components required to explain 80% of variance; (2) interpretability of top components via correlation with RIASEC dimensions; and (3) cross-model consistency measured as pairwise correlation of principal components (PC) loadings across target models (OLMo, Marin, Qwen). We validate RIASEC axes by computing cosine similarity between estimated directions and top principal components, targeting \>0.6 at middle layers.
+We test whether principal components correlate with established psychometric dimensions by computing cosine similarity between (a) framework-specific contrast vectors (e.g., mean Enterprising minus mean Social personas for RIASEC; mean high-Honesty-Humility minus mean low-Honesty-Humility personas for HEXACO) and (b) top principal components. We target cosine \>0.6 at middle layers for at least one framework; successful mapping to any validated framework supports H1.
 
 #### **Task Outcomes (H3)** {#task-outcomes-(h3)}
 
@@ -190,7 +190,13 @@ We construct personas from O\*NET job titles and descriptions through the follow
 4. **Rollout Generation**: For each job-prompt-question combination, we generate model responses and collect activation data from target layers in the residual stream.  
 5. **Persona Vector Extraction**: Following Chen et al. (2025), we compute persona vectors as the mean activation difference between a job-persona's responses and a baseline (either the default assistant or mean across all personas).
 
-**Validation via RIASEC.** We validate persona behavioral profiles by administering Holland code assessments to persona-steered models. This serves two purposes: (1) confirming that job-based personas produce expected RIASEC profiles (e.g., "accountant" scores high on Conventional, "mechanic" scores high on Realistic), and (2) providing interpretable axes for mapping persona geometry. We use an LLM judge calibrated against established RIASEC inventories to score model responses. One major concern is that with the limited size (n=48) of official RIASEC questions, and the vocation-focused aspects of RIASEC may be insufficient to fully measure the variance of behavior in model behavior. We plan to approach this as investigators ready to explore and test other psychological models of personality that may be able to help explain a larger portion of the variance than RIASEC would.
+**Validation via Psychometric Frameworks**
+
+We validate persona behavioral profiles by administering multiple established assessments to persona-steered models: RIASEC vocational interest inventories (Holland, 1997), the HEXACO-PI-R personality assessment (Ashton & Lee, 2007), and the IPIP-NEO-120 measuring Big Five facets (Johnson, 2014). This multi-framework approach serves two purposes: (1) confirming that job-based personas produce expected psychometric profiles (e.g., "accountant" scores high on Conventional interests and Conscientiousness; "used car salesperson" scores low on Honesty-Humility), and (2) providing multiple interpretive lenses for mapping persona geometry.
+
+We use these frameworks because all three connect to O\*NET's occupational ontology. RIASEC codes are directly assigned to O\*NET occupations. Big Five traits map to O\*NET Work Styles through established crosswalks (Sackett & Walmsley, 2014). Critically, research demonstrates that HEXACO explains incremental variance in vocational interests beyond Big Five alone, with Honesty-Humility showing distinctive relationships to Enterprising interests (McKay & Tokar, 2012). This is particularly relevant for AI safety: the Honesty-Humility dimension captures integrity-related variance that could help identify manipulative or deceptive behavioral patterns in persona space.
+
+We compile comprehensive question batteries from established instruments across all frameworks, enabling both domain-level and facet-level assessment. For RIASEC, we use items from the O\*NET Interest Profiler (60 items) and IPIP vocational interest scales. For HEXACO, we draw from the full HEXACO-PI-R inventory (up to 200 items measuring 25 facets; Lee & Ashton, 2018), with shorter forms available for rapid iteration. For Big Five, we use items from the IPIP-NEO pool (up to 300 items measuring 30 facets; Goldberg et al., 2006; Johnson, 2014). Our approach is to use a wide battery of questions for personas across multiple potential personality models and avoid prematurely constraining our measurement to domain-level scores when facet-level variance may prove more informative. We administer assessments via LLM judge calibrated against established human norms."
 
 **Target Scale.** We aim to generate 100-1,000 validated personas during the MATS timeline. Initial experiments will use stratified sampling across all six Holland code categories; full O\*NET coverage (\~1,000 occupations) is a stretch goal contingent on Phase 1 results.
 
@@ -202,11 +208,11 @@ We analyze the geometric structure of persona vectors in activation space to tes
 
 **Dimensionality Reduction.** We standardize persona vectors by subtracting the mean across all personas and apply PCA to identify the principal axes of variation in persona space. Based on the Lu 2026 findings, we expect a relatively low-dimensional structure. We report: (1) number of components required to explain 70% to 90% of variance, (2) interpretability of top components via correlation with RIASEC dimensions and inspection of high/low-loading personas.
 
-**RIASEC Axis Validation.** We test whether the geometric structure aligns with Holland code dimensions by computing cosine similarity between: (a) direct RIASEC contrast vectors (e.g., mean "Realistic" personas minus mean "Artistic" personas), and (b) the top principal components. High alignment (cosine \> 0.6) would support H1; low alignment would indicate job-based personas organize along different axes than traditional personality frameworks.
+**Psychometric Axis Validation.** We test whether the geometric structure aligns with established psychometric dimensions by computing cosine similarity between framework-specific contrast vectors and top principal components. For RIASEC, we construct six contrast vectors (e.g., mean Realistic personas minus mean Artistic personas). For HEXACO, we construct six trait contrast vectors based on persona assessment scores (e.g., high vs. low Honesty-Humility). For Big Five, we construct five analogous contrasts. High alignment (cosine \> 0.6) between any framework's dimensions and top PCs would support H1. Different frameworks may explain different principal components. An example is that earlier PCs might align with personality traits while later PCs capture vocational interest distinctions, or vice versa. This would suggest persona geometry reflects multiple psychological dimensions rather than a single framework.
 
-**Cross-Model Consistency.** To assess whether persona geometry is model-specific or reflects shared semantic structure, we compare PC loadings across our target models (OLMo, Marin, Qwen). Following Lu et al. (2026), we measure pairwise correlation of how persona vectors project onto each model's top PCs. High cross-model correlation (r \> 0.8) would suggest the geometry derives from shared training data representations rather than model-specific artifacts.
+**Cross-Model Consistency.** To assess whether persona geometry is model-specific or reflects shared semantic structure, we compare PC loadings across our target models (OLMo, Marin, Qwen). Following Lu et al. (2026), we measure pairwise correlation of how persona vectors project onto each model's top PCs. High cross-model correlation (r \> 0.7) would suggest the geometry derives from shared training data representations rather than model-specific artifacts.
 
-**Go/No-Go Criterion.** If Phase 1 experiments show (a) fewer than 3 interpretable components, or (b) RIASEC axes have near-zero correlation with top PCs, we pivot to alternative personality frameworks (Big Five, direct trait vectors) or focus the contribution on persistence rather than geometry.
+**Go/No-Go Criterion.** If Phase 1 experiments show (a) fewer than 3 interpretable components, or (b) no tested framework (RIASEC, HEXACO, Big Five, etc.) achieves any meaningful correlation (cosine \> 0.4) with top PCs, we will focus the contribution on persona persistence and multi-agent simulations rather than geometry mapping. However, because we test multiple frameworks from the start, partial success is very possible: geometry may align with personality traits but not vocational interests, or vice versa.
 
 #### **Persona Persistence via Activation Fixtures** {#persona-persistence-via-activation-fixtures}
 
@@ -343,67 +349,95 @@ The core infrastructure is fully established and ready; e.g., the GitHub reposit
 
 ## **References**
 
-### **Inbox/Misc** {#inbox/misc}
+### **Inbox – No links or AI Generated citations – double check\!\!\!** {#inbox-–-no-links-or-ai-generated-citations-–-double-check!!!}
 
-1. Tversky, A., & Kahneman, D. (1974). Judgment under uncertainty: Heuristics and biases. *Science*, 185(4157), 1124-1131.  
-2. Fehr, E., & Schmidt, K. M. (1999). A theory of fairness, competition, and cooperation. *Quarterly Journal of Economics*, 114(3), 817-868.  
-3. Shapley, L. S. (1953). A value for n-person games. *Contributions to the Theory of Games*, 2(28), 307-317.  
-4. S. Rath (2026). Agent Drift: Quantifying Behavioral Degradation in Multi-Agent LLM Systems Over Extended Interactions. [https://arxiv.org/abs/2601.04170](https://arxiv.org/abs/2601.04170)  
-5. Generative agent-based modeling with actions grounded in physical, social, or digital space using Concordia [https://arxiv.org/abs/2312.03664](https://arxiv.org/abs/2312.03664)  
-6. Multi-Actor Generative Artificial Intelligence as a Game Engine [https://arxiv.org/abs/2507.08892](https://arxiv.org/abs/2507.08892)  
-7. \[ft\] Fine-Tuning Lowers Safety and Disrupts Evaluation Consistency [arxiv.org/abs/2506.17209v1](http://arxiv.org/abs/2506.17209v1)  
-8. \[singular\] The Coasean Singularity? Demand, Supply, and Market Design with AI Agents [https://www.nber.org/system/files/chapters/c15309/c15309.pdf](https://www.nber.org/system/files/chapters/c15309/c15309.pdf)  
-9. [https://www.aipolicyperspectives.com/p/coasean-bargaining-at-scale](https://www.aipolicyperspectives.com/p/coasean-bargaining-at-scale)  
-10. The Good, the Bad, and the Hulk-like GPT: Analyzing Emotional Decisions of Large Language Models in Cooperation and Bargaining Games. [https://arxiv.org/abs/2406.03299](https://arxiv.org/abs/2406.03299)  
-11. Programming Refusal with Conditional Activation Steering [arxiv.org/abs/2409.05907](http://arxiv.org/abs/2409.05907)  [github.com/IBM/activation-steering/tree/main](http://github.com/IBM/activation-steering/tree/main)  
-12. emergent collusion in multi agent negotiation  [https://arxiv.org/abs/2510.05174](https://arxiv.org/abs/2510.05174)   
-13. AI Agents Can Enable Superior Market Designs [https://conference.iza.org/DATA\_2025/manning\_b36140.pdf](https://conference.iza.org/DATA_2025/manning_b36140.pdf) showing that LMs can carry over the preferences of their humans efficiently  
-14. Institutional AI: Governing LLM Collusion in Multi-Agent Cournot Markets via Public Governance Graphs  [https://arxiv.org/html/2601.11369](https://arxiv.org/html/2601.11369) 
+* Lee, K., & Ashton, M. C. (2018). Psychometric properties of the HEXACO-100. Assessment, 25(5), 543-556.  
+* Goldberg, L. R. (1999). A broad-bandwidth, public domain, personality inventory measuring the lower-level facets of several five-factor models. In I. Mervielde, I. Deary, F. De Fruyt, & F. Ostendorf (Eds.), Personality Psychology in Europe (Vol. 7, pp. 7-28). Tilburg University Press.  
+* Schwartz, S. H. (1992). Universals in the content and structure of values: Theoretical advances and empirical tests in 20 countries. Advances in Experimental Social Psychology, 25, 1-65.  
+* Jones, D. N., & Paulhus, D. L. (2014). Introducing the Short Dark Triad (SD3): A brief measure of dark personality traits. Assessment, 21(1), 28-41.  
+* Paulhus, D. L., Buckels, E. E., Trapnell, P. D., & Jones, D. N. (2021). Screening for dark personalities: The Short Dark Tetrad (SD4). European Journal of Psychological Assessment, 37(3), 208-222.  
+* Ashton, M. C., & Lee, K. (2007). Empirical, theoretical, and practical advantages of the HEXACO model of personality structure. Personality and Social Psychology Review, 11(2), 150-166.  
+* Ashton, M. C., & Lee, K. (2009). The HEXACO-60: A short measure of the major dimensions of personality. Journal of Personality Assessment, 91(4), 340-345.  
+* Goldberg, L. R., Johnson, J. A., Eber, H. W., Hogan, R., Ashton, M. C., Cloninger, C. R., & Gough, H. G. (2006). The international personality item pool and the future of public-domain personality measures. Journal of Research in Personality, 40(1), 84-96.  
+* Johnson, J. A. (2014). Measuring thirty facets of the Five Factor Model with a 120-item public domain inventory: Development of the IPIP-NEO-120. Journal of Research in Personality, 51, 78-89.  
+* McKay, D. A., & Tokar, D. M. (2012). The HEXACO and five-factor models of personality in relation to RIASEC vocational interests. Journal of Vocational Behavior, 81(2), 138-149.  
+* Sackett, P. R., & Walmsley, P. T. (2014). Which personality attributes are most important in the workplace? Perspectives on Psychological Science, 9(5), 538-551.  
+* Serapio-García, G., Safdari, M., Crepy, C., Sun, L., Fitz, S., Romero, P., Abdulhai, M., Faust, A., & Matarić, M. (2025). A psychometric framework for evaluating and shaping personality traits in large language models. Nature Machine Intelligence, 7, 1954-1968. https://doi.org/10.1038/s42256-025-01115-6 Nature  
+* Tversky, A., & Kahneman, D. (1974). Judgment under uncertainty: Heuristics and biases. *Science*, 185(4157), 1124-1131.  
+* Fehr, E., & Schmidt, K. M. (1999). A theory of fairness, competition, and cooperation. *Quarterly Journal of Economics*, 114(3), 817-868.  
+* Shapley, L. S. (1953). A value for n-person games. *Contributions to the Theory of Games*, 2(28), 307-317.  
+* Holland, J. L. (1997). *Making vocational choices: A theory of vocational personalities and work environments* (3rd ed.). Psychological Assessment Resources.
 
-### **Personas** {#personas}
+### **Inbox – Unsorted citations with links**
 
-15. R. Chen, A. Arditi, H. Sleight, O. Evans, and J. Lindsey (2025-09) Persona Vectors: Monitoring and Controlling Character Traits in Language Models. arXiv. Note: arXiv:2507.21509 \[cs\] External Links: [Link](http://arxiv.org/abs/2507.21509), [Document](https://dx.doi.org/10.48550/arXiv.2507.21509) 
+1. Other options include  
+   1. [https://en.wikipedia.org/wiki/Theory\_of\_basic\_human\_values](https://en.wikipedia.org/wiki/Theory_of_basic_human_values)   
+   2. [International\_Personality\_Item\_Pool](https://en.wikipedia.org/wiki/International_Personality_Item_Pool)  
+   3. [16PF\_Questionnaire](https://en.wikipedia.org/wiki/16PF_Questionnaire)  
+   4. [Revised\_NEO\_Personality\_Inventory](https://en.wikipedia.org/wiki/Revised_NEO_Personality_Inventory)  
+   5. [Occupational\_Personality\_Questionnaires](https://en.wikipedia.org/wiki/Occupational_Personality_Questionnaires)  
+   6. Schwartz Basic Human Values  
+   7. Dark Triad/Tetrad  
+   8. Big Five Aspect Scales (BFAS)  
+   9. VIA Strengths  
+2. \[ft\] Fine-Tuning Lowers Safety and Disrupts Evaluation Consistency [arxiv.org/abs/2506.17209v1](http://arxiv.org/abs/2506.17209v1)  
+3. \[singular\] The Coasean Singularity? Demand, Supply, and Market Design with AI Agents [https://www.nber.org/system/files/chapters/c15309/c15309.pdf](https://www.nber.org/system/files/chapters/c15309/c15309.pdf)  
+4. [https://www.aipolicyperspectives.com/p/coasean-bargaining-at-scale](https://www.aipolicyperspectives.com/p/coasean-bargaining-at-scale)  
+5. The Good, the Bad, and the Hulk-like GPT: Analyzing Emotional Decisions of Large Language Models in Cooperation and Bargaining Games. [https://arxiv.org/abs/2406.03299](https://arxiv.org/abs/2406.03299)  
+6. Programming Refusal with Conditional Activation Steering [arxiv.org/abs/2409.05907](http://arxiv.org/abs/2409.05907)  [github.com/IBM/activation-steering/tree/main](http://github.com/IBM/activation-steering/tree/main)  
+7. emergent collusion in multi agent negotiation  [https://arxiv.org/abs/2510.05174](https://arxiv.org/abs/2510.05174)   
+8. AI Agents Can Enable Superior Market Designs [https://conference.iza.org/DATA\_2025/manning\_b36140.pdf](https://conference.iza.org/DATA_2025/manning_b36140.pdf) showing that LMs can carry over the preferences of their humans efficiently  
+9. Institutional AI: Governing LLM Collusion in Multi-Agent Cournot Markets via Public Governance Graphs  [https://arxiv.org/html/2601.11369](https://arxiv.org/html/2601.11369) 
 
-16. K. Li, T. Liu, N. Bashkansky, D. Bau, F. Viégas, H. Pfister, and M. Wattenberg (2024-07) Measuring and Controlling Instruction (In)Stability in Language Model Dialogs. arXiv. Note: arXiv:2402.10962 \[cs\]Comment: COLM 2024; Code and data: https://github.com/likenneth/persona\_drift External Links: [Link](http://arxiv.org/abs/2402.10962), [Document](https://dx.doi.org/10.48550/arXiv.2402.10962) 
+### **Language Model Personas** {#language-model-personas}
 
-17. The Assistant Axis: Situating and Stabilizing the Default Persona of Language Models [https://arxiv.org/abs/2601.10387v1](https://arxiv.org/abs/2601.10387v1)
+10. R. Chen, A. Arditi, H. Sleight, O. Evans, and J. Lindsey (2025-09) Persona Vectors: Monitoring and Controlling Character Traits in Language Models. arXiv. Note: arXiv:2507.21509 \[cs\] External Links: [Link](http://arxiv.org/abs/2507.21509), [Document](https://dx.doi.org/10.48550/arXiv.2507.21509) 
 
-18. The Prompt Makes the Person(a): A Systematic Evaluation of Sociodemographic Persona Prompting for Large Language Models [https://arxiv.org/abs/2507.16076](https://arxiv.org/abs/2507.16076)  
-19. persona agent at test time [https://arxiv.org/pdf/2506.06254](https://arxiv.org/pdf/2506.06254) primarily uses context to just feed into th emodel when thinking about  
-20. Quantifying the Persona Effect in LLM Simulations [https://arxiv.org/abs/2402.10811](https://arxiv.org/abs/2402.10811)   
-21. Personality Vector: Modulating Personality of Large Language Models by Model Merging [https://arxiv.org/abs/2509.19727](https://arxiv.org/abs/2509.19727)  
-22. R. Shah, Q. Feuillade–Montixi, S. Pour, A. Tagade, S. Casper, and J. Rando (2023-11) Scalable and Transferable Black-Box Jailbreaks for Language Models via Persona Modulation. arXiv. Note: arXiv:2311.03348 \[cs\] External Links: [Link](http://arxiv.org/abs/2311.03348), [Document](https://dx.doi.org/10.48550/arXiv.2311.03348)
+11. K. Li, T. Liu, N. Bashkansky, D. Bau, F. Viégas, H. Pfister, and M. Wattenberg (2024-07) Measuring and Controlling Instruction (In)Stability in Language Model Dialogs. arXiv. Note: arXiv:2402.10962 \[cs\]Comment: COLM 2024; Code and data: https://github.com/likenneth/persona\_drift External Links: [Link](http://arxiv.org/abs/2402.10962), [Document](https://dx.doi.org/10.48550/arXiv.2402.10962) 
+
+12. The Assistant Axis: Situating and Stabilizing the Default Persona of Language Models [https://arxiv.org/abs/2601.10387v1](https://arxiv.org/abs/2601.10387v1)
+
+13. The Prompt Makes the Person(a): A Systematic Evaluation of Sociodemographic Persona Prompting for Large Language Models [https://arxiv.org/abs/2507.16076](https://arxiv.org/abs/2507.16076)  
+14. persona agent at test time [https://arxiv.org/pdf/2506.06254](https://arxiv.org/pdf/2506.06254) primarily uses context to just feed into th emodel when thinking about  
+15. Quantifying the Persona Effect in LLM Simulations [https://arxiv.org/abs/2402.10811](https://arxiv.org/abs/2402.10811)   
+16. Personality Vector: Modulating Personality of Large Language Models by Model Merging [https://arxiv.org/abs/2509.19727](https://arxiv.org/abs/2509.19727)  
+17. R. Shah, Q. Feuillade–Montixi, S. Pour, A. Tagade, S. Casper, and J. Rando (2023-11) Scalable and Transferable Black-Box Jailbreaks for Language Models via Persona Modulation. arXiv. Note: arXiv:2311.03348 \[cs\] External Links: [Link](http://arxiv.org/abs/2311.03348), [Document](https://dx.doi.org/10.48550/arXiv.2311.03348)  
+18. S. Rath (2026). Agent Drift: Quantifying Behavioral Degradation in Multi-Agent LLM Systems Over Extended Interactions. [https://arxiv.org/abs/2601.04170](https://arxiv.org/abs/2601.04170)
 
 ### **Activation Steering** {#activation-steering}
 
-23. A. M. Turner, L. Thiergart, G. Leech, D. Udell, J. J. Vazquez, U. Mini, and M. MacDiarmid (2024-10) Steering Language Models With Activation Engineering. arXiv. Note: arXiv:2308.10248 \[cs\] External Links: [Link](http://arxiv.org/abs/2308.10248), [Document](https://dx.doi.org/10.48550/arXiv.2308.10248)   
-24. N. Panickssery, N. Gabrieli, J. Schulz, M. Tong, E. Hubinger, and A. M. Turner (2024-07) Steering Llama 2 via Contrastive Activation Addition. arXiv. Note: arXiv:2312.06681 \[cs\] External Links: [Link](http://arxiv.org/abs/2312.06681), [Document](https://dx.doi.org/10.48550/arXiv.2312.06681)   
-25. Analyzing the Generalization and Reliability of Steering Vectors [https://arxiv.org/abs/2407.12404](https://arxiv.org/abs/2407.12404)  
-26. Refusal in Language Models Is Mediated by a Single Direction [https://arxiv.org/abs/2406.11717](https://arxiv.org/abs/2406.11717) 
+19. A. M. Turner, L. Thiergart, G. Leech, D. Udell, J. J. Vazquez, U. Mini, and M. MacDiarmid (2024-10) Steering Language Models With Activation Engineering. arXiv. Note: arXiv:2308.10248 \[cs\] External Links: [Link](http://arxiv.org/abs/2308.10248), [Document](https://dx.doi.org/10.48550/arXiv.2308.10248)   
+20. N. Panickssery, N. Gabrieli, J. Schulz, M. Tong, E. Hubinger, and A. M. Turner (2024-07) Steering Llama 2 via Contrastive Activation Addition. arXiv. Note: arXiv:2312.06681 \[cs\] External Links: [Link](http://arxiv.org/abs/2312.06681), [Document](https://dx.doi.org/10.48550/arXiv.2312.06681)   
+21. Analyzing the Generalization and Reliability of Steering Vectors [https://arxiv.org/abs/2407.12404](https://arxiv.org/abs/2407.12404)  
+22. Refusal in Language Models Is Mediated by a Single Direction [https://arxiv.org/abs/2406.11717](https://arxiv.org/abs/2406.11717) 
 
-### **Linear Geometric Representations** {#linear-geometric-representations}
+### **Linear Representations / Geometry of Language Models** {#linear-representations-/-geometry-of-language-models}
 
-27. The Linear Representation Hypothesis and the Geometry of Large Language Models [https://proceedings.mlr.press/v235/park24c.html](https://proceedings.mlr.press/v235/park24c.html)  
-28. A. Zou, L. Phan, S. Chen, J. Campbell, P. Guo, R. Ren, A. Pan, X. Yin, M. Mazeika, A. Dombrowski, S. Goel, N. Li, M. J. Byun, Z. Wang, A. Mallen, S. Basart, S. Koyejo, D. Song, M. Fredrikson, J. Z. Kolter, and D. Hendrycks (2025-03) Representation Engineering: A Top-Down Approach to AI Transparency. arXiv. Note: arXiv:2310.01405 \[cs\]Comment: Code is available at https://github.com/andyzoujm/representation-engineering   
-29. A. Templeton, T. Conerly, J. Marcus, J. Lindsey, T. Bricken, B. Chen, A. Pearce, C. Citro, E. Ameisen, A. Jones, H. Cunningham, N. L. Turner, C. McDougall, M. MacDiarmid, C. D. Freeman, T. R. Sumers, E. Rees, J. Batson, A. Jermyn, S. Carter, C. Olah, and T. Henighan (2024) Scaling monosemanticity: extracting interpretable features from claude 3 sonnet. Transformer Circuits Thread.   
-30. The Geometry of Truth: Emergent Linear Structure in Large Language Model Representations of True/False Datasets [https://arxiv.org/abs/2310.06824](https://arxiv.org/abs/2310.06824) 
+23. The Linear Representation Hypothesis and the Geometry of Large Language Models [https://proceedings.mlr.press/v235/park24c.html](https://proceedings.mlr.press/v235/park24c.html)  
+24. A. Zou, L. Phan, S. Chen, J. Campbell, P. Guo, R. Ren, A. Pan, X. Yin, M. Mazeika, A. Dombrowski, S. Goel, N. Li, M. J. Byun, Z. Wang, A. Mallen, S. Basart, S. Koyejo, D. Song, M. Fredrikson, J. Z. Kolter, and D. Hendrycks (2025-03) Representation Engineering: A Top-Down Approach to AI Transparency. arXiv. Note: arXiv:2310.01405 \[cs\]Comment: Code is available at https://github.com/andyzoujm/representation-engineering   
+25. A. Templeton, T. Conerly, J. Marcus, J. Lindsey, T. Bricken, B. Chen, A. Pearce, C. Citro, E. Ameisen, A. Jones, H. Cunningham, N. L. Turner, C. McDougall, M. MacDiarmid, C. D. Freeman, T. R. Sumers, E. Rees, J. Batson, A. Jermyn, S. Carter, C. Olah, and T. Henighan (2024) Scaling monosemanticity: extracting interpretable features from claude 3 sonnet. Transformer Circuits Thread.   
+26. The Geometry of Truth: Emergent Linear Structure in Large Language Model Representations of True/False Datasets [https://arxiv.org/abs/2310.06824](https://arxiv.org/abs/2310.06824) 
 
-### **Bargaining** {#bargaining}
+### **AI Social Cognition** {#ai-social-cognition}
 
-31. Shapley-Coop: Credit Assignment for Emergent Cooperation in Self-Interested LLM Agents [https://arxiv.org/abs/2506.07388](https://arxiv.org/abs/2506.07388)
+27. Shapley-Coop: Credit Assignment for Emergent Cooperation in Self-Interested LLM Agents [https://arxiv.org/abs/2506.07388](https://arxiv.org/abs/2506.07388)
 
-32. Cooperation, Competition, and Maliciousness: LLM-Stakeholders Interactive Negotiation [https://arxiv.org/html/2309.17234v2](https://arxiv.org/html/2309.17234v2)
+28. Cooperation, Competition, and Maliciousness: LLM-Stakeholders Interactive Negotiation [https://arxiv.org/html/2309.17234v2](https://arxiv.org/html/2309.17234v2)
 
-33. strategic tradeoffs answered a lot of questions [https://arxiv.org/pdf/2509.09071](https://arxiv.org/pdf/2509.09071)  
-34. language of bargaining linguistic effects in llm negotations [https://arxiv.org/abs/2601.04387v1](https://arxiv.org/abs/2601.04387v1)   
-35. negotiation with LLMs prompt hacks, gaps, deficits [https://arxiv.org/abs/2312.03720](https://arxiv.org/abs/2312.03720)
+29. strategic tradeoffs answered a lot of questions [https://arxiv.org/pdf/2509.09071](https://arxiv.org/pdf/2509.09071)  
+30. language of bargaining linguistic effects in llm negotations [https://arxiv.org/abs/2601.04387v1](https://arxiv.org/abs/2601.04387v1)   
+31. negotiation with LLMs prompt hacks, gaps, deficits [https://arxiv.org/abs/2312.03720](https://arxiv.org/abs/2312.03720)
 
-### **Personality Measurement** {#personality-measurement}
+### **Psychometrics** {#psychometrics}
 
-36. "Making Vocational Choices" (3rd Edition, Psychological Assessment Resources, 1997\)  
-37. "A Theory of Vocational Choice" (Journal of Counseling Psychology, 1959  
-38. U.S. Department of Labor. (2024). O\*NET OnLine. [https://www.onetonline.org/](https://www.onetonline.org/)   
-39. The Career Interests of Large Language Models [https://arxiv.org/abs/2407.08564](https://arxiv.org/abs/2407.08564)
+32. "A Theory of Vocational Choice" (Journal of Counseling Psychology, 1959  
+33. U.S. Department of Labor. (2024). O\*NET OnLine. [https://www.O\*NETonline.org/](https://www.onetonline.org/)   
+34. The Career Interests of Large Language Models [https://arxiv.org/abs/2407.08564](https://arxiv.org/abs/2407.08564)  
+35. McKay, Derek & Tokar, David. (2012). The HEXACO and five-factor models of personality in relation to RIASEC vocational interests. Journal of Vocational Behavior. 81\. 138–149. 10.1016/j.jvb.2012.05.006.  
+36. Occupational characteristics moderate personality–performance relations in major occupational groups [https://www.sciencedirect.com/science/article/abs/pii/S0001879121001275](https://www.sciencedirect.com/science/article/abs/pii/S0001879121001275)  
+37. A psychometric framework for evaluating and shaping personality traits in large language models [https://www.nature.com/articles/s42256-025-01115-6](https://www.nature.com/articles/s42256-025-01115-6)  
+38. Integrating personality and career adaptability into vocational interest space [https://www.sciencedirect.com/science/article/abs/pii/S0001879116300240](https://www.sciencedirect.com/science/article/abs/pii/S0001879116300240)   
+39. Measuring thirty facets of the Five Factor Model with a 120-item public domain inventory: Development of the IPIP-NEO-120 [https://www.sciencedirect.com/science/article/abs/pii/S0092656614000506](https://www.sciencedirect.com/science/article/abs/pii/S0092656614000506) 
 
 ### **Role Playing** {#role-playing}
 
@@ -414,49 +448,42 @@ The core infrastructure is fully established and ready; e.g., the GitHub reposit
 
 ### **Sims** {#sims}
 
-44. EconAgent: LLM-Empowered Agents for Simulating Macroeconomic Activities [https://arxiv.org/abs/2310.10436](https://arxiv.org/abs/2310.10436) [https://github.com/tsinghua-fib-lab/ACL24-EconAgent](https://github.com/tsinghua-fib-lab/ACL24-EconAgent)  
-45. TwinMarket: Simulating Financial Markets via LLM-based Agents [https://arxiv.org/abs/2502.01506](https://arxiv.org/abs/2502.01506)  
-46. LLM-Economist: Large Population Models and Mechanism Design [https://arxiv.org/abs/2507.15815](https://arxiv.org/abs/2507.15815)  
-47. Deliberate Lab: A Platform for Real-Time Human-AI Social Experiments [https://arxiv.org/abs/2510.13011](https://arxiv.org/abs/2510.13011) [https://github.com/PAIR-code/deliberate-lab](https://github.com/PAIR-code/deliberate-lab)  
-48. Can Generative AI Agents Behave Like Humans? Evidence from Laboratory Market Experiments [https://arxiv.org/abs/2505.07457](https://arxiv.org/abs/2505.07457)  
-49. EconGym: A Scalable AI Testbed with Diverse Economic Tasks [https://arxiv.org/abs/2506.12110](https://arxiv.org/abs/2506.12110) [https://github.com/Miracle1207/EconGym](https://github.com/Miracle1207/EconGym)  
-50. Think, Speak, Decide: Language-Augmented Multi-Agent RL for Economic Decision-Making [https://arxiv.org/abs/2511.12876](https://arxiv.org/abs/2511.12876)  
-51. PGG Bench: Public Goods Game Benchmark [https://github.com/lechmazur/pgg\_bench](https://github.com/lechmazur/pgg_bench)  
-52. BankSim: Bank Payment Simulation for Fraud Detection [https://github.com/byeungchun/banksim](https://github.com/byeungchun/banksim)  
-53. Generative Agent Simulations of 1,000 People [https://arxiv.org/abs/2411.10109](https://arxiv.org/abs/2411.10109)  
-54. Generative Agents: Interactive Simulacra of Human Behavior [https://arxiv.org/abs/2304.03442](https://arxiv.org/abs/2304.03442)  
-55. Out of One, Many: Using Language Models to Simulate Human Samples [https://arxiv.org/abs/2209.06899](https://arxiv.org/abs/2209.06899)
+44. Generative agent-based modeling with actions grounded in physical, social, or digital space using Concordia [https://arxiv.org/abs/2312.03664](https://arxiv.org/abs/2312.03664)  
+45. Multi-Actor Generative Artificial Intelligence as a Game Engine [https://arxiv.org/abs/2507.08892](https://arxiv.org/abs/2507.08892)  
+46. J. Li, S. Qian, Y. Zhao, Q. Chen, Y. Zhao, Y. Zhang, L. Sun (2024). Agent Hospital: A Simulacrum of Hospital with Evolvable Medical Agents. [https://arxiv.org/abs/2405.02957](https://arxiv.org/abs/2405.02957)  
+47. F. Xu, Y. Zhou, et al. (2024). TheAgentCompany: Benchmarking LLM Agents on Consequential Real World Tasks. [https://arxiv.org/abs/2412.14161](https://arxiv.org/abs/2412.14161)  
+48. EconAgent: LLM-Empowered Agents for Simulating Macroeconomic Activities [https://arxiv.org/abs/2310.10436](https://arxiv.org/abs/2310.10436) [https://github.com/tsinghua-fib-lab/ACL24-EconAgent](https://github.com/tsinghua-fib-lab/ACL24-EconAgent)  
+49. TwinMarket: Simulating Financial Markets via LLM-based Agents [https://arxiv.org/abs/2502.01506](https://arxiv.org/abs/2502.01506)  
+50. LLM-Economist: Large Population Models and Mechanism Design [https://arxiv.org/abs/2507.15815](https://arxiv.org/abs/2507.15815)  
+51. Deliberate Lab: A Platform for Real-Time Human-AI Social Experiments [https://arxiv.org/abs/2510.13011](https://arxiv.org/abs/2510.13011) [https://github.com/PAIR-code/deliberate-lab](https://github.com/PAIR-code/deliberate-lab)  
+52. Can Generative AI Agents Behave Like Humans? Evidence from Laboratory Market Experiments [https://arxiv.org/abs/2505.07457](https://arxiv.org/abs/2505.07457)  
+53. EconGym: A Scalable AI Testbed with Diverse Economic Tasks [https://arxiv.org/abs/2506.12110](https://arxiv.org/abs/2506.12110) [https://github.com/Miracle1207/EconGym](https://github.com/Miracle1207/EconGym)  
+54. Think, Speak, Decide: Language-Augmented Multi-Agent RL for Economic Decision-Making [https://arxiv.org/abs/2511.12876](https://arxiv.org/abs/2511.12876)  
+55. PGG Bench: Public Goods Game Benchmark [https://github.com/lechmazur/pgg\_bench](https://github.com/lechmazur/pgg_bench)  
+56. BankSim: Bank Payment Simulation for Fraud Detection [https://github.com/byeungchun/banksim](https://github.com/byeungchun/banksim)  
+57. Generative Agent Simulations of 1,000 People [https://arxiv.org/abs/2411.10109](https://arxiv.org/abs/2411.10109)  
+58. Generative Agents: Interactive Simulacra of Human Behavior [https://arxiv.org/abs/2304.03442](https://arxiv.org/abs/2304.03442)  
+59. Out of One, Many: Using Language Models to Simulate Human Samples [https://arxiv.org/abs/2209.06899](https://arxiv.org/abs/2209.06899)  
+60. Large language models as simulated economic agents: What can we learn from homo silicus? [https://dl.acm.org/doi/abs/10.1145/3670865.3673513](https://dl.acm.org/doi/abs/10.1145/3670865.3673513)   
+61. Using Large Language Models to Simulate Multiple Humans and Replicate Human Subject Studies [https://arxiv.org/abs/2208.10264](https://arxiv.org/abs/2208.10264)  
+62. Learning from Synthetic Labs: Language Models as Auction Participants [https://arxiv.org/abs/2507.09083](https://arxiv.org/abs/2507.09083)   
+63. GenSim: A General Social Simulation Platform with Large Language Model based Agents [https://arxiv.org/abs/2410.04360](https://arxiv.org/abs/2410.04360)  
+64. Can A Society of Generative Agents Simulate Human Behavior and Inform Public Health Policy? A Case Study on Vaccine Hesitancy [https://arxiv.org/abs/2503.09639v2](https://arxiv.org/abs/2503.09639v2)  
+65. Plurals: A System for Guiding LLMs Via Simulated Social Ensembles [https://arxiv.org/abs/2409.17213v3](https://arxiv.org/abs/2409.17213v3)   
+66. PoliCon: Evaluating LLMs on Achieving Diverse Political Consensus [https://arxiv.org/abs/2505.19558](https://arxiv.org/abs/2505.19558)  
+67. Generative AI as Economic Agents [https://arxiv.org/abs/2406.00477](https://arxiv.org/abs/2406.00477)  
+68. Virtual Agent Economies [https://arxiv.org/abs/2509.10147](https://arxiv.org/abs/2509.10147)  
+69. An Economy of AI Agents [https://arxiv.org/abs/2509.01063](https://arxiv.org/abs/2509.01063)
 
-### **Sims** {#sims-1}
+### **Game Theory** {#game-theory}
 
-56. J. Li, S. Qian, Y. Zhao, Q. Chen, Y. Zhao, Y. Zhang, L. Sun (2024). Agent Hospital: A Simulacrum of Hospital with Evolvable Medical Agents. [https://arxiv.org/abs/2405.02957](https://arxiv.org/abs/2405.02957)  
-57. F. Xu, Y. Zhou, et al. (2024). TheAgentCompany: Benchmarking LLM Agents on Consequential Real World Tasks. [https://arxiv.org/abs/2412.14161](https://arxiv.org/abs/2412.14161)
-
-### **Study Sims** {#study-sims}
-
-58. Large language models as simulated economic agents: What can we learn from homo silicus? [https://dl.acm.org/doi/abs/10.1145/3670865.3673513](https://dl.acm.org/doi/abs/10.1145/3670865.3673513)   
-59. Using Large Language Models to Simulate Multiple Humans and Replicate Human Subject Studies [https://arxiv.org/abs/2208.10264](https://arxiv.org/abs/2208.10264)  
-60. Learning from Synthetic Labs: Language Models as Auction Participants [https://arxiv.org/abs/2507.09083](https://arxiv.org/abs/2507.09083) 
-
-### **Society Sims** {#society-sims}
-
-61. GenSim: A General Social Simulation Platform with Large Language Model based Agents [https://arxiv.org/abs/2410.04360](https://arxiv.org/abs/2410.04360)  
-62. Can A Society of Generative Agents Simulate Human Behavior and Inform Public Health Policy? A Case Study on Vaccine Hesitancy [https://arxiv.org/abs/2503.09639v2](https://arxiv.org/abs/2503.09639v2)  
-63. Plurals: A System for Guiding LLMs Via Simulated Social Ensembles [https://arxiv.org/abs/2409.17213v3](https://arxiv.org/abs/2409.17213v3)   
-64. PoliCon: Evaluating LLMs on Achieving Diverse Political Consensus [https://arxiv.org/abs/2505.19558](https://arxiv.org/abs/2505.19558)  
-65. Generative AI as Economic Agents [https://arxiv.org/abs/2406.00477](https://arxiv.org/abs/2406.00477)  
-66. Virtual Agent Economies [https://arxiv.org/abs/2509.10147](https://arxiv.org/abs/2509.10147)  
-67. An Economy of AI Agents [https://arxiv.org/abs/2509.01063](https://arxiv.org/abs/2509.01063)
-
-### **Game-Theoretic** {#game-theoretic}
-
-68. Nicer Than Humans: How do Large Language Models Behave in the Prisoner's Dilemma? [https://arxiv.org/abs/2406.13605v1](https://arxiv.org/abs/2406.13605v1)  
-69. Playing repeated games with large language models [https://www.nature.com/articles/s41562-025-02172-y](https://www.nature.com/articles/s41562-025-02172-y)  
-70. Phelps, Steve & Russell, Yvan. (2025). The machine psychology of cooperation: can GPT models operationalize prompts for altruism, cooperation, competitiveness, and selfishness in economic games?. Journal of Physics: Complexity. 6\. 10.1088/2632-072X/ada711.  
-71. Understanding LLM Agent Behaviours via Game Theory: Strategy Recognition, Biases and Multi-Agent Dynamics [https://arxiv.org/abs/2512.07462v1](https://arxiv.org/abs/2512.07462v1)  
-72. G. Piatti, Z. Zhu, M. Boyle, D. Yogatama, M. Schaekermann, and D. Hadfield-Menell (2024). Cooperate or Collapse: Emergence of Sustainable Cooperation in a Society of LLM Agents. NeurIPS 2024\. [https://arxiv.org/abs/2404.16698](https://arxiv.org/abs/2404.16698)  
-73. J. Light, M. Cai, S. Shen, and Z. Hu (2023). AvalonBench: Evaluating LLMs Playing the Game of Avalon. FMDM@NeurIPS 2023\. [https://arxiv.org/abs/2310.05036](https://arxiv.org/abs/2310.05036)  
-74. The Subtle Art of Defection: Understanding Uncooperative Behaviors in LLM based Multi-Agent Systems (2025). [https://arxiv.org/abs/2511.15862](https://arxiv.org/abs/2511.15862)
+70. Nicer Than Humans: How do Large Language Models Behave in the Prisoner's Dilemma? [https://arxiv.org/abs/2406.13605v1](https://arxiv.org/abs/2406.13605v1)  
+71. Playing repeated games with large language models [https://www.nature.com/articles/s41562-025-02172-y](https://www.nature.com/articles/s41562-025-02172-y)  
+72. Phelps, Steve & Russell, Yvan. (2025). The machine psychology of cooperation: can GPT models operationalize prompts for altruism, cooperation, competitiveness, and selfishness in economic games?. Journal of Physics: Complexity. 6\. 10.1088/2632-072X/ada711.  
+73. Understanding LLM Agent Behaviours via Game Theory: Strategy Recognition, Biases and Multi-Agent Dynamics [https://arxiv.org/abs/2512.07462v1](https://arxiv.org/abs/2512.07462v1)  
+74. G. Piatti, Z. Zhu, M. Boyle, D. Yogatama, M. Schaekermann, and D. Hadfield-Menell (2024). Cooperate or Collapse: Emergence of Sustainable Cooperation in a Society of LLM Agents. NeurIPS 2024\. [https://arxiv.org/abs/2404.16698](https://arxiv.org/abs/2404.16698)  
+75. J. Light, M. Cai, S. Shen, and Z. Hu (2023). AvalonBench: Evaluating LLMs Playing the Game of Avalon. FMDM@NeurIPS 2023\. [https://arxiv.org/abs/2310.05036](https://arxiv.org/abs/2310.05036)  
+76. The Subtle Art of Defection: Understanding Uncooperative Behaviors in LLM based Multi-Agent Systems (2025). [https://arxiv.org/abs/2511.15862](https://arxiv.org/abs/2511.15862)
 
 # **Appendix** {#appendix}
 
@@ -466,11 +493,37 @@ The core infrastructure is fully established and ready; e.g., the GitHub reposit
 
 #### **example from the assistant axis** {#example-from-the-assistant-axis}
 
-## **![][image1]Appendix B: Personality** {#appendix-b:-personality}
+## **![][image1]Appendix B: Psychometrics** {#appendix-b:-psychometrics}
+
+**Summary of full item counts for your reference:**
+
+| *Framework* | *Full Version* | *Items* | *Facets* |
+| ----- | ----- | ----- | ----- |
+| *HEXACO-PI-R* | *Full* | *200* | *25* |
+| *HEXACO-PI-R* | *Standard* | *100* | *25* |
+| *HEXACO* | *Brief* | *60* | *6 (domains only)* |
+| *IPIP-NEO* | *Full* | *300* | *30* |
+| *IPIP-NEO* | *Standard* | *120* | *30* |
+| *IPIP-NEO* | *Brief* | *60* | *30 (reduced reliability)* |
+| *O\*NET Interest Profiler* | *Standard* | *60* | *6* |
+| *O\*NET Interest Profiler* | *Short* | *30* | *6* |
+| *Schwartz SVS* | *Full* | *57* | *10 values* |
+| *Schwartz PVQ* | *Standard* | *40* | *10 values* |
+| *Short Dark Triad (SD3)* | *Standard* | *27* | *3* |
+| *Short Dark Tetrad (SD4)* | *Standard* | *28* | *4* |
 
 ### **RIASEC / Holland Codes** {#riasec-/-holland-codes}
 
-![][image2]
+![][image2]  
+**Table B1: Psychometric Frameworks Mapped to O\*NET**
+
+| Framework | Dimensions | Facets | O\*NET Connection | Instrument |
+| ----- | ----- | ----- | ----- | ----- |
+| RIASEC | 6 interests | — | Direct Holland codes | O\*NET Interest Profiler (60 items) |
+| HEXACO | 6 factors | 25 | 2024 Work Styles revision | HEXACO-60 (public, hexaco.org) |
+| Big Five | 5 factors | 30 | Work Styles crosswalk | IPIP-NEO-60 (public domain) |
+
+All three frameworks are non-proprietary with validated short-form instruments suitable for large-scale persona assessment. HEXACO's Honesty-Humility factor is particularly relevant for AI safety applications, capturing variance in integrity, manipulation, and deception that other frameworks do not directly measure.
 
 ## **Appendix C: Simulations** {#appendix-c:-simulations}
 
