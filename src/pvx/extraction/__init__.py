@@ -7,9 +7,9 @@ This module provides the core extraction functionality:
 - ExtractionPipeline: End-to-end pipeline with W&B logging and checkpointing
 """
 
-from .questions import QuestionBank
 from .activations import ActivationExtractor
 from .pipeline import ExtractionPipeline, PersonaVector
+from .questions import QuestionBank
 
 __all__ = [
     "QuestionBank",

@@ -13,7 +13,7 @@ from typing import Callable, Literal
 
 import numpy as np
 import torch
-from sklearn.cluster import KMeans, AgglomerativeClustering
+from sklearn.cluster import AgglomerativeClustering, KMeans
 from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import cosine_distances, cosine_similarity
 from sklearn.preprocessing import StandardScaler
@@ -175,7 +175,9 @@ class PersonaGeometry:
         )
 
         logger.info(f"PCA: {result.components_for_variance(0.9)} components for 90% variance")
-        logger.info(f"Top 3 components explain {cumulative[min(2, len(cumulative)-1)]:.1%} variance")
+        logger.info(
+            f"Top 3 components explain {cumulative[min(2, len(cumulative) - 1)]:.1%} variance"
+        )
 
         return result
 
@@ -222,7 +224,7 @@ class PersonaGeometry:
                 pc_cosines.append(float(cosine))
 
         return ContrastResult(
-            name=name or f"group_a_vs_group_b",
+            name=name or "group_a_vs_group_b",
             vector=contrast_vec,
             group_a_ids=[self.persona_ids[i] for i in indices_a],
             group_b_ids=[self.persona_ids[i] for i in indices_b],
@@ -303,9 +305,9 @@ class PersonaGeometry:
         """
         if metric == "cosine":
             return cosine_distances(self.vectors_np)
-        else:
-            from sklearn.metrics.pairwise import euclidean_distances
-            return euclidean_distances(self.vectors_np)
+        from sklearn.metrics.pairwise import euclidean_distances
+
+        return euclidean_distances(self.vectors_np)
 
     def compute_similarities(self) -> np.ndarray:
         """Compute pairwise cosine similarities between persona vectors.
@@ -383,7 +385,11 @@ class PersonaGeometry:
         if self.metadata:
             with open(output_dir / "metadata.json", "w") as f:
                 json.dump(
-                    {pid: dict(self.metadata[pid]) for pid in self.persona_ids if pid in self.metadata},
+                    {
+                        pid: dict(self.metadata[pid])
+                        for pid in self.persona_ids
+                        if pid in self.metadata
+                    },
                     f,
                     indent=2,
                 )

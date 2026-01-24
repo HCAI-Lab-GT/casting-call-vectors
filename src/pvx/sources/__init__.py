@@ -11,7 +11,7 @@ Future extensions could include:
 - RolePersonaSource: Non-vocational role-playing personas (e.g., "ghost", "demon", "mystic")
 """
 
-from .base import PersonaMetadata, PersonaSource, BaselineSource
+from .base import BaselineSource, PersonaMetadata, PersonaSource
 from .vocational import VocationalPersonaSource
 
 __all__ = [

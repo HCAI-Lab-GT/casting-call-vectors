@@ -63,8 +63,7 @@ class ONETLoader:
         self.data_dir = Path(data_dir)
         if not self.data_dir.exists():
             raise FileNotFoundError(
-                f"O*NET data directory not found: {self.data_dir}\n"
-                "Run: ./scripts/download_onet.sh"
+                f"O*NET data directory not found: {self.data_dir}\nRun: ./scripts/download_onet.sh"
             )
 
         # Cached dataframes
@@ -150,8 +149,7 @@ class ONETLoader:
 
         # Filter to OI scale (actual scores) and RIASEC elements
         oi_data = interests[
-            (interests["scale_id"] == "OI")
-            & (interests["element_id"].isin(RIASEC_ELEMENTS.keys()))
+            (interests["scale_id"] == "OI") & (interests["element_id"].isin(RIASEC_ELEMENTS.keys()))
         ]
 
         # Build dict of SOC -> {R: score, I: score, ...}
@@ -177,11 +175,7 @@ class ONETLoader:
         # Filter to IH scale (high-point codes)
         ih_data = interests[
             (interests["scale_id"] == "IH")
-            & (
-                interests["element_id"].isin(
-                    ["1.B.1.g", "1.B.1.h", "1.B.1.i"]
-                )
-            )
+            & (interests["element_id"].isin(["1.B.1.g", "1.B.1.h", "1.B.1.i"]))
         ]
 
         result = {}
@@ -237,9 +231,7 @@ class ONETLoader:
             "tasks": tasks,
         }
 
-    def filter_by_riasec(
-        self, primary: str, min_score: float = 5.0
-    ) -> list[str]:
+    def filter_by_riasec(self, primary: str, min_score: float = 5.0) -> list[str]:
         """Get occupations with high scores on a specific RIASEC dimension.
 
         Args:
@@ -305,8 +297,7 @@ class ONETLoader:
 
         slug = title.lower()
         slug = re.sub(r"[^a-z0-9]+", "_", slug)
-        slug = slug.strip("_")
-        return slug
+        return slug.strip("_")
 
 
 if __name__ == "__main__":

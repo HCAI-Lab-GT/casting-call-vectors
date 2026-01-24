@@ -7,9 +7,9 @@ This module provides analysis and visualization capabilities:
 - riasec: RIASEC-specific analysis functions (Holland codes)
 """
 
-from .geometry import PersonaGeometry, PCAResult, ClusterResult, ContrastResult
-from .viz import PersonaVisualizer
 from . import riasec
+from .geometry import ClusterResult, ContrastResult, PCAResult, PersonaGeometry
+from .viz import PersonaVisualizer
 
 __all__ = [
     "PersonaGeometry",

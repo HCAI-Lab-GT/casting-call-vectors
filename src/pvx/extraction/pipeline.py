@@ -10,16 +10,19 @@ complete persona vector extraction process, including:
 
 import json
 import logging
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import TYPE_CHECKING, Optional
 
 import torch
+
+if TYPE_CHECKING:
+    from pvx.judges.llm_as_judge import LLMJudge
 from tqdm import tqdm
 
 from ..sources.base import BaselineSource, PersonaMetadata, PersonaSource
-from .activations import ActivationExtractor, ActivationResult
+from .activations import ActivationExtractor
 from .questions import QuestionBank
 
 logger = logging.getLogger(__name__)
@@ -269,13 +272,25 @@ class ExtractionPipeline:
 
             # Initialize accumulators
             if persona_prompt_last_sum is None:
-                persona_prompt_last_sum = torch.zeros_like(persona_result.prompt_last, dtype=torch.float32)
-                persona_resp_mean_sum = torch.zeros_like(persona_result.response_mean, dtype=torch.float32)
-                persona_all_layers_sum = torch.zeros_like(persona_result.response_all_layers, dtype=torch.float32)
+                persona_prompt_last_sum = torch.zeros_like(
+                    persona_result.prompt_last, dtype=torch.float32
+                )
+                persona_resp_mean_sum = torch.zeros_like(
+                    persona_result.response_mean, dtype=torch.float32
+                )
+                persona_all_layers_sum = torch.zeros_like(
+                    persona_result.response_all_layers, dtype=torch.float32
+                )
 
-                baseline_prompt_last_sum = torch.zeros_like(baseline_result.prompt_last, dtype=torch.float32)
-                baseline_resp_mean_sum = torch.zeros_like(baseline_result.response_mean, dtype=torch.float32)
-                baseline_all_layers_sum = torch.zeros_like(baseline_result.response_all_layers, dtype=torch.float32)
+                baseline_prompt_last_sum = torch.zeros_like(
+                    baseline_result.prompt_last, dtype=torch.float32
+                )
+                baseline_resp_mean_sum = torch.zeros_like(
+                    baseline_result.response_mean, dtype=torch.float32
+                )
+                baseline_all_layers_sum = torch.zeros_like(
+                    baseline_result.response_all_layers, dtype=torch.float32
+                )
 
             # Accumulate
             persona_prompt_last_sum += persona_result.prompt_last.float()
@@ -308,19 +323,25 @@ class ExtractionPipeline:
             )
 
         # Compute contrastive differences
-        prompt_last_diff = (persona_prompt_last_sum / valid_count) - (baseline_prompt_last_sum / valid_count)
-        response_mean_diff = (persona_resp_mean_sum / valid_count) - (baseline_resp_mean_sum / valid_count)
-        all_layers_diff = (persona_all_layers_sum / valid_count) - (baseline_all_layers_sum / valid_count)
+        prompt_last_diff = (persona_prompt_last_sum / valid_count) - (
+            baseline_prompt_last_sum / valid_count
+        )
+        response_mean_diff = (persona_resp_mean_sum / valid_count) - (
+            baseline_resp_mean_sum / valid_count
+        )
+        all_layers_diff = (persona_all_layers_sum / valid_count) - (
+            baseline_all_layers_sum / valid_count
+        )
 
         # Log to W&B
         if self.wandb_run:
-            import wandb
-
-            self.wandb_run.log({
-                f"{source.persona_id}/valid_pairs": valid_count,
-                f"{source.persona_id}/total_pairs": total_count,
-                f"{source.persona_id}/vector_norm": torch.norm(prompt_last_diff).item(),
-            })
+            self.wandb_run.log(
+                {
+                    f"{source.persona_id}/valid_pairs": valid_count,
+                    f"{source.persona_id}/total_pairs": total_count,
+                    f"{source.persona_id}/vector_norm": torch.norm(prompt_last_diff).item(),
+                }
+            )
 
         return PersonaVector(
             persona_id=source.persona_id,
@@ -377,7 +398,9 @@ class ExtractionPipeline:
 
         # Filter out completed personas
         remaining = [s for s in sources if s.persona_id not in completed_ids]
-        logger.info(f"Extracting {len(remaining)} personas ({len(completed_ids)} already completed)")
+        logger.info(
+            f"Extracting {len(remaining)} personas ({len(completed_ids)} already completed)"
+        )
 
         for i, source in enumerate(tqdm(remaining, desc="Extracting personas")):
             try:
@@ -399,7 +422,7 @@ class ExtractionPipeline:
                     import wandb
 
                     artifact = wandb.Artifact(
-                        name=f"vectors-checkpoint-{i+1}",
+                        name=f"vectors-checkpoint-{i + 1}",
                         type="vectors",
                     )
                     artifact.add_dir(str(self.output_dir))

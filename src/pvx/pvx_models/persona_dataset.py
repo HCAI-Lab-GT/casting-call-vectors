@@ -22,23 +22,22 @@ Environment Variables:
     - VLLM_API_URL (optional): Base URL for vLLM OpenAI-compatible server
 """
 
+import argparse
 import json
 import os
 import warnings
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 from collections import namedtuple
 from itertools import product
-import argparse
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 import torch
+from dotenv import load_dotenv
 from openai import OpenAI
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from pvx import Heartbeat, setup_logging
 from pvx.pvx_models.prompts import PromptTemplates
-
-from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -86,7 +85,7 @@ class PersonaDataset:
         model: str = "qwen2.5:7b-instruct",
         base_url: Optional[str] = None,
         api_key_env: str = "LITELLM_API_KEY",
-        local_model: Optional[str] = 'Qwen/Qwen2.5-1.5B-Instruct',
+        local_model: Optional[str] = "Qwen/Qwen2.5-1.5B-Instruct",
         device: Optional[str] = None,
         dtype: torch.dtype = torch.float16,
         dirpath: str = "./persona_data/trait_datasets/",
@@ -126,7 +125,7 @@ class PersonaDataset:
         self.dtype = dtype
         self._hf_model = None
         self._hf_tokenizer = None
-        
+
         self.dirpath = dirpath
 
     @staticmethod
@@ -158,31 +157,28 @@ class PersonaDataset:
 
         if not os.path.exists(filepath):
             logger.info("Trait dataset not found. Initializing new trait dataset...")
-            dataset = PersonaDataset(
-                trait = trait
-            )
+            dataset = PersonaDataset(trait=trait)
             dataset.generate_dataset(save_to_json=True)
             return dataset
-            
+
         # Load JSON data
         with open(filepath, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         # Backward compatibility with older files that stored "client"
         if data["backend"] is None and "client" in data:
-            client = data["client"]
-            backend = "hf_local" if client == "ollama" else "openai"
+            data["client"]
 
         # reconstruct dataset instance
         dataset = PersonaDataset(
-            trait = trait,
-            num_questions = data["num_questions"],
-            backend = data.get("backend") or "openai",
-            model = data["model"],
-            base_url = data.get("base_url"),
-            local_model = data.get("local_model"),
+            trait=trait,
+            num_questions=data["num_questions"],
+            backend=data.get("backend") or "openai",
+            model=data["model"],
+            base_url=data.get("base_url"),
+            local_model=data.get("local_model"),
         )
-        
+
         # Populate dataset outputs
         dataset.positive_negative_pairs = data["positive_negative_pairs"]
         dataset.questions = data["questions"]
@@ -191,10 +187,10 @@ class PersonaDataset:
         # Load up loggers
         dataset.logger = setup_logging(name="persona-dataset")
         dataset.logger.info("Dataset loaded from: %s", filepath)
-        
+
         return dataset
 
-    def save_dataset_to_json(self, dirpath: str=None) -> str:
+    def save_dataset_to_json(self, dirpath: str = None) -> str:
         """
         Save the persona vector dataset to a JSON file.
 
@@ -239,7 +235,9 @@ class PersonaDataset:
         logger.info("Dataset saved to: %s", filepath)
         return filepath
 
-    def generate_dataset(self, save_to_json=True, max_tries=5) -> Tuple[List[Tuple[str, str]], List[str], str, str]:
+    def generate_dataset(
+        self, save_to_json=True, max_tries=5
+    ) -> Tuple[List[Tuple[str, str]], List[str], str, str]:
         """
         Generate the complete persona dataset.
 
@@ -247,7 +245,7 @@ class PersonaDataset:
         process. It generates trait descriptions, question instructions, and then
         uses these to create positive/negative instruction pairs, questions, and
         an evaluation prompt. The generated dataset is automatically saved to JSON.
-        
+
         Args:
             save_to_json (bool): Whether to save the generated dataset to a JSON file.
                 Defaults to True.
@@ -260,7 +258,7 @@ class PersonaDataset:
                 - questions: List of evaluation questions
                 - evaluation_prompt: The prompt for evaluating the trait
                 - filepath: Path where the dataset was saved
-                
+
         Raises:
             ValueError: If the dataset output cannot be parsed after max_tries attempts
 
@@ -300,12 +298,14 @@ class PersonaDataset:
             try:
                 pos_neg_pairs, questions = self._parse_dataset_output(response=response)
                 break
-            except json.JSONDecodeError as e:
+            except json.JSONDecodeError:
                 continue
         else:
             raise ValueError("Failed to parse dataset output after multiple attempts")
-        
-        evaluation_prompt = PromptTemplates.evaluation(trait=self.trait,trait_description=trait_description)
+
+        evaluation_prompt = PromptTemplates.evaluation(
+            trait=self.trait, trait_description=trait_description
+        )
 
         self.positive_negative_pairs = pos_neg_pairs
         self.questions = questions
@@ -330,12 +330,14 @@ class PersonaDataset:
                 - [2] (str): The evaluation question
         """
         Pair = namedtuple("Pair", ["pos", "neg", "question"])
-        return [Pair(pos=pos, neg=neg, question=q) for (pos, neg), q in product(self.positive_negative_pairs, self.questions)]
+        return [
+            Pair(pos=pos, neg=neg, question=q)
+            for (pos, neg), q in product(self.positive_negative_pairs, self.questions)
+        ]
 
-    def _inference_with_client(self, 
-                              messages: List[Dict[str, str]], 
-                              temperature: float = 0.9,
-                              max_new_tokens = 1024) -> Tuple[Optional[str], str]:
+    def _inference_with_client(
+        self, messages: List[Dict[str, str]], temperature: float = 0.9, max_new_tokens=1024
+    ) -> Tuple[Optional[str], str]:
         """
         Perform LLM inference using either OpenAI/vLLM HTTP or local HF transformers.
 
@@ -370,12 +372,14 @@ class PersonaDataset:
             if self.backend == "hf_local":
                 if self._hf_model is None or self._hf_tokenizer is None:
                     self._init_local_model()
-                    
+
                 # Prepare prompt for decoder-only model
                 prompt = self._messages_to_prompt(messages)
-                
+
                 # Generate response
-                inputs = self._hf_tokenizer(prompt, return_tensors="pt", padding=True).to(self._hf_model.device)
+                inputs = self._hf_tokenizer(prompt, return_tensors="pt", padding=True).to(
+                    self._hf_model.device
+                )
                 generated = self._hf_model.generate(
                     **inputs,
                     do_sample=True,
@@ -386,15 +390,15 @@ class PersonaDataset:
                 decoded = self._hf_tokenizer.decode(
                     generated[0][inputs["input_ids"].shape[-1] :], skip_special_tokens=True
                 )
-                
+
                 return (None, decoded.strip())
-            
+
             base_url = self.base_url
             if self.backend == "vllm" and base_url is None:
                 base_url = os.environ.get("VLLM_API_URL")
             if base_url is None:
                 base_url = "https://glados.ctisl.gtri.org"
-                
+
             api_key = os.environ.get(self.api_key_env) or os.environ.get("OPENAI_API_KEY")
             if api_key is None:
                 raise ValueError(
@@ -408,7 +412,7 @@ class PersonaDataset:
                 temperature=temperature,
             )
             return (None, chat_response.choices[0].message.content)
-        
+
         except Exception as e:
             logger.exception(
                 "inference failed | backend=%s model=%s temp=%s",
@@ -424,7 +428,7 @@ class PersonaDataset:
         """
         if self.backend != "hf_local":
             return
-        
+
         # Device selection
         if self.device:
             device = self.device
@@ -516,7 +520,7 @@ class PersonaDataset:
                 - pos_neg_pairs: List of (positive, negative) instruction tuples
                 - questions: List of evaluation questions
                 - eval_prompt: The evaluation prompt (concatenated if multi-line)
-                
+
         Raises:
             json.JSONDecodeError: If the response does not contain valid JSON
         """
@@ -524,11 +528,11 @@ class PersonaDataset:
         response_dict = json.loads(json_text)
 
         # Extract components
-        pos_instructions = response_dict['pos_instructions']
-        neg_instructions = response_dict['neg_instructions']
-        questions = response_dict['questions']
+        pos_instructions = response_dict["pos_instructions"]
+        neg_instructions = response_dict["neg_instructions"]
+        questions = response_dict["questions"]
 
-        return list(zip(pos_instructions, neg_instructions)), questions
+        return list(zip(pos_instructions, neg_instructions, strict=False)), questions
 
     @staticmethod
     def _messages_to_prompt(messages: List[Dict[str, str]]) -> str:
@@ -547,16 +551,44 @@ class PersonaDataset:
         prompt += "\\n\\nAssistant:"
         return prompt
 
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Generate Persona Dataset")
-    ap.add_argument('-t','--traits', nargs='+', help='<Optional> Select traits', required=False)
-    ap.add_argument('-f', '--dirpath', default='./persona_data/trait_datasets/', help='Directory filepath to save generated datasets')
-    ap.add_argument('-b', '--backend', default='hf_local', help='Backend to use: openai, vllm, hf_local')
-    ap.add_argument('-m', '--model', default='openai/gpt-oss-120b', help='Model to use for openai/vllm backend')
-    ap.add_argument('-a', '--api_key_env', default='OPENAI_API_KEY', help='Model to use for openai/vllm backend')
-    ap.add_argument('-u', '--base_url', default='https://api.together.xyz/v1', help='Model to use for openai/vllm backend')
-    ap.add_argument('-l', '--local_model', default='Qwen/Qwen2.5-1.5B-Instruct', help='Local HF model to use for hf_local backend')
-    ap.add_argument('-N', '--num_questions', type=int, default=100, help='Number of questions to generate per trait')
+    ap.add_argument("-t", "--traits", nargs="+", help="<Optional> Select traits", required=False)
+    ap.add_argument(
+        "-f",
+        "--dirpath",
+        default="./persona_data/trait_datasets/",
+        help="Directory filepath to save generated datasets",
+    )
+    ap.add_argument(
+        "-b", "--backend", default="hf_local", help="Backend to use: openai, vllm, hf_local"
+    )
+    ap.add_argument(
+        "-m", "--model", default="openai/gpt-oss-120b", help="Model to use for openai/vllm backend"
+    )
+    ap.add_argument(
+        "-a", "--api_key_env", default="OPENAI_API_KEY", help="Model to use for openai/vllm backend"
+    )
+    ap.add_argument(
+        "-u",
+        "--base_url",
+        default="https://api.together.xyz/v1",
+        help="Model to use for openai/vllm backend",
+    )
+    ap.add_argument(
+        "-l",
+        "--local_model",
+        default="Qwen/Qwen2.5-1.5B-Instruct",
+        help="Local HF model to use for hf_local backend",
+    )
+    ap.add_argument(
+        "-N",
+        "--num_questions",
+        type=int,
+        default=100,
+        help="Number of questions to generate per trait",
+    )
     args = ap.parse_args()
 
     trait_list = args.traits or [
@@ -577,14 +609,14 @@ if __name__ == "__main__":
     for trait in trait_list:
         try:
             PersonaDataset.from_json(trait=trait, dirpath=args.dirpath)
-        except Exception as e:
+        except Exception:
             dataset: PersonaDataset = PersonaDataset(
                 trait=trait,
                 num_questions=args.num_questions,
                 backend=args.backend,
                 local_model=args.local_model,
                 model=args.model,
-                api_key_env=args.api_key_env
+                api_key_env=args.api_key_env,
             )
             dataset.generate_dataset(save_to_json=True)
 

@@ -208,5 +208,4 @@ def to_slug(title: str) -> str:
     """
     slug = title.lower()
     slug = re.sub(r"[^a-z0-9]+", "_", slug)
-    slug = slug.strip("_")
-    return slug
+    return slug.strip("_")

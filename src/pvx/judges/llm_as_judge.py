@@ -20,21 +20,19 @@ Environment Variables:
     - VLLM_API_URL (optional): Base URL for vLLM OpenAI-compatible server
 """
 
-import os
-from typing import Dict, List, Optional, Tuple
-import math
-from pathlib import Path
-import yaml
-import numpy as np
-import torch
-from openai import OpenAI
-from pvx import Heartbeat, setup_logging
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from dotenv import load_dotenv
-import asyncio
-import re
 import argparse
-import inspect
+import math
+import os
+import re
+import warnings
+from typing import Dict, List, Optional
+
+import torch
+from dotenv import load_dotenv
+from openai import OpenAI
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from pvx import setup_logging
 
 load_dotenv()
 
@@ -61,7 +59,18 @@ class LLMJudge:
         prompt_template (str): Template for evaluation prompt
     """
 
-    def __init__(self, backend: str = "openai", model: str = "openai/gpt-oss-20b", local_model: Optional[str] = "Qwen/Qwen2.5-7B-Instruct", base_url: Optional[str] = "https://api.together.xyz/v1", prompt_template: str = "", api_key_env: str = "TOGETHER_API_KEY", eval_type: str = "0_100", device: Optional[str] = None, dtype: torch.dtype = torch.float16):
+    def __init__(
+        self,
+        backend: str = "openai",
+        model: str = "openai/gpt-oss-20b",
+        local_model: Optional[str] = "Qwen/Qwen2.5-7B-Instruct",
+        base_url: Optional[str] = "https://api.together.xyz/v1",
+        prompt_template: str = "",
+        api_key_env: str = "TOGETHER_API_KEY",
+        eval_type: str = "0_100",
+        device: Optional[str] = None,
+        dtype: torch.dtype = torch.float16,
+    ):
         """
         Initialize an LLMJudge instance.
 
@@ -83,12 +92,12 @@ class LLMJudge:
         self.eval_type = eval_type
         self.device = device
         self.dtype = dtype
-        
+
         self._hf_model = None
         self._hf_tokenizer = None
-        
+
         self.aggregate_score = self._aggregate_0_100_score_inference
-        
+
         # self.logprob_models = {'gpt-4', 'gpt-3', 'gpt-3.5', 'gpt-5', 'gpt-4o'}
 
         # if self.eval_type == "0_100":
@@ -117,7 +126,7 @@ class LLMJudge:
             temperature=0,
             logprobs=True,
             top_logprobs=20,
-            seed=0
+            seed=0,
         )
         try:
             logprobs = completion.choices[0].logprobs.content[0].top_logprobs
@@ -174,17 +183,14 @@ class LLMJudge:
         """
         _, response = self._inference_with_client(messages=messages)
         try:
-            score = int(response)
-            return score
+            return int(response)
         except (ValueError, TypeError):
             match = re.search(r"\d{1,3}", str(response))
             if match:
                 return int(match.group())
-            else:
-                print("Response: " + response)
-                return 0
-        
-    
+            print("Response: " + response)
+            return 0
+
     def judge(self, **kwargs):
         """
         Evaluate a model response using the configured prompt template and aggregation method.
@@ -195,21 +201,20 @@ class LLMJudge:
         Returns:
             float: The aggregated score.
         """
-        messages = [dict(role='user', content=self.prompt_template.format(**kwargs))]
+        messages = [{"role": "user", "content": self.prompt_template.format(**kwargs)}]
         # if inspect.iscoroutinefunction(self.aggregate_score):
         #     score = await self.aggregate_score(messages)
         # else:
         #     score = self.aggregate_score(messages)
-        score = self.aggregate_score(messages)
-        return score
-    
+        return self.aggregate_score(messages)
+
     def _init_local_model(self):
         """
         Lazily load a HF transformers causal LM for local inference.
         """
         if self.backend != "hf_local":
             return
-        
+
         # Device selection
         if self.device:
             device = self.device
@@ -239,9 +244,9 @@ class LLMJudge:
         self._hf_model = model
         self._hf_tokenizer = tokenizer
 
-    def _inference_with_client(self, messages: List[Dict[str, str]], 
-                              temperature: float = 0.9,
-                              max_new_tokens = 1024):
+    def _inference_with_client(
+        self, messages: List[Dict[str, str]], temperature: float = 0.9, max_new_tokens=1024
+    ):
         """
         Perform LLM inference using the configured backend.
 
@@ -266,7 +271,9 @@ class LLMJudge:
                 prompt = self._messages_to_prompt(messages)
 
                 # Generate response
-                inputs = self._hf_tokenizer(prompt, return_tensors="pt", padding=True).to(self._hf_model.device)
+                inputs = self._hf_tokenizer(prompt, return_tensors="pt", padding=True).to(
+                    self._hf_model.device
+                )
                 generated = self._hf_model.generate(
                     **inputs,
                     do_sample=True,
@@ -308,7 +315,7 @@ class LLMJudge:
                 temperature,
             )
             raise e
-    
+
     @staticmethod
     def _messages_to_prompt(messages: List[Dict[str, str]]) -> str:
         """
@@ -339,7 +346,6 @@ class LLMJudge:
         return self.judge(**kwargs)
 
 
-
 PROMPT_TEMPLATE = (
     "You are evaluating whether the model's response displays the trait: angry. "
     "Angry individuals tend to express strong negative emotions openly, react impulsively to perceived slights, and may use harsh language. "
@@ -351,16 +357,32 @@ PROMPT_TEMPLATE = (
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Evaluate a model response using LLMJudge")
-    ap.add_argument('--backend', default='openai', help='Backend to use: openai, vllm, hf_local')
-    ap.add_argument('--model', default='openai/gpt-oss-20b', help='Model to use for openai/vllm/hf_local backend')
-    ap.add_argument('--local_model', default='Qwen/Qwen2.5-7B-Instruct', help='Local HF model to use for hf_local backend')
-    ap.add_argument('--base_url', default='https://api.together.xyz/v1', help='Base URL for OpenAI/vLLM endpoints')
-    ap.add_argument('--api_key_env', default='TOGETHER_API_KEY', help='Environment variable for API key')
-    ap.add_argument('--eval_type', default='0_100', help='Evaluation type (e.g., 0_100)')
-    ap.add_argument('--device', default=None, help='Device for local inference (cuda, cpu, etc.)')
-    ap.add_argument('--dtype', default='float16', help='Data type for local model (e.g., float16, float32)')
-    ap.add_argument('--question', required=True, help='The evaluation question')
-    ap.add_argument('--answer', required=True, help='The model response to evaluate')
+    ap.add_argument("--backend", default="openai", help="Backend to use: openai, vllm, hf_local")
+    ap.add_argument(
+        "--model",
+        default="openai/gpt-oss-20b",
+        help="Model to use for openai/vllm/hf_local backend",
+    )
+    ap.add_argument(
+        "--local_model",
+        default="Qwen/Qwen2.5-7B-Instruct",
+        help="Local HF model to use for hf_local backend",
+    )
+    ap.add_argument(
+        "--base_url",
+        default="https://api.together.xyz/v1",
+        help="Base URL for OpenAI/vLLM endpoints",
+    )
+    ap.add_argument(
+        "--api_key_env", default="TOGETHER_API_KEY", help="Environment variable for API key"
+    )
+    ap.add_argument("--eval_type", default="0_100", help="Evaluation type (e.g., 0_100)")
+    ap.add_argument("--device", default=None, help="Device for local inference (cuda, cpu, etc.)")
+    ap.add_argument(
+        "--dtype", default="float16", help="Data type for local model (e.g., float16, float32)"
+    )
+    ap.add_argument("--question", required=True, help="The evaluation question")
+    ap.add_argument("--answer", required=True, help="The model response to evaluate")
     args = ap.parse_args()
 
     dtype = getattr(torch, args.dtype)
@@ -373,11 +395,8 @@ if __name__ == "__main__":
         eval_type=args.eval_type,
         device=args.device,
         dtype=dtype,
-        prompt_template=PROMPT_TEMPLATE
+        prompt_template=PROMPT_TEMPLATE,
     )
 
     score = judge(question=args.question, answer=args.answer)
     print(f"Score: {score}")
-    
-    
-    

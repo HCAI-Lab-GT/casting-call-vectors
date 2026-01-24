@@ -7,11 +7,9 @@ and variance analysis. Supports both static (matplotlib) and interactive
 
 import logging
 from pathlib import Path
-from typing import Callable, Literal
+from typing import Callable
 
-import numpy as np
-
-from .geometry import PersonaGeometry, PCAResult, ClusterResult
+from .geometry import ClusterResult, PCAResult, PersonaGeometry
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +69,7 @@ class PersonaVisualizer:
             group_labels.append(label)
 
         # Get unique groups (excluding None)
-        unique_groups = sorted(set(g for g in group_labels if g is not None))
+        unique_groups = sorted({g for g in group_labels if g is not None})
 
         # Build color map if not provided
         if color_map is None:
@@ -132,7 +130,7 @@ class PersonaVisualizer:
         x = pca_result.projections[:, pc_x]
         y = pca_result.projections[:, pc_y]
 
-        scatter = ax.scatter(x, y, c=colors, alpha=alpha, s=s)
+        ax.scatter(x, y, c=colors, alpha=alpha, s=s)
 
         # Add labels if requested
         if show_labels:
@@ -189,7 +187,6 @@ class PersonaVisualizer:
             matplotlib Figure
         """
         import matplotlib.pyplot as plt
-        from mpl_toolkits.mplot3d import Axes3D
 
         fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111, projection="3d")
@@ -298,7 +295,7 @@ class PersonaVisualizer:
         x = pca_result.projections[:, 0]
         y = pca_result.projections[:, 1]
 
-        scatter = ax.scatter(x, y, c=colors, alpha=0.7, s=50)
+        ax.scatter(x, y, c=colors, alpha=0.7, s=50)
 
         # Plot cluster centers if available
         if cluster_result.cluster_centers is not None:
@@ -388,9 +385,9 @@ class PersonaVisualizer:
             plotly Figure
         """
         try:
-            import plotly.express as px
-            import plotly.graph_objects as go
             import pandas as pd
+            import plotly.express as px
+            import plotly.graph_objects as go  # noqa: F401
         except ImportError:
             logger.warning("plotly not installed, falling back to matplotlib")
             return self.plot_pca_3d(pca_result, color_by=color_by, title=title)
@@ -435,13 +432,15 @@ class PersonaVisualizer:
             title=title or "Interactive PCA Projection",
         )
 
-        fig.update_traces(marker=dict(size=5, opacity=0.8))
+        fig.update_traces(marker={"size": 5, "opacity": 0.8})
         fig.update_layout(
-            scene=dict(
-                xaxis_title=f"PC1 ({pca_result.explained_variance_ratio[0] * 100:.1f}%)",
-                yaxis_title=f"PC2 ({pca_result.explained_variance_ratio[1] * 100:.1f}%)",
-                zaxis_title=f"PC3 ({pca_result.explained_variance_ratio[2] * 100:.1f}%)" if pca_result.projections.shape[1] > 2 else "PC3",
-            )
+            scene={
+                "xaxis_title": f"PC1 ({pca_result.explained_variance_ratio[0] * 100:.1f}%)",
+                "yaxis_title": f"PC2 ({pca_result.explained_variance_ratio[1] * 100:.1f}%)",
+                "zaxis_title": f"PC3 ({pca_result.explained_variance_ratio[2] * 100:.1f}%)"
+                if pca_result.projections.shape[1] > 2
+                else "PC3",
+            }
         )
 
         return fig
@@ -484,6 +483,7 @@ class PersonaVisualizer:
 
         # Clean up figures
         import matplotlib.pyplot as plt
+
         plt.close("all")
 
     def save_all(
@@ -534,6 +534,7 @@ class PersonaVisualizer:
 
         # Clean up
         import matplotlib.pyplot as plt
+
         plt.close("all")
 
         logger.info(f"Saved visualizations to {output_dir}")

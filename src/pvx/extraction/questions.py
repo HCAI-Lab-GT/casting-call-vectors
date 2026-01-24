@@ -146,9 +146,7 @@ class QuestionBank:
             ValueError: If n > len(self)
         """
         if n > len(self):
-            raise ValueError(
-                f"Cannot sample {n} questions from bank of size {len(self)}"
-            )
+            raise ValueError(f"Cannot sample {n} questions from bank of size {len(self)}")
 
         rng = random.Random(seed)
         sampled = rng.sample(self._questions, n)
@@ -165,9 +163,7 @@ class QuestionBank:
             List of n question dictionaries with IDs
         """
         if n > len(self):
-            raise ValueError(
-                f"Cannot sample {n} questions from bank of size {len(self)}"
-            )
+            raise ValueError(f"Cannot sample {n} questions from bank of size {len(self)}")
 
         rng = random.Random(seed)
         return rng.sample(self._questions, n)

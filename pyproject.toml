@@ -35,6 +35,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "ruff>=0.6.0",
+  "pytest>=8.0.0",
+  "pytest-cov>=4.0.0",
 ]
 
 [project.entry-points.inspect_ai]
@@ -49,7 +51,18 @@ packages = ["src/pvx"]
 
 [tool.ruff]
 line-length = 100
+
+[tool.ruff.lint]
 extend-select = ["B", "I", "C4", "RET"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = ["-v", "--tb=short", "-m", "not slow"]
+markers = [
+    "slow: tests requiring model loading",
+    "integration: integration tests",
+]
 
 [dependency-groups]
 dev = [

@@ -6,7 +6,6 @@ activations during model generation, which are then used to compute persona vect
 
 import logging
 from dataclasses import dataclass
-from typing import Literal
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -74,17 +73,33 @@ class ActivationExtractor:
         self.layer = layer
         self._device = device
 
-        # Determine dtype
+        # Determine dtype (MPS works best with float32)
         if dtype is None:
-            dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+            if torch.cuda.is_available():
+                dtype = torch.float16
+            elif torch.backends.mps.is_available():
+                dtype = torch.float32
+            else:
+                dtype = torch.float32
 
         logger.info(f"Loading model: {model_id}")
 
         # Load tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(model_id)
 
-        # Load model with appropriate device mapping
+        # Resolve device
         if device == "auto":
+            if torch.cuda.is_available():
+                resolved_device = "cuda"
+            elif torch.backends.mps.is_available():
+                resolved_device = "mps"
+            else:
+                resolved_device = "cpu"
+        else:
+            resolved_device = device
+
+        # Load model with appropriate device mapping
+        if resolved_device == "cuda":
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_id,
                 torch_dtype=dtype,
@@ -95,8 +110,8 @@ class ActivationExtractor:
                 model_id,
                 torch_dtype=dtype,
             )
-            if device != "cpu":
-                self.model = self.model.to(device)
+            if resolved_device != "cpu":
+                self.model = self.model.to(resolved_device)
 
         # Determine actual device
         self.device = next(self.model.parameters()).device
@@ -279,9 +294,7 @@ class ActivationExtractor:
             resp_sum += final_act.to(acc_dtype)
 
             # Accumulate all layers
-            all_layers_last = torch.stack(
-                [hs[:, -1, :] for hs in out.hidden_states], dim=0
-            )
+            all_layers_last = torch.stack([hs[:, -1, :] for hs in out.hidden_states], dim=0)
             resp_sum_all_layers += all_layers_last.to(acc_dtype)
 
             count += 1

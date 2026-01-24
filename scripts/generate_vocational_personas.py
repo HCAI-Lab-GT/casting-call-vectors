@@ -23,7 +23,6 @@ Usage:
 """
 
 import argparse
-import json
 import logging
 import sys
 import time
@@ -34,12 +33,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from tqdm import tqdm
 
-from pvx.data.onet_loader import ONETLoader, RIASEC_FULL_NAMES
+from pvx.data.onet_loader import RIASEC_FULL_NAMES, ONETLoader
 from pvx.pvx_models.vocational_dataset import VocationalPersonaGenerator
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -93,9 +90,7 @@ def main():
 
     # Initialize loader and generator
     loader = ONETLoader()
-    generator = VocationalPersonaGenerator(
-        model=args.model, output_dir=args.output_dir
-    )
+    generator = VocationalPersonaGenerator(model=args.model, output_dir=args.output_dir)
     output_dir = Path(args.output_dir)
 
     # Get occupations to process
@@ -113,14 +108,8 @@ def main():
 
         # Filter by RIASEC if specified
         if args.riasec:
-            profiles = [
-                p
-                for p in profiles
-                if p.get("riasec_primary") == args.riasec
-            ]
-            logger.info(
-                f"Filtered to {len(profiles)} {RIASEC_FULL_NAMES[args.riasec]} occupations"
-            )
+            profiles = [p for p in profiles if p.get("riasec_primary") == args.riasec]
+            logger.info(f"Filtered to {len(profiles)} {RIASEC_FULL_NAMES[args.riasec]} occupations")
 
     # Apply limit
     if args.limit:
@@ -130,9 +119,7 @@ def main():
     if args.skip_existing:
         original_count = len(profiles)
         profiles = [
-            p
-            for p in profiles
-            if not (output_dir / f"{loader.to_slug(p['title'])}.json").exists()
+            p for p in profiles if not (output_dir / f"{loader.to_slug(p['title'])}.json").exists()
         ]
         skipped = original_count - len(profiles)
         if skipped > 0:
@@ -156,8 +143,7 @@ def main():
                 # Use fallback prompts (no API call)
                 persona = {
                     "instruction": [
-                        {"pos": p}
-                        for p in generator._generate_fallback_prompts(profile)
+                        {"pos": p} for p in generator._generate_fallback_prompts(profile)
                     ],
                     "eval_prompt": generator.generate_eval_prompt(profile),
                     "_metadata": {
@@ -177,9 +163,7 @@ def main():
             # Track RIASEC distribution
             primary = profile.get("riasec_primary")
             if primary:
-                stats["riasec_counts"][primary] = (
-                    stats["riasec_counts"].get(primary, 0) + 1
-                )
+                stats["riasec_counts"][primary] = stats["riasec_counts"].get(primary, 0) + 1
 
             # Rate limiting
             if not args.fallback_only and args.delay > 0:

@@ -17,7 +17,6 @@ Typical usage:
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
 
 logger = logging.getLogger(__name__)
 
@@ -110,21 +109,25 @@ def _generate_environment_setup(
     ]
 
     # Load modules (common on HPC clusters)
-    lines.extend([
-        "# Load modules (adjust for your cluster)",
-        "module purge 2>/dev/null || true",
-        "module load cuda/12.1 2>/dev/null || true",
-        "",
-    ])
+    lines.extend(
+        [
+            "# Load modules (adjust for your cluster)",
+            "module purge 2>/dev/null || true",
+            "module load cuda/12.1 2>/dev/null || true",
+            "",
+        ]
+    )
 
     # Conda environment
     if conda_env:
-        lines.extend([
-            f"# Activate conda environment",
-            f"source $(conda info --base)/etc/profile.d/conda.sh",
-            f"conda activate {conda_env}",
-            "",
-        ])
+        lines.extend(
+            [
+                "# Activate conda environment",
+                "source $(conda info --base)/etc/profile.d/conda.sh",
+                f"conda activate {conda_env}",
+                "",
+            ]
+        )
 
     # Extra environment variables
     if extra_env_vars:
@@ -135,18 +138,22 @@ def _generate_environment_setup(
 
     # UV setup
     if use_uv:
-        lines.extend([
-            "# Ensure uv is available",
-            "export PATH=\"$HOME/.cargo/bin:$PATH\"",
-            "",
-        ])
+        lines.extend(
+            [
+                "# Ensure uv is available",
+                'export PATH="$HOME/.cargo/bin:$PATH"',
+                "",
+            ]
+        )
 
     # Working directory
-    lines.extend([
-        "# Change to project directory",
-        "cd $SLURM_SUBMIT_DIR",
-        "",
-    ])
+    lines.extend(
+        [
+            "# Change to project directory",
+            "cd $SLURM_SUBMIT_DIR",
+            "",
+        ]
+    )
 
     return "\n".join(lines)
 
@@ -230,13 +237,13 @@ def generate_extraction_job(
         f"mkdir -p {config.output_dir}",
         "",
         "# Run extraction",
-        f"echo \"Starting extraction job: $SLURM_JOB_ID\"",
-        f"echo \"Node: $(hostname)\"",
-        f"echo \"GPUs: $CUDA_VISIBLE_DEVICES\"",
+        'echo "Starting extraction job: $SLURM_JOB_ID"',
+        'echo "Node: $(hostname)"',
+        'echo "GPUs: $CUDA_VISIBLE_DEVICES"',
         "",
         command,
         "",
-        "echo \"Extraction complete: $SLURM_JOB_ID\"",
+        'echo "Extraction complete: $SLURM_JOB_ID"',
     ]
 
     return "\n".join(script_parts)
@@ -299,12 +306,12 @@ def generate_analysis_job(
         f"mkdir -p {config.output_dir}",
         "",
         "# Run analysis",
-        f"echo \"Starting analysis job: $SLURM_JOB_ID\"",
-        f"echo \"Node: $(hostname)\"",
+        'echo "Starting analysis job: $SLURM_JOB_ID"',
+        'echo "Node: $(hostname)"',
         "",
         command,
         "",
-        "echo \"Analysis complete: $SLURM_JOB_ID\"",
+        'echo "Analysis complete: $SLURM_JOB_ID"',
     ]
 
     return "\n".join(script_parts)
@@ -409,18 +416,20 @@ def write_job_scripts(
 
     for riasec in ["R", "I", "A", "S", "E", "C"]:
         submit_all.append(f"JOB_{riasec}=$(sbatch --parsable extract_{riasec}.sh)")
-        submit_all.append(f"echo \"Submitted {riasec}: $JOB_{riasec}\"")
+        submit_all.append(f'echo "Submitted {riasec}: $JOB_{riasec}"')
 
-    submit_all.extend([
-        "",
-        "# Submit analysis job with dependency on all extraction jobs",
-        "DEPS=\"afterok:$JOB_R:$JOB_I:$JOB_A:$JOB_S:$JOB_E:$JOB_C\"",
-        "JOB_ANALYSIS=$(sbatch --parsable --dependency=$DEPS run_analysis.sh)",
-        "echo \"Submitted analysis (depends on extraction): $JOB_ANALYSIS\"",
-        "",
-        "echo 'All jobs submitted!'",
-        "squeue -u $USER",
-    ])
+    submit_all.extend(
+        [
+            "",
+            "# Submit analysis job with dependency on all extraction jobs",
+            'DEPS="afterok:$JOB_R:$JOB_I:$JOB_A:$JOB_S:$JOB_E:$JOB_C"',
+            "JOB_ANALYSIS=$(sbatch --parsable --dependency=$DEPS run_analysis.sh)",
+            'echo "Submitted analysis (depends on extraction): $JOB_ANALYSIS"',
+            "",
+            "echo 'All jobs submitted!'",
+            "squeue -u $USER",
+        ]
+    )
 
     submit_path = output_path / "submit_all.sh"
     submit_path.write_text("\n".join(submit_all))

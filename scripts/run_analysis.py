@@ -129,7 +129,9 @@ def main(
 
     # Initialize geometry analyzer
     geometry = PersonaGeometry(vectors=vectors, metadata=metadata)
-    logger.info(f"Geometry analyzer: {len(geometry.persona_ids)} personas, {geometry.hidden_dim} dimensions")
+    logger.info(
+        f"Geometry analyzer: {len(geometry.persona_ids)} personas, {geometry.hidden_dim} dimensions"
+    )
 
     # Run PCA
     logger.info(f"Computing PCA with {n_pcs} components")
@@ -140,7 +142,7 @@ def main(
     cumulative = 0.0
     for i, var in enumerate(pca_result.explained_variance_ratio[:5]):
         cumulative += var
-        logger.info(f"  PC{i+1}: {var:.3f} (cumulative: {cumulative:.3f})")
+        logger.info(f"  PC{i + 1}: {var:.3f} (cumulative: {cumulative:.3f})")
 
     # Save PCA results
     pca_output = {
@@ -148,7 +150,7 @@ def main(
         "n_components": n_pcs,
         "explained_variance_ratio": pca_result.explained_variance_ratio.tolist(),
         "cumulative_variance": [
-            sum(pca_result.explained_variance_ratio[:i+1])
+            sum(pca_result.explained_variance_ratio[: i + 1])
             for i in range(len(pca_result.explained_variance_ratio))
         ],
     }
@@ -171,12 +173,12 @@ def main(
         fig = visualizer.plot_pca_2d(pca_result)
         fig.savefig(output_path / "pca_2d.png", dpi=150, bbox_inches="tight")
         plt.close(fig)
-        logger.info(f"Saved 2D PCA plot")
+        logger.info("Saved 2D PCA plot")
 
         fig = visualizer.plot_variance_explained(pca_result)
         fig.savefig(output_path / "variance_explained.png", dpi=150, bbox_inches="tight")
         plt.close(fig)
-        logger.info(f"Saved variance explained plot")
+        logger.info("Saved variance explained plot")
 
     # W&B logging
     if wandb_project:

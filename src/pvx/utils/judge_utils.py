@@ -1,4 +1,3 @@
-
 class JudgeConfig:
     def __init__(
         self,

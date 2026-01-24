@@ -14,11 +14,10 @@ RIASEC Dimensions:
 
 import logging
 from dataclasses import dataclass
-from typing import Literal
 
 import numpy as np
 
-from .geometry import PersonaGeometry, PCAResult, ContrastResult
+from .geometry import ContrastResult, PCAResult, PersonaGeometry
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +71,10 @@ class RIASECAnalysisResult:
 
 def get_riasec_color_fn():
     """Return a color function for RIASEC primary type."""
+
     def color_fn(persona_id: str, metadata: dict) -> str | None:
         return metadata.get("riasec_primary")
+
     return color_fn
 
 
@@ -92,7 +93,9 @@ def group_by_riasec(geometry: PersonaGeometry) -> dict[str, list[str]]:
         Dict mapping RIASEC letter -> list of persona IDs
     """
     return geometry.group_by(
-        lambda pid, meta: meta.get("riasec_primary") if meta.get("riasec_primary") in RIASEC_DIMS else None
+        lambda pid, meta: meta.get("riasec_primary")
+        if meta.get("riasec_primary") in RIASEC_DIMS
+        else None
     )
 
 
@@ -124,7 +127,9 @@ def compute_riasec_contrasts(
                 n_pcs=n_pcs,
             )
             results.append(contrast)
-            logger.info(f"Computed {dim_a} vs {dim_b} contrast ({len(groups[dim_a])} vs {len(groups[dim_b])} personas)")
+            logger.info(
+                f"Computed {dim_a} vs {dim_b} contrast ({len(groups[dim_a])} vs {len(groups[dim_b])} personas)"
+            )
         else:
             logger.warning(f"Insufficient personas for {dim_a} vs {dim_b} contrast")
 
@@ -237,7 +242,7 @@ def compute_cluster_riasec_purity(
             continue
 
         # Count RIASEC types in cluster
-        type_counts = {dim: 0 for dim in RIASEC_DIMS}
+        type_counts = dict.fromkeys(RIASEC_DIMS, 0)
         for idx in cluster_indices:
             pid = geometry.persona_ids[idx]
             riasec_type = persona_riasec.get(pid)
@@ -303,7 +308,9 @@ def analyze_riasec(
     # Log top PC correlations
     for pc_idx, corrs in pc_correlations.items():
         top_dim = max(corrs, key=lambda d: abs(corrs[d]))
-        logger.info(f"PC{pc_idx + 1}: strongest correlation with {RIASEC_FULL_NAMES[top_dim]} (r={corrs[top_dim]:.3f})")
+        logger.info(
+            f"PC{pc_idx + 1}: strongest correlation with {RIASEC_FULL_NAMES[top_dim]} (r={corrs[top_dim]:.3f})"
+        )
 
     return RIASECAnalysisResult(
         pc_correlations=pc_correlations,
