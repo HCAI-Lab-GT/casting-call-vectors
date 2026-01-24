@@ -5,6 +5,7 @@ activations during model generation, which are then used to compute persona vect
 """
 
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 import torch
@@ -111,7 +112,7 @@ class ActivationExtractor:
                 torch_dtype=dtype,
             )
             if resolved_device != "cpu":
-                self.model = self.model.to(resolved_device)
+                self.model = self.model.to(resolved_device)  # type: ignore[arg-type]
 
         # Determine actual device
         self.device = next(self.model.parameters()).device
@@ -132,7 +133,7 @@ class ActivationExtractor:
                 logger.warning(f"torch.compile failed: {e}")
 
         # Put model in inference mode
-        self.model.train(False)
+        self.model.train(False)  # type: ignore[union-attr]
 
         logger.info(f"Model loaded on {self.device} with dtype {self.dtype}")
         logger.info(f"Extracting from layer {layer}")
@@ -199,7 +200,7 @@ class ActivationExtractor:
         sorted_probs /= sorted_probs.sum()
 
         # Sample
-        idx = torch.multinomial(sorted_probs, 1).item()
+        idx = int(torch.multinomial(sorted_probs, 1).item())
         return int(sorted_indices[idx].item())
 
     @torch.inference_mode()
@@ -351,12 +352,13 @@ class ActivationExtractor:
         """
         results = []
 
+        prompt_iter: Iterable[tuple[str, str]] = prompts
         if show_progress:
             from tqdm import tqdm
 
-            prompts = tqdm(prompts, desc="Extracting activations")
+            prompt_iter = tqdm(prompts, desc="Extracting activations")
 
-        for system_prompt, question in prompts:
+        for system_prompt, question in prompt_iter:
             result = self.extract(
                 system_prompt=system_prompt,
                 question=question,

@@ -153,9 +153,9 @@ class PersonaDataset:
             json.JSONDecodeError: If the file contains invalid JSON
             KeyError: If required keys are missing from the JSON data
         """
-        filepath = os.path.join(dirpath, f"{trait}_dataset.json")
+        filepath = Path(dirpath) / f"{trait}_dataset.json"
 
-        if not os.path.exists(filepath):
+        if not filepath.exists():
             logger.info("Trait dataset not found. Initializing new trait dataset...")
             dataset = PersonaDataset(trait=trait)
             dataset.generate_dataset(save_to_json=True)
@@ -213,7 +213,7 @@ class PersonaDataset:
             >>> print(f"Saved to: {path}")
             "Saved to: ./my_datasets/verbose_dataset.json"
         """
-        filepath = os.path.join((dirpath or self.dirpath), f"{self.trait}_dataset.json")
+        filepath = Path(dirpath or self.dirpath) / f"{self.trait}_dataset.json"
 
         dataset_dict = {
             "trait": self.trait,

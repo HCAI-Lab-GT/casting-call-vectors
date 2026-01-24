@@ -307,8 +307,8 @@ class ExtractionPipeline:
         if valid_count == 0:
             logger.warning(f"No valid pairs for {source.persona_id}")
             # Return zero vectors
-            hidden_dim = self.extractor.model.config.hidden_size
-            num_layers = self.extractor.model.config.num_hidden_layers + 1
+            hidden_dim = self.extractor.model.config.hidden_size  # type: ignore[union-attr]
+            num_layers = self.extractor.model.config.num_hidden_layers + 1  # type: ignore[union-attr]
             return PersonaVector(
                 persona_id=source.persona_id,
                 prompt_last_diff=torch.zeros(1, hidden_dim),
@@ -323,6 +323,14 @@ class ExtractionPipeline:
             )
 
         # Compute contrastive differences
+        # Type guard: valid_count > 0 means accumulators were initialized
+        assert persona_prompt_last_sum is not None
+        assert baseline_prompt_last_sum is not None
+        assert persona_resp_mean_sum is not None
+        assert baseline_resp_mean_sum is not None
+        assert persona_all_layers_sum is not None
+        assert baseline_all_layers_sum is not None
+
         prompt_last_diff = (persona_prompt_last_sum / valid_count) - (
             baseline_prompt_last_sum / valid_count
         )
