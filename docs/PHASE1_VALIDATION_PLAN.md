@@ -32,7 +32,49 @@ Phase 1 implementation is **100% complete**. All extraction, analysis, and infra
 
 ## Implementation Steps
 
-### Step 0: Type Checking with ty
+### Step 0: Code Quality & Style Validation
+
+**Goal**: Verify existing code adheres to project principles from AGENTS.md. Not refactoring—just identifying violations.
+
+**Quick Checks (automated)**:
+
+```bash
+# Ruff linting (enforces PEP 8, import order, error checking)
+uv run ruff check src/ tests/ --statistics
+
+# Ruff formatting check (Black-compatible)
+uv run ruff format --check src/ tests/
+
+# Find files exceeding 150 lines (AGENTS.md limit)
+find src/ -name "*.py" -exec wc -l {} + | awk '$1 > 150 {print}'
+
+# Check for os.path usage (should use pathlib)
+rg "import os\.path|from os import path|os\.path\." src/
+
+# Check for print statements (should use logging)
+rg "^\s*print\(" src/ --glob "!__pycache__"
+
+# Check for old-style type hints (List, Dict, Optional from typing)
+rg "from typing import.*\b(List|Dict|Optional|Tuple|Set)\b" src/
+```
+
+**Key Principles to Verify** (from AGENTS.md):
+
+| Principle | Check | Action if Violated |
+|-----------|-------|-------------------|
+| Ruff linting | `ruff check` exits clean | Fix errors before tests |
+| Ruff formatting | `ruff format --check` | Run `ruff format` |
+| File size ≤150 lines | `wc -l` check | Split only if blocking |
+| Function length ≤30 lines | Manual review | Note for future |
+| Native type hints | Grep for `typing.List` etc | Update during type fixes |
+| pathlib not os.path | Grep check | Update if found |
+| logging not print | Grep for `print(` | Replace with logger |
+
+**Priority**: Fix only what blocks testing. Note other violations for gradual improvement—don't create refactoring busy work.
+
+---
+
+### Step 1: Type Checking with ty
 
 **Goal**: Establish type checking baseline and fix critical type errors.
 
@@ -92,7 +134,7 @@ class Extractor(Protocol):
 
 ---
 
-### Step 1: Add MPS (Apple Silicon) Support
+### Step 2: Add MPS (Apple Silicon) Support
 
 **File**: [src/pvx/extraction/activations.py](src/pvx/extraction/activations.py)
 
@@ -126,7 +168,7 @@ if self._device == "auto":
 
 ---
 
-### Step 2: Add Model Presets Configuration
+### Step 3: Add Model Presets Configuration
 
 **New file**: `src/pvx/config/__init__.py`
 **New file**: `src/pvx/config/models.py`
@@ -163,7 +205,7 @@ MODEL_PRESETS = {
 
 ---
 
-### Step 3: Create Test Infrastructure
+### Step 4: Create Test Infrastructure
 
 **Directory structure**:
 ```
@@ -195,7 +237,7 @@ tests/
 
 ---
 
-### Step 4: Write Mock Implementations
+### Step 5: Write Mock Implementations
 
 **File**: `tests/mocks/model_mocks.py`
 
@@ -239,7 +281,7 @@ class MockPersonaSource:
 
 ---
 
-### Step 5: Write Unit Tests
+### Step 6: Write Unit Tests
 
 **Test categories**:
 
@@ -265,7 +307,7 @@ class MockPersonaSource:
 
 ---
 
-### Step 6: Write Integration Tests
+### Step 7: Write Integration Tests
 
 **File**: `tests/integration/test_extraction_pipeline.py`
 
@@ -296,7 +338,7 @@ class TestExtractionPipelineIntegration:
 
 ---
 
-### Step 7: Create Smoke Test Script
+### Step 8: Create Smoke Test Script
 
 **File**: `scripts/smoke_test.py`
 
@@ -320,7 +362,7 @@ uv run python scripts/smoke_test.py --model smol3-3b
 
 ---
 
-### Step 8: Add pytest Configuration
+### Step 9: Add pytest Configuration
 
 **Update**: `pyproject.toml`
 
@@ -376,6 +418,20 @@ markers = [
 
 ## Verification Plan
 
+### Code Quality (fast, no model loading)
+
+```bash
+# Ruff linting - check for errors and style issues
+uv run ruff check src/ tests/ --statistics
+
+# Ruff formatting - verify Black-compatible formatting
+uv run ruff format --check src/ tests/
+
+# Fix any issues automatically
+uv run ruff check src/ tests/ --fix
+uv run ruff format src/ tests/
+```
+
 ### Type Checking (fast, no model loading)
 
 ```bash
@@ -427,6 +483,10 @@ uv run python scripts/run_extraction.py \
 
 ## Success Criteria
 
+- [ ] **Ruff linting passes**: `uv run ruff check src/` exits clean
+- [ ] **Ruff formatting passes**: `uv run ruff format --check src/` exits clean
+- [ ] **No os.path usage**: All file operations use pathlib
+- [ ] **No print statements**: Use logging module instead
 - [ ] **Type checking passes**: `uv run ty check` exits cleanly on core extraction modules
 - [ ] **py.typed marker exists**: `src/pvx/py.typed` file created
 - [ ] All unit tests pass without model loading
