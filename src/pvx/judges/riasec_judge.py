@@ -16,7 +16,7 @@ class RIASECJudge:
         if not yaml_path.exists():
             raise FileNotFoundError(f"RIASEC YAML file not found: {riasec_yaml_path}")
         
-        with open(yaml_path, 'r'):
+        with open(yaml_path, 'r') as f:
             self.riasec_data = yaml.safe_load(f)
         
         self.trait_dict = {}
@@ -58,7 +58,7 @@ class RIASECJudge:
             characteristics = info['characteristics']
             trait_results = {}
             for characteristic in characteristics:
-                messages = self._get_system_messages(description, characteristic)
+                messages = self._get_system_messages(trait, description, characteristic)
                 response = persona_model.generate(
                     messages=messages,
                     alpha=alpha,
@@ -68,7 +68,7 @@ class RIASECJudge:
                 # Classify as YES or NO
                 if yes_pattern.search(response):
                     answer = "YES"
-                    if not counts[trait]:
+                    if trait not in counts:
                         counts[trait] = 0
                     counts[trait] += 1
                 elif no_pattern.search(response):
