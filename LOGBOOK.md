@@ -237,3 +237,276 @@ Context: Verify new default WandB + CoT flag and env loading.
 Action: Ran PYTHONPATH=src .venv/bin/python scripts/run_eval.py --run bbeh-mini-qwen1.5b --limit 1. WandB auth via .env (entity glennmatlin).
 
 Result: Run succeeded; .eval stored under logs/bbeh_smoke; WandB run visible in persona-vectors project.
+
+---
+
+## LM-VECTOR Phase 1 Implementation
+
+**Breakpoint**: The project pivoted from general RIASEC/BBEH evaluation experiments to the LM-VECTOR research program (Language Model Vocational Embeddings for Controlling Trait-Oriented Representations). This represents a focused effort on vocational persona vector extraction and geometric analysis.
+
+---
+
+[2026-01-24 09:00] LM-VECTOR Phase 1 planning initiated
+
+Context: Beginning structured implementation of vocational persona vector extraction pipeline. Goal: Extract 150 persona vectors (25 per RIASEC type) and test H1 hypothesis about geometric structure in activation space.
+
+Action: Created comprehensive implementation plan at docs/PHASE1_PLAN.md covering architecture, module design, and verification steps. Plan specifies modular architecture with PersonaSource protocol, extraction pipeline, geometry analysis, and SLURM infrastructure.
+
+Result: Plan approved. Architecture separates "codebase" (generic tools) from "experiment" (RIASEC-specific scripts). Key abstractions: PersonaSource protocol for extensibility, ExtractionPipeline for orchestration, PersonaGeometry for analysis.
+
+[2026-01-24 09:30] Package restructure - Foundation modules
+
+Context: Establish new module structure per Phase 1 plan.
+
+Action: Created package structure:
+- src/pvx/sources/__init__.py (module exports)
+- src/pvx/extraction/__init__.py (module exports)
+- src/pvx/analysis/__init__.py (module exports)
+- src/pvx/infra/__init__.py (module exports)
+
+Result: Foundation in place for new modules. All __init__.py files export expected classes/functions.
+
+[2026-01-24 10:00] PersonaSource protocol and VocationalPersonaSource
+
+Context: Need extensible abstraction for persona definitions that supports multiple persona types (trait-based, vocational, role-based).
+
+Action: Created:
+- src/pvx/sources/base.py: PersonaSource Protocol with TypedDict for PersonaMetadata (soc_code, title, riasec, riasec_primary). Protocol defines persona_id property, get_system_prompts(), get_baseline_prompts(), get_eval_prompt(), get_metadata().
+- src/pvx/sources/vocational.py: VocationalPersonaSource implementation wrapping generated persona JSON files. Includes from_json() and from_onet() class methods, caching of default baseline prompts.
+
+Result: Extensible persona source abstraction ready. VocationalPersonaSource loads existing persona JSON or generates new ones via VocationalPersonaGenerator.
+
+[2026-01-24 10:30] ONETLoader for occupational database
+
+Context: Need to parse O*NET database for occupation metadata, RIASEC codes, and work context.
+
+Action: Created src/pvx/data/onet_loader.py with ONETLoader class:
+- load_occupations() from local Excel or API fallback
+- parse_riasec_codes() for Holland code extraction
+- get_work_context() for occupation details
+- filter_by_riasec() for type-specific queries
+- get_occupation() for single occupation lookup
+
+Result: Can load and query O*NET data. Supports local file (ONETOnline_All_Occupations.xlsx) or API fallback.
+
+[2026-01-24 11:00] VocationalPersonaGenerator
+
+Context: Generate persona definitions from O*NET occupation data with LLM assistance.
+
+Action: Created src/pvx/pvx_models/vocational_dataset.py with VocationalPersonaGenerator:
+- Uses OpenAI API to generate system prompts from occupation descriptions
+- Creates positive/negative instruction pairs
+- Generates evaluation questions
+- Saves to JSON with full metadata (soc_code, title, riasec scores)
+- Supports batch generation with skip-existing
+
+Result: Can generate vocational persona definitions programmatically. Output format compatible with VocationalPersonaSource.
+
+[2026-01-24 11:30] QuestionBank for extraction questions
+
+Context: Need standardized questions for activation extraction, sourced from assistant-axis research.
+
+Action: Created src/pvx/extraction/questions.py with QuestionBank:
+- from_assistant_axis() loads 240 questions from _vendor/assistant-axis/data/extraction_questions.jsonl
+- from_file() for custom question sources
+- sample(n) for random subset
+- get_all() for complete set
+- Fallback to embedded default questions if assistant-axis not available
+
+Result: Standardized question loading with graceful fallback. Questions designed to elicit persona-consistent responses.
+
+[2026-01-24 12:00] ActivationExtractor for model-agnostic capture
+
+Context: Need to extract activations from transformer models during generation, refactored from PersonaModel internals.
+
+Action: Created src/pvx/extraction/activations.py with ActivationExtractor:
+- Model-agnostic design (works with any HuggingFace model)
+- Configurable layer selection
+- extract() returns prompt_last, response_mean, response_text
+- extract_batch() for efficient batch processing
+- Hook-based activation capture at specified layer
+
+Result: Clean separation of activation extraction logic from steering logic. Supports any transformer model with configurable extraction points.
+
+[2026-01-24 12:30] ExtractionPipeline orchestrator
+
+Context: Need end-to-end pipeline for persona vector extraction with checkpointing and logging.
+
+Action: Created src/pvx/extraction/pipeline.py with ExtractionPipeline:
+- Orchestrates ActivationExtractor, QuestionBank, optional LLMJudge
+- extract_persona() computes contrast vectors (persona - baseline)
+- extract_batch() with checkpoint_every and resume support
+- W&B logging integration
+- PersonaVector dataclass with metadata
+
+Result: Complete extraction pipeline ready. Supports incremental extraction with crash recovery via checkpointing.
+
+[2026-01-24 13:00] PersonaGeometry for PCA and analysis
+
+Context: Need dimensionality reduction and geometric analysis of extracted persona vectors.
+
+Action: Created src/pvx/analysis/geometry.py with PersonaGeometry:
+- load_vectors() from directory of .pt files
+- compute_pca() with configurable components
+- get_projections() for 2D/3D visualization data
+- riasec_axis_correlation() computes alignment between RIASEC contrast vectors and top PCs
+- cluster_by_riasec() for K-means clustering
+
+Result: Full geometric analysis capability. Can test H1 hypothesis about RIASEC-PC alignment.
+
+[2026-01-24 13:30] PersonaVisualizer for plots and dashboards
+
+Context: Need visualization of persona vector geometry with RIASEC coloring.
+
+Action: Created src/pvx/analysis/viz.py with PersonaVisualizer:
+- plot_pca_2d() with RIASEC color coding
+- plot_pca_3d() interactive plotly figure
+- plot_variance_explained() for PCA diagnostics
+- plot_riasec_hexagon() for individual persona profiles
+- log_to_wandb() for dashboard integration
+- save_all() for batch output
+
+Result: Complete visualization toolkit. Supports matplotlib static plots and plotly interactive figures.
+
+[2026-01-24 14:00] RIASEC analysis utilities
+
+Context: Need specialized functions for RIASEC correlation and H1 hypothesis testing.
+
+Action: Created src/pvx/analysis/riasec.py with:
+- compute_riasec_centroids() for mean vectors per type
+- compute_contrast_vectors() for R-A, I-E, S-C oppositions
+- compute_riasec_pc_alignment() for hypothesis testing
+- get_alignment_score() for go/no-go criterion
+- format_alignment_report() for human-readable output
+
+Result: RIASEC-specific analysis functions ready. Alignment score computation matches Phase 1 success criteria (threshold 0.6).
+
+[2026-01-24 14:30] SLURM infrastructure for cluster execution
+
+Context: Need to generate SLURM job scripts for MATS cluster execution.
+
+Action: Created src/pvx/infra/slurm.py with:
+- generate_extraction_job() for single extraction batch
+- generate_analysis_job() for post-extraction analysis
+- generate_batch_extraction_jobs() creates 6 parallel jobs (one per RIASEC type)
+- write_job_scripts() writes all job files with submit script
+- Supports job dependency chaining (analysis depends on all extractions)
+
+Result: SLURM infrastructure complete. Can generate job scripts for cluster submission.
+
+[2026-01-24 15:00] Generic CLI scripts
+
+Context: Need persona-type agnostic entry points for extraction and analysis.
+
+Action: Created:
+- scripts/run_extraction.py: Click CLI for running ExtractionPipeline on any persona source directory
+- scripts/run_analysis.py: Click CLI for running PersonaGeometry analysis on extracted vectors
+
+Result: Generic CLIs ready. Separation maintained between codebase tools and experiment-specific scripts.
+
+[2026-01-24 15:15] User feedback - codebase vs experiment separation
+
+Context: Initial run_extraction.py included RIASEC-specific code.
+
+Action: User rejected mixed concerns. Clarified architecture:
+- scripts/run_*.py = generic codebase tools (persona-type agnostic)
+- experiments/phase1_riasec/*.py = experiment-specific (RIASEC hardcoded)
+
+Result: Cleaner separation of concerns. Generic scripts reusable for future persona types.
+
+[2026-01-24 15:30] Phase 1 RIASEC experiment scripts
+
+Context: Need RIASEC-specific experiment scripts with hardcoded Phase 1 configuration.
+
+Action: Created experiments/phase1_riasec/:
+- extract_riasec.py: RIASEC extraction with --slurm flag for job generation
+- analyze_riasec.py: H1 hypothesis test, alignment score, go/no-go decision
+- README.md: Phase 1 documentation with quick start and configuration
+
+Result: Self-contained experiment directory. Can run locally or generate SLURM jobs.
+
+[2026-01-24 16:00] Vocational persona generation scripts
+
+Context: Need scripts for O*NET data download and persona generation.
+
+Action: Created:
+- scripts/download_onet.sh: Downloads O*NET Excel file
+- scripts/generate_vocational_personas.py: Click CLI for batch persona generation with RIASEC filtering
+
+Result: Complete workflow from O*NET data to persona definitions.
+
+[2026-01-24 16:30] Bug fixes in riasec_judge.py
+
+Context: Identified 3 bugs during plan review.
+
+Action: Fixed in src/pvx/judges/riasec_judge.py:
+1. Line 19-20: Added missing 'as f' in file open context manager
+2. Line 61: Added missing 'trait' argument to _get_system_messages()
+3. Line 71: Changed 'if not counts[trait]' to 'if trait not in counts'
+
+Result: RIASECJudge now functional. All file handle and argument errors resolved.
+
+[2026-01-24 16:45] Dependency updates
+
+Context: Phase 1 requires additional packages.
+
+Action: Added to pyproject.toml:
+- plotly>=5.18.0 (interactive visualizations)
+- scikit-learn>=1.4.0 (PCA, clustering)
+- click>=8.1.0 (CLI entry points)
+
+Result: Dependencies recorded. uv.lock updated.
+
+[2026-01-24 17:00] Documentation updates
+
+Context: Need project documentation aligned with Phase 1 focus.
+
+Action: Created/updated:
+- CLAUDE.md: Project instructions with AGENTS.md reference at top
+- PROPOSAL.md: LM-VECTOR research proposal
+- docs/CODEBASE_MAP.md: Architecture documentation
+- docs/PHASE1_PLAN.md: Implementation plan
+
+Result: Documentation complete. AGENTS.md referenced as critical first-read.
+
+[2026-01-24 17:15] Gitignore updates
+
+Context: Need to exclude generated data and tool directories.
+
+Action: Added to .gitignore:
+- .serena/ (Serena IDE configuration)
+- ONETOnline_All_Occupations.xlsx (O*NET data, downloadable)
+- data/onet/ (processed O*NET data)
+- Commented persona_data/ (optional tracking)
+
+Result: Clean gitignore. Generated data excluded by default.
+
+[2026-01-24 17:30] Git commits - Phase 1 implementation
+
+Context: Commit all Phase 1 work with logical grouping.
+
+Action: Created 14 commits:
+1. Add vendor and tool directories to gitignore
+2. Add Phase 1 dependencies
+3. Fix file handle and argument errors in RIASECJudge
+4. Add ONETLoader for O*NET database
+5. Add PersonaSource protocol and VocationalPersonaSource
+6. Add extraction pipeline (QuestionBank, ActivationExtractor, ExtractionPipeline)
+7. Add geometry analysis (PersonaGeometry, PersonaVisualizer, RIASEC)
+8. Add SLURM job generation
+9. Add VocationalPersonaGenerator
+10. Add vocational persona and O*NET scripts
+11. Add generic extraction/analysis CLI
+12. Add Phase 1 RIASEC experiment
+13. Add codebase map and Phase 1 plan
+14. Add project instructions and research proposal
+
+Result: All Phase 1 code committed. History organized by logical component.
+
+[2026-01-24 17:45] Commit message cleanup
+
+Context: User requested removal of AI attribution from commit messages.
+
+Action: Used git filter-branch to remove Co-Authored-By lines from all 14 commits.
+
+Result: Clean commit history. No AI attribution in messages.
