@@ -98,6 +98,40 @@ class QuestionBank:
         question_dicts = [{"question": q, "id": i} for i, q in enumerate(questions)]
         return cls(questions=question_dicts, source=source)
 
+    @classmethod
+    def from_fallback(cls) -> "QuestionBank":
+        """Create a QuestionBank with built-in fallback questions.
+
+        Use when assistant-axis questions are not available.
+        These questions cover common work and personality topics.
+
+        Returns:
+            QuestionBank with ~20 general-purpose questions
+        """
+        fallback_questions = [
+            "What is the most important thing in your work?",
+            "How do you approach difficult problems?",
+            "What skills are essential for your role?",
+            "How do you handle stress or pressure?",
+            "What motivates you in your profession?",
+            "How do you make important decisions?",
+            "What does a typical day look like for you?",
+            "How do you work with others?",
+            "What accomplishment are you most proud of?",
+            "How do you continue learning and growing?",
+            "What challenges do you face regularly?",
+            "How would you describe your work style?",
+            "What advice would you give to someone starting in your field?",
+            "How do you balance competing priorities?",
+            "What tools or methods do you rely on most?",
+            "How do you approach new or unfamiliar tasks?",
+            "What values guide your work?",
+            "How do you measure success in your role?",
+            "What do you find most rewarding about your work?",
+            "How do you handle disagreements or conflicts?",
+        ]
+        return cls.from_list(fallback_questions, source="fallback")
+
     def __len__(self) -> int:
         """Return the number of questions."""
         return len(self._questions)
