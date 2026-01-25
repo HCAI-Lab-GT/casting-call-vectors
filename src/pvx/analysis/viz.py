@@ -3,13 +3,18 @@
 This module provides plotting functions for PCA projections, clustering,
 and variance analysis. Supports both static (matplotlib) and interactive
 (plotly) visualizations, with optional W&B integration.
+
+Also provides multi-model comparison visualizations through MultiModelVisualizer.
 """
 
 import logging
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from .geometry import ClusterResult, PCAResult, PersonaGeometry
+
+if TYPE_CHECKING:
+    from pvx.config import RunConfig
 
 logger = logging.getLogger(__name__)
 
@@ -30,15 +35,60 @@ class PersonaVisualizer:
         self,
         geometry: PersonaGeometry,
         default_colormap: str = "tab10",
+        model_slug: str | None = None,
     ):
         """Initialize visualizer.
 
         Args:
             geometry: PersonaGeometry instance with vectors and metadata
             default_colormap: Default colormap for categorical coloring
+            model_slug: Model identifier for plot titles (e.g., "olmo-7b-instruct")
         """
         self.geometry = geometry
         self.default_colormap = default_colormap
+        self.model_slug = model_slug
+
+    @classmethod
+    def from_run_config(
+        cls,
+        run: "RunConfig",
+        default_colormap: str = "tab10",
+    ) -> "PersonaVisualizer":
+        """Create visualizer from a RunConfig.
+
+        Loads vectors from the run directory and uses model_slug for titles.
+
+        Args:
+            run: RunConfig pointing to a completed run
+            default_colormap: Default colormap for categorical coloring
+
+        Returns:
+            PersonaVisualizer with geometry loaded from run
+        """
+        import torch
+        from pvx.extraction.pipeline import PersonaVector
+
+        vectors = {}
+        metadata = {}
+
+        vectors_dir = run.vectors_dir()
+        for pt_file in vectors_dir.glob("*.pt"):
+            try:
+                vec = PersonaVector.load(pt_file.with_suffix(""))
+                vectors[vec.persona_id] = vec.prompt_last_diff.squeeze()
+                metadata[vec.persona_id] = dict(vec.metadata)
+            except Exception as e:
+                logger.warning(f"Failed to load {pt_file}: {e}")
+
+        geometry = PersonaGeometry(vectors=vectors, metadata=metadata)
+        return cls(geometry, default_colormap, model_slug=run.model_slug)
+
+    def _title_with_model(self, title: str | None, default: str) -> str:
+        """Add model slug to title if available."""
+        base = title or default
+        if self.model_slug:
+            return f"{base} [{self.model_slug}]"
+        return base
 
     def _get_colors(
         self,
@@ -157,7 +207,7 @@ class PersonaVisualizer:
         var_y = pca_result.explained_variance_ratio[pc_y] * 100
         ax.set_xlabel(f"PC{pc_x + 1} ({var_x:.1f}%)")
         ax.set_ylabel(f"PC{pc_y + 1} ({var_y:.1f}%)")
-        ax.set_title(title or "Persona Vector PCA Projection")
+        ax.set_title(self._title_with_model(title, "Persona Vector PCA Projection"))
 
         plt.tight_layout()
         return fig
@@ -206,7 +256,7 @@ class PersonaVisualizer:
         ax.set_xlabel(f"PC1 ({var[0] * 100:.1f}%)")
         ax.set_ylabel(f"PC2 ({var[1] * 100:.1f}%)")
         ax.set_zlabel(f"PC3 ({var[2] * 100:.1f}%)")
-        ax.set_title(title or "Persona Vector PCA Projection (3D)")
+        ax.set_title(self._title_with_model(title, "Persona Vector PCA Projection (3D)"))
 
         # Add legend
         if color_by and legend_map:
@@ -262,7 +312,7 @@ class PersonaVisualizer:
         ax2.set_xticks(x)
         ax2.legend()
 
-        fig.suptitle(title or "PCA Variance Analysis")
+        fig.suptitle(self._title_with_model(title, "PCA Variance Analysis"))
         plt.tight_layout()
         return fig
 
@@ -538,3 +588,138 @@ class PersonaVisualizer:
         plt.close("all")
 
         logger.info(f"Saved visualizations to {output_dir}")
+
+
+def plot_model_comparison_bar(
+    metrics_list: list[dict],
+    metric_key: str = "alignment_score",
+    figsize: tuple[float, float] = (10, 6),
+    title: str | None = None,
+):
+    """Plot bar chart comparing a metric across models.
+
+    Args:
+        metrics_list: List of dicts with 'model' and metric values
+        metric_key: Key to plot (e.g., 'alignment_score', 'silhouette_score')
+        figsize: Figure size
+        title: Plot title
+
+    Returns:
+        matplotlib Figure
+    """
+    import matplotlib.pyplot as plt
+
+    models = [m["model"] for m in metrics_list]
+    values = [m.get(metric_key) or 0 for m in metrics_list]
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    bars = ax.bar(models, values)
+
+    # Color bars based on value (higher is better)
+    for bar, val in zip(bars, values):
+        if val >= 0.6:
+            bar.set_color("green")
+        elif val >= 0.4:
+            bar.set_color("orange")
+        else:
+            bar.set_color("red")
+
+    ax.set_xlabel("Model")
+    ax.set_ylabel(metric_key.replace("_", " ").title())
+    ax.set_title(title or f"Model Comparison: {metric_key}")
+
+    # Rotate labels if many models
+    if len(models) > 4:
+        plt.xticks(rotation=45, ha="right")
+
+    plt.tight_layout()
+    return fig
+
+
+def plot_alignment_comparison(
+    comparison,
+    figsize: tuple[float, float] = (12, 5),
+):
+    """Plot comprehensive alignment comparison across models.
+
+    Args:
+        comparison: ModelComparison instance
+        figsize: Figure size
+
+    Returns:
+        matplotlib Figure
+    """
+    import matplotlib.pyplot as plt
+
+    fig, axes = plt.subplots(1, 3, figsize=figsize)
+
+    metrics = comparison.to_dict()
+    models = [m["model"] for m in metrics]
+
+    # Alignment scores
+    ax1 = axes[0]
+    scores = [m.get("alignment_score") or 0 for m in metrics]
+    bars = ax1.bar(models, scores)
+    ax1.axhline(y=0.6, color="green", linestyle="--", label="GO threshold")
+    ax1.set_ylabel("Alignment Score")
+    ax1.set_title("RIASEC Alignment")
+    ax1.legend()
+    for bar, val in zip(bars, scores):
+        bar.set_color("green" if val >= 0.6 else "orange" if val >= 0.4 else "red")
+
+    # Silhouette scores
+    ax2 = axes[1]
+    sil_scores = [m.get("silhouette_score") or 0 for m in metrics]
+    ax2.bar(models, sil_scores, color="steelblue")
+    ax2.set_ylabel("Silhouette Score")
+    ax2.set_title("Clustering Quality")
+
+    # Hidden dimensions
+    ax3 = axes[2]
+    dims = [m.get("hidden_dim") or 0 for m in metrics]
+    ax3.bar(models, dims, color="purple")
+    ax3.set_ylabel("Hidden Dimension")
+    ax3.set_title("Model Size")
+
+    # Rotate labels
+    for ax in axes:
+        plt.sca(ax)
+        if len(models) > 3:
+            plt.xticks(rotation=45, ha="right")
+
+    fig.suptitle("Multi-Model Comparison", fontsize=14)
+    plt.tight_layout()
+    return fig
+
+
+def save_comparison_plots(
+    comparison,
+    output_dir: Path | str,
+) -> None:
+    """Save all comparison plots to directory.
+
+    Args:
+        comparison: ModelComparison instance
+        output_dir: Directory for output files
+    """
+    import matplotlib.pyplot as plt
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Main comparison figure
+    fig = plot_alignment_comparison(comparison)
+    fig.savefig(output_dir / "model_comparison.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+    # Individual metric bars
+    for metric in ["alignment_score", "silhouette_score", "mean_riasec_purity"]:
+        try:
+            fig = plot_model_comparison_bar(comparison.to_dict(), metric)
+            fig.savefig(output_dir / f"{metric}_comparison.png", dpi=150, bbox_inches="tight")
+            plt.close(fig)
+        except Exception as e:
+            logger.warning(f"Failed to plot {metric}: {e}")
+
+    logger.info(f"Saved comparison plots to {output_dir}")
