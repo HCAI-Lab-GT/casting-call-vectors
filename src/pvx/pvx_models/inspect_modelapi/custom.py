@@ -19,7 +19,7 @@ from pvx import setup_logging  # , Heartbeat
 logger = setup_logging(name="persona wrapper")
 
 
-def render_prompt(messages: list[ChatMessage]) -> list[dict[str, str]]:
+def render_prompt(messages: list[ChatMessage]) -> list[dict]:
     """
     Render the prompt from the list of chat messages.
 
@@ -38,7 +38,7 @@ class PVXModelAPI(ModelAPI):
         model_name: str,
         base_url: str | None = None,
         api_key: str | None = None,
-        api_key_vars: list[str] = None,
+        api_key_vars: list[str] | None = None,
         config: GenerateConfig | None = None,
         **model_args: Any,
     ) -> None:
@@ -100,7 +100,7 @@ class PVXModelAPI(ModelAPI):
         # Run sync inference off the event loop (Inspect is async, AnyIO-based)
         # so you do not block parallel execution. :contentReference[oaicite:1]{index=1}
         t0 = time.perf_counter()
-        text = await anyio.to_thread.run_sync(
+        text = await anyio.to_thread.run_sync(  # type: ignore[attr-defined]
             partial(self.pvx.generate, messages=prompt, **nonnull_params)
         )
         dt = time.perf_counter() - t0

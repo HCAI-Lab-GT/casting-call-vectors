@@ -1,10 +1,15 @@
 """Unit tests for PersonaGeometry analysis."""
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pytest
 import torch
 
 from pvx.analysis.geometry import PersonaGeometry
+
+if TYPE_CHECKING:
+    from pvx.sources.base import PersonaMetadata
 
 
 class TestPersonaGeometryInit:
@@ -32,7 +37,7 @@ class TestPersonaGeometryInit:
     def test_with_metadata(
         self,
         sample_vectors: dict[str, torch.Tensor],
-        sample_metadata: dict[str, dict],
+        sample_metadata: "dict[str, PersonaMetadata]",
     ):
         """Should store optional metadata."""
         geometry = PersonaGeometry(sample_vectors, metadata=sample_metadata)
@@ -254,7 +259,7 @@ class TestGroupBy:
     def test_group_by_metadata(
         self,
         sample_vectors: dict[str, torch.Tensor],
-        sample_metadata: dict[str, dict],
+        sample_metadata: "dict[str, PersonaMetadata]",
     ):
         """Should group personas by metadata field."""
         geometry = PersonaGeometry(sample_vectors, metadata=sample_metadata)

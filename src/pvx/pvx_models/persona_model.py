@@ -15,7 +15,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.utils import logging as transformers_logging
 
 from pvx import Heartbeat, setup_logging
-from pvx.pvx_models.llm_as_judge import LLMJudge
+from pvx.judges.llm_as_judge import LLMJudge
 from pvx.pvx_models.persona_dataset import PersonaDataset
 from pvx.utils.judge_utils import JudgeConfig
 
@@ -25,7 +25,9 @@ torch.set_float32_matmul_precision("high")
 transformers_logging.set_verbosity_error()
 
 # request-local steering state (per concurrent generate call)
-_STEER_DELTA = contextvars.ContextVar("steer_delta", default=None)  # Tensor (1,H) or None
+_STEER_DELTA: contextvars.ContextVar[torch.Tensor | None] = contextvars.ContextVar(
+    "steer_delta", default=None
+)  # Tensor (1,H) or None
 
 logger = setup_logging(name="persona-model")
 
@@ -39,8 +41,8 @@ class PersonaModel:
         self,
         target_model_id: str = "qwen2.5:7b-instruct",
         dataset: Optional[PersonaDataset] = None,
-        trait: str = None,
-        layer: float = 14,
+        trait: str | None = None,
+        layer: int = 14,
         default_alpha: float = 3.0,
         judge_config: Optional[JudgeConfig] = None,
         judge_threshold: float = 50.0,
@@ -64,7 +66,12 @@ class PersonaModel:
             return
 
         # load dataset from file if provided, if path doesnt exist, initialize new trait dataset
-        self.dataset = dataset if dataset else PersonaDataset.from_json(trait)
+        if dataset:
+            self.dataset = dataset
+        elif trait:
+            self.dataset = PersonaDataset.from_json(trait)
+        else:
+            raise ValueError("Either dataset or trait must be provided")
         self.trait = self.dataset.trait
 
         self.judge_threshold = judge_threshold
@@ -150,7 +157,7 @@ class PersonaModel:
         # Set device
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         if not torch.cuda.is_available():
-            self.model = self.model.to(self.device)
+            self.model = self.model.to(self.device)  # type: ignore[arg-type]
 
         # Set EOD token id
         self.eos_token_ids = (
@@ -233,9 +240,9 @@ class PersonaModel:
         cls,
         target_model_id: str = "qwen2.5:7b-instruct",
         dataset: Optional[PersonaDataset] = None,
-        trait: str = None,  # alternate to dataset for loading
-        layer: float = 14,
-        json_filepath: str = None,
+        trait: str | None = None,  # alternate to dataset for loading
+        layer: int = 14,
+        json_filepath: str | None = None,
     ) -> "PersonaModel":
         """
         Load a PersonaModel instance from a JSON file if it exists, otherwise create a new one.
@@ -447,13 +454,17 @@ class PersonaModel:
                 if not made_progress:
                     break
 
-        prompt_last_pos_mean = sum_prompt_last_pos / max(n, 1)
-        prompt_last_neg_mean = sum_prompt_last_neg / max(n, 1)
-        response_avg_pos_mean = sum_resp_avg_pos / max(n, 1)
-        response_avg_neg_mean = sum_resp_avg_neg / max(n, 1)
+        # Check if any pairs were processed
+        if sum_prompt_last_pos is None:
+            raise RuntimeError("No valid pairs found during extraction")
 
-        all_layers_response_avg_pos_mean = sum_resp_avg_all_layers_pos / max(n, 1)
-        all_layers_response_avg_neg_mean = sum_resp_avg_all_layers_neg / max(n, 1)
+        prompt_last_pos_mean = sum_prompt_last_pos / max(n, 1)
+        prompt_last_neg_mean = sum_prompt_last_neg / max(n, 1)  # type: ignore[operator]
+        response_avg_pos_mean = sum_resp_avg_pos / max(n, 1)  # type: ignore[operator]
+        response_avg_neg_mean = sum_resp_avg_neg / max(n, 1)  # type: ignore[operator]
+
+        all_layers_response_avg_pos_mean = sum_resp_avg_all_layers_pos / max(n, 1)  # type: ignore[operator]
+        all_layers_response_avg_neg_mean = sum_resp_avg_all_layers_neg / max(n, 1)  # type: ignore[operator]
 
         prompt_persona_vector = prompt_last_pos_mean - prompt_last_neg_mean  # (1, hidden)
         response_persona_vector = response_avg_pos_mean - response_avg_neg_mean  # (1, hidden)
@@ -482,11 +493,11 @@ class PersonaModel:
     def generate(
         self,
         prompt: str | None = None,
-        messages: list[str] | None = None,
-        alpha: float | None = 3,
+        messages: list[dict[str, str]] | None = None,
+        alpha: float = 3.0,
         max_new_tokens: int = 2000,
         temperature: float = 0.9,
-        top_p=0.99,
+        top_p: float = 0.99,
     ) -> str:
         """
         Generate a response to the prompt with persona steering.
@@ -509,6 +520,7 @@ class PersonaModel:
 
         if messages is None:
             # Prepare messages in chat format
+            assert prompt is not None  # Validated above
             messages = [{"role": "user", "content": prompt}]
 
         formatted = self.tokenizer.apply_chat_template(
@@ -578,7 +590,7 @@ class PersonaModel:
         attention_mask: torch.Tensor | None,
         temperature: float = 0.9,
         max_new_tokens: int = 20000,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, str]:
         """
         Generate response and extract prompt last activation, response average activation, and response average activations all layers.
 
@@ -621,7 +633,7 @@ class PersonaModel:
                 device=prompt_last.device,
                 dtype=prompt_last.dtype,
             )
-            return prompt_last, resp_avg, resp_avg_all_layers
+            return prompt_last, resp_avg, resp_avg_all_layers, ""
 
         # accumulate response activations
         acc_dtype = (
@@ -696,7 +708,7 @@ class PersonaModel:
         """
 
         # Get the decoder blocks and specific target steer block
-        blocks = self._get_decoder_blocks(self.model)
+        blocks = self._get_decoder_blocks(self.model)  # type: ignore[arg-type]
         block = blocks[layer_idx]
         self._steer_block = block
 
@@ -804,9 +816,9 @@ class PersonaModel:
 
         # Common HF layouts
         if hasattr(model, "model") and hasattr(model.model, "layers"):  # LLaMA/Qwen/Mistral
-            return model.model.layers
+            return list(model.model.layers)  # type: ignore[attr-defined]
         if hasattr(model, "transformer") and hasattr(model.transformer, "h"):  # GPT-2
-            return model.transformer.h
+            return list(model.transformer.h)  # type: ignore[attr-defined]
         raise RuntimeError("Unsupported model layout: cannot locate decoder blocks.")
 
     def _top_p_sample(
@@ -850,7 +862,7 @@ class PersonaModel:
         # Map back to the original indices
         original_index = sorted_indices.gather(-1, sampled_index)
 
-        return original_index.item()  # Convert tensor to integer
+        return int(original_index.item())  # Convert tensor to integer
 
 
 if __name__ == "__main__":

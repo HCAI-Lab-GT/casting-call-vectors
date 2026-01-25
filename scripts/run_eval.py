@@ -168,6 +168,11 @@ def run_task(args, task_cfg, models_cfg) -> None:
 
     # Param Priorities: Arguments > task > None, args
     model_id = args.model_id or model.get("model")
+    if not isinstance(model_id, str):
+        logger.error("No model_id specified. Use --model-id or configure in models.yaml")
+        sys.exit(1)
+    assert isinstance(model_id, str)  # Type narrowing for ty
+    model_id_str: str = model_id
     model_args = model.get("args", {})  # models.yaml: args
     model_args.update(task_cfg.get("model_args_override", {}))  # runs.yaml: model_args_override
     model_args.update(parse_kv_list(args.model_arg))  # CLI -M args
@@ -190,7 +195,7 @@ def run_task(args, task_cfg, models_cfg) -> None:
         # build uv run python command
         cmd = build_command(
             task=task,
-            model_id=model_id,
+            model_id=model_id_str,
             limit=limit,
             log_dir=log_dir,
             model_args=single_trait_model_args,
@@ -207,8 +212,7 @@ def run_task(args, task_cfg, models_cfg) -> None:
         if wandb_enabled:
             if not env.get("WANDB_API_KEY"):
                 logger.error(
-                    "WANDB_API_KEY is required because WandB is enabled by default. Set it or pass --no-wandb.",
-                    file=sys.stderr,
+                    "WANDB_API_KEY is required because WandB is enabled by default. Set it or pass --no-wandb."
                 )
                 sys.exit(1)
             env["INSPECT_WANDB_ENABLED"] = "1"
@@ -266,12 +270,12 @@ def run_task(args, task_cfg, models_cfg) -> None:
             )  # :contentReference[oaicite:7]{index=7}
             json_path = os.path.join(log_dir, latest_path.with_suffix(".json").name)
 
-            with wandb.init(
+            with wandb.init(  # type: ignore[attr-defined]
                 project=env.get("WANDB_PROJECT"),
                 entity=env.get("WANDB_ENTITY"),
                 id=run_id,
                 resume="allow",
-            ) as run:  # :contentReference[oaicite:8]{index=8}
+            ) as run:
                 # # Save as Artifact
                 # art = wandb.Artifact(
                 #     name=f"inspect_eval__task={hdr.eval.task}__model={hdr.eval.model}",

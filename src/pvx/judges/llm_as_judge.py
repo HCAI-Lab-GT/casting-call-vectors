@@ -168,7 +168,7 @@ class LLMJudge:
             return None
         return sum_ / total
 
-    def _aggregate_0_100_score_inference(self, messages: dict) -> float:
+    def _aggregate_0_100_score_inference(self, messages: list[dict[str, str]]) -> float:
         """
         Aggregate a score between 0 and 100 from model inference output.
 
@@ -266,6 +266,10 @@ class LLMJudge:
             if self.backend == "hf_local":
                 if self._hf_model is None or self._hf_tokenizer is None:
                     self._init_local_model()
+
+                # Assert models are initialized after _init_local_model
+                assert self._hf_model is not None
+                assert self._hf_tokenizer is not None
 
                 # Prepare prompt for decoder-only model
                 prompt = self._messages_to_prompt(messages)

@@ -160,7 +160,7 @@ def main(
 
     # Run clustering
     logger.info("Computing clusters")
-    cluster_result = geometry.compute_clusters(n_clusters=6)
+    cluster_result = geometry.cluster(n_clusters=6)
     logger.info(f"Silhouette score: {cluster_result.silhouette_score:.3f}")
 
     # Create visualizer

@@ -94,7 +94,7 @@ class PersonaVisualizer:
         self,
         color_by: str | Callable[[str, dict], str | None] | None,
         color_map: dict[str, str] | None = None,
-    ) -> tuple[list[str], dict[str, str], list[str | None]]:
+    ) -> tuple[list, dict[str, str], list[str | None]]:
         """Get colors for each persona based on grouping function or key.
 
         Args:
@@ -104,6 +104,7 @@ class PersonaVisualizer:
         Returns:
             Tuple of (colors_list, legend_map, group_labels)
         """
+        import matplotlib.colors as mcolors
         import matplotlib.pyplot as plt
 
         # Get group labels
@@ -111,7 +112,7 @@ class PersonaVisualizer:
         for pid in self.geometry.persona_ids:
             meta = self.geometry.metadata.get(pid, {})
             if callable(color_by):
-                label = color_by(pid, meta)
+                label = color_by(pid, dict(meta))
             elif isinstance(color_by, str):
                 label = meta.get(color_by)
             else:
@@ -122,22 +123,25 @@ class PersonaVisualizer:
         unique_groups = sorted({g for g in group_labels if g is not None})
 
         # Build color map if not provided
+        final_color_map: dict[str, str]
         if color_map is None:
             cmap = plt.get_cmap(self.default_colormap)
-            color_map = {
-                group: cmap(i / max(len(unique_groups) - 1, 1))
+            final_color_map = {
+                group: mcolors.to_hex(cmap(i / max(len(unique_groups) - 1, 1)))
                 for i, group in enumerate(unique_groups)
             }
+        else:
+            final_color_map = color_map
 
         # Assign colors
-        colors = []
+        colors: list = []
         for label in group_labels:
-            if label is not None and label in color_map:
-                colors.append(color_map[label])
+            if label is not None and label in final_color_map:
+                colors.append(final_color_map[label])
             else:
                 colors.append("gray")
 
-        return colors, color_map, group_labels
+        return colors, final_color_map, group_labels
 
     def plot_pca_2d(
         self,
@@ -420,6 +424,7 @@ class PersonaVisualizer:
         self,
         pca_result: PCAResult,
         color_by: str | Callable[[str, dict], str | None] | None = None,
+        color_map: dict[str, str] | None = None,
         hover_keys: list[str] | None = None,
         title: str | None = None,
     ):
@@ -428,6 +433,7 @@ class PersonaVisualizer:
         Args:
             pca_result: PCA result from geometry.compute_pca()
             color_by: Metadata key or function for coloring
+            color_map: Optional dict mapping group names to colors
             hover_keys: Metadata keys to show on hover
             title: Plot title
 
@@ -477,6 +483,7 @@ class PersonaVisualizer:
             y="PC2",
             z="PC3",
             color="group" if color_by else None,
+            color_discrete_map=color_map,
             hover_name="persona_id",
             hover_data=hover_keys or [],
             title=title or "Interactive PCA Projection",

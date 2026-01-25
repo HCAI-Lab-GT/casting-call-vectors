@@ -34,12 +34,14 @@ import torch
 # Add src to path for local development
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
+from typing import cast
+
 from pvx.analysis import PersonaGeometry
 from pvx.analysis.riasec import RIASEC_COLORS, analyze_riasec, group_by_riasec
 from pvx.config import MODEL_PRESETS, SMOLLM_MODELS
 from pvx.extraction import ExtractionPipeline, QuestionBank
 from pvx.extraction.pipeline import PersonaVector
-from pvx.sources.base import BaselineSource
+from pvx.sources.base import BaselineSource, PersonaMetadata, PersonaSource
 from pvx.sources.vocational import load_vocational_personas
 
 logging.basicConfig(
@@ -171,7 +173,7 @@ def main(
 
     baseline = BaselineSource.from_vocational_default()
     vectors = pipeline.extract_batch(
-        sources=personas,
+        sources=cast(list[PersonaSource], personas),
         baseline=baseline,
         num_questions=num_questions,
         checkpoint_every=1,
@@ -209,7 +211,9 @@ def main(
 
     # Build vectors and metadata dicts
     vectors_dict = {v.persona_id: v.prompt_last_diff.squeeze() for v in loaded_vectors}
-    metadata_dict = {v.persona_id: dict(v.metadata) for v in loaded_vectors}
+    metadata_dict: dict[str, PersonaMetadata] = {
+        v.persona_id: cast(PersonaMetadata, dict(v.metadata)) for v in loaded_vectors
+    }
 
     geometry = PersonaGeometry(vectors=vectors_dict, metadata=metadata_dict)
     logger.info(f"Geometry: {geometry.n_personas} personas, {geometry.hidden_dim} dimensions")

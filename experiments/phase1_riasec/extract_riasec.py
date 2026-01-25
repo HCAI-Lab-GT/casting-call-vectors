@@ -45,14 +45,13 @@ RIASEC_TYPES = ["R", "I", "A", "S", "E", "C"]
 PERSONAS_PER_TYPE = 25
 TOTAL_PERSONAS = 150
 
-DEFAULT_CONFIG = {
-    "model": "allenai/OLMo-7B-Instruct",
-    "layer": 14,
-    "num_questions": 50,
-    "persona_dir": "persona_data/vocational_personas/instructions",
-    "output_dir": "outputs/phase1_riasec/vectors",
-    "wandb_project": "pvx-phase1",
-}
+# Typed configuration constants
+DEFAULT_MODEL: str = "allenai/OLMo-7B-Instruct"
+DEFAULT_LAYER: int = 14
+DEFAULT_NUM_QUESTIONS: int = 50
+DEFAULT_PERSONA_DIR: str = "persona_data/vocational_personas/instructions"
+DEFAULT_OUTPUT_DIR: str = "outputs/phase1_riasec/vectors"
+DEFAULT_WANDB_PROJECT: str = "pvx-phase1"
 
 
 @click.command()
@@ -70,17 +69,17 @@ DEFAULT_CONFIG = {
 )
 @click.option(
     "--model",
-    default=DEFAULT_CONFIG["model"],
+    default=DEFAULT_MODEL,
     help="HuggingFace model identifier",
 )
 @click.option(
     "--output-dir",
-    default=DEFAULT_CONFIG["output_dir"],
+    default=DEFAULT_OUTPUT_DIR,
     help="Base output directory",
 )
 @click.option(
     "--wandb-project",
-    default=DEFAULT_CONFIG["wandb_project"],
+    default=DEFAULT_WANDB_PROJECT,
     help="W&B project name",
 )
 @click.option(
@@ -123,7 +122,7 @@ def main(
         logger.info(f"Generating SLURM scripts in {slurm_dir}")
         scripts = write_job_scripts(
             output_dir=slurm_dir,
-            persona_dir=DEFAULT_CONFIG["persona_dir"],
+            persona_dir=DEFAULT_PERSONA_DIR,
             model_id=model,
             output_base=output_dir,
             personas_per_job=limit,
@@ -153,7 +152,7 @@ def main(
     all_personas = []
     for r_type in types_to_extract:
         personas = list(load_vocational_personas(
-            directory=Path(DEFAULT_CONFIG["persona_dir"]),
+            directory=Path(DEFAULT_PERSONA_DIR),
             riasec_filter=r_type,
             limit=limit,
         ))
@@ -178,7 +177,7 @@ def main(
 
     pipeline = ExtractionPipeline(
         model_id=model,
-        layer=DEFAULT_CONFIG["layer"],
+        layer=DEFAULT_LAYER,
         questions=questions,
         output_dir=output_dir,
         wandb_project=wandb_project,
@@ -190,7 +189,7 @@ def main(
         vectors = pipeline.extract_batch(
             sources=all_personas,
             baseline=baseline,
-            num_questions=DEFAULT_CONFIG["num_questions"],
+            num_questions=DEFAULT_NUM_QUESTIONS,
             checkpoint_every=1,
             resume_from=resume,
         )

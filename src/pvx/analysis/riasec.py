@@ -251,7 +251,7 @@ def compute_cluster_riasec_purity(
 
         total = sum(type_counts.values())
         if total > 0:
-            dominant = max(type_counts, key=type_counts.get)
+            dominant = max(type_counts, key=lambda x: type_counts.get(x, 0))
             purity = type_counts[dominant] / total
             purity_results[cluster_id] = {
                 "dominant": dominant,

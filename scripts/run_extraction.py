@@ -177,7 +177,9 @@ def main(
         questions = QuestionBank.from_fallback()
 
     # Load personas
-    source_path = Path(persona_path) if persona_path else Path(persona_dir)
+    # One of these is guaranteed to be set by the earlier check
+    assert persona_path is not None or persona_dir is not None
+    source_path = Path(persona_path) if persona_path else Path(persona_dir)  # type: ignore[arg-type]
     personas = list(load_personas_from_path(source_path))
 
     if limit:

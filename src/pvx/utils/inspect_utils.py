@@ -49,4 +49,4 @@ def print_sample_input(input: str | list[ChatMessage]) -> str:
             res += f"[[{cm.role}]]\n{cm.content}\n\n"
 
         return res
-    return None
+    return ""

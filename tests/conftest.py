@@ -1,9 +1,13 @@
 """Shared pytest fixtures for persona-vectors tests."""
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 import torch
+
+if TYPE_CHECKING:
+    from pvx.sources.base import PersonaMetadata
 
 
 @pytest.fixture
@@ -88,8 +92,9 @@ def sample_vectors() -> dict[str, torch.Tensor]:
 
 
 @pytest.fixture
-def sample_metadata() -> dict[str, dict]:
+def sample_metadata() -> "dict[str, PersonaMetadata]":
     """Return sample metadata for geometry testing."""
+    # Using dict literal with partial TypedDict fields is fine - PersonaMetadata uses total=False
     return {
         "nurse_1": {"riasec_primary": "S", "title": "Registered Nurse"},
         "nurse_2": {"riasec_primary": "S", "title": "Nurse Practitioner"},

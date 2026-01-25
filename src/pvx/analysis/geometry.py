@@ -66,6 +66,7 @@ class ClusterResult:
         method: Clustering method used
         persona_ids: Mapping of indices to persona IDs
         cluster_centers: Cluster centers if available
+        silhouette_score: Silhouette score for clustering quality
     """
 
     labels: np.ndarray
@@ -73,6 +74,7 @@ class ClusterResult:
     method: str
     persona_ids: list[str]
     cluster_centers: np.ndarray | None = None
+    silhouette_score: float | None = None
 
     def get_cluster_members(self, cluster_id: int) -> list[str]:
         """Get persona IDs belonging to a cluster."""
@@ -97,6 +99,16 @@ class ContrastResult:
     group_a_ids: list[str]
     group_b_ids: list[str]
     pc_cosines: list[float] = field(default_factory=list)
+
+    @property
+    def group_a_size(self) -> int:
+        """Number of personas in group A."""
+        return len(self.group_a_ids)
+
+    @property
+    def group_b_size(self) -> int:
+        """Number of personas in group B."""
+        return len(self.group_b_ids)
 
 
 class PersonaGeometry:
@@ -343,9 +355,11 @@ class PersonaGeometry:
             proj_values = []
             for i, pid in enumerate(self.persona_ids):
                 meta = self.metadata.get(pid, {})
-                if metadata_key in meta and meta[metadata_key] is not None:
+                # Use .get() to avoid TypedDict subscript issues with runtime keys
+                value = meta.get(metadata_key) if isinstance(meta, dict) else None
+                if value is not None:
                     try:
-                        values.append(float(meta[metadata_key]))
+                        values.append(float(value))
                         proj_values.append(pc_proj[i])
                     except (ValueError, TypeError):
                         continue

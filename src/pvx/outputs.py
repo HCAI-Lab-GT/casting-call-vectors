@@ -219,22 +219,22 @@ class OutputManager:
             Dict with model counts, run counts, etc.
         """
         models = self.list_models()
-        summary = {
-            "base_dir": str(self.base_dir),
-            "model_count": len(models),
-            "models": {},
-        }
+        models_dict: dict[str, dict] = {}
 
         for model in models:
             runs = self.list_runs(model_slug=model)
             completed = [r for r in runs if r.completed_at is not None]
-            summary["models"][model] = {
+            models_dict[model] = {
                 "total_runs": len(runs),
                 "completed_runs": len(completed),
                 "latest_run_id": runs[0].run_id if runs else None,
             }
 
-        return summary
+        return {
+            "base_dir": str(self.base_dir),
+            "model_count": len(models),
+            "models": models_dict,
+        }
 
     def __repr__(self) -> str:
         models = self.list_models()

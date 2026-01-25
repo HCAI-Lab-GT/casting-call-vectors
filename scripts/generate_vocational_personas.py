@@ -132,7 +132,9 @@ def main():
     logger.info(f"Generating personas for {len(profiles)} occupations")
 
     # Track statistics
-    stats = {"success": 0, "failed": 0, "riasec_counts": {}}
+    success_count = 0
+    failed_count = 0
+    riasec_counts: dict[str, int] = {}
 
     # Generate personas
     for profile in tqdm(profiles, desc="Generating personas"):
@@ -158,12 +160,12 @@ def main():
             else:
                 generator.generate_and_save(profile, slug)
 
-            stats["success"] += 1
+            success_count += 1
 
             # Track RIASEC distribution
             primary = profile.get("riasec_primary")
             if primary:
-                stats["riasec_counts"][primary] = stats["riasec_counts"].get(primary, 0) + 1
+                riasec_counts[primary] = riasec_counts.get(primary, 0) + 1
 
             # Rate limiting
             if not args.fallback_only and args.delay > 0:
@@ -171,20 +173,20 @@ def main():
 
         except Exception as e:
             logger.error(f"Failed to generate persona for {profile['title']}: {e}")
-            stats["failed"] += 1
+            failed_count += 1
 
     # Summary
     print("\n" + "=" * 50)
     print("GENERATION COMPLETE")
     print("=" * 50)
-    print(f"Success: {stats['success']}")
-    print(f"Failed:  {stats['failed']}")
+    print(f"Success: {success_count}")
+    print(f"Failed:  {failed_count}")
     print(f"Output:  {output_dir}")
 
-    if stats["riasec_counts"]:
+    if riasec_counts:
         print("\nRIASEC Distribution:")
         for letter in "RIASEC":
-            count = stats["riasec_counts"].get(letter, 0)
+            count = riasec_counts.get(letter, 0)
             name = RIASEC_FULL_NAMES[letter]
             print(f"  {letter} ({name}): {count}")
 

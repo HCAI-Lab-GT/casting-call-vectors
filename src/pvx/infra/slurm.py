@@ -196,7 +196,11 @@ def generate_extraction_job(
     if config is None:
         job_name = f"pvx-extract-{riasec_filter or 'all'}"
         config = SLURMConfig(
-            **DEFAULT_EXTRACTION_CONFIG,
+            partition="gpu",
+            gpus=1,
+            cpus_per_task=4,
+            mem="32G",
+            time="8:00:00",
             job_name=job_name,
         )
 
@@ -276,7 +280,11 @@ def generate_analysis_job(
     """
     if config is None:
         config = SLURMConfig(
-            **DEFAULT_ANALYSIS_CONFIG,
+            partition="cpu",
+            gpus=0,
+            cpus_per_task=8,
+            mem="16G",
+            time="2:00:00",
             job_name="pvx-analysis",
         )
 

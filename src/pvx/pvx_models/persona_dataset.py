@@ -184,13 +184,12 @@ class PersonaDataset:
         dataset.questions = data["questions"]
         dataset.evaluation_prompt = data["evaluation_prompt"]
 
-        # Load up loggers
-        dataset.logger = setup_logging(name="persona-dataset")
-        dataset.logger.info("Dataset loaded from: %s", filepath)
+        # Log loading
+        logger.info("Dataset loaded from: %s", filepath)
 
         return dataset
 
-    def save_dataset_to_json(self, dirpath: str = None) -> str:
+    def save_dataset_to_json(self, dirpath: str | None = None) -> str:
         """
         Save the persona vector dataset to a JSON file.
 
@@ -233,11 +232,11 @@ class PersonaDataset:
             json.dump(dataset_dict, f, indent=2, ensure_ascii=False)
 
         logger.info("Dataset saved to: %s", filepath)
-        return filepath
+        return str(filepath)
 
     def generate_dataset(
-        self, save_to_json=True, max_tries=5
-    ) -> Tuple[List[Tuple[str, str]], List[str], str, str]:
+        self, save_to_json: bool = True, max_tries: int = 5
+    ) -> Tuple[List[Tuple[str, str]], List[str], str, str | None]:
         """
         Generate the complete persona dataset.
 
@@ -372,6 +371,10 @@ class PersonaDataset:
             if self.backend == "hf_local":
                 if self._hf_model is None or self._hf_tokenizer is None:
                     self._init_local_model()
+
+                # Assert models are initialized
+                assert self._hf_model is not None
+                assert self._hf_tokenizer is not None
 
                 # Prepare prompt for decoder-only model
                 prompt = self._messages_to_prompt(messages)
