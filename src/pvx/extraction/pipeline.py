@@ -6,6 +6,7 @@ complete persona vector extraction process, including:
 - LLM judge scoring for quality filtering
 - Vector computation (contrastive mean differences)
 - Checkpointing and W&B logging
+- Run tracking via RunConfig for multi-model experiments
 """
 
 import json
@@ -18,6 +19,7 @@ from typing import TYPE_CHECKING, Optional
 import torch
 
 if TYPE_CHECKING:
+    from pvx.config import RunConfig
     from pvx.judges.llm_as_judge import LLMJudge
 from tqdm import tqdm
 
@@ -134,6 +136,7 @@ class ExtractionPipeline:
         output_dir: Path | str = "outputs/vectors",
         wandb_project: str | None = None,
         wandb_run_name: str | None = None,
+        run_config: Optional["RunConfig"] = None,
     ):
         """Initialize the extraction pipeline.
 
@@ -144,14 +147,30 @@ class ExtractionPipeline:
             judge: Optional LLM judge for quality filtering
             judge_threshold: Minimum score for valid responses (0-3 scale)
             output_dir: Directory for saving vectors and checkpoints
+                       (ignored if run_config is provided)
             wandb_project: W&B project name (None to disable logging)
             wandb_run_name: W&B run name (auto-generated if None)
+            run_config: RunConfig for multi-model experiment tracking.
+                       If provided, overrides output_dir and enables run lifecycle.
         """
-        self.model_id = model_id
-        self.layer = layer
+        self.run_config = run_config
         self.judge = judge
         self.judge_threshold = judge_threshold
-        self.output_dir = Path(output_dir)
+
+        # Use RunConfig values if provided, otherwise fall back to parameters
+        if run_config is not None:
+            self.model_id = run_config.model_id
+            self.layer = run_config.layer
+            self.output_dir = run_config.vectors_dir()
+            # Save config immediately to mark run as started
+            run_config.save()
+            logger.info(f"Run started: {run_config.run_id}")
+            logger.info(f"Output dir: {run_config.output_dir()}")
+        else:
+            self.model_id = model_id
+            self.layer = layer
+            self.output_dir = Path(output_dir)
+
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         # Load questions
@@ -168,17 +187,30 @@ class ExtractionPipeline:
             try:
                 import wandb
 
-                self.wandb_run = wandb.init(
-                    project=wandb_project,
-                    name=wandb_run_name,
-                    config={
-                        "model_id": model_id,
-                        "layer": layer,
+                # Use RunConfig for W&B config if available
+                if run_config is not None:
+                    wandb_config = run_config.to_wandb_config()
+                    wandb_config["num_questions"] = len(self.questions)
+                    wandb_config["judge_threshold"] = judge_threshold
+                else:
+                    wandb_config = {
+                        "model_id": self.model_id,
+                        "layer": self.layer,
                         "num_questions": len(self.questions),
                         "judge_threshold": judge_threshold,
-                    },
+                    }
+
+                self.wandb_run = wandb.init(
+                    project=wandb_project,
+                    name=wandb_run_name or (run_config.run_id if run_config else None),
+                    config=wandb_config,
                 )
                 logger.info(f"W&B logging enabled: {wandb_project}")
+
+                # Store W&B run ID in RunConfig
+                if run_config is not None:
+                    run_config.wandb_run_id = self.wandb_run.id
+                    run_config.save()
             except ImportError:
                 logger.warning("wandb not installed, logging disabled")
 
@@ -445,6 +477,13 @@ class ExtractionPipeline:
             if vec.persona_id not in completed_ids:
                 vec.save(self.output_dir / vec.persona_id)
 
+        # Mark run as complete if using RunConfig
+        if self.run_config is not None:
+            self.run_config.mark_complete()
+            self.run_config.save()
+            logger.info(f"Run complete: {self.run_config.run_id}")
+            logger.info(f"Extracted {len(vectors)} vectors to {self.output_dir}")
+
         # Final W&B artifact
         if self.wandb_run:
             import wandb
@@ -456,5 +495,42 @@ class ExtractionPipeline:
 
         return vectors
 
+    @classmethod
+    def from_run_config(
+        cls,
+        run_config: "RunConfig",
+        questions: QuestionBank | None = None,
+        judge: Optional["LLMJudge"] = None,
+        judge_threshold: float = 2.5,
+        wandb_project: str | None = None,
+    ) -> "ExtractionPipeline":
+        """Create an ExtractionPipeline from a RunConfig.
+
+        This is the preferred way to create a pipeline for tracked experiments.
+
+        Args:
+            run_config: RunConfig with model and output settings
+            questions: QuestionBank (defaults to assistant-axis or fallback)
+            judge: Optional LLM judge for quality filtering
+            judge_threshold: Minimum score for valid responses
+            wandb_project: W&B project name (None to disable)
+
+        Returns:
+            Configured ExtractionPipeline
+
+        Example:
+            >>> config = RunConfig.create("allenai/OLMo-7B-Instruct", layer=14)
+            >>> pipeline = ExtractionPipeline.from_run_config(config)
+        """
+        return cls(
+            run_config=run_config,
+            questions=questions,
+            judge=judge,
+            judge_threshold=judge_threshold,
+            wandb_project=wandb_project,
+            wandb_run_name=run_config.run_id,
+        )
+
     def __repr__(self) -> str:
-        return f"ExtractionPipeline(model={self.model_id!r}, layer={self.layer}, questions={len(self.questions)})"
+        run_info = f", run={self.run_config.run_id}" if self.run_config else ""
+        return f"ExtractionPipeline(model={self.model_id!r}, layer={self.layer}, questions={len(self.questions)}{run_info})"

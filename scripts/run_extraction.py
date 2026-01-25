@@ -18,6 +18,12 @@ Usage:
         --model allenai/OLMo-7B-Instruct \\
         --layer 14
 
+    # With run tracking (recommended for experiments)
+    uv run python scripts/run_extraction.py \\
+        --persona-dir personas/ \\
+        --model allenai/OLMo-7B-Instruct \\
+        --track
+
 For RIASEC-specific experiments, see experiments/phase1/.
 """
 
@@ -31,6 +37,7 @@ import click
 # Add src to path for local development
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from pvx.config import RunConfig
 from pvx.extraction import ExtractionPipeline, QuestionBank
 from pvx.sources.base import BaselineSource, PersonaSource
 
@@ -128,6 +135,11 @@ def load_personas_from_path(path: Path) -> Iterator[PersonaSource]:
     is_flag=True,
     help="Show what would be extracted without running",
 )
+@click.option(
+    "--track",
+    is_flag=True,
+    help="Enable run tracking with RunConfig (outputs to outputs/runs/{model}/{run_id}/)",
+)
 def main(
     persona_path: str | None,
     persona_dir: str | None,
@@ -141,6 +153,7 @@ def main(
     resume: str | None,
     limit: int | None,
     dry_run: bool,
+    track: bool,
 ):
     """Extract persona vectors using contrastive activation differences.
 
@@ -188,15 +201,31 @@ def main(
     # Create baseline
     baseline = BaselineSource.from_vocational_default()
 
-    # Initialize pipeline
-    pipeline = ExtractionPipeline(
-        model_id=model,
-        layer=layer,
-        questions=questions,
-        output_dir=output_dir,
-        wandb_project=wandb_project,
-        wandb_run_name=wandb_run_name,
-    )
+    # Initialize pipeline with optional run tracking
+    if track:
+        # Create RunConfig for tracked experiment
+        run_config = RunConfig.create(
+            model_id=model,
+            layer=layer,
+            num_questions=num_questions,
+            personas_dir=str(source_path),
+        )
+        pipeline = ExtractionPipeline.from_run_config(
+            run_config=run_config,
+            questions=questions,
+            wandb_project=wandb_project,
+        )
+        logger.info(f"Run tracking enabled: {run_config.run_id}")
+    else:
+        # Legacy mode without run tracking
+        pipeline = ExtractionPipeline(
+            model_id=model,
+            layer=layer,
+            questions=questions,
+            output_dir=output_dir,
+            wandb_project=wandb_project,
+            wandb_run_name=wandb_run_name,
+        )
 
     logger.info(f"Pipeline initialized: {pipeline}")
 

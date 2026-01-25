@@ -26,7 +26,6 @@ set -e
 MODEL="allenai/OLMo-7B-Instruct"
 LAYER=14
 NUM_QUESTIONS=50
-OUTPUT_DIR="outputs/phase1_vectors"
 WANDB_PROJECT="pvx-phase1"
 PERSONA_DIR="persona_data/vocational_personas/instructions"
 
@@ -36,7 +35,7 @@ echo "=================================================="
 echo "Model: $MODEL"
 echo "Layer: $LAYER"
 echo "Questions per persona: $NUM_QUESTIONS"
-echo "Output: $OUTPUT_DIR"
+echo "Output: outputs/runs/{model_slug}/{run_id}/ (auto-generated)"
 echo ""
 
 # Check for GPU
@@ -78,15 +77,10 @@ for letter in 'RIASEC':
 "
 echo ""
 
-# Check for existing checkpoint
-if [ -d "$OUTPUT_DIR" ] && [ "$(ls -A $OUTPUT_DIR/*.pt 2>/dev/null)" ]; then
-    EXISTING=$(ls -1 "$OUTPUT_DIR"/*.pt 2>/dev/null | wc -l | tr -d ' ')
-    echo "Found $EXISTING existing vectors - will resume from checkpoint"
-    RESUME_FLAG="--resume $OUTPUT_DIR"
-else
-    echo "Starting fresh extraction"
-    RESUME_FLAG=""
-fi
+# Check for existing runs (note: resume requires specifying a run directory)
+echo "Run tracking enabled - outputs saved to outputs/runs/olmo-7b-instruct/{run_id}/"
+echo "To resume a specific run, use: --resume outputs/runs/olmo-7b-instruct/{run_id}/vectors"
+RESUME_FLAG=""
 echo ""
 
 # Run extraction
@@ -98,16 +92,20 @@ uv run python scripts/run_extraction.py \
     --model "$MODEL" \
     --layer "$LAYER" \
     --num-questions "$NUM_QUESTIONS" \
-    --output-dir "$OUTPUT_DIR" \
     --wandb-project "$WANDB_PROJECT" \
+    --track \
     $RESUME_FLAG
 
 echo ""
 echo "=================================================="
 echo "Extraction complete!"
-echo "Vectors saved to: $OUTPUT_DIR"
 echo ""
-echo "Next: Run analysis"
-echo "  uv run python scripts/run_analysis.py \\"
-echo "    --vectors-dir $OUTPUT_DIR \\"
+echo "Vectors saved to: outputs/runs/olmo-7b-instruct/{run_id}/"
+echo ""
+echo "Next: Run analysis on the latest run:"
+echo "  uv run python -c \"from pvx.outputs import OutputManager; print(OutputManager().get_latest('olmo-7b-instruct').output_dir())\""
+echo ""
+echo "Or use the analysis script:"
+echo "  uv run python experiments/phase1/run_riasec_analysis.py \\"
+echo "    --vectors-dir outputs/runs/olmo-7b-instruct/{run_id}/vectors \\"
 echo "    --wandb-project $WANDB_PROJECT"
