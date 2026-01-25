@@ -20,8 +20,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import torch
-
 if TYPE_CHECKING:
     from pvx.config import RunConfig
 
@@ -167,9 +165,10 @@ class ModelComparison:
         """
         try:
             import pandas as pd
+
             return pd.DataFrame(self.to_dict())
         except ImportError:
-            raise ImportError("pandas required for to_dataframe()")
+            raise ImportError("pandas required for to_dataframe()") from None
 
     def compare_alignment_scores(self) -> dict[str, float | None]:
         """Get alignment scores by model.

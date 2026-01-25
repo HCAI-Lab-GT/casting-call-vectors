@@ -65,7 +65,7 @@ class PersonaVisualizer:
         Returns:
             PersonaVisualizer with geometry loaded from run
         """
-        import torch
+
         from pvx.extraction.pipeline import PersonaVector
 
         vectors = {}
@@ -617,7 +617,7 @@ def plot_model_comparison_bar(
     bars = ax.bar(models, values)
 
     # Color bars based on value (higher is better)
-    for bar, val in zip(bars, values):
+    for bar, val in zip(bars, values, strict=True):
         if val >= 0.6:
             bar.set_color("green")
         elif val >= 0.4:
@@ -665,7 +665,7 @@ def plot_alignment_comparison(
     ax1.set_ylabel("Alignment Score")
     ax1.set_title("RIASEC Alignment")
     ax1.legend()
-    for bar, val in zip(bars, scores):
+    for bar, val in zip(bars, scores, strict=True):
         bar.set_color("green" if val >= 0.6 else "orange" if val >= 0.4 else "red")
 
     # Silhouette scores

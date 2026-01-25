@@ -150,7 +150,11 @@ def main():
                     if run_dir.is_dir():
                         config = run_dir / "run_config.json"
                         status = "✓" if config.exists() else "?"
-                        vectors = len(list((run_dir / "vectors").glob("*.pt"))) if (run_dir / "vectors").exists() else 0
+                        vectors = (
+                            len(list((run_dir / "vectors").glob("*.pt")))
+                            if (run_dir / "vectors").exists()
+                            else 0
+                        )
                         print(f"    {status} {run_dir.name}/ ({vectors} vectors)")
 
     print("\nNote: Original directories NOT removed. Remove manually after verification:")

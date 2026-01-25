@@ -18,7 +18,6 @@ Directory Structure:
 """
 
 import logging
-import os
 import shutil
 from pathlib import Path
 
