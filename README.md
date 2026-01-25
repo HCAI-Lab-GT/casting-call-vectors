@@ -13,7 +13,7 @@ This project implements persona vector extraction and steering for language mode
 - `persona_data/` - Generated persona definitions
 - `_vendor/` - Vendored reference implementations (gitignored)
 
-For detailed architecture, see [docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md).
+For detailed architecture, see [docs/architecture/CODEBASE_MAP.md](docs/architecture/CODEBASE_MAP.md).
 
 ## Key Components
 
