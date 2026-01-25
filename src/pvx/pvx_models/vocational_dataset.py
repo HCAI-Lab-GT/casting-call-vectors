@@ -204,6 +204,13 @@ class VocationalPersonaGenerator:
                 "riasec": profile.get("riasec", {}),
                 "riasec_primary": profile.get("riasec_primary"),
                 "highpoint_codes": profile.get("highpoint_codes", []),
+                # Work Styles (16 traits, 1-5 scale)
+                "work_styles": profile.get("work_styles", {}),
+                # Big Five derived scores
+                "big_five": profile.get("big_five", {}),
+                # Work Values (6 values, 1-7 scale)
+                "work_values": profile.get("work_values", {}),
+                "work_value_highpoints": profile.get("work_value_highpoints", []),
             },
         }
 

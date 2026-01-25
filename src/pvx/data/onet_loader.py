@@ -48,6 +48,64 @@ HIGHPOINT_TO_RIASEC = {
     0.0: None,  # No third high-point
 }
 
+# Work Styles Element ID mapping (16 personality-like traits)
+WORK_STYLE_ELEMENTS = {
+    "1.C.1.a": "Achievement/Effort",
+    "1.C.1.b": "Persistence",
+    "1.C.1.c": "Initiative",
+    "1.C.2.b": "Leadership",
+    "1.C.3.a": "Cooperation",
+    "1.C.3.b": "Concern for Others",
+    "1.C.3.c": "Social Orientation",
+    "1.C.4.a": "Self-Control",
+    "1.C.4.b": "Stress Tolerance",
+    "1.C.4.c": "Adaptability/Flexibility",
+    "1.C.5.a": "Dependability",
+    "1.C.5.b": "Attention to Detail",
+    "1.C.5.c": "Integrity",
+    "1.C.6": "Independence",
+    "1.C.7.a": "Innovation",
+    "1.C.7.b": "Analytical Thinking",
+}
+
+# Big Five (OCEAN) derived from Work Styles
+# Based on established Work Styles → FFM mappings
+BIG_FIVE_MAPPING = {
+    "O": ["1.C.7.a", "1.C.7.b", "1.C.4.c"],  # Openness: Innovation, Analytical, Adaptability
+    "C": [
+        "1.C.5.a",
+        "1.C.1.a",
+        "1.C.1.b",
+        "1.C.5.b",
+    ],  # Conscientiousness: Dependability, Achievement, Persistence, Detail
+    "E": ["1.C.2.b", "1.C.3.c", "1.C.1.c"],  # Extraversion: Leadership, Social, Initiative
+    "A": ["1.C.3.a", "1.C.3.b", "1.C.5.c"],  # Agreeableness: Cooperation, Concern, Integrity
+    "N_inv": [
+        "1.C.4.b",
+        "1.C.4.a",
+    ],  # Emotional Stability (inverse N): Stress Tolerance, Self-Control
+}
+
+# Work Values Element ID mapping (6 work values)
+WORK_VALUE_ELEMENTS = {
+    "1.B.2.a": "Achievement",
+    "1.B.2.b": "Working Conditions",
+    "1.B.2.c": "Recognition",
+    "1.B.2.d": "Relationships",
+    "1.B.2.e": "Support",
+    "1.B.2.f": "Independence",
+}
+
+# Work Value High-Point mapping (VH scale)
+WORK_VALUE_HIGHPOINT = {
+    1: "Achievement",
+    2: "Working Conditions",
+    3: "Recognition",
+    4: "Relationships",
+    5: "Support",
+    6: "Independence",
+}
+
 
 class ONETLoader:
     """Load and process O*NET database files.
@@ -71,6 +129,12 @@ class ONETLoader:
         self._interests: Optional[pd.DataFrame] = None
         self._tasks: Optional[pd.DataFrame] = None
         self._riasec_by_occupation: Optional[dict] = None
+        # Work Styles and Work Values caches
+        self._work_styles: Optional[pd.DataFrame] = None
+        self._work_values: Optional[pd.DataFrame] = None
+        self._work_style_scores: Optional[dict] = None
+        self._work_value_scores: Optional[dict] = None
+        self._big_five_scores: Optional[dict] = None
 
     def load_occupations(self) -> pd.DataFrame:
         """Load occupation titles and descriptions.
@@ -136,6 +200,62 @@ class ONETLoader:
         logger.info(f"Loaded {len(df)} task statements from O*NET")
         return df
 
+    def load_work_styles(self) -> pd.DataFrame:
+        """Load Work Styles data (16 personality-like traits).
+
+        Returns:
+            DataFrame with columns: soc_code, element_id, element_name,
+            scale_id, data_value, n, standard_error, lower_ci, upper_ci,
+            recommend_suppress, date, domain_source
+        """
+        if self._work_styles is not None:
+            return self._work_styles
+
+        filepath = self.data_dir / "Work Styles.txt"
+        df = pd.read_csv(filepath, sep="\t")
+        df.columns = [
+            "soc_code",
+            "element_id",
+            "element_name",
+            "scale_id",
+            "data_value",
+            "n",
+            "standard_error",
+            "lower_ci",
+            "upper_ci",
+            "recommend_suppress",
+            "date",
+            "domain_source",
+        ]
+        self._work_styles = df
+        logger.info(f"Loaded {len(df)} work style records from O*NET")
+        return df
+
+    def load_work_values(self) -> pd.DataFrame:
+        """Load Work Values data (6 work values).
+
+        Returns:
+            DataFrame with columns: soc_code, element_id, element_name,
+            scale_id, data_value, date, domain_source
+        """
+        if self._work_values is not None:
+            return self._work_values
+
+        filepath = self.data_dir / "Work Values.txt"
+        df = pd.read_csv(filepath, sep="\t")
+        df.columns = [
+            "soc_code",
+            "element_id",
+            "element_name",
+            "scale_id",
+            "data_value",
+            "date",
+            "domain_source",
+        ]
+        self._work_values = df
+        logger.info(f"Loaded {len(df)} work value records from O*NET")
+        return df
+
     def get_riasec_scores(self) -> dict[str, dict[str, float]]:
         """Get RIASEC scores for all occupations.
 
@@ -192,6 +312,126 @@ class ONETLoader:
 
         return result
 
+    def get_work_style_scores(self) -> dict[str, dict[str, float]]:
+        """Get Work Style scores (IM scale, 1-5) for all occupations.
+
+        Returns:
+            Dict mapping SOC code -> {trait_name: score, ...}
+            Only includes the 16 standard Work Style traits.
+        """
+        if self._work_style_scores is not None:
+            return self._work_style_scores
+
+        work_styles = self.load_work_styles()
+
+        # Filter to IM scale and known elements
+        im_data = work_styles[
+            (work_styles["scale_id"] == "IM")
+            & (work_styles["element_id"].isin(WORK_STYLE_ELEMENTS.keys()))
+        ]
+
+        result = {}
+        for soc_code, group in im_data.groupby("soc_code"):
+            scores = {}
+            for _, row in group.iterrows():
+                element = row["element_id"]
+                name = WORK_STYLE_ELEMENTS[element]
+                scores[name] = row["data_value"]
+            result[soc_code] = scores
+
+        self._work_style_scores = result
+        return result
+
+    def get_big_five_scores(self) -> dict[str, dict[str, float]]:
+        """Compute Big Five (OCEAN) scores derived from Work Styles.
+
+        Returns:
+            Dict mapping SOC code -> {"O": score, "C": score, "E": score,
+            "A": score, "N_inv": score}
+
+        Note:
+            N_inv is Emotional Stability (inverse of Neuroticism).
+            Higher values = more emotionally stable.
+        """
+        if self._big_five_scores is not None:
+            return self._big_five_scores
+
+        work_style_scores = self.get_work_style_scores()
+
+        result = {}
+        for soc_code, styles in work_style_scores.items():
+            scores = {}
+            for domain, element_ids in BIG_FIVE_MAPPING.items():
+                domain_scores = []
+                for elem_id in element_ids:
+                    name = WORK_STYLE_ELEMENTS.get(elem_id)
+                    if name and name in styles:
+                        domain_scores.append(styles[name])
+                if domain_scores:
+                    scores[domain] = sum(domain_scores) / len(domain_scores)
+            result[soc_code] = scores
+
+        self._big_five_scores = result
+        return result
+
+    def get_work_value_scores(self) -> dict[str, dict[str, float]]:
+        """Get Work Value scores (EX scale, 1-7) for all occupations.
+
+        Returns:
+            Dict mapping SOC code -> {value_name: score, ...}
+            Only includes the 6 standard Work Values.
+        """
+        if self._work_value_scores is not None:
+            return self._work_value_scores
+
+        work_values = self.load_work_values()
+
+        # Filter to EX scale and known elements
+        ex_data = work_values[
+            (work_values["scale_id"] == "EX")
+            & (work_values["element_id"].isin(WORK_VALUE_ELEMENTS.keys()))
+        ]
+
+        result = {}
+        for soc_code, group in ex_data.groupby("soc_code"):
+            scores = {}
+            for _, row in group.iterrows():
+                element = row["element_id"]
+                name = WORK_VALUE_ELEMENTS[element]
+                scores[name] = row["data_value"]
+            result[soc_code] = scores
+
+        self._work_value_scores = result
+        return result
+
+    def get_work_value_highpoints(self) -> dict[str, list[str]]:
+        """Get Work Value high-point codes for all occupations.
+
+        Returns:
+            Dict mapping SOC code -> [primary, secondary, tertiary] value names
+        """
+        work_values = self.load_work_values()
+
+        # Filter to VH scale (high-point codes)
+        vh_data = work_values[
+            (work_values["scale_id"] == "VH")
+            & (work_values["element_id"].isin(["1.B.2.g", "1.B.2.h", "1.B.2.i"]))
+        ]
+
+        result = {}
+        for soc_code, group in vh_data.groupby("soc_code"):
+            codes = []
+            for element_id in ["1.B.2.g", "1.B.2.h", "1.B.2.i"]:
+                row = group[group["element_id"] == element_id]
+                if not row.empty:
+                    val = int(row.iloc[0]["data_value"])
+                    name = WORK_VALUE_HIGHPOINT.get(val)
+                    if name:
+                        codes.append(name)
+            result[soc_code] = codes
+
+        return result
+
     def get_occupation_profile(self, soc_code: str) -> dict:
         """Get complete profile for one occupation.
 
@@ -199,7 +439,9 @@ class ONETLoader:
             soc_code: O*NET-SOC occupation code (e.g., "11-1011.00")
 
         Returns:
-            Dict with keys: soc_code, title, description, riasec, highpoint_codes, tasks
+            Dict with keys: soc_code, title, description, riasec,
+            riasec_primary, highpoint_codes, work_styles, big_five,
+            work_values, work_value_highpoints, tasks
         """
         occupations = self.load_occupations()
         occ_row = occupations[occupations["soc_code"] == soc_code]
@@ -213,9 +455,25 @@ class ONETLoader:
         riasec_scores = self.get_riasec_scores()
         riasec = riasec_scores.get(soc_code, {})
 
-        # Get high-point codes
+        # Get RIASEC high-point codes
         highpoint_codes = self.get_highpoint_codes()
         highpoints = highpoint_codes.get(soc_code, [])
+
+        # Get Work Styles (16 traits, scale 1-5)
+        work_style_scores = self.get_work_style_scores()
+        work_styles = work_style_scores.get(soc_code, {})
+
+        # Get Big Five (derived from Work Styles)
+        big_five_scores = self.get_big_five_scores()
+        big_five = big_five_scores.get(soc_code, {})
+
+        # Get Work Values (6 values, scale 1-7)
+        work_value_scores = self.get_work_value_scores()
+        work_values = work_value_scores.get(soc_code, {})
+
+        # Get Work Value high-points
+        work_value_hp = self.get_work_value_highpoints()
+        work_value_highpoints = work_value_hp.get(soc_code, [])
 
         # Get tasks
         tasks_df = self.load_tasks()
@@ -225,9 +483,18 @@ class ONETLoader:
             "soc_code": soc_code,
             "title": occ["title"],
             "description": occ["description"],
+            # RIASEC (existing)
             "riasec": riasec,
             "riasec_primary": highpoints[0] if highpoints else None,
             "highpoint_codes": highpoints,
+            # Work Styles (new)
+            "work_styles": work_styles,
+            # Big Five derived (new)
+            "big_five": big_five,
+            # Work Values (new)
+            "work_values": work_values,
+            "work_value_highpoints": work_value_highpoints,
+            # Tasks
             "tasks": tasks,
         }
 
@@ -321,3 +588,16 @@ if __name__ == "__main__":
     print(f"Primary: {profile['riasec_primary']}")
     print(f"High-points: {profile['highpoint_codes']}")
     print(f"Tasks: {len(profile['tasks'])} tasks")
+
+    print("\n=== Work Styles (16 traits) ===")
+    for trait, score in sorted(profile["work_styles"].items()):
+        print(f"  {trait}: {score:.2f}")
+
+    print("\n=== Big Five (derived) ===")
+    for dim, score in sorted(profile["big_five"].items()):
+        print(f"  {dim}: {score:.2f}")
+
+    print("\n=== Work Values (6 values) ===")
+    for value, score in sorted(profile["work_values"].items()):
+        print(f"  {value}: {score:.2f}")
+    print(f"Work Value High-points: {profile['work_value_highpoints']}")
