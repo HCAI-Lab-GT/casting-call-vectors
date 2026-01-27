@@ -5,6 +5,7 @@ import re
 
 from pvx import setup_logging
 from pvx.pvx_models.persona_model import PersonaModel
+from pvx.pvx_models.riasec_persona_model import RIASECPersonaModel
 from pvx.utils.riasec_utils import RIASECHelpers
 
 logger = setup_logging(name="riasec-judge")
@@ -55,9 +56,9 @@ class RIASECJudge:
         Returns:
             list: List of message dicts for use with chat-based models.
         """
-        #"Answer YES or NO for the following characteristic."
+        #"Output EXACTLY one token: YES or NO. Answer YES or NO for the following characteristic."
         return [
-            {"role": "system", "content": RIASECHelpers.RIASEC_YN_SYSTEM_PROMPT},
+            {"role": "system", "content": "Output EXACTLY one token: YES or NO."},
             {"role": "user", "content": f"{characteristic}"}
         ]
 
@@ -119,7 +120,7 @@ if __name__ == "__main__":
     ap.add_argument("-f", "--json_filepath", type=str, default=None, help="Filepath to model init file (not trait dataset)")
     args = ap.parse_args()
     
-    pvx = PersonaModel.load_or_create(
+    pvx = RIASECPersonaModel.load_or_create(
         target_model_id=args.model_name,
         trait=args.trait,
         layer=14,
@@ -130,6 +131,8 @@ if __name__ == "__main__":
     results, counts = riasec_judge.evaluate_persona(pvx, args.alpha, args.max_new_tokens, args.temperature)
     logger.info("===TRAIT===")
     logger.info(args.trait)
+    logger.info("===RESULTS===")
+    logger.info(results)
     logger.info("===RIASEC Counts===")
     logger.info(counts)
     
