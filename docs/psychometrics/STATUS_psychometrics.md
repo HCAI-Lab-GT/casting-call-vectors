@@ -2,9 +2,9 @@
 
 > **Purpose**: Track progress on psychometric data preparation as outlined in [PSYCHOMETRICS_DATA.md](../reference/PSYCHOMETRICS_DATA.md).
 >
-> **Workflow Overview**: [WORKFLOW_overview_phases_2_7.md](./WORKFLOW_overview_phases_2_7.md)
+> **Workflow Overview**: [WORKFLOW_overview.md](workflows/WORKFLOW_overview.md)
 >
-> **Last Updated**: 2025-01-25 (Phase 7 workflow added)
+> **Last Updated**: 2026-01-26 (Reorganized directory structure)
 
 ---
 
@@ -26,13 +26,13 @@ The PSYCHOMETRICS_DATA.md reference document outlines 8 phases for preparing psy
 | Phase | Name | Reference Scope | Our Scope | Status | Workflow |
 |-------|------|-----------------|-----------|--------|----------|
 | 0 | Setup & Directory Structure | External data dirs | Project structure | **N/A** | - |
-| 1 | RIASEC / O*NET | O*NET downloads + Interest Profiler items | O*NET database integration | **COMPLETE** | - |
-| 2 | HEXACO-PI-R | Download + extract HEXACO items | HEXACOLoader class | **READY** | [WORKFLOW](./WORKFLOW_phase2_hexaco.md) |
-| 3 | IPIP-NEO (Big Five) | Download + extract IPIP items | IPIPNEOLoader class | **READY** | [WORKFLOW](./WORKFLOW_phase3_ipip_neo.md) |
-| 4 | Schwartz Values | Download + extract value items | SchwartzLoader class | **READY** | [WORKFLOW](./WORKFLOW_phase4_schwartz.md) |
-| 5 | Dark Personality (SD3/SD4) | Download dark triad items | DarkPersonalityLoader class | **READY** | [WORKFLOW](./WORKFLOW_phase5_dark_personality.md) |
-| 6 | ML-Ready Datasets | HuggingFace datasets | Dataset loaders | **READY** | [WORKFLOW](./WORKFLOW_phase6_ml_datasets.md) |
-| 7 | Final Catalog & Verification | Aggregate catalog | PsychometricRegistry | **READY** | [WORKFLOW](./WORKFLOW_phase7_catalog.md) |
+| 1 | RIASEC / O*NET | O*NET downloads + Interest Profiler items | O*NET database integration | **COMPLETE** | [WORKFLOW](workflows/WORKFLOW_phase1_onet.md) |
+| 2 | HEXACO-PI-R | Download + extract HEXACO items | HEXACOLoader class | **READY** | [WORKFLOW](workflows/WORKFLOW_phase2_hexaco.md) |
+| 3 | IPIP-NEO (Big Five) | Download + extract IPIP items | IPIPNEOLoader class | **READY** | [WORKFLOW](workflows/WORKFLOW_phase3_ipip_neo.md) |
+| 4 | Schwartz Values | Download + extract value items | SchwartzLoader class | **READY** | [WORKFLOW](workflows/WORKFLOW_phase4_schwartz.md) |
+| 5 | Dark Personality (SD3/SD4) | Download dark triad items | DarkPersonalityLoader class | **READY** | [WORKFLOW](workflows/WORKFLOW_phase5_dark_personality.md) |
+| 6 | ML-Ready Datasets | HuggingFace datasets | Dataset loaders | **READY** | [WORKFLOW](workflows/WORKFLOW_phase6_ml_datasets.md) |
+| 7 | Final Catalog & Verification | Aggregate catalog | PsychometricRegistry | **READY** | [WORKFLOW](workflows/WORKFLOW_phase7_catalog.md) |
 
 ---
 
@@ -64,10 +64,10 @@ Instead of the external data download approach in PSYCHOMETRICS_DATA.md, we inte
 
 | Document | Purpose | Status |
 |----------|---------|--------|
-| [DESIGN_psychometrics_mapping.md](DESIGN_psychometrics_mapping.md) | Work Styles → Big Five/HEXACO mapping rationale | Complete |
-| [IMPLEMENT_work_styles_extension.md](IMPLEMENT_work_styles_extension.md) | Verified implementation plan with code | **Executed** (2025-01-25) |
-| [archive/PHASE1_IMPLEMENTATION_PLAN.md](archive/PHASE1_IMPLEMENTATION_PLAN.md) | Original extraction pipeline | Archived |
-| [archive/PHASE1_VALIDATION_PLAN.md](archive/PHASE1_VALIDATION_PLAN.md) | Testing infrastructure | Archived |
+| [WORKFLOW_phase1_onet.md](workflows/WORKFLOW_phase1_onet.md) | Work Styles → Big Five/HEXACO mapping workflow | Complete |
+| [IMPLEMENT_work_styles_extension.md](archive/IMPLEMENT_work_styles_extension.md) | Verified implementation plan with code | **Executed** (2025-01-25) |
+| [PHASE1_IMPLEMENTATION_PLAN.md](archive/PHASE1_IMPLEMENTATION_PLAN.md) | Original extraction pipeline | Archived |
+| [PHASE1_VALIDATION_PLAN.md](archive/PHASE1_VALIDATION_PLAN.md) | Testing infrastructure | Archived |
 
 #### Data Coverage
 
@@ -106,7 +106,7 @@ The following phases from PSYCHOMETRICS_DATA.md are **deferred** until O*NET exp
 ### Phase 4: Schwartz Values
 - **Purpose**: Human values framework (10 basic values, 4 higher-order dimensions)
 - **Relevance**: Deeper values assessment beyond O*NET Work Values; requires centered scoring (MRAT correction)
-- **Status**: Workflow ready - see [WORKFLOW_phase4_schwartz.md](./WORKFLOW_phase4_schwartz.md)
+- **Status**: Workflow ready - see [WORKFLOW_phase4_schwartz.md](workflows/WORKFLOW_phase4_schwartz.md)
 
 ### Phase 5: Dark Personality (SD3/SD4)
 - **Purpose**: Dark Triad/Tetrad assessment
@@ -178,5 +178,5 @@ print('Work Values:', profile['work_values'])
 ## Related Documents
 
 - [PSYCHOMETRICS_DATA.md](../reference/PSYCHOMETRICS_DATA.md) - Master reference for all instruments
-- [DESIGN_psychometrics_mapping.md](DESIGN_psychometrics_mapping.md) - Mapping design rationale
-- [IMPLEMENT_work_styles_extension.md](IMPLEMENT_work_styles_extension.md) - Implementation details
+- [WORKFLOW_phase1_onet.md](workflows/WORKFLOW_phase1_onet.md) - Phase 1 workflow and mapping design
+- [IMPLEMENT_work_styles_extension.md](archive/IMPLEMENT_work_styles_extension.md) - Implementation details
