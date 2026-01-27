@@ -80,9 +80,74 @@ Score: 87
 - Environment variables for API keys must be set as described above.
 
 ---
+
+## Response Generation: Automated Trait-Aligned Answer Synthesis
+
+The `response_generation.py` module provides utilities for generating trait-aligned responses using LLMs. It is used for producing positive/negative answers for RIASEC and other persona traits.
+
+### Usage
+
+Call from Python or as part of the RIASEC pipeline. 
+
+Example (Non-RIASEC Response Generation):
+
+* Use `python src/pvx.pvx_models/response_generation.py --question "What is the theory of relativity"`
+
+Example (RIASEC Response Generation):
+
+* Use `python src/pvx.pvx_models/response_generation.py --riasec_positive --pos_neg_trait "Make your answers realistic" --question "Do you like to build puzzles"`
+
+**Arguments:**
+- `messages`: List of chat messages (system/user/assistant roles)
+- `temperature`, `max_new_tokens`, etc.: Standard generation parameters
+
+---
+
+## RIASEC Persona Model: Pre Generate Responses + Persona Model Generation
+
+The `riasec_persona_model.py` script/class extracts persona vectors for a given RIASEC trait using pregenerated positive/negative responses.
+
+### Usage
+
+Pre-generate responses for a trait:
+
+* Use `python src/pvx/pvx_models/riasec_persona_model.py --pre_generate_response --trait social`
+
+
+Extract persona vectors and generate a response:
+
+* Use `python src/pvx/pvx_models/riasec_persona_model.py --trait social --model_name Qwen/Qwen2.5-7B-Instruct --question "Do you like organizing events?"`
+
+
+**Arguments:**
+- `--pre_generate_response`: Generate and log positive/negative responses for the trait
+- `--trait`: RIASEC trait name
+- `--model_name`: Model to use
+- `--question`: Prompt for generation
+- Other generation parameters: `--max_new_tokens`, `--alpha`, `--temperature`, etc.
+
+---
+
+## RIASEC Judge: Automated Trait Evaluation
+
+The `riasec_judge.py` module provides a class for evaluating responses according to RIASEC trait alignment. Used in the pipeline for scoring generated answers.
+
+### Usage
+
+Call from Python or as part of the pipeline. Example:
+
+* Use `python src/pvx/pvx_models/judges/riasec_judge.py --trait social`
+
+**Arguments:**
+- `trait`: RIASEC trait name
+- `question`: The question being evaluated
+- `answer`: The model response to score
+
+---
 ## Setup Persona Models
-* Use `scripts/pvx/pvx_models/persona_dataset.py` to build persona traits
-* Use `scripts/pvx/pvx_models/persona_model.py` to test the persona model core
+* Use `src/pvx/pvx_models/persona_dataset.py` to build persona traits
+* Use `src/pvx/pvx_models/persona_model.py` to test the persona model core
+* Use `src/pvx/pvx_models/riasec_persona_model.py` to generate a riasec specific persona model
 
 ## CLI runner
 - Use `scripts/run_eval.py` to launch evals from presets.
@@ -96,3 +161,12 @@ Score: 87
   - `--limit`, `--log-dir` override per-run values
   - `--model-arg key=value` and `--solver-arg key=value` (repeatable) map to `-M` / `-S` in `inspect eval`
   - `--dry-run` prints the command only
+- Use `scripts/riasec_pipeline_eval.py` to perform the full pipeline of generating a riasec specific persona vector
+- Examples:
+  - `python scripts/riasec_pipeline_eval.py --pregenerate --generate_dataset --trait social --target_count 7`
+  - `python scripts/riasec_pipeline_eval.py --trait social`
+- Flags:
+  - `--pregenerate` will pregenerate a set of positive and negative responses to the list of riasec trait questions
+  - `--generate_dataset` will generate the dataset for the trait specified.
+  - `--trait` the RIASEC trait to generate a persona vector for with the RIASEC pipeline.
+  - `--target_count` the target number of pregenerated responses to be generated for each question's positive and negative responses.

@@ -172,7 +172,7 @@ class AbstractPersonaModel(ABC):
         self._install_steer_hook(layer_idx=self.layer_steering)
         
     @classmethod
-    def from_json(cls, json_filepath: str) -> 'PersonaModel':
+    def from_json(cls, json_filepath: str, trait: str = None, ) -> 'PersonaModel':
         """
         Load a PersonaModel instance from a previously saved JSON file.
         
@@ -190,6 +190,7 @@ class AbstractPersonaModel(ABC):
         
         # Create instance without extracting vectors
         instance = cls(
+            trait=trait,
             target_model_id=data["target_model_id"],
             dataset=None,  # Dataset not needed when loading from JSON
             layer=data["layer_steering"],
@@ -233,7 +234,7 @@ class AbstractPersonaModel(ABC):
 
         try:
             if Path(json_filepath).exists():                
-                return cls.from_json(json_filepath)
+                return cls.from_json(json_filepath, trait=trait)
 
         except Exception as e:
             logger.warning("⚠️ Failed to load from JSON: %s. Creating a new PersonaModel instance.", e)

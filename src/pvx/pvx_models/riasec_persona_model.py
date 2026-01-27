@@ -29,11 +29,58 @@ _STEER_DELTA = contextvars.ContextVar("steer_delta", default=None)  # Tensor (1,
 
 logger = setup_logging(name="riasec-persona-model")
 
+
 class RIASECPersonaModel(AbstractPersonaModel):
     """
     Persona model for RIASEC trait extraction and response generation.
     Implements persona vector extraction using pregenerated RIASEC responses.
     """
+
+    def __init__(self, *args, trait: str = None, dataset: PersonaDataset = None, riasec_config_path: str = './configs/riasec.yaml', from_json: bool = False, **kwargs):
+        """
+        Initialize RIASECPersonaModel with RIASEC-specific validation and pregeneration logic.
+        - Ensures trait is a valid RIASEC trait.
+        - Ensures dataset questions match RIASEC YAML.
+        - Pregenerates answers if missing in YAML.
+        """
+        # Validate trait
+        if trait is None:
+            raise ValueError("trait must be specified for RIASECPersonaModel")
+        if trait not in RIASECHelpers.RIASEC_TRAITS:
+            raise ValueError(f"Trait '{trait}' is not a valid RIASEC trait: {sorted(RIASECHelpers.RIASEC_TRAITS)}")
+        
+        if from_json:
+            super().__init__(*args, trait=trait, from_json=True, **kwargs)
+            return
+
+        # Load RIASEC YAML info
+        riasec_info = RIASECHelpers.fetch_riasec_information(riasec_config_path)
+        trait_info = riasec_info[trait]
+        yaml_questions = trait_info['questions']
+
+        # If dataset not provided, load from JSON or YAML
+        if dataset is None:
+            dataset = PersonaDataset.from_json(trait=trait, from_riasec=True, riasec_config_path=riasec_config_path)
+
+        # Check dataset questions match YAML
+        if dataset.questions != yaml_questions:
+            logger.info("Updating dataset questions to be RIASEC trait questions")
+            dataset.questions = yaml_questions
+
+        # Pregenerate answers if missing in YAML
+        needs_pregeneration = False
+        for qa in trait_info['question_answer_pairs']:
+            if not qa.get('positive') or not qa.get('negative'):
+                needs_pregeneration = True
+                break
+        if needs_pregeneration:
+            logger.info(f"Pregenerating missing answers for trait '{trait}' in YAML...")
+            accepted_responses = self.pre_generate_riasec_pos_neg_responses(trait=trait, riasec_config_path=riasec_config_path)
+            RIASECHelpers.update_riasec_yaml(riasec_config_path, trait, accepted_responses)
+            logger.info(f"Pregeneration complete and YAML updated for trait '{trait}'.")
+
+        # Call base class init
+        super().__init__(*args, trait=trait, dataset=dataset, **kwargs)
 
     @torch.inference_mode()
     def extract_persona_vector(self, temperature: float = 0.9, max_new_tokens: int = 200) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -259,11 +306,12 @@ if __name__ == "__main__":
     ap.add_argument("-a", "--alpha", type=float, default=1.0, help="Alpha value for persona steering")
     ap.add_argument("--temperature", type=float, default=0.9, help="Temperature for sampling")
     ap.add_argument("-q", "--question", type=str, default="What is the theory of relativity?", help="Question to generate response for")
+    ap.add_argument("-c", "--target_count", type=int, default=5, help="Number of pregenerated responses for each question")
     ap.add_argument("-f", "--json_filepath", type=str, default=None, help="Filepath to model init file (not trait dataset)")
     args = ap.parse_args()
     
     if args.pre_generate_response:
-        accepted_responses = RIASECPersonaModel.pre_generate_riasec_pos_neg_responses(trait=args.trait)
+        accepted_responses = RIASECPersonaModel.pre_generate_riasec_pos_neg_responses(trait=args.trait, target_count=args.target_count)
         logger.info("===Accepted Responses===")
         logger.info(accepted_responses)
     else:

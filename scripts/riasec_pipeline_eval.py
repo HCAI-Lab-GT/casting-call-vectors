@@ -10,13 +10,13 @@ def main():
     parser = argparse.ArgumentParser(description="RIASEC Pipeline Evaluation")
     parser.add_argument("--trait", type=str, required=True, help="Trait to evaluate (e.g., conventional)")
     parser.add_argument("--pregenerate", action="store_true", help="Pregenerate responses for the trait")
-    parser.add_argument("--update_yaml", action="store_true", help="Update YAML file with pregenerated responses")
     parser.add_argument("--generate_dataset", action="store_true", help="Generate dataset and inject questions")
     parser.add_argument("--yaml_path", type=str, default="./configs/riasec.yaml", help="Path to RIASEC YAML file")
     parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-7B-Instruct", help="Model name")
     parser.add_argument("--layer", type=int, default=14, help="Layer for persona steering")
     parser.add_argument("--json_filepath", type=str, default=None, help="Filepath to model init file (not trait dataset)")
     parser.add_argument("--judge_threshold", type=float, default=50, help="Threshold for LLM judge")
+    parser.add_argument("--target_count", type=int, default=5, help="Target Count for pregenerated responses.")
     args = parser.parse_args()
 
 
@@ -28,14 +28,14 @@ def main():
     accepted_responses = None
     if args.pregenerate:
         logger.info(f"Pregenerating responses for trait: {args.trait}")
-        accepted_responses = RIASECPersonaModel.pre_generate_riasec_pos_neg_responses(trait=args.trait)
+        accepted_responses = RIASECPersonaModel.pre_generate_riasec_pos_neg_responses(trait=args.trait, target_count=args.target_count)
         logger.info("=== Accepted Responses ===")
         logger.info(accepted_responses)
-
-    if args.update_yaml and accepted_responses:
-        logger.info(f"Updating YAML file {args.yaml_path} for trait {args.trait}")
-        RIASECHelpers.update_riasec_yaml(args.yaml_path, args.trait, accepted_responses)
-        logger.info("YAML file updated.")
+        
+        if accepted_responses:
+            logger.info(f"Updating YAML file {args.yaml_path} for trait {args.trait}")
+            RIASECHelpers.update_riasec_yaml(args.yaml_path, args.trait, accepted_responses)
+            logger.info("YAML file updated.")
 
     logger.info(f"Loading or creating RIASECPersonaModel for trait: {args.trait}")
     pvx = RIASECPersonaModel.load_or_create(
