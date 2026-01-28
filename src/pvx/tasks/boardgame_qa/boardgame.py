@@ -12,9 +12,8 @@ logger = setup_logging(name="boardgame-qa")
 
 HF_PATH = "tasksource/Boardgame-QA"
 @task
-def boardgame_loader(limit: int, prompt_type: str='') -> Task:
+def boardgame_loader(limit: int=None, prompt_type: str='') -> Task:
     '''
-    
     Args:
         limit (int)
         prompt_type (str): 'chain_of_thought'
