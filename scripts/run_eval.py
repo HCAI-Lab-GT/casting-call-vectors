@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 # ruff: noqa: I001
+from datetime import datetime
 
 import os
 import sys
+import json
+import random
 import subprocess
 from pathlib import Path
 from urllib.parse import urlparse, unquote
@@ -16,6 +19,8 @@ from dotenv import load_dotenv
 
 from inspect_ai.log import list_eval_logs, read_eval_log, convert_eval_logs
 import wandb
+
+from pvx.utils.wandb_utils import create_table
 
 from helpers import (
     DEFAULT_MODELS,
@@ -105,21 +110,25 @@ def main() -> None:
 
     # Load run if specified
     run = lookup_run(runs_cfg, args.run) if args.run else {}
-    
+
     # Convert flat task to one-item chain task
     if 'tasks' not in run:
         run = {
             'name': run['name'],
             'tasks': [{k: v for k, v in run.items() if k != 'name'}]
         }
-        
+
     logger.info(format_object(run, "Run Details: "))
-        
+
+    # create launch id (6 digit unique launch id for search) to group batched runs
+    batch_id = f"{random.randint(0, 999999):06d}"
+    logger.info("Batch ID: %s", batch_id)
+
     # Run all tasks in run
     for task in run['tasks']:
-        run_task(args, task, models_cfg)
-    
-def run_task(args, task_cfg, models_cfg) -> None:
+        run_task(args, task, models_cfg, batch_id)
+
+def run_task(args, task_cfg, models_cfg, batch_id=None) -> None:
     '''
     Runs a task with each of its traits in Inspect AI. 
     
@@ -146,7 +155,7 @@ def run_task(args, task_cfg, models_cfg) -> None:
         # run.yaml
     task_args = task_cfg.get('task_args', {})
     solver_args = task_cfg.get('solver_args', {})
-    
+
         # CLI
     task_args.update(parse_kv_list(args.task_arg))
     solver_args.update(parse_kv_list(args.solver_arg))
@@ -159,7 +168,7 @@ def run_task(args, task_cfg, models_cfg) -> None:
 
     # Load model via if specified
     model = lookup_model(models_cfg, model_name) if model_name is not None else {}
-    
+
     # Param Priorities: Arguments > task > None, args
     model_id = args.model_id or model.get('model')
     model_args = model.get('args', {}) # models.yaml: args
@@ -169,18 +178,18 @@ def run_task(args, task_cfg, models_cfg) -> None:
     # chain-of-thought prompt if requested
     if args.cot and "prompt_type" not in task_args:
         task_args["prompt_type"] = "chain_of_thought"
-        
+
     if 'trait' not in model_args or isinstance(model_args['trait'], str):
         model_args['trait'] = [model_args.get('trait')]
 
     for trait in model_args['trait']:
         single_trait_model_args = model_args.copy()
-        
+
         if trait:
             single_trait_model_args['trait'] = trait
         else:
             single_trait_model_args.pop('trait')
-        
+
         # build uv run python command
         cmd = build_command(
             task=task,
@@ -196,7 +205,7 @@ def run_task(args, task_cfg, models_cfg) -> None:
 
         env = os.environ.copy()
 
-        # configure WandB
+        ### WandB Configurations
         wandb_enabled = not args.no_wandb
         if wandb_enabled:
             if not env.get("WANDB_API_KEY"):
@@ -207,11 +216,35 @@ def run_task(args, task_cfg, models_cfg) -> None:
                 sys.exit(1)
             env["INSPECT_WANDB_ENABLED"] = "1"
             if args.wandb_project:
-                env["WANDB_PROJECT"] = args.wandb_project
+                env["INSPECT_WANDB_PROJECT"] = args.wandb_project
             if args.wandb_entity:
-                env["WANDB_ENTITY"] = args.wandb_entity
-            if args.wandb_tag:
-                env["WANDB_TAGS"] = ",".join(args.wandb_tag)
+                env["INSPECT_WANDB_ENTITY"] = args.wandb_entity
+
+            # Set WandB tags and configs
+            short_task_name = task.split("@")[-1]
+            model_tags = [
+                f"model:{model_name}",
+                f"benchmark:{short_task_name}",
+                f"trait:{trait}" if trait else None,
+                f"limit:{limit}" if limit else None,
+                f"batch_id:{batch_id}" if batch_id else None,
+            ]
+            model_configs = {
+                "model_id": model_name,
+                "benchmark_suite": task,
+                "trait": trait,
+                "limit": limit,
+                "temperature": generate_configs.get("temperature", None),
+                "top_p": generate_configs.get("top_p", None),
+                "max_tokens": generate_configs.get("max_tokens", None),
+            }
+
+            env["INSPECT_WANDB_MODELS_TAGS"] = json.dumps(args.wandb_tag + [t for t in model_tags if t is not None])
+            env["INSPECT_WANDB_MODELS_CONFIG"] = json.dumps(model_configs)
+
+            # Rename WandB run name
+            env["WANDB_NAME"] = f"{short_task_name}__{model_name}__{trait}__{batch_id}"
+
         else:
             env.pop("INSPECT_WANDB_ENABLED", None)
 
@@ -233,41 +266,53 @@ def run_task(args, task_cfg, models_cfg) -> None:
             result = subprocess.run(cmd, env=env)
 
         if result.returncode == 0 and wandb_enabled:
-
-            logs = list_eval_logs(log_dir)  # newest first by default :contentReference[oaicite:4]{index=4}
+            # newest log first by default, mild hack
+            logs = list_eval_logs(log_dir)  
             latest = logs[0]
             latest_path = Path(log_dir) / os.path.basename(unquote(urlparse(latest.name).path))
 
             # read header to get Inspect run_id
-            hdr = read_eval_log(latest_path, header_only=True)  # :contentReference[oaicite:5]{index=5}
-            run_id = hdr.eval.run_id  # run_id identifies the W&B Run :contentReference[oaicite:6]{index=6}
+            hdr = read_eval_log(latest_path, header_only=True)
+            run_id = hdr.eval.run_id  # run_id identifies the W&B Run
 
             ## Code if .json in separate location not same as .eval
             # out_dir = Path(...)
             # out_dir.mkdir(parents=True, exist_ok=True)
-            # convert_eval_logs(str(latest_path), to="json", output_dir=str(out_dir), stream=True)  # :contentReference[oaicite:7]{index=7}
+            # convert_eval_logs(str(latest_path), to="json", output_dir=str(out_dir), stream=True)
             # json_path = out_dir / latest_path.with_suffix(".json").name
 
-            convert_eval_logs(str(latest_path), to="json", output_dir=log_dir, stream=True)  # :contentReference[oaicite:7]{index=7}
+            convert_eval_logs(str(latest_path), to="json", output_dir=log_dir, stream=True)
+
             json_path = os.path.join(log_dir, latest_path.with_suffix(".json").name)
 
             with wandb.init(
                 project=env.get("WANDB_PROJECT"),
                 entity=env.get("WANDB_ENTITY"),
                 id=run_id,
-                resume="allow",
-            ) as run:  # :contentReference[oaicite:8]{index=8}
+                resume="must",
+            ) as run:
+                # rehydrate table with samples from json and upload to the run as artifact
+                data_table = create_table(json_path)
+                run.log({"samples": data_table})
 
-                # # Save as Artifact
-                # art = wandb.Artifact(
-                #     name=f"inspect_eval__task={hdr.eval.task}__model={hdr.eval.model}",
-                #     type="eval",
-                # )
-                # art.add_file(str(json_path))
-                # run.log_artifact(art)
+                ## Save InspectAI logs to WandB
 
-                ## Save as File
-                run.save(json_path, log_dir)
+                # select save method for logs (file, artifact, else (no save))
+                save_log_method = 'file'
+
+                # save log as Artifact (not used currently)
+                if save_log_method == 'artifact':
+                    art = wandb.Artifact(
+                        # name=f"inspect_eval__task={hdr.eval.task}__model={hdr.eval.model}",
+                        name="results",
+                        type="eval",
+                    )
+                    art.add_file(str(json_path))
+                    run.log_artifact(art)
+
+                # save log as File
+                elif save_log_method == 'file':
+                    run.save(json_path, log_dir)
 
     sys.exit(result.returncode)
 
