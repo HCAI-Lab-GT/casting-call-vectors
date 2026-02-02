@@ -6,20 +6,22 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-def format_object(obj: dict, prefix: str="") -> str:
-    '''
+
+def format_object(obj: dict, prefix: str = "") -> str:
+    """
     Logs dictionary/lists object better.
-    
+
     Args:
         obj (Any): any dict/list/str object, possibly nested. Preferably json formattable
-        
+
     Returns:
         str: text string to print
-    '''
+    """
     try:
         return prefix + json.dumps(obj, indent=2, ensure_ascii=False, sort_keys=False)
     except Exception:
         return prefix + str(obj)
+
 
 def setup_logging(
     name: str = "persona",
