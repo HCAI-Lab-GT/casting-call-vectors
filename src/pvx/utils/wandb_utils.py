@@ -1,55 +1,116 @@
-import os
-from typing import Any, Dict, Iterable, Optional
+import json
 
 import wandb
-from dotenv import load_dotenv
 
-_WANDB_ENV_VARS = ["WANDB_API_KEY", "WANDB_ENTITY", "WANDB_PROJECT", "WANDB_RUN_GROUP"]
+from pvx.utils.logging_utils import setup_logging
+
+logger = setup_logging(name="wandb_utils")
+
+"""
+# Note:
+# Do not attempt hook based custom wandb logging.
+# It's really brutal getting hook to work as dependent on inspect-wandb hook. No way to order and race condition hell.
+# Tried and gave up, not worth it.
+
+from inspect_ai.hooks import hooks, Hooks, RunStart, SampleEnd
+"""
 
 
-def _load_env():
-    # Load .env once to populate environment for wandb.init
-    load_dotenv()
-
-
-def init_wandb(
-    run_name: str,
-    project: Optional[str] = None,
-    entity: Optional[str] = None,
-    tags: Optional[Iterable[str]] = None,
-    config: Optional[Dict[str, Any]] = None,
-):
+def create_table(json_path: str) -> wandb.Table:
     """
-    Initialize a Weights & Biases run using env defaults.
+    Rehydrates table from JSON output file and uploads to wandb.
 
-    Env vars:
-      WANDB_API_KEY   (required)
-      WANDB_PROJECT   (default project if not passed)
-      WANDB_ENTITY    (your wandb entity/user)
-      WANDB_RUN_GROUP (optional grouping key)
+    Args:
+        json_path (str): Path to JSON file containing samples.
+
+    Returns:
+        wandb.Table: populated Wandb table.
     """
-    _load_env()
-    project = project or os.environ.get("WANDB_PROJECT")
-    entity = entity or os.environ.get("WANDB_ENTITY")
-    group = os.environ.get("WANDB_RUN_GROUP")
+    # Load JSON (fallback to JSONL if needed)
+    results = {}
+    try:
+        with open(json_path, "r") as f:
+            results = json.load(f)
+    except json.JSONDecodeError:
+        samples = []
+        with open(json_path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    samples.append(json.loads(line))
+        results = {"samples": samples}
 
-    if not os.environ.get("WANDB_API_KEY"):
-        raise RuntimeError("WANDB_API_KEY is not set. Add it to .env or your environment.")
-
-    return wandb.init(
-        project=project,
-        entity=entity,
-        name=run_name,
-        group=group,
-        tags=list(tags) if tags else None,
-        config=config or {},
-        settings=wandb.Settings(console="auto"),
+    # Create wandb Table
+    table = wandb.Table(
+        columns=[
+            "sample_id",
+            "input_json",
+            "output_json",
+            "scores_json",
+        ]
     )
 
+    # Helper to resolve attachments
+    def resolve_attachments(obj, attachments):
+        """
+        Replace strings like 'attachment://<id>' with attachments['<id>'] if present.
+        Works recursively on dict/list/str.
 
-def log_metrics(metrics: Dict[str, Any], step: Optional[int] = None):
-    wandb.log(metrics, step=step)
+        Args:
+            obj: object to resolve
+            attachments: dict of attachments
 
+        Returns:
+            Resolved object
+        """
+        if attachments is None:
+            attachments = {}
 
-def finish():
-    wandb.finish()
+        if isinstance(obj, str) and obj.startswith("attachment://"):
+            key = obj.split("attachment://", 1)[1]
+            return attachments.get(key, obj)
+
+        if isinstance(obj, dict):
+            return {k: resolve_attachments(v, attachments) for k, v in obj.items()}
+
+        if isinstance(obj, list):
+            return [resolve_attachments(v, attachments) for v in obj]
+
+        return obj
+
+    # Process each sample
+    samples = results.get("samples", results if isinstance(results, list) else [])
+    for s in samples:
+        # attachments can be per-sample (Inspect logs this) and/or top-level
+        attachments = {}
+        if isinstance(results, dict) and isinstance(results.get("attachments"), dict):
+            attachments.update(results["attachments"])
+        if isinstance(s, dict) and isinstance(s.get("attachments"), dict):
+            attachments.update(s["attachments"])
+
+        sample_id = s.get("id")
+
+        # Build input payload
+        inp = resolve_attachments(s.get("input"), attachments)
+        input_payload = {
+            "input": inp,
+            "target": s.get("target"),
+            "metadata": s.get("metadata", {}),
+        }
+
+        # Build output payload (resolve any attachment:// in completion/message content)
+        out = resolve_attachments(s.get("output"), attachments)
+
+        # Scores payload
+        scores = s.get("scores", {})
+
+        # Add to table
+        table.add_data(
+            sample_id,
+            json.dumps(input_payload, ensure_ascii=False, default=str),
+            json.dumps(out, ensure_ascii=False, default=str),
+            json.dumps(scores, ensure_ascii=False, default=str),
+        )
+
+    # Returns the table
+    return table
