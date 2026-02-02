@@ -1,9 +1,9 @@
-
 class GenerationConfig:
     """
     Configuration container for generation/model backend parameters.
     Used to standardize arguments for model and API selection.
     """
+
     def __init__(
         self,
         backend="openai",
@@ -12,7 +12,7 @@ class GenerationConfig:
         base_url="https://api.together.xyz/v1",
         api_key_env="TOGETHER_API_KEY",
         device=None,
-        dtype="float16"
+        dtype="float16",
     ):
         """
         Initialize generation configuration.
@@ -44,5 +44,5 @@ class GenerationConfig:
             "base_url": self.base_url,
             "api_key_env": self.api_key_env,
             "device": self.device,
-            "dtype": self.dtype
+            "dtype": self.dtype,
         }

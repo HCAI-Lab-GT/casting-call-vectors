@@ -20,21 +20,17 @@ Environment Variables:
     - VLLM_API_URL (optional): Base URL for vLLM OpenAI-compatible server
 """
 
-import os
-from typing import Dict, List, Optional, Tuple
-import math
-from pathlib import Path
-import yaml
-import numpy as np
-import torch
-from openai import OpenAI
-from pvx import Heartbeat, setup_logging
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from dotenv import load_dotenv
-import asyncio
-import re
 import argparse
-import inspect
+import os
+import warnings
+from typing import Dict, List, Optional
+
+import torch
+from dotenv import load_dotenv
+from openai import OpenAI
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from pvx import setup_logging
 
 load_dotenv()
 
@@ -44,9 +40,16 @@ logger = setup_logging(name="persona-llm-as-judge")
 
 
 class ResponseGeneration:
-
-    def __init__(self, backend: str = "openai", model: str = "openai/gpt-oss-20b", local_model: Optional[str] = "Qwen/Qwen2.5-7B-Instruct", base_url: Optional[str] = "https://api.together.xyz/v1", api_key_env: str = "TOGETHER_API_KEY", device: Optional[str] = None, dtype: torch.dtype = torch.float16):
-        
+    def __init__(
+        self,
+        backend: str = "openai",
+        model: str = "openai/gpt-oss-20b",
+        local_model: Optional[str] = "Qwen/Qwen2.5-7B-Instruct",
+        base_url: Optional[str] = "https://api.together.xyz/v1",
+        api_key_env: str = "TOGETHER_API_KEY",
+        device: Optional[str] = None,
+        dtype: torch.dtype = torch.float16,
+    ):
         self.backend = backend
         self.model = model
         self.local_model = local_model or model
@@ -54,17 +57,17 @@ class ResponseGeneration:
         self.api_key_env = api_key_env
         self.device = device
         self.dtype = dtype
-        
+
         self._hf_model = None
         self._hf_tokenizer = None
-    
+
     def _init_local_model(self):
         """
         Lazily load a HF transformers causal LM for local inference.
         """
         if self.backend != "hf_local":
             return
-        
+
         # Device selection
         if self.device:
             device = self.device
@@ -94,9 +97,9 @@ class ResponseGeneration:
         self._hf_model = model
         self._hf_tokenizer = tokenizer
 
-    def _inference_with_client(self, messages: List[Dict[str, str]], 
-                              temperature: float = 0.9,
-                              max_new_tokens = 1024):
+    def _inference_with_client(
+        self, messages: List[Dict[str, str]], temperature: float = 0.9, max_new_tokens=1024
+    ):
         """
         Perform LLM inference using the configured backend.
 
@@ -121,7 +124,9 @@ class ResponseGeneration:
                 prompt = self._messages_to_prompt(messages)
 
                 # Generate response
-                inputs = self._hf_tokenizer(prompt, return_tensors="pt", padding=True).to(self._hf_model.device)
+                inputs = self._hf_tokenizer(prompt, return_tensors="pt", padding=True).to(
+                    self._hf_model.device
+                )
                 generated = self._hf_model.generate(
                     **inputs,
                     do_sample=True,
@@ -163,16 +168,16 @@ class ResponseGeneration:
                 temperature,
             )
             raise e
-        
+
     @staticmethod
     def convert_str_to_message(messages: list[str]) -> List[Dict[str, str]]:
         input_messages = []
         for message in messages:
             input_message = {"role": "user", "content": message}
             input_messages.append(input_message)
-        
+
         return input_messages
-    
+
     @staticmethod
     def _messages_to_prompt(messages: List[Dict[str, str]]) -> str:
         """
@@ -190,9 +195,9 @@ class ResponseGeneration:
         prompt += "\\n\\nAssistant:"
         return prompt
 
-    def __call__(self, messages: List[Dict[str, str]], 
-                              temperature: float = 0.9,
-                              max_new_tokens = 1024):
+    def __call__(
+        self, messages: List[Dict[str, str]], temperature: float = 0.9, max_new_tokens=1024
+    ):
         """
         Callable interface for the judge. Equivalent to calling judge(**kwargs).
 
@@ -202,45 +207,76 @@ class ResponseGeneration:
         Returns:
             float: The aggregated score.
         """
-        return self._inference_with_client(messages=messages, temperature=temperature, max_new_tokens=max_new_tokens)
-
+        return self._inference_with_client(
+            messages=messages, temperature=temperature, max_new_tokens=max_new_tokens
+        )
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Evaluate a model response using LLMJudge")
-    ap.add_argument('--backend', default='openai', help='Backend to use: openai, vllm, hf_local')
-    ap.add_argument('--model', default='deepseek-ai/DeepSeek-R1', help='Model to use for openai/vllm/hf_local backend')
-    ap.add_argument('--riasec_positive', action='store_true', help="Use system prompting with RIASEC positive case")
-    ap.add_argument('--riasec_negative', action='store_true', help="Use system prompting with RIASEC positive case")
-    ap.add_argument('--pos_neg_trait', default="", help="The positive or negative trait system prompting")
-    ap.add_argument('--trait', default="realistic", help="Trait for RIASEC response generation")
-    ap.add_argument('--local_model', default='Qwen/Qwen2.5-7B-Instruct', help='Local HF model to use for hf_local backend')
-    ap.add_argument('--base_url', default='https://api.together.xyz/v1', help='Base URL for OpenAI/vLLM endpoints')
-    ap.add_argument('--api_key_env', default='TOGETHER_API_KEY', help='Environment variable for API key')
-    ap.add_argument('--device', default=None, help='Device for local inference (cuda, cpu, etc.)')
-    ap.add_argument('--dtype', default='float16', help='Data type for local model (e.g., float16, float32)')
-    ap.add_argument('--question', required=True, help='The evaluation question')
+    ap.add_argument("--backend", default="openai", help="Backend to use: openai, vllm, hf_local")
+    ap.add_argument(
+        "--model",
+        default="deepseek-ai/DeepSeek-R1",
+        help="Model to use for openai/vllm/hf_local backend",
+    )
+    ap.add_argument(
+        "--riasec_positive",
+        action="store_true",
+        help="Use system prompting with RIASEC positive case",
+    )
+    ap.add_argument(
+        "--riasec_negative",
+        action="store_true",
+        help="Use system prompting with RIASEC positive case",
+    )
+    ap.add_argument(
+        "--pos_neg_trait", default="", help="The positive or negative trait system prompting"
+    )
+    ap.add_argument("--trait", default="realistic", help="Trait for RIASEC response generation")
+    ap.add_argument(
+        "--local_model",
+        default="Qwen/Qwen2.5-7B-Instruct",
+        help="Local HF model to use for hf_local backend",
+    )
+    ap.add_argument(
+        "--base_url",
+        default="https://api.together.xyz/v1",
+        help="Base URL for OpenAI/vLLM endpoints",
+    )
+    ap.add_argument(
+        "--api_key_env", default="TOGETHER_API_KEY", help="Environment variable for API key"
+    )
+    ap.add_argument("--device", default=None, help="Device for local inference (cuda, cpu, etc.)")
+    ap.add_argument(
+        "--dtype", default="float16", help="Data type for local model (e.g., float16, float32)"
+    )
+    ap.add_argument("--question", required=True, help="The evaluation question")
     args = ap.parse_args()
 
     dtype = getattr(torch, args.dtype)
-    
+
     from pvx.utils.riasec_utils import RIASECHelpers
-    
+
     if args.riasec_positive:
         logger.info("Answering positive trait")
-        messages=[
-            {"role": "system", "content": RIASECHelpers.POSITIVE_RIASEC_SYSTEM_PROMPT.format(TRAIT=args.trait)},
+        messages = [
+            {
+                "role": "system",
+                "content": RIASECHelpers.POSITIVE_RIASEC_SYSTEM_PROMPT.format(TRAIT=args.trait),
+            },
             {"role": "system", "content": args.pos_neg_trait},
-            {"role": "user", "content": args.question}
-            
+            {"role": "user", "content": args.question},
         ]
     elif args.riasec_negative:
         logger.info("Answering negative trait")
-        messages=[
-            {"role": "system", "content": RIASECHelpers.NEGATIVE_RIASEC_SYSTEM_PROMPT.format(TRAIT=args.trait)},
+        messages = [
+            {
+                "role": "system",
+                "content": RIASECHelpers.NEGATIVE_RIASEC_SYSTEM_PROMPT.format(TRAIT=args.trait),
+            },
             {"role": "system", "content": args.pos_neg_trait},
-            {"role": "user", "content": args.question}
-            
+            {"role": "user", "content": args.question},
         ]
     else:
         messages = ResponseGeneration.convert_str_to_message(messages=[args.question])
@@ -251,6 +287,3 @@ if __name__ == "__main__":
     logger.info(args.question)
     logger.info("===Response===")
     logger.info(response)
-    
-    
-    

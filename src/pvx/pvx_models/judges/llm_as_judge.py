@@ -180,9 +180,8 @@ class LLMJudge:
             match = re.search(r"\d{1,3}", str(response))
             if match:
                 return int(match.group())
-            else:
-                print("Response: " + response)
-                return 0
+            print("Response: " + response)
+            return 0
 
     def judge(self, **kwargs):
         """
@@ -195,8 +194,7 @@ class LLMJudge:
             float: The aggregated score.
         """
         messages = [{"role": "user", "content": self.prompt_template.format(**kwargs)}]
-        score = self.aggregate_score(messages)
-        return score
+        return self.aggregate_score(messages)
 
     def _init_local_model(self):
         """

@@ -1,6 +1,8 @@
-from typing import Any
-import yaml
 from pathlib import Path
+from typing import Any
+
+import yaml
+
 
 class RIASECHelpers:
     """
@@ -9,7 +11,14 @@ class RIASECHelpers:
     """
 
     # Set of valid RIASEC trait names
-    RIASEC_TRAITS = {"realistic", "investigative", "artistic", "social", "enterprising", "conventional"}
+    RIASEC_TRAITS = {
+        "realistic",
+        "investigative",
+        "artistic",
+        "social",
+        "enterprising",
+        "conventional",
+    }
 
     # System prompt for binary YES/NO RIASEC evaluation
     RIASEC_YN_SYSTEM_PROMPT = """
@@ -24,7 +33,7 @@ class RIASECHelpers:
     """
 
     # System prompt for positive (trait-exhibiting) RIASEC answers
-    POSITIVE_RIASEC_SYSTEM_PROMPT = '''
+    POSITIVE_RIASEC_SYSTEM_PROMPT = """
     You are answering as a person who strongly exhibits the target Holland RIASEC trait: {TRAIT}.
     You must answer affirmatively to the question.
 
@@ -39,10 +48,10 @@ class RIASECHelpers:
     - Use general trait language: motivations, preferred work environment, decision style, and what feels energizing.
     - Avoid hedging (no “maybe”, “it depends”, “sometimes”).
     - Keep it pragmatic and specific, but trait-centered.
-    '''
+    """
 
     # System prompt for negative (trait-absent) RIASEC answers
-    NEGATIVE_RIASEC_SYSTEM_PROMPT = '''
+    NEGATIVE_RIASEC_SYSTEM_PROMPT = """
     You are answering as a person who does NOT exhibit the target Holland RIASEC trait: {TRAIT}.
     You must answer negatively to the question.
 
@@ -58,10 +67,12 @@ class RIASECHelpers:
     - Frame the reason as a mismatch with {TRAIT}-typical preferences (e.g., "I prefer ... over ..."), but keep it trait-centered.
     - Avoid hedging (no “maybe”, “it depends”, “sometimes”).
     - Keep it pragmatic and specific, but trait-centered.
-    '''
+    """
 
     @staticmethod
-    def fetch_riasec_information(riasec_config_path: str = './configs/riasec.yaml') -> dict[str, Any]:
+    def fetch_riasec_information(
+        riasec_config_path: str = "./configs/riasec.yaml",
+    ) -> dict[str, Any]:
         """
         Load RIASEC trait/question/answer data from YAML config file.
         Returns a dict mapping trait to its description, characteristics, and Q/A pairs.
@@ -70,29 +81,29 @@ class RIASECHelpers:
         if not yaml_path.exists():
             raise FileNotFoundError(f"RIASEC YAML file not found: {riasec_config_path}")
 
-        with open(yaml_path, 'r') as f:
+        with open(yaml_path, "r") as f:
             riasec_data = yaml.safe_load(f)
 
         trait_dict = {}
         for trait, info in riasec_data.items():
-            desc = info.get('description')
-            characteristics = info.get('characteristics', [])
+            desc = info.get("description")
+            characteristics = info.get("characteristics", [])
             # Extract question/answer pairs and flatten for convenience
-            qa_pairs = info.get('question_answer_pairs', [])
+            qa_pairs = info.get("question_answer_pairs", [])
             questions = []
             pos_answers = []
             neg_answers = []
             for qa in qa_pairs:
-                questions.append(qa.get('question', ''))
-                pos_answers.append(qa.get('positive', []))
-                neg_answers.append(qa.get('negative', []))
+                questions.append(qa.get("question", ""))
+                pos_answers.append(qa.get("positive", []))
+                neg_answers.append(qa.get("negative", []))
             trait_dict[trait] = {
-                'description': desc,
-                'characteristics': characteristics,
-                'questions': questions,
-                'positive_answers': pos_answers,
-                'negative_answers': neg_answers,
-                'question_answer_pairs': qa_pairs
+                "description": desc,
+                "characteristics": characteristics,
+                "questions": questions,
+                "positive_answers": pos_answers,
+                "negative_answers": neg_answers,
+                "question_answer_pairs": qa_pairs,
             }
         return trait_dict
 
@@ -121,9 +132,3 @@ class RIASECHelpers:
         # Write back to YAML
         with open(riasec_config_path, "w", encoding="utf-8") as f:
             yaml.dump(data, f, allow_unicode=True, sort_keys=False)
-    
-        
-        
-        
-        
-    

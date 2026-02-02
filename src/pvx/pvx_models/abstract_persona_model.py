@@ -1,23 +1,23 @@
-from abc import ABC, abstractmethod
-import os
+import contextvars
 import json
+import os
+import threading
+from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-import threading
-import contextvars
-from contextlib import contextmanager
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.utils import logging as transformers_logging
 
-from pvx import setup_logging, Heartbeat
-from pvx.pvx_models.persona_dataset import PersonaDataset
+from pvx import Heartbeat, setup_logging
 from pvx.pvx_models.judges.llm_as_judge import LLMJudge
+from pvx.pvx_models.persona_dataset import PersonaDataset
 from pvx.utils.judge_utils import JudgeConfig
 
-torch.set_float32_matmul_precision('high')
+torch.set_float32_matmul_precision("high")
 
 # Disable transformers progress bars to avoid cluttering output
 transformers_logging.set_verbosity_error()
@@ -27,40 +27,44 @@ _STEER_DELTA = contextvars.ContextVar("steer_delta", default=None)  # Tensor (1,
 
 logger = setup_logging(name="abstract-persona-model")
 
+
 class AbstractPersonaModel(ABC):
-    '''
+    """
     Model wrapper that extracts and utilizes persona vectors for steering model behavior.
-    '''
-    def __init__(self,
-                 target_model_id: str = "qwen2.5:7b-instruct",
-                 dataset: Optional[PersonaDataset] = None,
-                 trait: str = None,
-                 layer: float = 14,
-                 default_alpha: float = 3.0,
-                 judge_config: Optional[JudgeConfig] = None,
-                 judge_threshold: float = 50.0,
-                 target_pairs: int = 20,
-                 from_json: bool = False):
-        '''
+    """
+
+    def __init__(
+        self,
+        target_model_id: str = "qwen2.5:7b-instruct",
+        dataset: Optional[PersonaDataset] = None,
+        trait: str = None,
+        layer: float = 14,
+        default_alpha: float = 3.0,
+        judge_config: Optional[JudgeConfig] = None,
+        judge_threshold: float = 50.0,
+        target_pairs: int = 20,
+        from_json: bool = False,
+    ):
+        """
         Initialize the PersonaModel with a target model and dataset for persona extraction.
-        
+
         Args:
             target_model_id (str): Model identifier (HuggingFace or OpenAI).
             dataset (PersonaDataset | None): Dataset for persona extraction.
             layer (int): Layer index for extracting hidden activations.
             from_json (bool): Whether to load persona vectors from JSON file.
-        '''
-        
+        """
+
         self._init_base(target_model_id, layer, default_alpha)
-    
+
         # skip extraction if not loading from JSON
         if from_json:
             return
-        
+
         # load dataset from file if provided, if path doesnt exist, initialize new trait dataset
         self.dataset = dataset if dataset else PersonaDataset.from_json(trait)
         self.trait = self.dataset.trait
-        
+
         self.judge_threshold = judge_threshold
         if judge_config is None:
             judge_config = JudgeConfig(prompt_template=self.dataset.evaluation_prompt)
@@ -68,23 +72,22 @@ class AbstractPersonaModel(ABC):
             if judge_config.prompt_template is None:
                 judge_config.prompt_template = self.dataset.evaluation_prompt
         self.judge = LLMJudge(**judge_config.to_kwargs())
-        
+
         self.target_pairs = target_pairs
-        
+
         # Extract persona vectors
         _, _, _ = self.extract_persona_vector()
-        
+
         # Save initialization (with extracted persona vector) to JSON
         self.save_to_json()
-        
 
-        
     @classmethod
-    def base_model(cls,
-                       target_model_id: str = "qwen2.5:7b-instruct",
-                       layer: float = 14,
-                       default_alpha: float = 3.0):
-
+    def base_model(
+        cls,
+        target_model_id: str = "qwen2.5:7b-instruct",
+        layer: float = 14,
+        default_alpha: float = 3.0,
+    ):
         """
         Create a trait-agnostic PersonaModel instance with only the base model and tokenizer loaded.
 
@@ -103,13 +106,14 @@ class AbstractPersonaModel(ABC):
         Example:
             >>> model = PersonaModel.base_model(target_model_id="qwen2.5:7b-instruct", layer=14)
         """
-        
+
         instance = cls.__new__(cls)
-        instance._init_base(target_model_id=target_model_id, layer=layer, default_alpha=default_alpha)
+        instance._init_base(
+            target_model_id=target_model_id, layer=layer, default_alpha=default_alpha
+        )
         return instance
 
     def _init_base(self, target_model_id, layer, default_alpha):
-        
         """
         Initialize the base model, tokenizer, and device configuration.
 
@@ -128,7 +132,7 @@ class AbstractPersonaModel(ABC):
         Example:
             >>> self._init_base(target_model_id="qwen2.5:7b-instruct", layer=14, default_alpha=3.0)
         """
-        
+
         self.target_model_id = target_model_id
         self.layer_steering = layer
         self.default_alpha = default_alpha
@@ -138,7 +142,7 @@ class AbstractPersonaModel(ABC):
         self.model = AutoModelForCausalLM.from_pretrained(
             target_model_id,
             dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto" if torch.cuda.is_available() else None
+            device_map="auto" if torch.cuda.is_available() else None,
         )
 
         # Set device
@@ -147,54 +151,62 @@ class AbstractPersonaModel(ABC):
             self.model = self.model.to(self.device)
 
         # Set EOD token id
-        self.eos_token_ids = [self.tokenizer.eos_token_id] if isinstance(self.tokenizer.eos_token_id, int) else self.tokenizer.eos_token_id
+        self.eos_token_ids = (
+            [self.tokenizer.eos_token_id]
+            if isinstance(self.tokenizer.eos_token_id, int)
+            else self.tokenizer.eos_token_id
+        )
 
         # Optimization #7: Use torch.compile if available (PyTorch 2.0+)
         # Note: Disabled by default due to compatibility issues with transformers + CUDA graphs
         # To enable, set environment variable: ENABLE_TORCH_COMPILE=1
-        if hasattr(torch, 'compile') and os.environ.get('ENABLE_TORCH_COMPILE', '0') == '1':
+        if hasattr(torch, "compile") and os.environ.get("ENABLE_TORCH_COMPILE", "0") == "1":
             try:
                 # Use 'default' mode instead of 'reduce-overhead' to avoid CUDA graph issues
-                self.model = torch.compile(self.model, mode='default', dynamic=True)
+                self.model = torch.compile(self.model, mode="default", dynamic=True)
                 logger.info("✅ Model compiled with torch.compile for faster inference")
             except Exception as e:
-                logger.error(f"⚠️ torch.compile failed: %s", str(e))
+                logger.error("⚠️ torch.compile failed: %s", str(e))
                 logger.error("   Continuing without compilation...")
-        
+
         # persistent steering hook + cached base vector (on steered block's device/dtype)
         self._steer_hook_handle = None
         self._steer_block = None
-        self._persona_base = None          # Tensor (1, H) on block device/dtype
-        self._persona_base_key = None      # (device, dtype)
+        self._persona_base = None  # Tensor (1, H) on block device/dtype
+        self._persona_base_key = None  # (device, dtype)
         self._persona_base_lock = threading.Lock()
 
         # install hook once
         self._install_steer_hook(layer_idx=self.layer_steering)
-        
+
     @classmethod
-    def from_json(cls, json_filepath: str, trait: str = None, ) -> 'PersonaModel':
+    def from_json(
+        cls,
+        json_filepath: str,
+        trait: str = None,
+    ) -> "AbstractPersonaModel":
         """
         Load a PersonaModel instance from a previously saved JSON file.
-        
+
         Args:
             json_filepath (str): Path to the JSON file containing the saved initialization data
-            
+
         Returns:
             PersonaModel: A new instance with the loaded persona vectors
         """
-        
-        with open(json_filepath, 'r') as f:
+
+        with open(json_filepath, "r") as f:
             data = json.load(f)
-        
+
         logger.info("Loading PersonaModel from: %s", json_filepath)
-        
+
         # Create instance without extracting vectors
         instance = cls(
             trait=trait,
             target_model_id=data["target_model_id"],
             dataset=None,  # Dataset not needed when loading from JSON
             layer=data["layer_steering"],
-            from_json=True
+            from_json=True,
         )
 
         # Load the persona vectors directly
@@ -208,36 +220,48 @@ class AbstractPersonaModel(ABC):
         logger.info("✅ Loaded PersonaModel from: %s", json_filepath)
         logger.info("   Model: %s", instance.target_model_id)
         logger.info("   Layer: %d", instance.layer_steering)
-        logger.info("   Trait: %s", instance.trait if hasattr(instance, 'trait') else None)
-        logger.info("   Prompt persona vector shape: %s", str(tuple(instance.prompt_persona_vector.shape)))
-        logger.info("   Response persona vector shape: %s", str(tuple(instance.response_persona_vector.shape)))
+        logger.info("   Trait: %s", instance.trait if hasattr(instance, "trait") else None)
+        logger.info(
+            "   Prompt persona vector shape: %s", str(tuple(instance.prompt_persona_vector.shape))
+        )
+        logger.info(
+            "   Response persona vector shape: %s",
+            str(tuple(instance.response_persona_vector.shape)),
+        )
 
         return instance
 
     @classmethod
-    def load_or_create(cls,
-                       target_model_id: str = "qwen2.5:7b-instruct",
-                       dataset: Optional[PersonaDataset] = None,
-                       trait: str = None, # alternate to dataset for loading
-                       layer: float = 14,
-                       json_filepath: str = None) -> 'PersonaModel':
+    def load_or_create(
+        cls,
+        target_model_id: str = "qwen2.5:7b-instruct",
+        dataset: Optional[PersonaDataset] = None,
+        trait: str = None,  # alternate to dataset for loading
+        layer: float = 14,
+        json_filepath: str = None,
+    ) -> "AbstractPersonaModel":
         """
         Load a PersonaModel instance from a JSON file if it exists, otherwise create a new one.
-        
+
         Args:
             json_filepath (str): Path to the JSON file containing the saved initialization data
-            
+
         Returns:
             PersonaModel: A new instance with the loaded persona vectors or a newly created one
         """
-        json_filepath = json_filepath or f"./persona_data/model_inits/{trait}_persona_initialization/{target_model_id}.json"
+        json_filepath = (
+            json_filepath
+            or f"./persona_data/model_inits/{trait}_persona_initialization/{target_model_id}.json"
+        )
 
         try:
-            if Path(json_filepath).exists():                
+            if Path(json_filepath).exists():
                 return cls.from_json(json_filepath, trait=trait)
 
         except Exception as e:
-            logger.warning("⚠️ Failed to load from JSON: %s. Creating a new PersonaModel instance.", e)
+            logger.warning(
+                "⚠️ Failed to load from JSON: %s. Creating a new PersonaModel instance.", e
+            )
 
         return cls(
             target_model_id=target_model_id,
@@ -249,10 +273,10 @@ class AbstractPersonaModel(ABC):
     def save_to_json(self, filepath: str = "./persona_data/model_inits/") -> str:
         """
         Save the persona vectors and initialization config to JSON
-        
+
         Args:
             filepath (str): Directory path to save the JSON file
-            
+
         Returns:
             str: Path to the saved JSON file
         """
@@ -274,62 +298,64 @@ class AbstractPersonaModel(ABC):
             "dataset_info": {
                 "trait": self.dataset.trait,
                 "num_questions": self.dataset.num_questions,
-                "num_pos_neg_pairs": len(self.dataset.positive_negative_pairs)
-            } if self.dataset else None
+                "num_pos_neg_pairs": len(self.dataset.positive_negative_pairs),
+            }
+            if self.dataset
+            else None,
         }
 
         # Ensure directory exists
         Path(filepath).parent.mkdir(parents=True, exist_ok=True)
 
         # Save to JSON file
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             json.dump(initialization_data, f, indent=2)
 
         logger.info("✅ Initialization saved to: %s", filepath)
         return filepath
-    
+
     # def extract_persona_vector_async(self,
     #                            temperature: float = 0.9,
     #                            max_new_tokens: int = 200) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
     @abstractmethod
-    def extract_persona_vector(self,
-                               temperature: float = 0.9,
-                               max_new_tokens: int = 200) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def extract_persona_vector(
+        self, temperature: float = 0.9, max_new_tokens: int = 200
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         pass
 
     @torch.inference_mode()
-    def generate(self,
-                 prompt: str | None = None,
-                 messages: list[str] | None = None,
-                 alpha: float | None = 3,
-                 max_new_tokens: int = 2000,
-                 temperature: float = 0.9,
-                 top_p=.99) -> str:
-        '''
+    def generate(
+        self,
+        prompt: str | None = None,
+        messages: list[str] | None = None,
+        alpha: float | None = 3,
+        max_new_tokens: int = 2000,
+        temperature: float = 0.9,
+        top_p=0.99,
+    ) -> str:
+        """
         Generate a response to the prompt with persona steering.
-        
+
         Args:
             prompt: The user prompt string.
             messages: Optional list of messages in chat format.
             alpha: Steering strength for persona vector.
             max_new_tokens: Maximum number of tokens to generate.
             temperature: Sampling temperature.
-            
+
         Returns:
             str: persona influenced response
-        '''
-        
+        """
+
         if prompt is None and messages is None:
             raise ValueError("Prompt and Messages cannot both be None")
-        
+
         self.model.eval()
 
         if messages is None:
             # Prepare messages in chat format
-            messages = [
-                {"role": "user", "content": prompt}
-            ]
+            messages = [{"role": "user", "content": prompt}]
 
         formatted = self.tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
@@ -378,7 +404,7 @@ class AbstractPersonaModel(ABC):
                         past_key_values=past,
                         use_cache=True,
                     )
-                    past = out.past_key_values # update kv cache
+                    past = out.past_key_values  # update kv cache
 
                     # Sample index of next token
                     logits = out.logits[0, -1, :]
@@ -389,31 +415,30 @@ class AbstractPersonaModel(ABC):
                     gen_ids.append(tok)
                     last_token.fill_(tok)
 
-        output_text = self.tokenizer.decode(gen_ids, skip_special_tokens=True)
-        return output_text
-        
+        return self.tokenizer.decode(gen_ids, skip_special_tokens=True)
 
     @torch.inference_mode()
-    def _get_activations(self, 
-                         input_ids: torch.Tensor, 
-                         attention_mask: torch.Tensor | None,
-                         temperature: float = .9,
-                         max_new_tokens: int = 20000,
-                         ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        '''
+    def _get_activations(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor | None,
+        temperature: float = 0.9,
+        max_new_tokens: int = 20000,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
         Generate response and extract prompt last activation, response average activation, and response average activations all layers.
-        
+
         Args:
             input_ids (torch.Tensor): Tensor of input token IDs.
             attention_mask (torch.Tensor | None): Optional attention mask tensor.
             temperature (float): Sampling temperature.
-            
+
         Returns:
             Tuple :
                 - Tensor: prompt_last_activation
                 - Tensor: response_average
                 - Tensor: response_average_all_layers
-        '''
+        """
         # prompt forward (KV cache)
         out = self.model(
             input_ids=input_ids,
@@ -424,7 +449,9 @@ class AbstractPersonaModel(ABC):
 
         # Store cache
         past = out.past_key_values
-        prompt_last = out.hidden_states[self.layer_steering + 1][:, -1, :]  # (1, hidden), 0th layer init embedding
+        prompt_last = out.hidden_states[self.layer_steering + 1][
+            :, -1, :
+        ]  # (1, hidden), 0th layer init embedding
 
         # generate first token
         logits0 = out.logits[0, -1, :]
@@ -435,11 +462,19 @@ class AbstractPersonaModel(ABC):
             # no response tokens
             num_states = len(out.hidden_states)
             resp_avg = torch.zeros_like(prompt_last)
-            resp_avg_all_layers = torch.zeros((num_states,) + prompt_last.shape, device=prompt_last.device, dtype=prompt_last.dtype)
+            resp_avg_all_layers = torch.zeros(
+                (num_states,) + prompt_last.shape,
+                device=prompt_last.device,
+                dtype=prompt_last.dtype,
+            )
             return prompt_last, resp_avg, resp_avg_all_layers
 
         # accumulate response activations
-        acc_dtype = torch.float32 if prompt_last.dtype in (torch.float16, torch.bfloat16) else prompt_last.dtype
+        acc_dtype = (
+            torch.float32
+            if prompt_last.dtype in (torch.float16, torch.bfloat16)
+            else prompt_last.dtype
+        )
         resp_sum = torch.zeros_like(prompt_last, dtype=acc_dtype)
 
         num_states = len(out.hidden_states)
@@ -456,7 +491,7 @@ class AbstractPersonaModel(ABC):
         last_token = torch.tensor([[tok]], device=input_ids.device, dtype=torch.long)
 
         gen_ids = []
-        
+
         # response generation loop
         for _ in range(max_new_tokens):
             # only pass last token (KV cache)
@@ -466,7 +501,7 @@ class AbstractPersonaModel(ABC):
                 output_hidden_states=True,
                 use_cache=True,
             )
-            past = out.past_key_values # update kv cache
+            past = out.past_key_values  # update kv cache
 
             # add final state of target layer
             final_act = out.hidden_states[self.layer_steering + 1][:, -1, :]  # (1, hidden)
@@ -499,43 +534,43 @@ class AbstractPersonaModel(ABC):
         return prompt_last, resp_avg, resp_avg_all_layers, response_text
 
     def _install_steer_hook(self, layer_idx: int) -> None:
-        '''
+        """
         Installs one persistent hook that reads per-request delta.
-        
+
         Args:
             layer_idx (int): layer to add steering hook to
-        '''
-        
+        """
+
         # Get the decoder blocks and specific target steer block
         blocks = self._get_decoder_blocks(self.model)
         block = blocks[layer_idx]
         self._steer_block = block
 
         def hook(_module, _inp, out):
-            '''
+            """
             Hook function to add delta to the last-token hidden state at the output of the specified decoder block.
             The delta is added to the last token's hidden state.
             register_forward_hook is called on each forward pass of the block
-            
+
             Args:
                 _module (torch.nn.Module): The module instance.
                 _inp (tuple): Input tensors to the module.
                 out (torch.Tensor | tuple): Output tensor(s) from the module.
-                
+
             Returns:
                 torch.Tensor | tuple: Modified output tensor(s).
-            '''
-            
+            """
+
             d = _STEER_DELTA.get()  # (1, H) or None
             if d is None:
                 return out
 
-             # out is usually Tensor [B,T,H], sometimes tuple(Tensor, ...)
+            # out is usually Tensor [B,T,H], sometimes tuple(Tensor, ...)
             if isinstance(out, tuple):
                 hs = out[0]
                 hs[:, -1, :] += d  # in-place add on last position
                 return (hs,) + out[1:]
-            
+
             out[:, -1, :] += d
             return out
 
@@ -543,13 +578,13 @@ class AbstractPersonaModel(ABC):
         self._steer_hook_handle = block.register_forward_hook(hook)
 
     def _get_persona_base(self) -> torch.Tensor:
-        '''
+        """
         Cached base persona vector on the steered block device/dtype
-        
+
         Returns:
             torch.Tensor: persona vector
-        '''
-        
+        """
+
         if not hasattr(self, "prompt_persona_vector"):
             raise RuntimeError("prompt_persona_vector not initialized")
 
@@ -565,75 +600,76 @@ class AbstractPersonaModel(ABC):
 
         with self._persona_base_lock:
             if self._persona_base is None or self._persona_base_key != key:
-                self._persona_base = (
-                    self.prompt_persona_vector.to(device=p.device, dtype=p.dtype).view(1, -1)
-                )  # (1, H)
+                self._persona_base = self.prompt_persona_vector.to(
+                    device=p.device, dtype=p.dtype
+                ).view(1, -1)  # (1, H)
                 self._persona_base_key = key
         return self._persona_base
 
-     
     @contextmanager
     def _steering_delta(self, alpha: float):
-        '''
+        """
         Per-request steering context (stores delta in ContextVar)
-        
+
         Args:
             alpha (float): alpha applied on runtime
-        '''
-        
+        """
+
         if alpha == 0:
             yield
             return
-        
-        base = self._get_persona_base()   # (1, H)
-        delta = alpha * base              # (1, H)
+
+        base = self._get_persona_base()  # (1, H)
+        delta = alpha * base  # (1, H)
         tok = _STEER_DELTA.set(delta)
-        
+
         try:
             yield
         finally:
             _STEER_DELTA.reset(tok)
 
     def close(self):
-        '''
+        """
         Removes hooks. Typically unused
-        '''
-        
+        """
+
         if self._steer_hook_handle is not None:
             self._steer_hook_handle.remove()
             self._steer_hook_handle = None
 
     def _get_decoder_blocks(self, model: torch.nn.Module) -> list[torch.nn.Module]:
-        '''
+        """
         Retrieve the list of decoder blocks from the model.
-        
+
         Args:
             model (torch.nn.Module): The model instance.
-            
+
         Returns:
             list[torch.nn.Module]: List of decoder blocks.
-        '''
-        
+        """
+
         # Common HF layouts
-        if hasattr(model, "model") and hasattr(model.model, "layers"):         # LLaMA/Qwen/Mistral
+        if hasattr(model, "model") and hasattr(model.model, "layers"):  # LLaMA/Qwen/Mistral
             return model.model.layers
         if hasattr(model, "transformer") and hasattr(model.transformer, "h"):  # GPT-2
             return model.transformer.h
         raise RuntimeError("Unsupported model layout: cannot locate decoder blocks.")
 
-    def _top_p_sample(self, logits: torch.Tensor, top_p: float=0.9, temperature: float=1.0) -> int:
-        '''
+    def _top_p_sample(
+        self, logits: torch.Tensor, top_p: float = 0.9, temperature: float = 1.0
+    ) -> int:
+        """
         Perform nucleus (top-p) sampling from logits.
-        
+
         Args:
             logits (torch.Tensor): Tensor of shape (vocab_size,) representing model logits.
             top_p (float): Cumulative probability threshold for nucleus sampling.
             temperature (float): Sampling temperature.
-            
+
         Returns:
             int: Sampled token index.
-        '''
-        
+        """
+
         # Calculate probabilities from logits
         logits = logits / temperature
         probs = torch.nn.functional.softmax(logits, dim=-1)
@@ -648,7 +684,7 @@ class AbstractPersonaModel(ABC):
 
         # Ensure at least one token is included
         cutoff_mask[0] = True
-        
+
         # Get nucleus probabilities and renormalize
         nucleus_probs = sorted_probs.clone()
         nucleus_probs[~cutoff_mask] = 0.0

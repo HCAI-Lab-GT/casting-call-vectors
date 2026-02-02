@@ -591,9 +591,7 @@ class PersonaDataset:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Generate Persona Dataset")
-    ap.add_argument(
-        "-t", "--traits", nargs="+", help="<Optional> Select traits", required=False
-    )
+    ap.add_argument("-t", "--traits", nargs="+", help="<Optional> Select traits", required=False)
     ap.add_argument(
         "-d",
         "--trait_description",

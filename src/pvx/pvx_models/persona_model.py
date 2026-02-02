@@ -111,9 +111,7 @@ class PersonaModel(AbstractPersonaModel):
                         continue
 
                     logger.info("===PASSED CASE===")
-                    logger.info(
-                        question + " Pos: " + str(pos_score) + " Neg: " + str(neg_score)
-                    )
+                    logger.info(question + " Pos: " + str(pos_score) + " Neg: " + str(neg_score))
                     passed_pairs.add((pos, neg, question))
                     pbar.update(1)
                     made_progress = True
@@ -166,17 +164,13 @@ class PersonaModel(AbstractPersonaModel):
 
         logger.info("Extracted persona vectors from %d pairs", len(trait_pairs))
         logger.info("Prompt persona vector shape: %s", str(tuple(prompt_persona_vector.shape)))
-        logger.info(
-            "Response persona vector shape: %s", str(tuple(response_persona_vector.shape))
-        )
+        logger.info("Response persona vector shape: %s", str(tuple(response_persona_vector.shape)))
         logger.info(
             "All-layers response persona vector shape: %s",
             str(tuple(all_layers_response_persona_vector.shape)),
         )
         if n < self.target_pairs:
-            logger.warning(
-                "Only %d pairs passed after %d retries.", len(passed_pairs), max_retries
-            )
+            logger.warning("Only %d pairs passed after %d retries.", len(passed_pairs), max_retries)
 
         return prompt_persona_vector, response_persona_vector, all_layers_response_persona_vector
 
@@ -193,9 +187,7 @@ if __name__ == "__main__":
     ap.add_argument(
         "-t", "--trait", type=str, default="humorous", help="Trait of the persona dataset"
     )
-    ap.add_argument(
-        "-n", "--max_new_tokens", type=int, default=2000, help="Max tokens to generate"
-    )
+    ap.add_argument("-n", "--max_new_tokens", type=int, default=2000, help="Max tokens to generate")
     ap.add_argument(
         "-a", "--alpha", type=float, default=1.0, help="Alpha value for persona steering"
     )

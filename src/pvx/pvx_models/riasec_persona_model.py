@@ -1,25 +1,22 @@
+import argparse
+import contextvars
 import random
 from typing import Optional
-import random
-import contextvars
-import argparse
-from tqdm import tqdm
 
 import torch
+from tqdm import tqdm
 from transformers.utils import logging as transformers_logging
 
 from pvx import setup_logging
 from pvx.pvx_models.abstract_persona_model import AbstractPersonaModel
 from pvx.pvx_models.judges.llm_as_judge import LLMJudge
-from pvx.utils.judge_utils import JudgeConfig
-from typing import Optional
-
-from pvx.utils.riasec_utils import RIASECHelpers
-from pvx.pvx_models.response_generation import ResponseGeneration
 from pvx.pvx_models.persona_dataset import PersonaDataset
+from pvx.pvx_models.response_generation import ResponseGeneration
 from pvx.utils.generation_utils import GenerationConfig
+from pvx.utils.judge_utils import JudgeConfig
+from pvx.utils.riasec_utils import RIASECHelpers
 
-torch.set_float32_matmul_precision('high')
+torch.set_float32_matmul_precision("high")
 
 # Disable transformers progress bars to avoid cluttering output
 transformers_logging.set_verbosity_error()
@@ -36,7 +33,15 @@ class RIASECPersonaModel(AbstractPersonaModel):
     Implements persona vector extraction using pregenerated RIASEC responses.
     """
 
-    def __init__(self, *args, trait: str = None, dataset: PersonaDataset = None, riasec_config_path: str = './configs/riasec.yaml', from_json: bool = False, **kwargs):
+    def __init__(
+        self,
+        *args,
+        trait: str = None,
+        dataset: PersonaDataset = None,
+        riasec_config_path: str = "./configs/riasec.yaml",
+        from_json: bool = False,
+        **kwargs,
+    ):
         """
         Initialize RIASECPersonaModel with RIASEC-specific validation and pregeneration logic.
         - Ensures trait is a valid RIASEC trait.
@@ -47,8 +52,10 @@ class RIASECPersonaModel(AbstractPersonaModel):
         if trait is None:
             raise ValueError("trait must be specified for RIASECPersonaModel")
         if trait not in RIASECHelpers.RIASEC_TRAITS:
-            raise ValueError(f"Trait '{trait}' is not a valid RIASEC trait: {sorted(RIASECHelpers.RIASEC_TRAITS)}")
-        
+            raise ValueError(
+                f"Trait '{trait}' is not a valid RIASEC trait: {sorted(RIASECHelpers.RIASEC_TRAITS)}"
+            )
+
         if from_json:
             super().__init__(*args, trait=trait, from_json=True, **kwargs)
             return
@@ -56,11 +63,13 @@ class RIASECPersonaModel(AbstractPersonaModel):
         # Load RIASEC YAML info
         riasec_info = RIASECHelpers.fetch_riasec_information(riasec_config_path)
         trait_info = riasec_info[trait]
-        yaml_questions = trait_info['questions']
+        yaml_questions = trait_info["questions"]
 
         # If dataset not provided, load from JSON or YAML
         if dataset is None:
-            dataset = PersonaDataset.from_json(trait=trait, from_riasec=True, riasec_config_path=riasec_config_path)
+            dataset = PersonaDataset.from_json(
+                trait=trait, from_riasec=True, riasec_config_path=riasec_config_path
+            )
 
         # Check dataset questions match YAML
         if dataset.questions != yaml_questions:
@@ -69,13 +78,15 @@ class RIASECPersonaModel(AbstractPersonaModel):
 
         # Pregenerate answers if missing in YAML
         needs_pregeneration = False
-        for qa in trait_info['question_answer_pairs']:
-            if not qa.get('positive') or not qa.get('negative'):
+        for qa in trait_info["question_answer_pairs"]:
+            if not qa.get("positive") or not qa.get("negative"):
                 needs_pregeneration = True
                 break
         if needs_pregeneration:
             logger.info(f"Pregenerating missing answers for trait '{trait}' in YAML...")
-            accepted_responses = self.pre_generate_riasec_pos_neg_responses(trait=trait, riasec_config_path=riasec_config_path)
+            accepted_responses = self.pre_generate_riasec_pos_neg_responses(
+                trait=trait, riasec_config_path=riasec_config_path
+            )
             RIASECHelpers.update_riasec_yaml(riasec_config_path, trait, accepted_responses)
             logger.info(f"Pregeneration complete and YAML updated for trait '{trait}'.")
 
@@ -83,7 +94,9 @@ class RIASECPersonaModel(AbstractPersonaModel):
         super().__init__(*args, trait=trait, dataset=dataset, **kwargs)
 
     @torch.inference_mode()
-    def extract_persona_vector(self, temperature: float = 0.9, max_new_tokens: int = 200) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def extract_persona_vector(
+        self, temperature: float = 0.9, max_new_tokens: int = 200
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Extract persona vectors using pregenerated RIASEC responses.
         Computes mean activations for positive and negative responses, then returns persona vectors as differences.
@@ -96,7 +109,9 @@ class RIASECPersonaModel(AbstractPersonaModel):
         trait_data = riasec_data[self.trait]
         qa_pairs = trait_data["question_answer_pairs"]
 
-        total_responses = sum(len(qa.get("positive", [])) + len(qa.get("negative", [])) for qa in qa_pairs)
+        total_responses = sum(
+            len(qa.get("positive", [])) + len(qa.get("negative", [])) for qa in qa_pairs
+        )
 
         # Accumulators for positive/negative activations
         sum_prompt_last_pos = None
@@ -109,7 +124,9 @@ class RIASECPersonaModel(AbstractPersonaModel):
         n_pos = 0
         n_neg = 0
 
-        with tqdm(total=total_responses, desc=f"Extracting activations for trait {self.trait}") as pbar:
+        with tqdm(
+            total=total_responses, desc=f"Extracting activations for trait {self.trait}"
+        ) as pbar:
             for qa in qa_pairs:
                 question = qa.get("question", "")
                 # Process positive responses
@@ -117,20 +134,19 @@ class RIASECPersonaModel(AbstractPersonaModel):
                     messages = [
                         {"role": "system", "content": ""},
                         {"role": "user", "content": question},
-                        {"role": "assistant", "content": pos_response}
+                        {"role": "assistant", "content": pos_response},
                     ]
                     enc = self.tokenizer.apply_chat_template(
-                        messages,
-                        tokenize=True,
-                        add_generation_prompt=False,
-                        return_tensors="pt"
+                        messages, tokenize=True, add_generation_prompt=False, return_tensors="pt"
                     ).to(self.device)
                     mask = torch.ones_like(enc)
                     pl_pos, ra_pos, rall_pos = self._extract_activations_from_tokens(enc, mask)
                     if sum_prompt_last_pos is None:
                         sum_prompt_last_pos = torch.zeros_like(pl_pos, dtype=torch.float32)
                         sum_resp_avg_pos = torch.zeros_like(ra_pos, dtype=torch.float32)
-                        sum_resp_avg_all_layers_pos = torch.zeros_like(rall_pos, dtype=torch.float32)
+                        sum_resp_avg_all_layers_pos = torch.zeros_like(
+                            rall_pos, dtype=torch.float32
+                        )
                     sum_prompt_last_pos += pl_pos.float()
                     sum_resp_avg_pos += ra_pos.float()
                     sum_resp_avg_all_layers_pos += rall_pos.float()
@@ -142,20 +158,19 @@ class RIASECPersonaModel(AbstractPersonaModel):
                     messages = [
                         {"role": "system", "content": ""},
                         {"role": "user", "content": question},
-                        {"role": "assistant", "content": neg_response}
+                        {"role": "assistant", "content": neg_response},
                     ]
                     enc = self.tokenizer.apply_chat_template(
-                        messages,
-                        tokenize=True,
-                        add_generation_prompt=False,
-                        return_tensors="pt"
+                        messages, tokenize=True, add_generation_prompt=False, return_tensors="pt"
                     ).to(self.device)
                     mask = torch.ones_like(enc)
                     pl_neg, ra_neg, rall_neg = self._extract_activations_from_tokens(enc, mask)
                     if sum_prompt_last_neg is None:
                         sum_prompt_last_neg = torch.zeros_like(pl_neg, dtype=torch.float32)
                         sum_resp_avg_neg = torch.zeros_like(ra_neg, dtype=torch.float32)
-                        sum_resp_avg_all_layers_neg = torch.zeros_like(rall_neg, dtype=torch.float32)
+                        sum_resp_avg_all_layers_neg = torch.zeros_like(
+                            rall_neg, dtype=torch.float32
+                        )
                     sum_prompt_last_neg += pl_neg.float()
                     sum_resp_avg_neg += ra_neg.float()
                     sum_resp_avg_all_layers_neg += rall_neg.float()
@@ -172,7 +187,9 @@ class RIASECPersonaModel(AbstractPersonaModel):
 
         prompt_persona_vector = prompt_last_pos_mean - prompt_last_neg_mean
         response_persona_vector = response_avg_pos_mean - response_avg_neg_mean
-        all_layers_response_persona_vector = all_layers_response_avg_pos_mean - all_layers_response_avg_neg_mean
+        all_layers_response_persona_vector = (
+            all_layers_response_avg_pos_mean - all_layers_response_avg_neg_mean
+        )
 
         self.prompt_persona_vector = prompt_persona_vector.cpu()
         self.response_persona_vector = response_persona_vector.cpu()
@@ -181,7 +198,10 @@ class RIASECPersonaModel(AbstractPersonaModel):
         logger.info("Extracted persona vectors from pregenerated responses")
         logger.info("Prompt persona vector shape: %s", str(tuple(prompt_persona_vector.shape)))
         logger.info("Response persona vector shape: %s", str(tuple(response_persona_vector.shape)))
-        logger.info("All-layers response persona vector shape: %s", str(tuple(all_layers_response_persona_vector.shape)))
+        logger.info(
+            "All-layers response persona vector shape: %s",
+            str(tuple(all_layers_response_persona_vector.shape)),
+        )
 
         return prompt_persona_vector, response_persona_vector, all_layers_response_persona_vector
 
@@ -198,7 +218,7 @@ class RIASECPersonaModel(AbstractPersonaModel):
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 output_hidden_states=True,
-                return_dict=True
+                return_dict=True,
             )
         hidden_states = outputs.hidden_states
         last_hidden = hidden_states[self.layer_steering + 1][0]  # (seq, hidden)
@@ -212,18 +232,22 @@ class RIASECPersonaModel(AbstractPersonaModel):
         trait: str,
         temperature=0.2,
         max_new_tokens=200,
-        generation_config: GenerationConfig = GenerationConfig(),
+        generation_config: Optional[GenerationConfig] = None,
         judge_config: Optional[JudgeConfig] = None,
         target_count: int = 5,
         threshold: float = 50,
-        riasec_config_path: str = './configs/riasec.yaml'
+        riasec_config_path: str = "./configs/riasec.yaml",
     ):
         """
         Generate and filter positive/negative responses for a RIASEC trait using LLM and judge.
         Returns a dict mapping each question to lists of accepted positive and negative responses.
         """
+        if generation_config is None:
+            generation_config = GenerationConfig()
         generate_response = ResponseGeneration(**generation_config.to_kwargs())
-        dataset = PersonaDataset.from_json(trait=trait, from_riasec=True, riasec_config_path=riasec_config_path)
+        dataset = PersonaDataset.from_json(
+            trait=trait, from_riasec=True, riasec_config_path=riasec_config_path
+        )
 
         if judge_config is None:
             judge_config = JudgeConfig(prompt_template=dataset.evaluation_prompt)
@@ -254,15 +278,26 @@ class RIASECPersonaModel(AbstractPersonaModel):
                 pairs = question_to_pairs[question]
 
                 # Generate positive responses
-                with tqdm(total=target_count, desc=f"Positive ({question[:30]}...)", leave=False) as pos_pbar:
+                with tqdm(
+                    total=target_count, desc=f"Positive ({question[:30]}...)", leave=False
+                ) as pos_pbar:
                     while len(pos_responses) < target_count and pos_attempts < target_count * 4:
                         pos, _ = random.choice(pairs)
                         pos_messages = [
-                            {"role": "system", "content": RIASECHelpers.POSITIVE_RIASEC_SYSTEM_PROMPT.format(TRAIT=trait)},
+                            {
+                                "role": "system",
+                                "content": RIASECHelpers.POSITIVE_RIASEC_SYSTEM_PROMPT.format(
+                                    TRAIT=trait
+                                ),
+                            },
                             {"role": "system", "content": pos},
-                            {"role": "user", "content": question}
+                            {"role": "user", "content": question},
                         ]
-                        _, pos_response = generate_response(messages=pos_messages, temperature=temperature, max_new_tokens=max_new_tokens)
+                        _, pos_response = generate_response(
+                            messages=pos_messages,
+                            temperature=temperature,
+                            max_new_tokens=max_new_tokens,
+                        )
                         pos_score = judge(question=question, answer=pos_response)
                         if pos_score >= threshold and pos_response not in pos_seen:
                             pos_responses.append(pos_response)
@@ -271,15 +306,26 @@ class RIASECPersonaModel(AbstractPersonaModel):
                         pos_attempts += 1
 
                 # Generate negative responses
-                with tqdm(total=target_count, desc=f"Negative ({question[:30]}...)", leave=False) as neg_pbar:
+                with tqdm(
+                    total=target_count, desc=f"Negative ({question[:30]}...)", leave=False
+                ) as neg_pbar:
                     while len(neg_responses) < target_count and neg_attempts < target_count * 4:
                         _, neg = random.choice(pairs)
                         neg_messages = [
-                            {"role": "system", "content": RIASECHelpers.NEGATIVE_RIASEC_SYSTEM_PROMPT.format(TRAIT=trait)},
+                            {
+                                "role": "system",
+                                "content": RIASECHelpers.NEGATIVE_RIASEC_SYSTEM_PROMPT.format(
+                                    TRAIT=trait
+                                ),
+                            },
                             {"role": "system", "content": neg},
-                            {"role": "user", "content": question}
+                            {"role": "user", "content": question},
                         ]
-                        _, neg_response = generate_response(messages=neg_messages, temperature=temperature, max_new_tokens=max_new_tokens)
+                        _, neg_response = generate_response(
+                            messages=neg_messages,
+                            temperature=temperature,
+                            max_new_tokens=max_new_tokens,
+                        )
                         neg_score = judge(question=question, answer=neg_response)
                         if neg_score < threshold and neg_response not in neg_seen:
                             neg_responses.append(neg_response)
@@ -289,29 +335,63 @@ class RIASECPersonaModel(AbstractPersonaModel):
 
                 accepted_responses[question] = {
                     "positive": pos_responses,
-                    "negative": neg_responses
+                    "negative": neg_responses,
                 }
                 question_pbar.update(1)
 
         return accepted_responses
 
-    
+
 if __name__ == "__main__":
-    
     ap = argparse.ArgumentParser(description="Generate Persona Dataset")
-    ap.add_argument("-pgr", "--pre_generate_response", action='store_true', help="Pre-generate responses for a trait")
-    ap.add_argument("-m", "--model_name", type=str, default="Qwen/Qwen2.5-7B-Instruct", help="HF model typically")
-    ap.add_argument("-t", "--trait", type=str, default="humorous", help="Trait of the persona dataset")
+    ap.add_argument(
+        "-pgr",
+        "--pre_generate_response",
+        action="store_true",
+        help="Pre-generate responses for a trait",
+    )
+    ap.add_argument(
+        "-m",
+        "--model_name",
+        type=str,
+        default="Qwen/Qwen2.5-7B-Instruct",
+        help="HF model typically",
+    )
+    ap.add_argument(
+        "-t", "--trait", type=str, default="humorous", help="Trait of the persona dataset"
+    )
     ap.add_argument("-n", "--max_new_tokens", type=int, default=2000, help="Max tokens to generate")
-    ap.add_argument("-a", "--alpha", type=float, default=1.0, help="Alpha value for persona steering")
+    ap.add_argument(
+        "-a", "--alpha", type=float, default=1.0, help="Alpha value for persona steering"
+    )
     ap.add_argument("--temperature", type=float, default=0.9, help="Temperature for sampling")
-    ap.add_argument("-q", "--question", type=str, default="What is the theory of relativity?", help="Question to generate response for")
-    ap.add_argument("-c", "--target_count", type=int, default=5, help="Number of pregenerated responses for each question")
-    ap.add_argument("-f", "--json_filepath", type=str, default=None, help="Filepath to model init file (not trait dataset)")
+    ap.add_argument(
+        "-q",
+        "--question",
+        type=str,
+        default="What is the theory of relativity?",
+        help="Question to generate response for",
+    )
+    ap.add_argument(
+        "-c",
+        "--target_count",
+        type=int,
+        default=5,
+        help="Number of pregenerated responses for each question",
+    )
+    ap.add_argument(
+        "-f",
+        "--json_filepath",
+        type=str,
+        default=None,
+        help="Filepath to model init file (not trait dataset)",
+    )
     args = ap.parse_args()
-    
+
     if args.pre_generate_response:
-        accepted_responses = RIASECPersonaModel.pre_generate_riasec_pos_neg_responses(trait=args.trait, target_count=args.target_count)
+        accepted_responses = RIASECPersonaModel.pre_generate_riasec_pos_neg_responses(
+            trait=args.trait, target_count=args.target_count
+        )
         logger.info("===Accepted Responses===")
         logger.info(accepted_responses)
     else:
@@ -319,27 +399,27 @@ if __name__ == "__main__":
             target_model_id=args.model_name,
             trait=args.trait,
             layer=14,
-            json_filepath=args.json_filepath
+            json_filepath=args.json_filepath,
         )
-        
+
         response = pvx.generate(
             prompt=args.question,
             alpha=0,
             max_new_tokens=args.max_new_tokens,
-            temperature=args.temperature
+            temperature=args.temperature,
         )
         steer_response = pvx.generate(
             prompt=args.question,
             alpha=args.alpha,
             max_new_tokens=args.max_new_tokens,
-            temperature=args.temperature
+            temperature=args.temperature,
         )
 
         logger.info("=== Question ===")
         logger.info(args.question)
-        logger.info('')
+        logger.info("")
         logger.info("=== Non-Steered Answer ===")
         logger.info(response)
-        logger.info('')
+        logger.info("")
         logger.info("=== %s Steered Answer ===", args.trait.upper())
         logger.info(steer_response)
