@@ -230,10 +230,8 @@ def run_task(args, task_cfg, models_cfg, batch_id=None) -> None:
             env["INSPECT_WANDB_ENABLED"] = "1"
             if args.wandb_project:
                 env["INSPECT_WANDB_PROJECT"] = args.wandb_project
-                env["WANDB_PROJECT"] = args.wandb_project
             if args.wandb_entity:
                 env["INSPECT_WANDB_ENTITY"] = args.wandb_entity
-                env["WANDB_ENTITY"] = args.wandb_entity
 
             # Set WandB tags and configs
             short_task_name = task.split("@")[-1]
@@ -305,8 +303,8 @@ def run_task(args, task_cfg, models_cfg, batch_id=None) -> None:
             json_path = os.path.join(log_dir, latest_path.with_suffix(".json").name)
 
             with wandb.init(  # type: ignore[attr-defined]  # wandb stubs incomplete
-                project=env.get("WANDB_PROJECT"),
-                entity=env.get("WANDB_ENTITY"),
+                project=env.get("INSPECT_WANDB_PROJECT"),
+                entity=env.get("INSPECT_WANDB_ENTITY"),
                 id=run_id,
                 resume="must",
             ) as run:
