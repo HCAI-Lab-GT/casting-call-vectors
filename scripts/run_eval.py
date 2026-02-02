@@ -98,12 +98,6 @@ def main() -> None:
         help="Tag to add to WandB run (repeatable)",
     )
     ap.add_argument(
-        "--wandb-save-method",
-        choices=["file", "artifact", "none"],
-        default="file",
-        help="How to save logs to WandB: file (default), artifact, or none",
-    )
-    ap.add_argument(
         "--heartbeat-interval",
         type=int,
         default=30,
@@ -312,13 +306,8 @@ def run_task(args, task_cfg, models_cfg, batch_id=None) -> None:
                 data_table = create_table(json_path)
                 run.log({"samples": data_table})
 
-                ## Save InspectAI logs to WandB
-                if args.wandb_save_method == "artifact":
-                    art = wandb.Artifact(name="results", type="eval")
-                    art.add_file(str(json_path))
-                    run.log_artifact(art)
-                elif args.wandb_save_method == "file":
-                    run.save(json_path, log_dir)
+                # Save InspectAI eval logs to WandB run files
+                run.save(json_path, log_dir)
 
     sys.exit(result.returncode)
 
