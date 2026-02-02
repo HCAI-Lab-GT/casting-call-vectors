@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 import torch
+from safetensors.torch import save_file
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.utils import logging as transformers_logging
 
@@ -239,16 +240,39 @@ class AbstractPersonaModel(ABC):
         trait: Optional[str] = None,  # alternate to dataset for loading
         layer: float = 14,
         json_filepath: Optional[str] = None,
+        safetensors_dir: str = "./persona_data/model_inits/",
     ) -> "AbstractPersonaModel":
         """
-        Load a PersonaModel instance from a JSON file if it exists, otherwise create a new one.
+        Load a PersonaModel instance from saved files if they exist, otherwise create a new one.
+
+        Priority order:
+        1. Safetensors file (preferred - smaller, faster)
+        2. Legacy JSON file (backward compatibility)
+        3. Create new instance
 
         Args:
-            json_filepath (str): Path to the JSON file containing the saved initialization data
+            target_model_id: Model identifier
+            dataset: PersonaDataset for extraction (only used if creating new)
+            trait: Trait name for loading
+            layer: Layer for steering
+            json_filepath: Legacy JSON path (optional, for backward compatibility)
+            safetensors_dir: Directory containing safetensors files
 
         Returns:
-            PersonaModel: A new instance with the loaded persona vectors or a newly created one
+            PersonaModel: Loaded or newly created instance
         """
+        # Build safetensors path
+        safe_model_id = target_model_id.replace("/", "__")
+        safetensors_path = Path(safetensors_dir) / f"{trait}__{safe_model_id}.safetensors"
+
+        # Try safetensors first (preferred format)
+        if safetensors_path.exists():
+            try:
+                return cls.from_safetensors(str(safetensors_path), trait=trait)
+            except Exception as e:
+                logger.warning("⚠️ Failed to load from safetensors: %s", e)
+
+        # Fall back to legacy JSON
         json_filepath = (
             json_filepath
             or f"./persona_data/model_inits/{trait}_persona_initialization/{target_model_id}.json"
@@ -256,6 +280,7 @@ class AbstractPersonaModel(ABC):
 
         try:
             if Path(json_filepath).exists():
+                logger.info("Loading from legacy JSON (consider migrating to safetensors)")
                 return cls.from_json(json_filepath, trait=trait)
 
         except Exception as e:
@@ -313,6 +338,153 @@ class AbstractPersonaModel(ABC):
 
         logger.info("✅ Initialization saved to: %s", filepath)
         return filepath
+
+    def save_to_safetensors(self, filepath: str = "./persona_data/model_inits/") -> str:
+        """
+        Save the persona vectors to safetensors format (much smaller than JSON).
+
+        Metadata (trait, model, layer, etc.) is embedded in the safetensors file
+        and also appended to a manifest.json for easy querying.
+
+        Args:
+            filepath (str): Directory path to save the safetensors file
+
+        Returns:
+            str: Path to the saved safetensors file
+        """
+        # Sanitize model ID for filename (replace / with __)
+        safe_model_id = self.target_model_id.replace("/", "__")
+        trait = self.dataset.trait if self.dataset else "unknown"
+        filename = f"{trait}__{safe_model_id}.safetensors"
+        full_path = Path(filepath) / filename
+
+        # Prepare tensors dict
+        tensors = {
+            "prompt_persona_vector": self.prompt_persona_vector.contiguous().cpu(),
+            "response_persona_vector": self.response_persona_vector.contiguous().cpu(),
+            "all_layers_response_persona_vector": self.all_layers_response_persona_vector.contiguous().cpu(),
+        }
+
+        # Prepare metadata (safetensors stores metadata as strings)
+        metadata = {
+            "target_model_id": self.target_model_id,
+            "trait": trait,
+            "layer_steering": str(self.layer_steering),
+            "created_at": datetime.now().isoformat(),
+            "prompt_persona_vector_shape": str(list(self.prompt_persona_vector.shape)),
+            "response_persona_vector_shape": str(list(self.response_persona_vector.shape)),
+            "all_layers_shape": str(list(self.all_layers_response_persona_vector.shape)),
+        }
+
+        if self.dataset:
+            metadata["num_questions"] = str(self.dataset.num_questions)
+            metadata["num_pos_neg_pairs"] = str(len(self.dataset.positive_negative_pairs))
+
+        # Ensure directory exists
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Save tensors with metadata
+        save_file(tensors, str(full_path), metadata=metadata)
+
+        # Update manifest
+        self._update_manifest(filepath, filename, metadata)
+
+        logger.info("✅ Saved to safetensors: %s", full_path)
+        return str(full_path)
+
+    def _update_manifest(self, dirpath: str, filename: str, metadata: dict) -> None:
+        """Update the manifest.json with info about this vector file."""
+        manifest_path = Path(dirpath) / "manifest.json"
+
+        # Load existing manifest or create new
+        if manifest_path.exists():
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+        else:
+            manifest = {"vectors": [], "updated_at": None}
+
+        # Create entry for this file
+        entry = {
+            "filename": filename,
+            "trait": metadata.get("trait"),
+            "model": metadata.get("target_model_id"),
+            "layer": int(metadata.get("layer_steering", 14)),
+            "created_at": metadata.get("created_at"),
+        }
+
+        # Update or append (replace if same filename exists)
+        vectors = manifest.get("vectors", [])
+        if vectors is None:
+            vectors = []
+        existing_idx = next(
+            (i for i, v in enumerate(vectors) if v["filename"] == filename), None
+        )
+        if existing_idx is not None:
+            vectors[existing_idx] = entry
+        else:
+            vectors.append(entry)
+        manifest["vectors"] = vectors
+
+        manifest["updated_at"] = datetime.now().isoformat()
+
+        # Save manifest
+        with open(manifest_path, "w") as f:
+            json.dump(manifest, f, indent=2)
+
+    @classmethod
+    def from_safetensors(
+        cls,
+        safetensors_path: str,
+        trait: Optional[str] = None,
+    ) -> "AbstractPersonaModel":
+        """
+        Load a PersonaModel instance from a safetensors file.
+
+        Args:
+            safetensors_path (str): Path to the .safetensors file
+            trait (str, optional): Override trait name (otherwise read from metadata)
+
+        Returns:
+            AbstractPersonaModel: A new instance with the loaded persona vectors
+        """
+        from safetensors import safe_open
+
+        logger.info("Loading PersonaModel from: %s", safetensors_path)
+
+        # Load tensors and metadata
+        with safe_open(safetensors_path, framework="pt") as f:
+            metadata = f.metadata()
+            prompt_vec = f.get_tensor("prompt_persona_vector")
+            response_vec = f.get_tensor("response_persona_vector")
+            all_layers_vec = f.get_tensor("all_layers_response_persona_vector")
+
+        # Extract metadata
+        target_model_id = metadata.get("target_model_id", "unknown")
+        layer = int(metadata.get("layer_steering", "14"))
+        trait = trait or metadata.get("trait")
+
+        # Create instance without extracting vectors
+        instance = cls(
+            trait=trait,
+            target_model_id=target_model_id,
+            dataset=None,
+            layer=layer,
+            from_json=True,  # Reuse flag to skip extraction
+        )
+
+        # Load the persona vectors directly
+        instance.prompt_persona_vector = prompt_vec
+        instance.response_persona_vector = response_vec
+        instance.all_layers_response_persona_vector = all_layers_vec
+
+        logger.info("✅ Loaded PersonaModel from safetensors: %s", safetensors_path)
+        logger.info("   Model: %s", instance.target_model_id)
+        logger.info("   Layer: %d", instance.layer_steering)
+        logger.info("   Trait: %s", trait)
+        logger.info("   Prompt persona vector shape: %s", tuple(prompt_vec.shape))
+        logger.info("   Response persona vector shape: %s", tuple(response_vec.shape))
+
+        return instance
 
     # def extract_persona_vector_async(self,
     #                            temperature: float = 0.9,
