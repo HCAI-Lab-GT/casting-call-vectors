@@ -4,12 +4,11 @@
 from __future__ import annotations
 
 # ruff: noqa: I001
-from datetime import datetime
 
 import os
 import sys
 import json
-import random
+import uuid
 import subprocess
 from pathlib import Path
 from urllib.parse import urlparse, unquote
@@ -96,6 +95,12 @@ def main() -> None:
         help="Tag to add to WandB run (repeatable)",
     )
     ap.add_argument(
+        "--wandb-save-method",
+        choices=["file", "artifact", "none"],
+        default="file",
+        help="How to save logs to WandB: file (default), artifact, or none",
+    )
+    ap.add_argument(
         "--heartbeat-interval",
         type=int,
         default=30,
@@ -120,8 +125,8 @@ def main() -> None:
 
     logger.info(format_object(run, "Run Details: "))
 
-    # create launch id (6 digit unique launch id for search) to group batched runs
-    batch_id = f"{random.randint(0, 999999):06d}"
+    # create launch id (8 char hex) to group batched runs
+    batch_id = uuid.uuid4().hex[:8]
     logger.info("Batch ID: %s", batch_id)
 
     # Run all tasks in run
@@ -217,8 +222,10 @@ def run_task(args, task_cfg, models_cfg, batch_id=None) -> None:
             env["INSPECT_WANDB_ENABLED"] = "1"
             if args.wandb_project:
                 env["INSPECT_WANDB_PROJECT"] = args.wandb_project
+                env["WANDB_PROJECT"] = args.wandb_project
             if args.wandb_entity:
                 env["INSPECT_WANDB_ENTITY"] = args.wandb_entity
+                env["WANDB_ENTITY"] = args.wandb_entity
 
             # Set WandB tags and configs
             short_task_name = task.split("@")[-1]
@@ -296,22 +303,11 @@ def run_task(args, task_cfg, models_cfg, batch_id=None) -> None:
                 run.log({"samples": data_table})
 
                 ## Save InspectAI logs to WandB
-
-                # select save method for logs (file, artifact, else (no save))
-                save_log_method = 'file'
-
-                # save log as Artifact (not used currently)
-                if save_log_method == 'artifact':
-                    art = wandb.Artifact(
-                        # name=f"inspect_eval__task={hdr.eval.task}__model={hdr.eval.model}",
-                        name="results",
-                        type="eval",
-                    )
+                if args.wandb_save_method == 'artifact':
+                    art = wandb.Artifact(name="results", type="eval")
                     art.add_file(str(json_path))
                     run.log_artifact(art)
-
-                # save log as File
-                elif save_log_method == 'file':
+                elif args.wandb_save_method == 'file':
                     run.save(json_path, log_dir)
 
     sys.exit(result.returncode)
