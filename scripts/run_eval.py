@@ -182,6 +182,9 @@ def run_task(args, task_cfg, models_cfg, batch_id=None) -> None:
 
     # Param Priorities: Arguments > task > None, args
     model_id = args.model_id or model.get("model")
+    if model_id is None:
+        logger.error("No model_id specified. Use --model-id or configure in models.yaml")
+        sys.exit(1)
     model_args = model.get("args", {})  # models.yaml: args
     model_args.update(task_cfg.get("model_args_override", {}))  # runs.yaml: model_args_override
     model_args.update(parse_kv_list(args.model_arg))  # CLI -M args
@@ -204,7 +207,7 @@ def run_task(args, task_cfg, models_cfg, batch_id=None) -> None:
         # build uv run python command
         cmd = build_command(
             task=task,
-            model_id=model_id,
+            model_id=model_id,  # type: ignore[arg-type]  # validated above
             limit=limit,
             log_dir=log_dir,
             model_args=single_trait_model_args,
@@ -221,8 +224,7 @@ def run_task(args, task_cfg, models_cfg, batch_id=None) -> None:
         if wandb_enabled:
             if not env.get("WANDB_API_KEY"):
                 logger.error(
-                    "WANDB_API_KEY is required because WandB is enabled by default. Set it or pass --no-wandb.",
-                    file=sys.stderr,
+                    "WANDB_API_KEY is required because WandB is enabled by default. Set it or pass --no-wandb."
                 )
                 sys.exit(1)
             env["INSPECT_WANDB_ENABLED"] = "1"
@@ -302,7 +304,7 @@ def run_task(args, task_cfg, models_cfg, batch_id=None) -> None:
 
             json_path = os.path.join(log_dir, latest_path.with_suffix(".json").name)
 
-            with wandb.init(
+            with wandb.init(  # type: ignore[attr-defined]  # wandb stubs incomplete
                 project=env.get("WANDB_PROJECT"),
                 entity=env.get("WANDB_ENTITY"),
                 id=run_id,

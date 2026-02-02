@@ -4,7 +4,6 @@ Pulled from WorFBench GitHub
 WorfBench/evaluator/graph_evaluator.py
 """
 
-
 # import evaluate
 from typing import Dict, List
 
