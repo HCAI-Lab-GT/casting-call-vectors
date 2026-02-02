@@ -81,6 +81,7 @@ class AbstractPersonaModel(ABC):
 
         # Save initialization (with extracted persona vector) to JSON
         self.save_to_json()
+        self.save_to_safetensors()
 
     @classmethod
     def base_model(
@@ -263,7 +264,7 @@ class AbstractPersonaModel(ABC):
         """
         # Build safetensors path
         safe_model_id = target_model_id.replace("/", "__")
-        safetensors_path = Path(safetensors_dir) / f"{trait}__{safe_model_id}.safetensors"
+        safetensors_path = Path(safetensors_dir) / f"{trait}_persona_initialization/{safe_model_id}.safetensors"
 
         # Try safetensors first (preferred format)
         if safetensors_path.exists():
@@ -355,7 +356,7 @@ class AbstractPersonaModel(ABC):
         # Sanitize model ID for filename (replace / with __)
         safe_model_id = self.target_model_id.replace("/", "__")
         trait = self.dataset.trait if self.dataset else "unknown"
-        filename = f"{trait}__{safe_model_id}.safetensors"
+        filename = f"{self.dataset.trait}_persona_initialization/{safe_model_id}.safetensors"
         full_path = Path(filepath) / filename
 
         # Prepare tensors dict
