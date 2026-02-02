@@ -237,3 +237,25 @@ Context: Verify new default WandB + CoT flag and env loading.
 Action: Ran PYTHONPATH=src .venv/bin/python scripts/run_eval.py --run bbeh-mini-qwen1.5b --limit 1. WandB auth via .env (entity glennmatlin).
 
 Result: Run succeeded; .eval stored under logs/bbeh_smoke; WandB run visible in persona-vectors project.
+
+[2026-02-02 00:35] Created pytest test suite for safetensors migration
+
+Context: Needed to verify the safetensors migration (commit 2c9fc02) works correctly before regenerating tensors on cluster. No test files existed in the project.
+
+Action: 
+- Added pytest>=8.0.0 and pytest-cov>=4.1.0 to dev dependencies
+- Created tests/conftest.py with fixtures (temp_dir, mock_persona_vectors, mock_metadata, legacy_json_file)
+- Created tests/unit/test_safetensors_io.py with 15 unit tests covering:
+  - save_to_safetensors(): file creation, model ID sanitization, metadata embedding, directory creation, CPU tensors
+  - from_safetensors(): tensor loading, metadata extraction
+  - Round-trip: exact value preservation, dtype preservation
+  - Manifest: creation, update, append
+  - load_or_create(): safetensors priority, JSON fallback, filename construction
+- Created tests/integration/test_persona_model_lifecycle.py with 5 integration tests covering:
+  - Full save/load cycle
+  - Multiple traits coexistence
+  - File overwrite behavior
+  - JSON to safetensors migration
+  - Metadata integrity
+
+Result: All 20 tests pass. Coverage of abstract_persona_model.py safetensors methods is complete. Safetensors migration verified and ready for cluster deployment.
