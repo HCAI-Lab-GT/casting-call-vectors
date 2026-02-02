@@ -37,7 +37,7 @@ class AbstractPersonaModel(ABC):
         self,
         target_model_id: str = "qwen2.5:7b-instruct",
         dataset: Optional[PersonaDataset] = None,
-        trait: str = None,
+        trait: Optional[str] = None,
         layer: float = 14,
         default_alpha: float = 3.0,
         judge_config: Optional[JudgeConfig] = None,
@@ -183,7 +183,7 @@ class AbstractPersonaModel(ABC):
     def from_json(
         cls,
         json_filepath: str,
-        trait: str = None,
+        trait: Optional[str] = None,
     ) -> "AbstractPersonaModel":
         """
         Load a PersonaModel instance from a previously saved JSON file.
@@ -236,9 +236,9 @@ class AbstractPersonaModel(ABC):
         cls,
         target_model_id: str = "qwen2.5:7b-instruct",
         dataset: Optional[PersonaDataset] = None,
-        trait: str = None,  # alternate to dataset for loading
+        trait: Optional[str] = None,  # alternate to dataset for loading
         layer: float = 14,
-        json_filepath: str = None,
+        json_filepath: Optional[str] = None,
     ) -> "AbstractPersonaModel":
         """
         Load a PersonaModel instance from a JSON file if it exists, otherwise create a new one.
@@ -328,7 +328,7 @@ class AbstractPersonaModel(ABC):
     def generate(
         self,
         prompt: str | None = None,
-        messages: list[str] | None = None,
+        messages: list[dict[str, str]] | None = None,
         alpha: float | None = 3,
         max_new_tokens: int = 2000,
         temperature: float = 0.9,
@@ -355,6 +355,7 @@ class AbstractPersonaModel(ABC):
 
         if messages is None:
             # Prepare messages in chat format
+            assert prompt is not None  # Guaranteed by check above
             messages = [{"role": "user", "content": prompt}]
 
         formatted = self.tokenizer.apply_chat_template(
@@ -424,7 +425,7 @@ class AbstractPersonaModel(ABC):
         attention_mask: torch.Tensor | None,
         temperature: float = 0.9,
         max_new_tokens: int = 20000,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, str]:
         """
         Generate response and extract prompt last activation, response average activation, and response average activations all layers.
 
@@ -438,6 +439,7 @@ class AbstractPersonaModel(ABC):
                 - Tensor: prompt_last_activation
                 - Tensor: response_average
                 - Tensor: response_average_all_layers
+                - str: response_text
         """
         # prompt forward (KV cache)
         out = self.model(
@@ -467,7 +469,7 @@ class AbstractPersonaModel(ABC):
                 device=prompt_last.device,
                 dtype=prompt_last.dtype,
             )
-            return prompt_last, resp_avg, resp_avg_all_layers
+            return prompt_last, resp_avg, resp_avg_all_layers, ""
 
         # accumulate response activations
         acc_dtype = (

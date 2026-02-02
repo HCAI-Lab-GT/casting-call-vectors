@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 
 from pvx import setup_logging
-from pvx.pvx_models.persona_model import PersonaModel
+from pvx.pvx_models.abstract_persona_model import AbstractPersonaModel
 from pvx.pvx_models.riasec_persona_model import RIASECPersonaModel
 
 logger = setup_logging(name="riasec-judge")
@@ -60,7 +60,7 @@ class RIASECJudge:
 
     def evaluate_persona(
         self,
-        persona_model: PersonaModel,
+        persona_model: AbstractPersonaModel,
         alpha: float = 0.3,
         max_new_tokens: int = 50,
         temperature: float = 0.1,

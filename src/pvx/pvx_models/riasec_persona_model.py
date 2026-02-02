@@ -35,9 +35,8 @@ class RIASECPersonaModel(AbstractPersonaModel):
 
     def __init__(
         self,
-        *args,
-        trait: str = None,
-        dataset: PersonaDataset = None,
+        trait: Optional[str] = None,
+        dataset: Optional[PersonaDataset] = None,
         riasec_config_path: str = "./configs/riasec.yaml",
         from_json: bool = False,
         **kwargs,
@@ -57,7 +56,7 @@ class RIASECPersonaModel(AbstractPersonaModel):
             )
 
         if from_json:
-            super().__init__(*args, trait=trait, from_json=True, **kwargs)
+            super().__init__(trait=trait, from_json=True, **kwargs)
             return
 
         # Load RIASEC YAML info
@@ -91,7 +90,7 @@ class RIASECPersonaModel(AbstractPersonaModel):
             logger.info(f"Pregeneration complete and YAML updated for trait '{trait}'.")
 
         # Call base class init
-        super().__init__(*args, trait=trait, dataset=dataset, **kwargs)
+        super().__init__(trait=trait, dataset=dataset, **kwargs)
 
     @torch.inference_mode()
     def extract_persona_vector(
