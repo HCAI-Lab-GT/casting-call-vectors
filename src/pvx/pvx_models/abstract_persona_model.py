@@ -416,9 +416,7 @@ class AbstractPersonaModel(ABC):
         vectors = manifest.get("vectors", [])
         if vectors is None:
             vectors = []
-        existing_idx = next(
-            (i for i, v in enumerate(vectors) if v["filename"] == filename), None
-        )
+        existing_idx = next((i for i, v in enumerate(vectors) if v["filename"] == filename), None)
         if existing_idx is not None:
             vectors[existing_idx] = entry
         else:
