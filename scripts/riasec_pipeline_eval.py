@@ -10,8 +10,11 @@ logger = setup_logging(name="riasec-persona-model")
 
 def main():
     parser = argparse.ArgumentParser(description="RIASEC Pipeline Evaluation")
+    # Note: "trait" is used as a generic term here for consistency with the broader persona
+    # pipeline, even though RIASEC literature technically refers to these as "types" or
+    # "vocational interest categories" rather than personality traits.
     parser.add_argument(
-        "--trait", type=str, required=True, help="Trait to evaluate (e.g., conventional)"
+        "--trait", type=str, required=True, help="RIASEC type to evaluate (e.g., conventional)"
     )
     parser.add_argument(
         "--pregenerate", action="store_true", help="Pregenerate responses for the trait"

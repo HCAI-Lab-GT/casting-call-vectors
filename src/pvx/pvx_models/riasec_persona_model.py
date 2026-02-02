@@ -128,18 +128,32 @@ class RIASECPersonaModel(AbstractPersonaModel):
         ) as pbar:
             for qa in qa_pairs:
                 question = qa.get("question", "")
+
+                # Compute prompt_len once per question by tokenizing prompt-only
+                # (with add_generation_prompt=True to include the assistant turn start)
+                prompt_messages = [
+                    {"role": "system", "content": ""},
+                    {"role": "user", "content": question},
+                ]
+                prompt_only = self.tokenizer.apply_chat_template(
+                    prompt_messages, tokenize=True, add_generation_prompt=True, return_tensors="pt"
+                )
+                prompt_len = prompt_only.shape[1]
+
                 # Process positive responses
                 for pos_response in qa.get("positive", []):
-                    messages = [
+                    full_messages = [
                         {"role": "system", "content": ""},
                         {"role": "user", "content": question},
                         {"role": "assistant", "content": pos_response},
                     ]
                     enc = self.tokenizer.apply_chat_template(
-                        messages, tokenize=True, add_generation_prompt=False, return_tensors="pt"
+                        full_messages, tokenize=True, add_generation_prompt=False, return_tensors="pt"
                     ).to(self.device)
                     mask = torch.ones_like(enc)
-                    pl_pos, ra_pos, rall_pos = self._extract_activations_from_tokens(enc, mask)
+                    pl_pos, ra_pos, rall_pos = self._extract_activations_from_tokens(
+                        enc, mask, prompt_len
+                    )
                     if sum_prompt_last_pos is None:
                         sum_prompt_last_pos = torch.zeros_like(pl_pos, dtype=torch.float32)
                         sum_resp_avg_pos = torch.zeros_like(ra_pos, dtype=torch.float32)
@@ -154,16 +168,18 @@ class RIASECPersonaModel(AbstractPersonaModel):
 
                 # Process negative responses
                 for neg_response in qa.get("negative", []):
-                    messages = [
+                    full_messages = [
                         {"role": "system", "content": ""},
                         {"role": "user", "content": question},
                         {"role": "assistant", "content": neg_response},
                     ]
                     enc = self.tokenizer.apply_chat_template(
-                        messages, tokenize=True, add_generation_prompt=False, return_tensors="pt"
+                        full_messages, tokenize=True, add_generation_prompt=False, return_tensors="pt"
                     ).to(self.device)
                     mask = torch.ones_like(enc)
-                    pl_neg, ra_neg, rall_neg = self._extract_activations_from_tokens(enc, mask)
+                    pl_neg, ra_neg, rall_neg = self._extract_activations_from_tokens(
+                        enc, mask, prompt_len
+                    )
                     if sum_prompt_last_neg is None:
                         sum_prompt_last_neg = torch.zeros_like(pl_neg, dtype=torch.float32)
                         sum_resp_avg_neg = torch.zeros_like(ra_neg, dtype=torch.float32)
@@ -204,13 +220,20 @@ class RIASECPersonaModel(AbstractPersonaModel):
 
         return prompt_persona_vector, response_persona_vector, all_layers_response_persona_vector
 
-    def _extract_activations_from_tokens(self, input_ids, attention_mask):
+    def _extract_activations_from_tokens(self, input_ids, attention_mask, prompt_len: int):
         """
         Extract activations from a prompt+response sequence.
+
+        Args:
+            input_ids: Tokenized full prompt+response sequence
+            attention_mask: Attention mask for the sequence
+            prompt_len: Number of tokens in the prompt (before assistant response starts).
+                        Used to correctly separate prompt vs response activations.
+
         Returns:
             prompt_last: last hidden state of prompt (from self.layer_steering+1)
-            resp_avg: average hidden state of response (from self.layer_steering+1)
-            rall: average hidden state of response across all layers
+            resp_avg: average hidden state of response tokens only (from self.layer_steering+1)
+            rall: average hidden state of response tokens across all layers
         """
         with torch.no_grad():
             outputs = self.model(
@@ -221,9 +244,20 @@ class RIASECPersonaModel(AbstractPersonaModel):
             )
         hidden_states = outputs.hidden_states
         last_hidden = hidden_states[self.layer_steering + 1][0]  # (seq, hidden)
-        resp_avg = last_hidden.mean(dim=0)
-        rall = torch.stack([h[0].mean(dim=0) for h in hidden_states])  # (layers, hidden)
-        prompt_last = last_hidden[-1]  # last token
+
+        # Use prompt_len to correctly split prompt vs response activations
+        prompt_last = last_hidden[prompt_len - 1]  # Last token of prompt (before response)
+
+        # Average only the response tokens (after prompt_len)
+        resp_hidden = last_hidden[prompt_len:]
+        if resp_hidden.shape[0] > 0:
+            resp_avg = resp_hidden.mean(dim=0)
+            rall = torch.stack([h[0][prompt_len:].mean(dim=0) for h in hidden_states])
+        else:
+            # Fallback if no response tokens (shouldn't happen with pregenerated responses)
+            resp_avg = last_hidden.mean(dim=0)
+            rall = torch.stack([h[0].mean(dim=0) for h in hidden_states])
+
         return prompt_last, resp_avg, rall
 
     @staticmethod
