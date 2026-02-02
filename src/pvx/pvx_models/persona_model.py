@@ -1,20 +1,20 @@
-import os
+import argparse
+import contextvars
 import json
+import os
 import random
+import threading
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-import threading
-import contextvars
-from contextlib import contextmanager, nullcontext
-import argparse
-from tqdm import tqdm
 
 import torch
+from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.utils import logging as transformers_logging
 
-from pvx import setup_logging, Heartbeat
+from pvx import Heartbeat, setup_logging
 from pvx.pvx_models.persona_dataset import PersonaDataset
 
 torch.set_float32_matmul_precision("high")
@@ -153,7 +153,7 @@ class PersonaModel:
                 self.model = torch.compile(self.model, mode="default", dynamic=True)
                 logger.info("✅ Model compiled with torch.compile for faster inference")
             except Exception as e:
-                logger.error(f"⚠️ torch.compile failed: %s", str(e))
+                logger.error("⚠️ torch.compile failed: %s", str(e))
                 logger.error("   Continuing without compilation...")
 
         # persistent steering hook + cached base vector (on steered block's device/dtype)
@@ -519,8 +519,7 @@ class PersonaModel:
                     gen_ids.append(tok)
                     last_token.fill_(tok)
 
-        output_text = self.tokenizer.decode(gen_ids, skip_special_tokens=True)
-        return output_text
+        return self.tokenizer.decode(gen_ids, skip_special_tokens=True)
 
     @torch.inference_mode()
     def _get_activations(

@@ -22,18 +22,18 @@ Environment Variables:
     - VLLM_API_URL (optional): Base URL for vLLM OpenAI-compatible server
 """
 
+import argparse
 import json
 import os
 import warnings
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 from collections import namedtuple
 from itertools import product
-import argparse
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 import torch
 from openai import OpenAI
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from pvx import Heartbeat, setup_logging
 from pvx.pvx_models import prompts
@@ -164,15 +164,17 @@ class PersonaDataset:
             data = json.load(f)
 
         # Backward compatibility with older files that stored "client"
-        if data["backend"] is None and "client" in data:
+        backend = data.get("backend")
+        if backend is None and "client" in data:
             client = data["client"]
             backend = "hf_local" if client == "ollama" else "openai"
+        backend = backend or "openai"
 
         # reconstruct dataset instance
         dataset = PersonaDataset(
             trait=trait,
             num_questions=data["num_questions"],
-            backend=data.get("backend") or "openai",
+            backend=backend,
             model=data["model"],
             base_url=data.get("base_url"),
             local_model=data.get("local_model"),
@@ -299,7 +301,7 @@ class PersonaDataset:
                     response=response
                 )
                 break
-            except json.JSONDecodeError as e:
+            except json.JSONDecodeError:
                 continue
         else:
             raise ValueError("Failed to parse dataset output after multiple attempts")
@@ -530,7 +532,7 @@ class PersonaDataset:
         questions = response_dict["questions"]
         eval_prompt = response_dict["eval_prompt"]
 
-        return list(zip(pos_instructions, neg_instructions)), questions, eval_prompt
+        return list(zip(pos_instructions, neg_instructions, strict=True)), questions, eval_prompt
 
     @staticmethod
     def _messages_to_prompt(messages: List[Dict[str, str]]) -> str:
@@ -598,7 +600,7 @@ if __name__ == "__main__":
     for trait in trait_list:
         try:
             PersonaDataset.from_json(trait=trait, dirpath=args.dirpath)
-        except Exception as e:
+        except Exception:
             dataset: PersonaDataset = PersonaDataset(
                 trait=trait,
                 num_questions=args.num_questions,

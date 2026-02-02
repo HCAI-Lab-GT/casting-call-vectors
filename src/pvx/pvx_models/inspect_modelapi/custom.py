@@ -1,20 +1,18 @@
 from __future__ import annotations
 
-from typing import Any
 import time
 from functools import partial
+from typing import Any
 
 import anyio
-
-
 from inspect_ai.model import (
-    ModelAPI,
     ChatMessage,
     GenerateConfig,
-    ModelOutput,
+    ModelAPI,
     ModelCall,
+    ModelOutput,
 )
-from inspect_ai.tool import ToolInfo, ToolChoice
+from inspect_ai.tool import ToolChoice, ToolInfo
 
 from pvx import setup_logging  # , Heartbeat
 
@@ -40,10 +38,14 @@ class PVXModelAPI(ModelAPI):
         model_name: str,
         base_url: str | None = None,
         api_key: str | None = None,
-        api_key_vars: list[str] = [],
-        config: GenerateConfig = GenerateConfig(),
+        api_key_vars: list[str] | None = None,
+        config: GenerateConfig | None = None,
         **model_args: Any,
     ) -> None:
+        if api_key_vars is None:
+            api_key_vars = []
+        if config is None:
+            config = GenerateConfig()
         super().__init__(model_name, base_url, api_key, api_key_vars, config)
 
         # Limit concurrency by default for local GPU models

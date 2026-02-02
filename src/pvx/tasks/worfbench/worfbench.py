@@ -8,22 +8,20 @@ Huggingface:
     Test: https://huggingface.co/datasets/zjunlp/WorFBench_test
 """
 
+import argparse
 import re
 from functools import partial
-import argparse
 
 from inspect_ai import Task, task
 from inspect_ai.dataset import Dataset, Sample, hf_dataset
-from inspect_ai.solver import chain_of_thought, generate, TaskState
-from inspect_ai.scorer import scorer, Score, Scorer, Target, mean, stderr
-
-from pvx.utils.logging_utils import setup_logging
-from pvx.utils.inspect_utils import dicts_to_chatmessages, print_sample_input
+from inspect_ai.scorer import Score, Scorer, Target, mean, scorer, stderr
+from inspect_ai.solver import TaskState, chain_of_thought, generate
+from sentence_transformers import SentenceTransformer
 
 from pvx.tasks.worfbench.eval_prompt import one_shot_example, two_shot_example
-from pvx.tasks.worfbench.graph_evaluator import t_eval_nodes, t_eval_graph
-
-from sentence_transformers import SentenceTransformer
+from pvx.tasks.worfbench.graph_evaluator import t_eval_graph, t_eval_nodes
+from pvx.utils.inspect_utils import dicts_to_chatmessages, print_sample_input
+from pvx.utils.logging_utils import setup_logging
 
 sentence_model = SentenceTransformer("all-mpnet-base-v2")
 
@@ -282,7 +280,7 @@ def workflow_to_graph_list(workflow: str) -> list[str]:
             return []
 
         edge_workflow = []
-        for i, match in enumerate(edge_matches):
+        for match in edge_matches:
             edge = list(match)
             if "START" in edge:
                 edge[edge.index("START")] = "0"
@@ -297,8 +295,7 @@ def workflow_to_graph_list(workflow: str) -> list[str]:
             print("edge_workflow is empty")
             return []
 
-        workflow = {"nodes": node_workflow, "edges": edge_workflow}
-        return workflow
+        return {"nodes": node_workflow, "edges": edge_workflow}
     except Exception as e:
         print(e)
         return []

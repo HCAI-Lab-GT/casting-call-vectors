@@ -1,8 +1,8 @@
 from inspect_ai.model import (
     ChatMessage,
+    ChatMessageAssistant,
     ChatMessageSystem,
     ChatMessageUser,
-    ChatMessageAssistant,
 )
 
 _ROLE = {
@@ -43,9 +43,9 @@ def print_sample_input(input: str | list[ChatMessage]) -> str:
     """
     if isinstance(input, str):
         return input
-    elif isinstance(input, list):
+    if isinstance(input, list):
         res = ""
         for cm in input:
             res += f"[[{cm.role}]]\n{cm.content}\n\n"
-
         return res
+    return ""

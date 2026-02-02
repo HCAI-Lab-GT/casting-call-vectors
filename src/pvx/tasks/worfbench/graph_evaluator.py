@@ -4,21 +4,13 @@ Pulled from WorFBench GitHub
 WorfBench/evaluator/graph_evaluator.py
 """
 
-from collections import defaultdict
-import json
-from numpy import mean
 
 # import evaluate
-import itertools
+from typing import Dict, List
+
 import networkx as nx
 import numpy as np
-import copy
-import json
-import re
-from tqdm import tqdm
 from sentence_transformers import SentenceTransformer, util
-from itertools import combinations
-from typing import List, Dict
 
 
 def all_topological_sorts(graph: Dict[str, List[str]]) -> List[List[str]]:
@@ -88,9 +80,9 @@ def match_node(
             if bert_score_matrix[i][j] > match_threshold:
                 G.add_edge(i, str(j), weight=bert_score_matrix[i][j])
     max_weight_matching = nx.max_weight_matching(G)
-    pred_to_gt_mapping = dict()
+    pred_to_gt_mapping = {}
     for key in max_weight_matching:
-        if type(key[0]) == int:
+        if isinstance(key[0], int):
             pred_to_gt_mapping[int(key[0])] = int(key[1])
         else:
             pred_to_gt_mapping[int(key[1])] = int(key[0])

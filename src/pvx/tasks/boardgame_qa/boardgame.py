@@ -1,9 +1,8 @@
-import os
 
 from inspect_ai import Task, task
 from inspect_ai.dataset import Sample, hf_dataset
-from inspect_ai.solver import chain_of_thought, generate, system_message
 from inspect_ai.scorer import pattern
+from inspect_ai.solver import chain_of_thought, generate, system_message
 
 from pvx import setup_logging
 from pvx.utils.inspect_utils import print_sample_input

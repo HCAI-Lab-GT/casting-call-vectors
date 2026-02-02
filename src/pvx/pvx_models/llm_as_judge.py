@@ -20,21 +20,21 @@ Environment Variables:
     - VLLM_API_URL (optional): Base URL for vLLM OpenAI-compatible server
 """
 
-import os
-from typing import Dict, List, Optional, Tuple
-import math
-from pathlib import Path
-import yaml
-import numpy as np
-import torch
-from openai import OpenAI
-from pvx import Heartbeat, setup_logging
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from dotenv import load_dotenv
-import asyncio
-import re
 import argparse
+import asyncio
 import inspect
+import math
+import os
+import re
+import warnings
+from typing import Dict, List, Optional
+
+import torch
+from dotenv import load_dotenv
+from openai import OpenAI
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from pvx import setup_logging
 
 load_dotenv()
 
@@ -183,15 +183,12 @@ class LLMJudge:
         """
         _, response = self._inference_with_client(messages=messages)
         try:
-            score = int(response)
-            return score
+            return int(response)
         except (ValueError, TypeError):
             match = re.search(r"\d{1,3}", str(response))
             if match:
                 return int(match.group())
-            else:
-                raise ValueError(f"No valid score found in response: {response}")
-        å
+            raise ValueError(f"No valid score found in response: {response}") from None
 
     async def judge(self, **kwargs):
         """
@@ -203,7 +200,7 @@ class LLMJudge:
         Returns:
             float: The aggregated score.
         """
-        messages = [dict(role="user", content=self.prompt_template.format(**kwargs))]
+        messages = [{"role": "user", "content": self.prompt_template.format(**kwargs)}]
         if inspect.iscoroutinefunction(self.aggregate_score):
             score = await self.aggregate_score(messages)
         else:
