@@ -148,7 +148,10 @@ class RIASECPersonaModel(AbstractPersonaModel):
                         {"role": "assistant", "content": pos_response},
                     ]
                     enc = self.tokenizer.apply_chat_template(
-                        full_messages, tokenize=True, add_generation_prompt=False, return_tensors="pt"
+                        full_messages,
+                        tokenize=True,
+                        add_generation_prompt=False,
+                        return_tensors="pt",
                     ).to(self.device)
                     mask = torch.ones_like(enc)
                     pl_pos, ra_pos, rall_pos = self._extract_activations_from_tokens(
@@ -174,7 +177,10 @@ class RIASECPersonaModel(AbstractPersonaModel):
                         {"role": "assistant", "content": neg_response},
                     ]
                     enc = self.tokenizer.apply_chat_template(
-                        full_messages, tokenize=True, add_generation_prompt=False, return_tensors="pt"
+                        full_messages,
+                        tokenize=True,
+                        add_generation_prompt=False,
+                        return_tensors="pt",
                     ).to(self.device)
                     mask = torch.ones_like(enc)
                     pl_neg, ra_neg, rall_neg = self._extract_activations_from_tokens(
