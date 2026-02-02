@@ -191,7 +191,7 @@ class PersonaDataset:
 
         return dataset
 
-    def save_dataset_to_json(self, dirpath: str = None) -> str:
+    def save_dataset_to_json(self, dirpath: str | None = None) -> str:
         """
         Save the persona vector dataset to a JSON file.
 
@@ -238,7 +238,7 @@ class PersonaDataset:
 
     def generate_dataset(
         self, save_to_json=True, max_tries=5
-    ) -> Tuple[List[Tuple[str, str]], List[str], str, str]:
+    ) -> Tuple[List[Tuple[str, str]], List[str], str, str | None]:
         """
         Generate the complete persona dataset.
 

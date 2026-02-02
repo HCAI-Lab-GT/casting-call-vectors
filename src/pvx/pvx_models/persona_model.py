@@ -37,7 +37,7 @@ class PersonaModel:
         self,
         target_model_id: str = "qwen2.5:7b-instruct",
         dataset: Optional[PersonaDataset] = None,
-        trait: str = None,
+        trait: str | None = None,
         layer: float = 14,
         default_alpha: float = 3.0,
         from_json: bool = False,
@@ -218,9 +218,9 @@ class PersonaModel:
         cls,
         target_model_id: str = "qwen2.5:7b-instruct",
         dataset: Optional[PersonaDataset] = None,
-        trait: str = None,  # alternate to dataset for loading
+        trait: str | None = None,  # alternate to dataset for loading
         layer: float = 14,
-        json_filepath: str = None,
+        json_filepath: str | None = None,
     ) -> "PersonaModel":
         """
         Load a PersonaModel instance from a JSON file if it exists, otherwise create a new one.
@@ -432,7 +432,7 @@ class PersonaModel:
     def generate(
         self,
         prompt: str | None = None,
-        messages: list[str] | None = None,
+        messages: list[dict[str, str]] | None = None,
         alpha: float | None = 3,
         max_new_tokens: int = 2000,
         temperature: float = 0.9,
@@ -459,6 +459,7 @@ class PersonaModel:
 
         if messages is None:
             # Prepare messages in chat format
+            assert prompt is not None  # Guaranteed by check above
             messages = [{"role": "user", "content": prompt}]
 
         formatted = self.tokenizer.apply_chat_template(

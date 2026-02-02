@@ -52,7 +52,7 @@ ANSWER_PATTERN_WORD = re.compile(r"(?i)ANSWER\s*:\s*(\w+)(?:\n|$)")
 @task
 def worfbench_task(
     split: str = "test",
-    limit: int = None,
+    limit: int | None = None,
     nshot: int = 2,
     eval_type: str = "node",
     prompt_type: str = "",
@@ -141,7 +141,7 @@ def worfbench_scorer(prompt_type: str, eval_type: str = "node") -> Scorer:
     return score
 
 
-def build_dataset(split: str = "test", limit: int = None, nshot: int = 2) -> Dataset:
+def build_dataset(split: str = "test", limit: int | None = None, nshot: int = 2) -> Dataset:
     """
     Builds Inspect Dataset object with parameters
 
@@ -250,7 +250,7 @@ WorfBench/evaluator/node_eval.py:workflow_to_graph_list
 """
 
 
-def workflow_to_graph_list(workflow: str) -> list[str]:
+def workflow_to_graph_list(workflow: str) -> dict[str, list] | list:
     try:
         if "Node" not in workflow:
             print("workflow is not in the right format")

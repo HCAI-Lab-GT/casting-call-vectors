@@ -44,3 +44,26 @@ packages = ["src/pvx"]
 [tool.ruff]
 line-length = 100
 extend-select = ["B", "I", "C4", "RET"]
+
+# ty type checker configuration
+# Note: ty is in beta (stable 2026). These rules are relaxed for third-party
+# library type issues while still catching errors in our own code.
+[tool.ty.src]
+include = ["src", "scripts", "tests"]
+exclude = ["_vendor"]
+
+[tool.ty.rules]
+# Library type stub issues (wandb, torch, transformers, inspect-ai, etc.)
+# These are not bugs in our code - they're incomplete type stubs in libraries.
+invalid-argument-type = "warn"     # Library stubs don't cover all overloads
+unresolved-attribute = "warn"      # Dynamic attrs on library objects
+possibly-missing-attribute = "ignore"
+no-matching-overload = "warn"
+call-non-callable = "warn"         # Transformers tokenizers typed as Optional
+unsupported-operator = "warn"      # Torch tensor / int operations
+invalid-return-type = "warn"       # model.model.layers returns object, Tensor.item() returns int|float
+
+# Keep strict - these catch real bugs in our code
+unresolved-import = "error"
+unresolved-reference = "error"
+invalid-assignment = "error"
