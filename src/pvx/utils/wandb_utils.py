@@ -4,25 +4,26 @@ from pvx.utils.logging_utils import setup_logging
 
 logger = setup_logging(name="wandb_utils")
 
-'''
+"""
 # Note:
 # Do not attempt hook based custom wandb logging.
 # It's really brutal getting hook to work as dependent on inspect-wandb hook. No way to order and race condition hell.
 # Tried and gave up, not worth it.
 
 from inspect_ai.hooks import hooks, Hooks, RunStart, SampleEnd
-'''
+"""
+
 
 def create_table(json_path: str) -> wandb.Table:
-    '''
+    """
     Rehydrates table from JSON output file and uploads to wandb.
-    
+
     Args:
         json_path (str): Path to JSON file containing samples.
-        
+
     Returns:
         wandb.Table: populated Wandb table.
-    '''
+    """
     # Load JSON (fallback to JSONL if needed)
     results = {}
     try:
@@ -38,23 +39,25 @@ def create_table(json_path: str) -> wandb.Table:
         results = {"samples": samples}
 
     # Create wandb Table
-    table = wandb.Table(columns=[
-        "sample_id",
-        "input_json",
-        "output_json",
-        "scores_json",
-    ])
+    table = wandb.Table(
+        columns=[
+            "sample_id",
+            "input_json",
+            "output_json",
+            "scores_json",
+        ]
+    )
 
     # Helper to resolve attachments
     def resolve_attachments(obj, attachments):
         """
         Replace strings like 'attachment://<id>' with attachments['<id>'] if present.
         Works recursively on dict/list/str.
-        
+
         Args:
             obj: object to resolve
             attachments: dict of attachments
-            
+
         Returns:
             Resolved object
         """
