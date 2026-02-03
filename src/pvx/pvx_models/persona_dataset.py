@@ -38,6 +38,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from pvx import Heartbeat, setup_logging
 from pvx.pvx_models.prompts import PromptTemplates
+from pvx.utils.riasec_utils import RIASECHelpers
 
 load_dotenv()
 
@@ -80,6 +81,9 @@ class PersonaDataset:
     def __init__(
         self,
         trait: str,
+        trait_description: Optional[str] = None,
+        from_riasec: bool = False,
+        riasec_config_path: str = "./configs/riasec.yaml",
         num_questions: int = 100,
         backend: str = "hf_local",
         model: str = "qwen2.5:7b-instruct",
@@ -128,8 +132,27 @@ class PersonaDataset:
 
         self.dirpath = dirpath
 
+        if trait_description is not None:
+            logger.info("Trait description set from initializer")
+            self.trait_description = trait_description
+        elif from_riasec and self.trait in RIASECHelpers.RIASEC_TRAITS:
+            logger.info("Trait description set from RIASEC config yaml")
+            self.trait_description = RIASECHelpers.fetch_riasec_information(
+                riasec_config_path=riasec_config_path
+            )[self.trait]["description"]
+        else:
+            logger.info("Trait description will be generated")
+            self.trait_description = None
+        self.from_riasec = from_riasec
+
     @staticmethod
-    def from_json(trait: str, dirpath: str = "./persona_data/trait_datasets") -> "PersonaDataset":
+    def from_json(
+        trait: str,
+        trait_description: Optional[str] = None,
+        from_riasec: bool = False,
+        riasec_config_path: str = "./configs/riasec.yaml",
+        dirpath: str = "./persona_data/trait_datasets",
+    ) -> "PersonaDataset":
         """
         Load a previously saved dataset from a JSON file.
 
@@ -153,11 +176,16 @@ class PersonaDataset:
             json.JSONDecodeError: If the file contains invalid JSON
             KeyError: If required keys are missing from the JSON data
         """
-        filepath = Path(dirpath) / f"{trait}_dataset.json"
+        filepath = os.path.join(dirpath, f"{trait}_dataset.json")
 
-        if not filepath.exists():
+        if not os.path.exists(filepath):
             logger.info("Trait dataset not found. Initializing new trait dataset...")
-            dataset = PersonaDataset(trait=trait)
+            dataset = PersonaDataset(
+                trait=trait,
+                trait_description=trait_description,
+                from_riasec=from_riasec,
+                riasec_config_path=riasec_config_path,
+            )
             dataset.generate_dataset(save_to_json=True)
             return dataset
 
@@ -166,14 +194,17 @@ class PersonaDataset:
             data = json.load(f)
 
         # Backward compatibility with older files that stored "client"
-        if data["backend"] is None and "client" in data:
-            data["client"]
+        backend = data.get("backend")
+        if backend is None and "client" in data:
+            client = data["client"]
+            backend = "hf_local" if client == "ollama" else "openai"
+        backend = backend or "openai"
 
         # reconstruct dataset instance
         dataset = PersonaDataset(
             trait=trait,
             num_questions=data["num_questions"],
-            backend=data.get("backend") or "openai",
+            backend=backend,
             model=data["model"],
             base_url=data.get("base_url"),
             local_model=data.get("local_model"),
@@ -184,8 +215,9 @@ class PersonaDataset:
         dataset.questions = data["questions"]
         dataset.evaluation_prompt = data["evaluation_prompt"]
 
-        # Log loading
-        logger.info("Dataset loaded from: %s", filepath)
+        # Load up loggers
+        dataset.logger = setup_logging(name="persona-dataset")
+        dataset.logger.info("Dataset loaded from: %s", filepath)
 
         return dataset
 
@@ -212,7 +244,7 @@ class PersonaDataset:
             >>> print(f"Saved to: {path}")
             "Saved to: ./my_datasets/verbose_dataset.json"
         """
-        filepath = Path(dirpath or self.dirpath) / f"{self.trait}_dataset.json"
+        filepath = os.path.join((dirpath or self.dirpath), f"{self.trait}_dataset.json")
 
         dataset_dict = {
             "trait": self.trait,
@@ -232,10 +264,10 @@ class PersonaDataset:
             json.dump(dataset_dict, f, indent=2, ensure_ascii=False)
 
         logger.info("Dataset saved to: %s", filepath)
-        return str(filepath)
+        return filepath
 
     def generate_dataset(
-        self, save_to_json: bool = True, max_tries: int = 5
+        self, save_to_json=True, max_tries=5
     ) -> Tuple[List[Tuple[str, str]], List[str], str, str | None]:
         """
         Generate the complete persona dataset.
@@ -268,8 +300,11 @@ class PersonaDataset:
             >>> print(f"Dataset saved to: {path}")
         """
         # Generate trait description and question instruction
-        trait_description: str = self._generate_trait_description()
-        logger.info("Generated trait description for %s", self.trait)
+        if self.trait_description is None:
+            trait_description: str = self._generate_trait_description()
+            logger.info("Generated trait description for %s", self.trait)
+        else:
+            trait_description = self.trait_description
 
         question_instruction: str = self._generate_question_instruction()
         logger.info("Generated question instruction for %s", self.trait)
@@ -371,10 +406,6 @@ class PersonaDataset:
             if self.backend == "hf_local":
                 if self._hf_model is None or self._hf_tokenizer is None:
                     self._init_local_model()
-
-                # Assert models are initialized
-                assert self._hf_model is not None
-                assert self._hf_tokenizer is not None
 
                 # Prepare prompt for decoder-only model
                 prompt = self._messages_to_prompt(messages)
@@ -533,9 +564,12 @@ class PersonaDataset:
         # Extract components
         pos_instructions = response_dict["pos_instructions"]
         neg_instructions = response_dict["neg_instructions"]
-        questions = response_dict["questions"]
+        if self.from_riasec:
+            questions = RIASECHelpers.fetch_riasec_information()[self.trait]["questions"]
+        else:
+            questions = response_dict["questions"]
 
-        return list(zip(pos_instructions, neg_instructions, strict=False)), questions
+        return list(zip(pos_instructions, neg_instructions, strict=True)), questions
 
     @staticmethod
     def _messages_to_prompt(messages: List[Dict[str, str]]) -> str:
@@ -559,30 +593,53 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Generate Persona Dataset")
     ap.add_argument("-t", "--traits", nargs="+", help="<Optional> Select traits", required=False)
     ap.add_argument(
+        "-d",
+        "--trait_description",
+        default=None,
+        help="<Optional> description of the trait to generate a dataset for.",
+    )
+    ap.add_argument(
+        "--from_riasec",
+        action="store_true",
+        help="Use RIASEC config for trait description",
+    )
+    ap.add_argument(
         "-f",
         "--dirpath",
         default="./persona_data/trait_datasets/",
         help="Directory filepath to save generated datasets",
     )
     ap.add_argument(
+        "-c",
+        "--riasec_config",
+        default="./configs/riasec.yaml",
+        help="Directory filepath for riasec config file",
+    )
+    ap.add_argument(
         "-b", "--backend", default="hf_local", help="Backend to use: openai, vllm, hf_local"
     )
     ap.add_argument(
-        "-m", "--model", default="openai/gpt-oss-120b", help="Model to use for openai/vllm backend"
+        "-m",
+        "--model",
+        default="openai/gpt-oss-120b",
+        help="Model to use for openai/vllm backend",
     )
     ap.add_argument(
-        "-a", "--api_key_env", default="OPENAI_API_KEY", help="Model to use for openai/vllm backend"
+        "-a",
+        "--api_key_env",
+        default="OPENAI_API_KEY",
+        help="Environment variable for API key",
     )
     ap.add_argument(
         "-u",
         "--base_url",
         default="https://api.together.xyz/v1",
-        help="Model to use for openai/vllm backend",
+        help="Base URL for openai/vllm backend",
     )
     ap.add_argument(
         "-l",
         "--local_model",
-        default="Qwen/Qwen2.5-1.5B-Instruct",
+        default="Qwen/Qwen2.5-7B-Instruct",
         help="Local HF model to use for hf_local backend",
     )
     ap.add_argument(
@@ -611,10 +668,16 @@ if __name__ == "__main__":
 
     for trait in trait_list:
         try:
-            PersonaDataset.from_json(trait=trait, dirpath=args.dirpath)
+            PersonaDataset.from_json(
+                trait=trait,
+                dirpath=args.dirpath,
+                from_riasec=args.from_riasec,
+                riasec_config_path=args.riasec_config,
+            )
         except Exception:
             dataset: PersonaDataset = PersonaDataset(
                 trait=trait,
+                from_riasec=args.from_riasec,
                 num_questions=args.num_questions,
                 backend=args.backend,
                 local_model=args.local_model,

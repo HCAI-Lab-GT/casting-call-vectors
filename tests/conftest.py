@@ -1,105 +1,67 @@
-"""Shared pytest fixtures for persona-vectors tests."""
-
+import json
+import shutil
+import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
 import torch
 
-if TYPE_CHECKING:
-    from pvx.sources.base import PersonaMetadata
+
+@pytest.fixture
+def temp_dir():
+    """Temporary directory for test files, cleaned up after test."""
+    d = tempfile.mkdtemp()
+    yield Path(d)
+    shutil.rmtree(d)
 
 
 @pytest.fixture
-def project_root() -> Path:
-    """Return the project root directory."""
-    return Path(__file__).parent.parent
-
-
-@pytest.fixture(scope="session")
-def test_device() -> str:
-    """Detect available compute device.
-
-    Returns:
-        Device string: "cuda", "mps", or "cpu"
-    """
-    if torch.cuda.is_available():
-        return "cuda"
-    if torch.backends.mps.is_available():
-        return "mps"
-    return "cpu"
-
-
-@pytest.fixture
-def unit_model_id() -> str:
-    """Return SmolLM2-135M model ID for fast unit tests."""
-    return "HuggingFaceTB/SmolLM2-135M-Instruct"
-
-
-@pytest.fixture
-def smoke_model_id() -> str:
-    """Return SmolLM3-3B model ID for proper smoke tests."""
-    return "HuggingFaceTB/SmolLM3-3B"
-
-
-@pytest.fixture
-def sample_questions() -> list[str]:
-    """Return sample questions for testing."""
-    return [
-        "What is the most important thing in your work?",
-        "How do you handle difficult situations?",
-        "What skills are essential for your role?",
-        "How do you approach problem-solving?",
-        "What motivates you in your profession?",
-    ]
-
-
-@pytest.fixture
-def sample_persona_data() -> dict:
-    """Return mock vocational persona data."""
-    return {
-        "soc_code": "29-1141.00",
-        "title": "Registered Nurses",
-        "riasec": {"R": 2.3, "I": 3.5, "A": 2.1, "S": 6.2, "E": 3.8, "C": 3.0},
-        "riasec_primary": "S",
-        "highpoint_codes": ["S", "I", "E"],
-        "instructions": [
-            "You are a Registered Nurse working in a hospital.",
-            "You are a caring and professional nurse.",
-            "You are an experienced healthcare professional.",
-        ],
-        "baseline_instructions": [
-            "",
-            "You are an AI assistant.",
-            "You are a helpful assistant.",
-        ],
-    }
-
-
-@pytest.fixture
-def sample_vectors() -> dict[str, torch.Tensor]:
-    """Return sample persona vectors for geometry testing."""
+def mock_persona_vectors():
+    """Mock persona vectors with realistic shapes (Qwen2.5-7B has 4096 hidden dim, 29 layers)."""
     torch.manual_seed(42)
-    hidden_dim = 768
     return {
-        "nurse_1": torch.randn(hidden_dim),
-        "nurse_2": torch.randn(hidden_dim),
-        "engineer_1": torch.randn(hidden_dim),
-        "engineer_2": torch.randn(hidden_dim),
-        "artist_1": torch.randn(hidden_dim),
-        "artist_2": torch.randn(hidden_dim),
+        "prompt": torch.randn(1, 4096),
+        "response": torch.randn(1, 4096),
+        "all_layers": torch.randn(29, 1, 4096),
     }
 
 
 @pytest.fixture
-def sample_metadata() -> "dict[str, PersonaMetadata]":
-    """Return sample metadata for geometry testing."""
-    # Using dict literal with partial TypedDict fields is fine - PersonaMetadata uses total=False
+def mock_metadata():
+    """Mock metadata for safetensors files."""
     return {
-        "nurse_1": {"riasec_primary": "S", "title": "Registered Nurse"},
-        "nurse_2": {"riasec_primary": "S", "title": "Nurse Practitioner"},
-        "engineer_1": {"riasec_primary": "R", "title": "Software Engineer"},
-        "engineer_2": {"riasec_primary": "R", "title": "Mechanical Engineer"},
-        "artist_1": {"riasec_primary": "A", "title": "Graphic Designer"},
-        "artist_2": {"riasec_primary": "A", "title": "Illustrator"},
+        "target_model_id": "Qwen/Qwen2.5-7B-Instruct",
+        "trait": "artistic",
+        "layer_steering": "14",
     }
+
+
+@pytest.fixture
+def legacy_json_file(temp_dir, mock_persona_vectors):
+    """Create a legacy JSON initialization file for backward compatibility testing."""
+    json_dir = temp_dir / "artistic_persona_initialization" / "Qwen"
+    json_dir.mkdir(parents=True)
+    json_path = json_dir / "Qwen2.5-7B-Instruct.json"
+
+    data = {
+        "target_model_id": "Qwen/Qwen2.5-7B-Instruct",
+        "trait": "artistic",
+        "layer_steering": 14,
+        "device": "cpu",
+        "prompt_persona_vector": mock_persona_vectors["prompt"].tolist(),
+        "response_persona_vector": mock_persona_vectors["response"].tolist(),
+        "all_layers_response_persona_vector": mock_persona_vectors["all_layers"].tolist(),
+        "prompt_persona_vector_shape": list(mock_persona_vectors["prompt"].shape),
+        "response_persona_vector_shape": list(mock_persona_vectors["response"].shape),
+        "created_at": "2026-01-15T10:00:00",
+        "dataset_info": {
+            "trait": "artistic",
+            "num_questions": 100,
+            "num_pos_neg_pairs": 5,
+        },
+    }
+
+    with open(json_path, "w") as f:
+        json.dump(data, f)
+
+    return json_path

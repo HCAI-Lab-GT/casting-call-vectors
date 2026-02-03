@@ -93,7 +93,7 @@ class PromptTemplates:
         "{trait_description}"
         "[QUESTION START] {{question}} [QUESTION END] Model response: [{{answer}}] "
         "Focus only on whether the model exhibits this trait."
-        "Respond with a number between 0 and 100. Don't say anything else, just the number."
+        "Respond with a number between 0 and 100, where 100 indicates strong trait exemplification, and 0 represents low trait exemplification. Don't say anything else, just the number."
     )
 
     @staticmethod

@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 """
-Prefetch models used in this project so first runs don't stall on downloads.
+Prefetch models and datasets used in this project so first runs don't stall on downloads.
 
 Usage examples:
-  python scripts/prefetch.py                     # download default set (Qwen 1.5B)
+  python scripts/prefetch.py                     # download default set (Qwen 1.7B + Boardgame-QA)
   python scripts/prefetch.py --include-large     # also cache the big GPT-OSS 20B model
-  python scripts/prefetch.py --models qwen7b     # pick specific aliases
+  python scripts/prefetch.py --models qwen20b    # pick specific aliases
+  python scripts/prefetch.py --datasets boardgameqa bigbenchhard
 
 Environment:
   - Reads .env (HF_TOKEN, HF_HOME, TRANSFORMERS_CACHE, HF_HUB_ENABLE_HF_TRANSFER).
@@ -15,6 +16,7 @@ Environment:
 import argparse
 import os
 
+from datasets import load_dataset
 from dotenv import load_dotenv
 from huggingface_hub import snapshot_download
 
@@ -25,6 +27,12 @@ MODEL_MAP = {
     "qwen7b": "Qwen/Qwen2-7B-Instruct",
     "gpt-oss-20b": "openai/gpt-oss-20b",
     "gpt-oss-7b": "openai/gpt-oss-7b",
+}
+
+# Dataset aliases to HF ids (tasksource datasets are script-based but we rely on cached conversion)
+DATASET_MAP = {
+    "boardgameqa": ("tasksource/Boardgame-QA", "test"),
+    "bigbenchhard": ("maveriq/bigbenchhard", "train"),
 }
 
 
@@ -57,6 +65,20 @@ def prefetch_models(model_ids, token, cache_dir, include_large):
         print(f"[ok] cached {repo_id}")
 
 
+def prefetch_datasets(dataset_ids, token, cache_dir):
+    for did in dataset_ids:
+        repo_id, split = DATASET_MAP[did]
+        print(f"[dataset] caching {repo_id} split={split} ...")
+        load_dataset(
+            repo_id,
+            split=split,
+            download_mode="reuse_dataset_if_exists",
+            use_auth_token=token,
+            cache_dir=cache_dir,
+        )
+        print(f"[ok] cached {repo_id}:{split}")
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Prefetch HF models/datasets for this repo.")
     parser.add_argument(
@@ -65,6 +87,13 @@ def parse_args():
         choices=list(MODEL_MAP.keys()),
         default=["qwen1.5b"],
         help="Which model aliases to download (default: qwen1.5b).",
+    )
+    parser.add_argument(
+        "--datasets",
+        nargs="*",
+        choices=list(DATASET_MAP.keys()),
+        default=["boardgameqa"],
+        help="Which datasets to cache (default: boardgameqa).",
     )
     parser.add_argument(
         "--include-large",
@@ -83,7 +112,8 @@ def main():
     if args.include_large:
         models.add("gpt-oss-20b")
     prefetch_models(sorted(models), token, cache_dir, include_large=args.include_large)
-    print("All requested models are cached.")
+    prefetch_datasets(args.datasets, token, cache_dir)
+    print("All requested artifacts are cached.")
 
 
 if __name__ == "__main__":

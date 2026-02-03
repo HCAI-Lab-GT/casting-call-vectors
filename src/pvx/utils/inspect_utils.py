@@ -47,6 +47,5 @@ def print_sample_input(input: str | list[ChatMessage]) -> str:
         res = ""
         for cm in input:
             res += f"[[{cm.role}]]\n{cm.content}\n\n"
-
         return res
     return ""

@@ -11,37 +11,27 @@ dependencies = [
   "tqdm>=4.66.0",
   "datasets>=3.1.0",
   "accelerate>=1.0.0",
-  "bitsandbytes>=0.48.0; sys_platform != 'darwin'",
-  "pandas>=2.0.0",
   "inspect-ai>=0.3.4",
   "anthropic>=0.75.0",
   "python-dotenv>=1.0.0",
   "wandb>=0.18.7",
   "vllm>=0.5.2",
   "matplotlib>=3.9.0",
+  "nvitop>=1.6.0",
   "inspect-evals>=0.3.102",
   "inspect-wandb>=0.2.0",
   "pyyaml>=6.0.2",
   "hf-transfer>=0.1.9",
   "anyio>=4.12.0",
   "sentence-transformers>=5.2.0",
-  # Phase 1 additions
-  "plotly>=5.18.0",
-  "scikit-learn>=1.4.0",
-  "click>=8.1.0",
-  "ruff>=0.14.8",
-  "pytest>=9.0.2",
-  "pytest-cov>=7.0.0",
-  "coverage>=7.13.1",
-  "iniconfig>=2.3.0",
-  "pluggy>=1.6.0",
+  "safetensors>=0.4.0",
 ]
 
 [project.optional-dependencies]
 dev = [
   "ruff>=0.6.0",
   "pytest>=8.0.0",
-  "pytest-cov>=4.0.0",
+  "pytest-cov>=4.1.0",
 ]
 
 [project.entry-points.inspect_ai]
@@ -56,20 +46,27 @@ packages = ["src/pvx"]
 
 [tool.ruff]
 line-length = 100
-
-[tool.ruff.lint]
 extend-select = ["B", "I", "C4", "RET"]
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-addopts = ["-v", "--tb=short", "-m", "not slow"]
-markers = [
-    "slow: tests requiring model loading",
-    "integration: integration tests",
-]
+# ty type checker configuration
+# Note: ty is in beta (stable 2026). These rules are relaxed for third-party
+# library type issues while still catching errors in our own code.
+[tool.ty.src]
+include = ["src", "scripts", "tests"]
+exclude = ["_vendor"]
 
-[dependency-groups]
-dev = [
-    "ty>=0.0.13",
-]
+[tool.ty.rules]
+# Library type stub issues (wandb, torch, transformers, inspect-ai, etc.)
+# These are not bugs in our code - they're incomplete type stubs in libraries.
+invalid-argument-type = "warn"     # Library stubs don't cover all overloads
+unresolved-attribute = "warn"      # Dynamic attrs on library objects
+possibly-missing-attribute = "ignore"
+no-matching-overload = "warn"
+call-non-callable = "warn"         # Transformers tokenizers typed as Optional
+unsupported-operator = "warn"      # Torch tensor / int operations
+invalid-return-type = "warn"       # model.model.layers returns object, Tensor.item() returns int|float
+
+# Keep strict - these catch real bugs in our code
+unresolved-import = "error"
+unresolved-reference = "error"
+invalid-assignment = "error"

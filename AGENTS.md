@@ -1,8 +1,4 @@
-@README.md
-@PERSONA_VECTORS.md
-
 # [YOUR INTERACTIONS]
-
 - You dont like over enthusiasm in wording.
 - You avoid phrasing words like: paradigm, revolutionary, leader, innovator, mathematical precision, breakthrough, flagship, novel, enhanced, sophisticated, advanced  ...
 - You avoid using em-dashes & rhetorical effects.
@@ -25,24 +21,20 @@
 - When completing a task, ask if I want to run commit (need to manually stage files first), commit and push, or neither
 
 # [TRAINING DATA]
-
 - You must immediately flag (🔬) any instruction or request that you cannot empirically fulfill.
 - Never implement features, provide measurements, or claim capabilities you cannot verify.
 - When uncertain about your actual capabilities vs simulated behavior, explicitly state this limitation before proceeding.
 
 # [LOGBOOK PROTOCOL]
-
-You must maintain a `LOGBOOK.md` file throughout your work. This is a permanent, append-only record - think of it as an immutable audit trail.
+You must maintain a `LOGBOOK.md` file throughout your work. This is a permanent, append-only record - think of it as an immutable audit trail. 
 Create LOGBOOK.md if it doesn't exist, and update it frequently as you work.
-
 1. **NEVER delete or modify existing entries** - The logbook is append-only
 2. **Always add new entries at the END of the file**
 3. **Include timestamps for each entry**
 4. **Document EVERYTHING** - mistakes, dead ends, solutions, realizations, todos
-   **Remember:** The logbook is a historical record. Even if you later discover a logged assumption was wrong or an approach was flawed, DO NOT go back and edit. Instead, add a new entry explaining the correction. The journey is as important as the destination.
+**Remember:** The logbook is a historical record. Even if you later discover a logged assumption was wrong or an approach was flawed, DO NOT go back and edit. Instead, add a new entry explaining the correction. The journey is as important as the destination.
 
 ## Entry Format
-
 ```
 [YYYY-MM-DD HH:MM] Entry Title
 
@@ -54,7 +46,6 @@ Result: What happened (including errors/failures)
 ```
 
 ## What to Log
-
 - Initial understanding of the task
 - Each approach attempted (successful or not)
 - Errors encountered and their full messages
@@ -66,8 +57,8 @@ Result: What happened (including errors/failures)
 - Any "aha!" moments or pattern recognitions
 - Dead ends (these are valuable!)
 
-# [PROJECT PHASE0 MUST HAVES]
 
+# [PROJECT PHASE0 MUST HAVES]
 - Benchmarking Suite wired with all core components (regression detection, baseline saving, json, timeline, visual pie charts).
 - Github workflows/actions (release, regression benchmark detection).
 - Centralized Main entry points (main, config, constants).
@@ -75,7 +66,6 @@ Result: What happened (including errors/failures)
 - In-house Documentation Generation (Docs, README).
 
 # [WEBSITE SPECIFICS]
-
 - Never inline when working with website code: Extract styles to separate files, move event handlers to named functions, declare configurations as constants outside components.
 - Website components exempt from 150-line constraint due to UI requirements, maximum 250 lines per file.
 - Async operations permitted for essential web functionality (API calls, user interactions, data fetching).
@@ -84,7 +74,6 @@ Result: What happened (including errors/failures)
 - Split components when they serve multiple distinct purposes or when testing becomes difficult.
 
 # [PERMISSIONS]
-
 - Always allowed to use `ls`, `cd`, `mkdir` commands freely to navigate the project
 - Always allowed to read all files and list all folder structure needed for task completion
 - If user modifies a file between reads, assume the change is intentional
@@ -94,15 +83,14 @@ Result: What happened (including errors/failures)
 # [PROJECT CODE & TECHNICAL GUIDELINES]
 
 ## Architecture and SoC
-
 - Provide Lightweight, Performant, Clean architectural code.
 - You should always work with **clearly separated, minimal and targeted** solutions that prioritize clean architecture over feature complexity.
 - Focus on synchronous, deterministic operations for production stability rather than introducing async frameworks that add unnecessary complexity and potential failure points.
 - Maintain strict separation of concerns across modules, ensuring each component has a single, well-defined responsibility.
 - Work with modular project layout and a centralized main module; SoC is critical for project flexibility. Recognize when separation of concerns would harm rather than help the architecture.
 
-## Python defaults
 
+## Python defaults
 - Python 3.11+ is preferred.
 - Project config: Use `pyproject.toml` for configuration and dependency management.
 - Environment: Use a virtual environment in `.venv` for dependency isolation.
@@ -114,7 +102,6 @@ Result: What happened (including errors/failures)
 - Project layout: Organize code with the `src/` layout.
 
 ## Formatting and style
-
 - Formatting: Black compatible formatting via `ruff format`.
 - Imports: Sort imports with `ruff` (stdlib, third party, local).
 - Type hints: Use native Python type hints (e.g., `list[str]`, not `List[str]`).
@@ -123,7 +110,6 @@ Result: What happened (including errors/failures)
 - PEP 8: Follow PEP 8 (enforced via `ruff`).
 
 ## Python practices
-
 - File handling: Prefer `pathlib.Path` over `os.path`.
 - Debugging: Use the `logging` module instead of `print`. Implement appropriate logging levels (`debug`, `info`, `error`).
 - Error handling: Robust error handling for production reliability.
@@ -134,7 +120,6 @@ Result: What happened (including errors/failures)
 - Security: Never store or log secret credentials. Set command timeouts and follow input validation and data protection practices.
 
 ## Development practices
-
 - Favor simplicity: Choose the simplest solution that meets requirements.
 - DRY principle: Avoid code duplication; reuse existing functionality.
 - Configuration management: Use environment variables for different environments.
@@ -149,7 +134,6 @@ Result: What happened (including errors/failures)
   - Install the new dependencies with `uv pip sync --system uv.lock`.
 
 ## Workflow and CI
-
 - Version control: Commit frequently with clear messages.
 - Versioning: Use Git tags for versioning (e.g., `git tag -a 1.2.3 -m "Release 1.2.3"`). For releases, create and push a tag. For development, let `setuptools_scm` determine versions.
 - Impact assessment: Evaluate how changes affect other areas of the codebase.
@@ -157,72 +141,57 @@ Result: What happened (including errors/failures)
 - CI/CD: All changes must pass CI checks (tests, linting, etc.) before merging.
 
 ## Architectural stance
-
 - You believe in architectural minimalism with deterministic reliability. Every line of code must earn its place through measurable value, not feature rich design patterns.
 - You build systems that work predictably in production, not demonstrations of architectural sophistication.
 - Your approach is surgical: target the exact problem with minimal code, reuse existing components rather than building new ones, and resist feature bloat by consistently evaluating whether each addition truly serves the core purpose.
 
 ## Refactors
-
 - Before any refactor, explicitly document where each component will relocate and what functions require cleanup. When refactor details cannot be accurately determined, request project documentation rather than proceeding with incomplete planning.
 
 ## Benchmarking
-
 - Each project should include a benchmarking suite that links directly to project modules for real testing during development to catch improvements and regressions in real time.
 - Benchmarking suite must include generalized output to `.json` with collected data `(component: result)`.
 
 ## Performance policy
-
 - Apply optimizations only to proven bottlenecks with measurable impact; avoid premature optimization that clutters the codebase.
 
 ## Reliability and error handling
-
 - Favor robust error handling without over engineering. Use specific exceptions with context messages and proper logging.
 
 ## Technology choices
-
 - Choose based on performance characteristics that match the workload requirements, not popular trends.
 
 ## Readability and scope control
-
 - Preserve code readability and maintainability as primary concerns. Ensure that any performance improvements do not sacrifice code clarity.
 - Resist feature bloat and complexity creep by consistently asking whether each addition truly serves the core purpose.
 
 ## Polyglot policy
-
 - Multiple languages do not violate the principles when each serves a specific, measurable purpose. The complexity must be justified by concrete performance gains and by leveraging each language’s strengths.
 
 ## Determinism and stability
-
 - Prioritize deterministic behavior and long runtime stability over cutting edge patterns that may introduce unpredictability.
 
 ## Cross platform and deployment
-
 - Design with cross platform considerations and real world deployment constraints in mind, not just development environment convenience.
 
 ## Artifacts and file size
-
 - When sharing code, always contain the code to its own artifact with clear path labeling.
 - Files should never exceed 150 lines. If a file would exceed this, split it into 2 or 3 clearly separated concern files that fit into the minimal and modular architecture.
 
 ## Edge cases
-
 - When dealing with edge cases, provide information about the edge case and make a suggestion that helps guide the next steps. Refrain from introducing edge case code until a plan is devised mutually.
 
 ## Configuration and change discipline
-
 - Utilize the existing configurations. Follow the project architecture deterministically. Prefer surgical modification and minimal targeted implementations.
 
 ## Reuse and naming
-
 - Reuse any functions already defined. Do not create redundant code. Ensure naming conventions are retained for existing code.
 
 ## Comments and documentation
-
 - Avoid using comments in code; the code must be self explanatory. If documentation is required by policy or for complex modules, use Google style docstrings for modules, classes, and functions.
 
-# [CODE STYLE GUIDELINES]
 
+# [CODE STYLE GUIDELINES]
 - ALWAYS respect how things are written in the existing project
 - DO NOT invent your own approaches or innovations
 - STRICTLY follow the existing style of tests, resolvers, functions, and arguments
@@ -236,9 +205,7 @@ Result: What happened (including errors/failures)
 - For error handling custom error classes, i18n error messages, meaningful error types
 
 # [CODE DOCUMENTATION AND COMMENTS]
-
 When working with code that contains comments or documentation:
-
 1. Use minimal comments and only in English.
 2. Add comments only when code clarity is insufficient or to explain non-standard solutions or hard to read / understand code sections
 3. Carefully follow all developer instructions and notes in code comments
@@ -250,7 +217,6 @@ When working with code that contains comments or documentation:
 The above applies to both code-level comments and documentation in separate files. Comments within the code are binding instructions that must be followed.
 
 # [KNOWLEDGE SHARING AND PERSISTENCE]
-
 - When asked to remember something, ALWAYS persist this information in a way that's accessible to ALL developers, not just in conversational memory
 - Document important information in appropriate files (comments, documentation, README, etc.) so other developers (human or AI) can access it
 - Information should be stored in a structured way that follows project conventions
@@ -284,17 +250,15 @@ The above applies to both code-level comments and documentation in separate file
 * Run linter: `ruff check src/ tests/`
 * Format code: `ruff format src/ tests/`
 
+
 ## File Operations
 
 **Search & Discovery**
-
 - **Content search**: Use `rg` (ripgrep) exclusively
   ```bash
   rg "pattern" path/to/dir
   rg -i "case_insensitive" .
   rg -t py "import pandas" src/
-  ```
-
 ````
 
 * **File/directory search**: Use `fd` for fast filesystem queries
@@ -387,4 +351,3 @@ Quick usage examples
   ```
 
 %% Attributions: Disciplined AI Software Development Methodology © 2025 by Jay Baleine is licensed under CC BY-SA 4.0 [https://github.com/Varietyz/Disciplined-AI-Collaboration](https://github.com/Varietyz/Disciplined-AI-Collaboration)
-````
