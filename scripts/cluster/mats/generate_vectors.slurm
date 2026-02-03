@@ -2,8 +2,7 @@
 #SBATCH --job-name=pvx-generate
 #SBATCH --output=logs/slurm/pvx-generate_%j.log
 #SBATCH --error=logs/slurm/pvx-generate_%j.err
-#SBATCH --partition=gpu
-#SBATCH --qos=normal
+#SBATCH --partition=compute
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=64G
@@ -26,7 +25,7 @@ export HF_HOME=/mnt/nw/teams/team_krier_shavit_c9/.cache/huggingface
 echo "Python: $(which python)"
 echo "Torch version: $(python -c 'import torch; print(torch.__version__)')"
 echo "CUDA available: $(python -c 'import torch; print(torch.cuda.is_available())')"
-echo "GPU: $(python -c 'import torch; print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"N/A\")')"
+echo "GPU: $(python -c 'import torch; print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "N/A")')"
 
 echo ""
 echo "========== VALIDATION =========="
@@ -39,8 +38,7 @@ assert torch.cuda.is_available(), 'CUDA not available!'
 print('CUDA check: PASSED')
 
 for trait in ['realistic', 'investigative', 'artistic', 'social', 'enterprising', 'conventional']:
-    path = f'persona_data/trait_datasets/{trait}_dataset.json'
-    ds = PersonaDataset.from_json(path)
+    ds = PersonaDataset.from_json(trait=trait)
     print(f'Dataset {trait}: {ds.num_questions} questions')
 print('Dataset check: PASSED')
 "

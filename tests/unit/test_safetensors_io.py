@@ -1,11 +1,9 @@
 """Unit tests for safetensors save/load operations in AbstractPersonaModel."""
 
 import json
-from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
 import torch
 from safetensors import safe_open
 
