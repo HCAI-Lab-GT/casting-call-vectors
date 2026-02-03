@@ -247,7 +247,8 @@ class TestLoadOrCreate:
         model.all_layers_response_persona_vector = mock_persona_vectors["all_layers"] * 2
         model.save_to_safetensors(str(temp_dir) + "/")
 
-        with safe_open(str(temp_dir / "artistic__Qwen__Qwen2.5-7B-Instruct.safetensors"), framework="pt") as f:
+        safetensors_path = temp_dir / "artistic_persona_initialization" / "Qwen__Qwen2.5-7B-Instruct.safetensors"
+        with safe_open(str(safetensors_path), framework="pt") as f:
             safetensors_prompt = f.get_tensor("prompt_persona_vector")
 
         assert torch.allclose(safetensors_prompt, mock_persona_vectors["prompt"] * 2)
@@ -255,10 +256,11 @@ class TestLoadOrCreate:
     def test_falls_back_to_json_when_no_safetensors(self, temp_dir, legacy_json_file):
         """Verify JSON is loaded when safetensors doesn't exist."""
         assert legacy_json_file.exists()
-        assert not (temp_dir / "artistic__Qwen__Qwen2.5-7B-Instruct.safetensors").exists()
+        safetensors_path = temp_dir / "artistic_persona_initialization" / "Qwen__Qwen2.5-7B-Instruct.safetensors"
+        assert not safetensors_path.exists()
 
     def test_filename_construction(self, temp_dir, mock_persona_vectors):
-        """Verify correct filename is constructed from trait and model ID."""
+        """Verify correct path is constructed from trait and model ID."""
         model = MockPersonaModel("Qwen/Qwen2.5-7B-Instruct", "conventional")
         model.prompt_persona_vector = mock_persona_vectors["prompt"]
         model.response_persona_vector = mock_persona_vectors["response"]
@@ -266,5 +268,5 @@ class TestLoadOrCreate:
 
         result_path = model.save_to_safetensors(str(temp_dir) + "/")
 
-        expected_filename = "conventional__Qwen__Qwen2.5-7B-Instruct.safetensors"
-        assert Path(result_path).name == expected_filename
+        expected_path = temp_dir / "conventional_persona_initialization" / "Qwen__Qwen2.5-7B-Instruct.safetensors"
+        assert Path(result_path) == expected_path
