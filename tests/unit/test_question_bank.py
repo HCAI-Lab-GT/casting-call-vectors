@@ -79,8 +79,9 @@ class TestQuestionBankSplit:
         train, test = bank.split()
 
         assert len(train) + len(test) == len(bank)
-        assert len(train) == 4  # 80% of 5
-        assert len(test) == 1  # 20% of 5
+        expected_train = int(len(bank) * 0.8)
+        assert len(train) == expected_train
+        assert len(test) == len(bank) - expected_train
 
     def test_split_custom_ratio(self, sample_questions: list[str]):
         """Should split with custom ratio."""
@@ -88,8 +89,9 @@ class TestQuestionBankSplit:
 
         train, test = bank.split(train_ratio=0.6)
 
-        assert len(train) == 3  # 60% of 5
-        assert len(test) == 2  # 40% of 5
+        expected_train = int(len(bank) * 0.6)
+        assert len(train) == expected_train
+        assert len(test) == len(bank) - expected_train
 
     def test_split_is_reproducible(self, sample_questions: list[str]):
         """Should produce same split with same seed."""
