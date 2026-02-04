@@ -324,17 +324,17 @@ class LLMJudge:
     def _messages_to_prompt(messages: List[Dict[str, str]]) -> str:
         """
         Flatten chat messages into a single prompt string for decoder-only HF models.
-        Format: "<system>\\n\\n<user>\\n\\nAssistant:"
+        Format: "<system>\n\n<user>\n\nAssistant:"
         """
         system_parts = [m["content"] for m in messages if m["role"] == "system"]
         user_parts = [m["content"] for m in messages if m["role"] == "user"]
-        system_block = "\\n".join(system_parts)
-        user_block = "\\n\\n".join(user_parts)
+        system_block = "\n".join(system_parts)
+        user_block = "\n\n".join(user_parts)
         prompt = ""
         if system_block:
-            prompt += f"{system_block}\\n\\n"
+            prompt += f"{system_block}\n\n"
         prompt += user_block
-        prompt += "\\n\\nAssistant:"
+        prompt += "\n\nAssistant:"
         return prompt
 
     def __call__(self, **kwargs):

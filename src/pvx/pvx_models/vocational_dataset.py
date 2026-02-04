@@ -120,24 +120,21 @@ class VocationalPersonaGenerator:
             tasks=tasks_str,
         )
 
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-        )
-
-        content = response.choices[0].message.content.strip()
-
-        # Parse JSON response
         try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+            )
+            content = response.choices[0].message.content.strip()
             prompts = json.loads(content)
             if isinstance(prompts, list) and len(prompts) == 5:
                 return prompts
         except json.JSONDecodeError:
-            pass
+            logger.warning("Failed to parse LLM response for %s, using fallback", profile["title"])
+        except Exception as e:
+            logger.warning("API call failed for %s: %s, using fallback", profile["title"], e)
 
-        # Fallback: generate basic prompts if LLM response is malformed
-        logger.warning(f"Failed to parse LLM response for {profile['title']}, using fallback")
         return self._generate_fallback_prompts(profile)
 
     def _generate_fallback_prompts(self, profile: dict) -> list[str]:
