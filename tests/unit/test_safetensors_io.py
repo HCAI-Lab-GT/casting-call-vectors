@@ -245,7 +245,9 @@ class TestLoadOrCreate:
         model.all_layers_response_persona_vector = mock_persona_vectors["all_layers"] * 2
         model.save_to_safetensors(str(temp_dir) + "/")
 
-        safetensors_path = temp_dir / "artistic_persona_initialization" / "Qwen__Qwen2.5-7B-Instruct.safetensors"
+        safetensors_path = (
+            temp_dir / "artistic_persona_initialization" / "Qwen__Qwen2.5-7B-Instruct.safetensors"
+        )
         with safe_open(str(safetensors_path), framework="pt") as f:
             safetensors_prompt = f.get_tensor("prompt_persona_vector")
 
@@ -254,7 +256,9 @@ class TestLoadOrCreate:
     def test_falls_back_to_json_when_no_safetensors(self, temp_dir, legacy_json_file):
         """Verify JSON is loaded when safetensors doesn't exist."""
         assert legacy_json_file.exists()
-        safetensors_path = temp_dir / "artistic_persona_initialization" / "Qwen__Qwen2.5-7B-Instruct.safetensors"
+        safetensors_path = (
+            temp_dir / "artistic_persona_initialization" / "Qwen__Qwen2.5-7B-Instruct.safetensors"
+        )
         assert not safetensors_path.exists()
 
     def test_filename_construction(self, temp_dir, mock_persona_vectors):
@@ -266,5 +270,9 @@ class TestLoadOrCreate:
 
         result_path = model.save_to_safetensors(str(temp_dir) + "/")
 
-        expected_path = temp_dir / "conventional_persona_initialization" / "Qwen__Qwen2.5-7B-Instruct.safetensors"
+        expected_path = (
+            temp_dir
+            / "conventional_persona_initialization"
+            / "Qwen__Qwen2.5-7B-Instruct.safetensors"
+        )
         assert Path(result_path) == expected_path

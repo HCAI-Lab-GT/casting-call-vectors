@@ -264,7 +264,9 @@ class AbstractPersonaModel(ABC):
         """
         # Build safetensors path
         safe_model_id = target_model_id.replace("/", "__")
-        safetensors_path = Path(safetensors_dir) / f"{trait}_persona_initialization/{safe_model_id}.safetensors"
+        safetensors_path = (
+            Path(safetensors_dir) / f"{trait}_persona_initialization/{safe_model_id}.safetensors"
+        )
 
         # Try safetensors first (preferred format)
         if safetensors_path.exists():

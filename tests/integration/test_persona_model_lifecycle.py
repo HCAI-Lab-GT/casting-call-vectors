@@ -63,7 +63,14 @@ class TestPersonaModelLifecycle:
 
     def test_multiple_traits_coexist(self, temp_dir, mock_persona_vectors):
         """Test that multiple trait vectors can be saved and loaded independently."""
-        traits = ["realistic", "investigative", "artistic", "social", "enterprising", "conventional"]
+        traits = [
+            "realistic",
+            "investigative",
+            "artistic",
+            "social",
+            "enterprising",
+            "conventional",
+        ]
 
         for trait in traits:
             model = StubPersonaModel(
@@ -84,7 +91,11 @@ class TestPersonaModelLifecycle:
         assert len(manifest["vectors"]) == 6
 
         for i, trait in enumerate(traits):
-            path = temp_dir / f"{trait}_persona_initialization" / "Qwen__Qwen2.5-7B-Instruct.safetensors"
+            path = (
+                temp_dir
+                / f"{trait}_persona_initialization"
+                / "Qwen__Qwen2.5-7B-Instruct.safetensors"
+            )
             with safe_open(str(path), framework="pt") as f:
                 loaded_prompt = f.get_tensor("prompt_persona_vector")
             expected = mock_persona_vectors["prompt"] * (i + 1)
