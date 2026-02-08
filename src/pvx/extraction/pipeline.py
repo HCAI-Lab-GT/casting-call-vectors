@@ -534,3 +534,4 @@ class ExtractionPipeline:
     def __repr__(self) -> str:
         run_info = f", run={self.run_config.run_id}" if self.run_config else ""
         return f"ExtractionPipeline(model={self.model_id!r}, layer={self.layer}, questions={len(self.questions)}{run_info})"
+

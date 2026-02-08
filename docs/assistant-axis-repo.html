@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Repo Workflow Guide — assistant-axis</title>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                   "Helvetica Neue", Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.7;
+      color: #1a1a2e;
+      background: #ffffff;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2.5rem 2rem 4rem;
+    }
+
+    /* Header */
+    header {
+      margin-bottom: 2.5rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 2px solid #e2e8f0;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #16213e;
+      letter-spacing: -0.02em;
+    }
+
+    header .subtitle {
+      margin-top: 0.35rem;
+      font-size: 0.9rem;
+      color: #64748b;
+    }
+
+    /* Table of Contents */
+    nav.toc {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 1.2rem 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+
+    nav.toc h2 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #64748b;
+      margin-bottom: 0.6rem;
+      border: none;
+      padding-left: 0;
+    }
+
+    nav.toc ol {
+      list-style: none;
+      counter-reset: toc;
+      padding-left: 0;
+    }
+
+    nav.toc li {
+      counter-increment: toc;
+      margin-bottom: 0.25rem;
+    }
+
+    nav.toc li::before {
+      content: counter(toc) ". ";
+      color: #94a3b8;
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+
+    nav.toc a {
+      color: #2563eb;
+      text-decoration: none;
+      font-size: 0.95rem;
+    }
+
+    nav.toc a:hover {
+      text-decoration: underline;
+    }
+
+    /* Sections */
+    section {
+      margin-bottom: 3rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    section:last-child {
+      border-bottom: none;
+    }
+
+    h2 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: #16213e;
+      border-left: 3px solid #3b82f6;
+      padding-left: 12px;
+      margin-bottom: 1.2rem;
+    }
+
+    h3 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: #1e293b;
+      margin-top: 1.5rem;
+      margin-bottom: 0.8rem;
+    }
+
+    p {
+      margin-bottom: 1rem;
+    }
+
+    /* Code */
+    code {
+      font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas,
+                   "DejaVu Sans Mono", monospace;
+      font-size: 0.88em;
+      background: #f1f5f9;
+      color: #334155;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    pre {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 1rem;
+      overflow-x: auto;
+      margin-bottom: 1.2rem;
+    }
+
+    pre code {
+      background: none;
+      padding: 0;
+      font-size: 0.85em;
+      line-height: 1.6;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1.5rem;
+    }
+
+    th {
+      background: #f8fafc;
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: #475569;
+      border-bottom: 2px solid #e2e8f0;
+    }
+
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 0.95rem;
+    }
+
+    tr:nth-child(even) td {
+      background: #fafbfc;
+    }
+
+    /* Diagrams */
+    .diagram {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      margin: 1.5rem auto;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+    }
+
+    .diagram-caption {
+      text-align: center;
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-top: -0.8rem;
+      margin-bottom: 1.5rem;
+    }
+
+    /* Lists */
+    ul, ol {
+      padding-left: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    li {
+      margin-bottom: 0.35rem;
+    }
+
+    /* Workflow Cards */
+    .workflow {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 0.8rem;
+    }
+
+    .workflow strong {
+      color: #1e293b;
+    }
+
+    /* Open Questions */
+    .question-item {
+      background: #fffbeb;
+      border-left: 3px solid #f59e0b;
+      padding: 0.7rem 1rem;
+      margin-bottom: 0.6rem;
+      border-radius: 0 6px 6px 0;
+    }
+
+    .question-item .label {
+      font-weight: 600;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .question-item .unknown { color: #92400e; }
+    .question-item .check   { color: #65a30d; }
+
+    /* Formula */
+    .formula {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      margin: 1rem 0;
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 1rem;
+      text-align: center;
+      color: #334155;
+    }
+
+    /* Step badge */
+    .step-badge {
+      display: inline-block;
+      background: #3b82f6;
+      color: white;
+      border-radius: 50%;
+      width: 26px;
+      height: 26px;
+      text-align: center;
+      line-height: 26px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    footer {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid #e2e8f0;
+      text-align: center;
+      font-size: 0.85rem;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>assistant-axis &mdash; Workflow Guide</h1>
+    <p class="subtitle">Generated by repo-workflow-guide &middot; The Assistant Axis: Situating and Stabilizing the Default Persona of Language Models</p>
+  </header>
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#concept">Core Concept</a></li>
+      <li><a href="#workflows">Workflows</a></li>
+      <li><a href="#pipeline">Pipeline: Input &rarr; Processing &rarr; Output</a></li>
+      <li><a href="#usage">Usage: Steering &amp; Monitoring</a></li>
+      <li><a href="#handoffs">Data Handoffs</a></li>
+      <li><a href="#modify">Where to Modify</a></li>
+      <li><a href="#questions">Open Questions</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <section id="overview">
+      <h2>Overview</h2>
+      <p>
+        This repository accompanies the paper <em>"The Assistant Axis: Situating and Stabilizing the Default Persona of Language Models"</em> (Lu et al., 2026). It provides a complete toolkit for computing, analyzing, and intervening on a direction in activation space&mdash;the <strong>Assistant Axis</strong>&mdash;that captures how "Assistant-like" a language model's current persona is.
+      </p>
+      <p>
+        The codebase has two main parts: a <strong>5-step pipeline</strong> in <code>pipeline/</code> that computes the axis from scratch for any model, and a <strong>Python library</strong> in <code>assistant_axis/</code> that loads pre-computed axes and applies steering or monitoring at inference time. Jupyter notebooks in <code>notebooks/</code> provide interactive analysis (PCA, visualization, steering demos). Conversation transcripts from the paper live in <code>transcripts/</code>.
+      </p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <section id="concept">
+      <h2>Core Concept</h2>
+      <p>
+        Large language models default to a "helpful Assistant" persona cultivated during post-training. This persona can <em>drift</em> during conversations&mdash;particularly in emotionally charged or meta-reflective contexts&mdash;leading to harmful behavior. The Assistant Axis captures this phenomenon as a measurable direction in the model's hidden states.
+      </p>
+
+      <div class="formula">
+        axis = mean(default_activations) &minus; mean(role_activations)
+      </div>
+
+      <p>
+        The axis points <strong>toward</strong> default Assistant behavior. Higher projections onto the axis indicate more "Assistant-like" responses (transparent, grounded, helpful); lower projections indicate drift toward role-playing personas (enigmatic, subversive, dramatic). Three models from the paper have pre-computed axes available on HuggingFace:
+      </p>
+
+      <table>
+        <thead>
+          <tr><th>Model</th><th>Target Layer</th><th>Total Layers</th><th>Capping Config</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>google/gemma-2-27b-it</code></td><td>22</td><td>46</td><td>&mdash;</td></tr>
+          <tr><td><code>Qwen/Qwen3-32B</code></td><td>32</td><td>64</td><td><code>layers_46:54-p0.25</code></td></tr>
+          <tr><td><code>meta-llama/Llama-3.3-70B-Instruct</code></td><td>40</td><td>80</td><td><code>layers_56:72-p0.25</code></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <section id="workflows">
+      <h2>Workflows</h2>
+
+      <div class="workflow">
+        <strong>Axis Computation Pipeline</strong> (<code>pipeline/1_generate.py</code> &rarr; <code>5_axis.py</code>) &mdash;
+        Generates model responses for 275 character roles, extracts hidden-state activations, scores role adherence with an LLM judge, computes per-role mean vectors, and aggregates them into the final Assistant Axis. This is the one-time offline computation.
+      </div>
+
+      <div class="workflow">
+        <strong>Inference-Time Steering</strong> (<code>assistant_axis.steering</code>) &mdash;
+        Loads a pre-computed axis and applies activation interventions (addition, ablation, capping) during model generation via PyTorch forward hooks. Used to push model behavior toward or away from the Assistant persona.
+      </div>
+
+      <div class="workflow">
+        <strong>Inference-Time Monitoring</strong> (<code>assistant_axis.axis</code> + <code>assistant_axis.internals</code>) &mdash;
+        Extracts activations from conversations, projects them onto the axis, and returns a scalar measuring how "Assistant-like" the model is at each turn. Used to detect persona drift in real time.
+      </div>
+
+      <div class="workflow">
+        <strong>Interactive Analysis</strong> (<code>notebooks/</code>) &mdash;
+        Jupyter notebooks for PCA analysis of role vectors, axis visualization with cosine similarity, steering demos, and transcript projection to visualize persona trajectories over conversations.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <section id="pipeline">
+      <h2>Pipeline: Input &rarr; Processing &rarr; Output</h2>
+
+      <p>
+        The pipeline computes the Assistant Axis from scratch. It is orchestrated by <code>pipeline/run_pipeline.sh</code> or by running each of the 5 numbered scripts individually. All scripts support checkpointing&mdash;they skip already-completed work on restart.
+      </p>
+
+      <!-- Data Flow Diagram -->
+      <svg viewBox="0 0 820 780" xmlns="http://www.w3.org/2000/svg" class="diagram" style="max-width:820px; background:#fafbfc;">
+        <defs>
+          <marker id="ah" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#475569"/></marker>
+          <marker id="ah-par" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8"/></marker>
+        </defs>
+        <!-- Title -->
+        <text x="410" y="32" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="20" font-weight="600" fill="#16213e">Assistant Axis Pipeline &mdash; Data Flow</text>
+        <!-- Input nodes -->
+        <rect x="20" y="60" width="175" height="55" rx="8" fill="#a5d8ff" stroke="#74b9ff" stroke-width="1.5"/>
+        <text x="107" y="83" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="13" font-weight="600" fill="#1e3a5f">Role Definitions</text>
+        <text x="107" y="101" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" fill="#2d5f8a">275 JSON files</text>
+        <rect x="20" y="130" width="175" height="55" rx="8" fill="#a5d8ff" stroke="#74b9ff" stroke-width="1.5"/>
+        <text x="107" y="153" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="13" font-weight="600" fill="#1e3a5f">Extraction Questions</text>
+        <text x="107" y="171" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" fill="#2d5f8a">240 JSONL entries</text>
+        <!-- Arrows to Step 1 -->
+        <line x1="195" y1="87" x2="265" y2="107" stroke="#475569" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="195" y1="157" x2="265" y2="127" stroke="#475569" stroke-width="1.5" marker-end="url(#ah)"/>
+        <!-- Step 1 -->
+        <rect x="270" y="85" width="190" height="60" rx="8" fill="#d0bfff" stroke="#b197fc" stroke-width="1.5"/>
+        <text x="283" y="107" font-family="-apple-system,sans-serif" font-size="11" font-weight="700" fill="#5f3dc4">1</text>
+        <circle cx="287" cy="103" r="9" fill="none" stroke="#5f3dc4" stroke-width="1.5"/>
+        <text x="365" y="109" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="13" font-weight="600" fill="#3b1f7a">Generate</text>
+        <text x="365" y="128" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" fill="#5f3dc4">vLLM batch inference</text>
+        <!-- Arrow to Responses store -->
+        <line x1="460" y1="115" x2="530" y2="115" stroke="#475569" stroke-width="1.5" marker-end="url(#ah)"/>
+        <!-- Responses store -->
+        <rect x="535" y="85" width="175" height="60" rx="8" fill="#c3fae8" stroke="#63e6be" stroke-width="1.5"/>
+        <text x="622" y="109" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="13" font-weight="600" fill="#0b5f3c">Responses</text>
+        <text x="622" y="128" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" fill="#12805c">{role}.jsonl</text>
+        <!-- Fan-out arrows (parallel) -->
+        <line x1="580" y1="145" x2="480" y2="210" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#ah-par)"/>
+        <line x1="660" y1="145" x2="700" y2="210" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#ah-par)"/>
+        <text x="600" y="180" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" fill="#94a3b8" font-style="italic">parallel</text>
+        <!-- Step 2 -->
+        <rect x="380" y="215" width="190" height="60" rx="8" fill="#d0bfff" stroke="#b197fc" stroke-width="1.5"/>
+        <text x="393" y="237" font-family="-apple-system,sans-serif" font-size="11" font-weight="700" fill="#5f3dc4">2</text>
+        <circle cx="397" cy="233" r="9" fill="none" stroke="#5f3dc4" stroke-width="1.5"/>
+        <text x="475" y="239" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="13" font-weight="600" fill="#3b1f7a">Activations</text>
+        <text x="475" y="258" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" fill="#5f3dc4">HF model forward</text>
+        <!-- Step 3 -->
+        <rect x="620" y="215" width="190" height="60" rx="8" fill="#ffd8a8" stroke="#ffa94d" stroke-width="1.5"/>
+        <text x="633" y="237" font-family="-apple-system,sans-serif" font-size="11" font-weight="700" fill="#d9480f">3</text>
+        <circle cx="637" cy="233" r="9" fill="none" stroke="#d9480f" stroke-width="1.5"/>
+        <text x="715" y="239" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="13" font-weight="600" fill="#803b0a">Judge</text>
+        <text x="715" y="258" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" fill="#d9480f">GPT-4 scoring (0-3)</text>
+        <!-- Arrows down to stores -->
+        <line x1="475" y1="275" x2="475" y2="330" stroke="#475569" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="715" y1="275" x2="715" y2="330" stroke="#475569" stroke-width="1.5" marker-end="url(#ah)"/>
+        <!-- Activation store -->
+        <rect x="380" y="335" width="190" height="50" rx="8" fill="#c3fae8" stroke="#63e6be" stroke-width="1.5"/>
+        <text x="475" y="356" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="13" font-weight="600" fill="#0b5f3c">Activations</text>
+        <text x="475" y="373" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" fill="#12805c">{role}.pt</text>
+        <!-- Scores store -->
+        <rect x="620" y="335" width="190" height="50" rx="8" fill="#c3fae8" stroke="#63e6be" stroke-width="1.5"/>
+        <text x="715" y="356" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="13" font-weight="600" fill="#0b5f3c">Scores</text>
+        <text x="715" y="373" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" fill="#12805c">{role}.json</text>
+        <!-- Merge arrows to Step 4 -->
+        <line x1="475" y1="385" x2="545" y2="435" stroke="#475569" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="715" y1="385" x2="645" y2="435" stroke="#475569" stroke-width="1.5" marker-end="url(#ah)"/>
+        <!-- Step 4 -->
+        <rect x="500" y="440" width="190" height="60" rx="8" fill="#d0bfff" stroke="#b197fc" stroke-width="1.5"/>
+        <text x="513" y="462" font-family="-apple-system,sans-serif" font-size="11" font-weight="700" fill="#5f3dc4">4</text>
+        <circle cx="517" cy="458" r="9" fill="none" stroke="#5f3dc4" stroke-width="1.5"/>
+        <text x="595" y="464" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="13" font-weight="600" fill="#3b1f7a">Vectors</text>
+        <text x="595" y="483" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" fill="#5f3dc4">mean(score=3 activations)</text>
+        <!-- Arrow to Step 5 -->
+        <line x1="595" y1="500" x2="595" y2="550" stroke="#475569" stroke-width="1.5" marker-end="url(#ah)"/>
+        <!-- Step 5 -->
+        <rect x="500" y="555" width="190" height="60" rx="8" fill="#d0bfff" stroke="#b197fc" stroke-width="1.5"/>
+        <text x="513" y="577" font-family="-apple-system,sans-serif" font-size="11" font-weight="700" fill="#5f3dc4">5</text>
+        <circle cx="517" cy="573" r="9" fill="none" stroke="#5f3dc4" stroke-width="1.5"/>
+        <text x="595" y="579" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="13" font-weight="600" fill="#3b1f7a">Axis</text>
+        <text x="595" y="598" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" fill="#5f3dc4">default - mean(roles)</text>
+        <!-- Arrow to output -->
+        <line x1="595" y1="615" x2="595" y2="660" stroke="#475569" stroke-width="1.5" marker-end="url(#ah)"/>
+        <!-- Output -->
+        <rect x="500" y="665" width="190" height="55" rx="8" fill="#b2f2bb" stroke="#69db7c" stroke-width="1.5"/>
+        <text x="595" y="688" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="14" font-weight="700" fill="#0b5f3c">axis.pt</text>
+        <text x="595" y="706" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" fill="#12805c">(n_layers, hidden_dim)</text>
+        <!-- Legend -->
+        <rect x="20" y="700" width="14" height="14" rx="3" fill="#a5d8ff" stroke="#74b9ff"/>
+        <text x="40" y="712" font-family="-apple-system,sans-serif" font-size="11" fill="#64748b">Input</text>
+        <rect x="80" y="700" width="14" height="14" rx="3" fill="#d0bfff" stroke="#b197fc"/>
+        <text x="100" y="712" font-family="-apple-system,sans-serif" font-size="11" fill="#64748b">Processing</text>
+        <rect x="175" y="700" width="14" height="14" rx="3" fill="#c3fae8" stroke="#63e6be"/>
+        <text x="195" y="712" font-family="-apple-system,sans-serif" font-size="11" fill="#64748b">Data Store</text>
+        <rect x="265" y="700" width="14" height="14" rx="3" fill="#ffd8a8" stroke="#ffa94d"/>
+        <text x="285" y="712" font-family="-apple-system,sans-serif" font-size="11" fill="#64748b">External API</text>
+        <rect x="360" y="700" width="14" height="14" rx="3" fill="#b2f2bb" stroke="#69db7c"/>
+        <text x="380" y="712" font-family="-apple-system,sans-serif" font-size="11" fill="#64748b">Output</text>
+      </svg>
+      <p class="diagram-caption">Data flow: role definitions and questions through the 5-step pipeline to the final axis tensor</p>
+
+      <h3><span class="step-badge">1</span> Generate Responses</h3>
+      <p>
+        Execution starts at <code>pipeline/1_generate.py</code>. The CLI takes <code>--model</code> (a HuggingFace model name) and <code>--output_dir</code>. The script instantiates a <code>RoleResponseGenerator</code> from <code>assistant_axis/generation.py</code>, which wraps a <code>VLLMGenerator</code> for high-throughput batch inference. It loads 275 role JSON files from <code>data/roles/instructions/</code>&mdash;each containing 5 system prompt variants&mdash;plus a <code>default.json</code> with neutral prompts like "You are an AI assistant." It also loads 240 extraction questions from <code>data/extraction_questions.jsonl</code>.
+      </p>
+      <p>
+        For each role, the generator produces <strong>1,200 responses</strong> (5 prompts &times; 240 questions) via vLLM batch inference, formatting each as a <code>[system, user]</code> conversation and appending the generated assistant reply. Results are saved as <code>{role}.jsonl</code> files, each line containing the conversation, system prompt, prompt index, question index, and question text. Multi-GPU tensor parallelism is supported.
+      </p>
+
+      <h3><span class="step-badge">2</span> Extract Activations</h3>
+      <p>
+        <code>pipeline/2_activations.py</code> takes the response JSONL files and extracts mean hidden-state activations. It loads the model via <code>ProbingModel</code> from <code>assistant_axis/internals/model.py</code>, which wraps a HuggingFace model and provides access to post-MLP residual stream outputs at each layer.
+      </p>
+      <p>
+        For each role's responses, conversations are batched and fed through the model. <code>ActivationExtractor</code> captures hidden states at specified layers, and <code>SpanMapper</code> maps token-level activations to per-turn means by identifying assistant turn boundaries. The result for each conversation is a tensor of shape <code>(n_layers, hidden_dim)</code>&mdash;the mean activation across all assistant tokens. These are saved as <code>{role}.pt</code> files keyed by <code>{label}_p{prompt}_q{question}</code>.
+      </p>
+
+      <h3><span class="step-badge">3</span> Score with LLM Judge</h3>
+      <p>
+        <code>pipeline/3_judge.py</code> can run <strong>in parallel</strong> with step 2 (both only need step 1's output). It scores how well each response adheres to its assigned role using an LLM judge (GPT-4.1-mini by default via the OpenAI API). Each role JSON file contains an <code>eval_prompt</code> template with <code>{question}</code> and <code>{answer}</code> placeholders.
+      </p>
+      <p>
+        The judge uses the <code>RateLimiter</code> and <code>call_judge_batch</code> from <code>assistant_axis/judge.py</code> for async concurrent API calls. Scores are integers 0&ndash;3: <strong>0</strong> = refused to answer, <strong>1</strong> = identified as AI but attempted answer, <strong>2</strong> = identified as AI with some role attributes, <strong>3</strong> = fully playing the role. Scores are saved as <code>{role}.json</code> files mapping response keys to score values.
+      </p>
+
+      <h3><span class="step-badge">4</span> Compute Per-Role Vectors</h3>
+      <p>
+        <code>pipeline/4_vectors.py</code> merges activations with scores. For each <strong>regular role</strong>, it filters activations to only those with <strong>score=3</strong> (fully role-playing), requires a minimum of 50 qualifying samples (configurable via <code>--min_count</code>), and computes their mean. For the <strong>default role</strong>, it takes the mean of <em>all</em> activations (no score filtering needed). Each result is a tensor of shape <code>(n_layers, hidden_dim)</code> saved as <code>{role}.pt</code>.
+      </p>
+
+      <h3><span class="step-badge">5</span> Compute the Axis</h3>
+      <p>
+        <code>pipeline/5_axis.py</code> loads all per-role vectors and separates them into default vectors and role vectors. It stacks each group, computes the mean across roles, and subtracts: <code>axis = mean(default) - mean(roles)</code>. The output is a tensor of shape <code>(n_layers, hidden_dim)</code> saved as <code>axis.pt</code>. The script reports per-layer norms to help identify which layers carry the strongest signal.
+      </p>
+
+      <h3>Data Handoffs</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Type / Shape</th>
+            <th>From</th>
+            <th>To</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Role definitions</td>
+            <td>275 JSON files (5 prompts + eval_prompt each)</td>
+            <td><code>data/roles/instructions/</code></td>
+            <td>Step 1 + Step 3</td>
+          </tr>
+          <tr>
+            <td>Extraction questions</td>
+            <td>240 JSONL entries</td>
+            <td><code>data/extraction_questions.jsonl</code></td>
+            <td>Step 1</td>
+          </tr>
+          <tr>
+            <td>Responses</td>
+            <td>JSONL per role (~1200 entries each)</td>
+            <td>Step 1</td>
+            <td>Step 2 + Step 3</td>
+          </tr>
+          <tr>
+            <td>Activations</td>
+            <td><code>.pt</code> dict &rarr; <code>Tensor[n_layers, hidden_dim]</code></td>
+            <td>Step 2</td>
+            <td>Step 4</td>
+          </tr>
+          <tr>
+            <td>Scores</td>
+            <td>JSON dict &rarr; <code>int (0-3)</code></td>
+            <td>Step 3</td>
+            <td>Step 4</td>
+          </tr>
+          <tr>
+            <td>Per-role vectors</td>
+            <td><code>.pt</code> &rarr; <code>Tensor[n_layers, hidden_dim]</code></td>
+            <td>Step 4</td>
+            <td>Step 5</td>
+          </tr>
+          <tr>
+            <td>Axis</td>
+            <td><code>Tensor[n_layers, hidden_dim]</code></td>
+            <td>Step 5</td>
+            <td>Steering / Monitoring</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <section id="usage">
+      <h2>Usage: Steering &amp; Monitoring</h2>
+
+      <p>
+        Once the axis is computed (or loaded from HuggingFace), the <code>assistant_axis</code> library provides three inference-time capabilities:
+      </p>
+
+      <!-- Swim-Lane Diagram -->
+      <svg viewBox="0 0 820 620" xmlns="http://www.w3.org/2000/svg" class="diagram" style="max-width:820px; background:#fafbfc;">
+        <defs>
+          <marker id="ah2" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#475569"/></marker>
+          <marker id="ah2-purple" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#8b5cf6"/></marker>
+        </defs>
+        <!-- Title -->
+        <text x="410" y="30" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="20" font-weight="600" fill="#16213e">Usage &mdash; Steering &amp; Monitoring</text>
+        <!-- Lane backgrounds -->
+        <rect x="15" y="45" width="240" height="555" rx="8" fill="#dbe4ff" opacity="0.35"/>
+        <rect x="270" y="45" width="280" height="555" rx="8" fill="#e5dbff" opacity="0.35"/>
+        <rect x="565" y="45" width="240" height="555" rx="8" fill="#d3f9d8" opacity="0.35"/>
+        <!-- Lane headers -->
+        <text x="135" y="68" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="14" font-weight="700" fill="#3b82f6">User Code</text>
+        <text x="410" y="68" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="14" font-weight="700" fill="#8b5cf6">assistant_axis library</text>
+        <text x="685" y="68" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="14" font-weight="700" fill="#22c55e">Model / External</text>
+
+        <!-- Row 1: Load model -->
+        <rect x="30" y="85" width="210" height="42" rx="6" fill="#a5d8ff" stroke="#74b9ff" stroke-width="1.5"/>
+        <text x="135" y="111" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="600" fill="#1e3a5f">load_model(name)</text>
+        <line x1="240" y1="106" x2="280" y2="106" stroke="#475569" stroke-width="1.5" marker-end="url(#ah2)"/>
+        <rect x="285" y="85" width="250" height="42" rx="6" fill="#d0bfff" stroke="#b197fc" stroke-width="1.5"/>
+        <text x="410" y="111" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="600" fill="#3b1f7a">get_config() + MODEL_CONFIGS</text>
+        <line x1="535" y1="106" x2="575" y2="106" stroke="#475569" stroke-width="1.5" marker-end="url(#ah2)"/>
+        <rect x="580" y="85" width="210" height="42" rx="6" fill="#b2f2bb" stroke="#69db7c" stroke-width="1.5"/>
+        <text x="685" y="111" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="600" fill="#0b5f3c">HuggingFace model</text>
+        <!-- Return -->
+        <line x1="580" y1="120" x2="240" y2="148" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#ah2)"/>
+        <text x="400" y="142" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="10" fill="#94a3b8">model, tokenizer</text>
+
+        <!-- Row 2: Load axis -->
+        <rect x="30" y="155" width="210" height="42" rx="6" fill="#a5d8ff" stroke="#74b9ff" stroke-width="1.5"/>
+        <text x="135" y="181" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="600" fill="#1e3a5f">load_axis(path)</text>
+        <line x1="240" y1="176" x2="280" y2="176" stroke="#475569" stroke-width="1.5" marker-end="url(#ah2)"/>
+        <rect x="285" y="155" width="250" height="42" rx="6" fill="#d0bfff" stroke="#b197fc" stroke-width="1.5"/>
+        <text x="410" y="175" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="600" fill="#3b1f7a">torch.load &rarr; axis tensor</text>
+        <text x="410" y="190" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="10" fill="#5f3dc4">(n_layers, hidden_dim)</text>
+        <!-- Return -->
+        <line x1="285" y1="190" x2="240" y2="210" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#ah2)"/>
+        <text x="250" y="207" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="10" fill="#94a3b8">axis</text>
+
+        <!-- Separator: Steering -->
+        <line x1="30" y1="225" x2="790" y2="225" stroke="#e2e8f0" stroke-width="1"/>
+        <text x="410" y="242" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="700" fill="#8b5cf6">STEERING</text>
+
+        <!-- Row 3: Create steerer -->
+        <rect x="30" y="255" width="210" height="42" rx="6" fill="#a5d8ff" stroke="#74b9ff" stroke-width="1.5"/>
+        <text x="135" y="281" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="600" fill="#1e3a5f">ActivationSteering()</text>
+        <line x1="240" y1="276" x2="280" y2="276" stroke="#475569" stroke-width="1.5" marker-end="url(#ah2)"/>
+        <rect x="285" y="255" width="250" height="42" rx="6" fill="#d0bfff" stroke="#b197fc" stroke-width="1.5"/>
+        <text x="410" y="281" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="600" fill="#3b1f7a">register_forward_hook(L)</text>
+
+        <!-- Row 4: Generate -->
+        <rect x="30" y="315" width="210" height="42" rx="6" fill="#a5d8ff" stroke="#74b9ff" stroke-width="1.5"/>
+        <text x="135" y="341" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="600" fill="#1e3a5f">model.generate(...)</text>
+        <line x1="240" y1="336" x2="575" y2="336" stroke="#475569" stroke-width="1.5" marker-end="url(#ah2)"/>
+        <rect x="580" y="315" width="210" height="42" rx="6" fill="#b2f2bb" stroke="#69db7c" stroke-width="1.5"/>
+        <text x="685" y="341" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="600" fill="#0b5f3c">Forward pass</text>
+        <!-- Hook fires -->
+        <path d="M 660 315 C 620 290 500 275 460 297" stroke="#8b5cf6" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#ah2-purple)"/>
+        <text x="540" y="290" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="10" font-weight="600" fill="#8b5cf6">hook: x + c*axis</text>
+        <!-- Return -->
+        <line x1="580" y1="350" x2="240" y2="378" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#ah2)"/>
+        <text x="400" y="372" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="10" fill="#94a3b8">steered response</text>
+
+        <!-- Separator: Monitoring -->
+        <line x1="30" y1="395" x2="790" y2="395" stroke="#e2e8f0" stroke-width="1"/>
+        <text x="410" y="412" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="700" fill="#22c55e">MONITORING</text>
+
+        <!-- Row 5: Extract activations -->
+        <rect x="30" y="425" width="210" height="42" rx="6" fill="#a5d8ff" stroke="#74b9ff" stroke-width="1.5"/>
+        <text x="135" y="451" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="600" fill="#1e3a5f">extract_activations()</text>
+        <line x1="240" y1="446" x2="280" y2="446" stroke="#475569" stroke-width="1.5" marker-end="url(#ah2)"/>
+        <rect x="285" y="425" width="250" height="42" rx="6" fill="#d0bfff" stroke="#b197fc" stroke-width="1.5"/>
+        <text x="410" y="445" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="600" fill="#3b1f7a">ActivationExtractor</text>
+        <text x="410" y="459" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="10" fill="#5f3dc4">+ SpanMapper</text>
+        <!-- Return -->
+        <line x1="285" y1="460" x2="240" y2="485" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#ah2)"/>
+        <text x="245" y="480" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="10" fill="#94a3b8">per-turn acts</text>
+
+        <!-- Row 6: Project -->
+        <rect x="30" y="495" width="210" height="42" rx="6" fill="#a5d8ff" stroke="#74b9ff" stroke-width="1.5"/>
+        <text x="135" y="521" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="600" fill="#1e3a5f">project(acts, axis, L)</text>
+        <line x1="240" y1="516" x2="280" y2="516" stroke="#475569" stroke-width="1.5" marker-end="url(#ah2)"/>
+        <rect x="285" y="495" width="250" height="42" rx="6" fill="#d0bfff" stroke="#b197fc" stroke-width="1.5"/>
+        <text x="410" y="515" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="600" fill="#3b1f7a">dot(act, axis/||axis||)</text>
+        <text x="410" y="529" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="10" fill="#5f3dc4">&rarr; scalar projection</text>
+        <!-- Return -->
+        <line x1="285" y1="530" x2="240" y2="555" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#ah2)"/>
+        <text x="240" y="550" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="10" fill="#94a3b8">float</text>
+
+        <!-- Result box -->
+        <rect x="30" y="560" width="210" height="32" rx="6" fill="#fff3bf" stroke="#ffd43b" stroke-width="1.5"/>
+        <text x="135" y="581" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" font-weight="600" fill="#92400e">Higher = more Assistant-like</text>
+      </svg>
+      <p class="diagram-caption">Swim-lane: steering via forward hooks and monitoring via axis projection</p>
+
+      <h3>Activation Steering</h3>
+      <p>
+        <code>ActivationSteering</code> in <code>assistant_axis/steering.py</code> is a context manager that registers PyTorch forward hooks on specified transformer layers. During <code>model.generate()</code>, the hook fires after each layer's forward pass and modifies the hidden states in-place. Four intervention types are supported:
+      </p>
+      <ul>
+        <li><strong>Addition</strong>: <code>x + coeff * axis</code> &mdash; standard activation steering. Positive coefficient = more Assistant-like.</li>
+        <li><strong>Ablation</strong>: Projects out the axis direction, then adds back with a coefficient. At coefficient=0, the axis component is fully removed.</li>
+        <li><strong>Mean Ablation</strong>: Replaces the axis component with a mean activation vector.</li>
+        <li><strong>Capping</strong>: Prevents the projection onto the axis from exceeding a threshold &tau;. Subtracts only the excess: <code>x - max(0, proj - &tau;) * axis_hat</code>. This is the most targeted intervention from the paper, used to prevent persona drift without over-correcting normal behavior.</li>
+      </ul>
+
+      <h3>Activation Monitoring</h3>
+      <p>
+        The <code>project()</code> function in <code>assistant_axis/axis.py</code> takes a hidden-state tensor and the axis, normalizes the axis direction, and computes the dot product at a given layer. The result is a scalar: higher values mean the model is behaving more like the default Assistant, lower values indicate persona drift. This can be computed per-turn in a conversation to track drift over time.
+      </p>
+      <p>
+        For extracting activations from conversations, the <code>internals</code> package provides <code>ProbingModel</code> (model wrapper), <code>ConversationEncoder</code> (tokenization with turn boundary tracking), <code>ActivationExtractor</code> (batched hidden state capture), and <code>SpanMapper</code> (maps token activations to per-turn means).
+      </p>
+
+      <h3>Activation Capping (Paper's Primary Mitigation)</h3>
+      <p>
+        Pre-computed capping configs for Qwen 3 32B and Llama 3.3 70B are available on HuggingFace. The <code>build_capping_steerer()</code> function in <code>steering.py</code> loads an experiment config (specifying which layers to cap and at what thresholds), constructs the corresponding <code>ActivationSteering</code> context manager, and applies multi-layer capping during generation. This prevents the model from drifting past a safe threshold on the axis without affecting normal behavior.
+      </p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <section id="handoffs">
+      <h2>Key Module Responsibilities</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Module</th>
+            <th>Key Symbols</th>
+            <th>Role</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>assistant_axis/models.py</code></td>
+            <td><code>MODEL_CONFIGS</code>, <code>get_config()</code></td>
+            <td>Model configuration lookup: target layer, total layers, short name, capping config paths</td>
+          </tr>
+          <tr>
+            <td><code>assistant_axis/generation.py</code></td>
+            <td><code>VLLMGenerator</code>, <code>RoleResponseGenerator</code></td>
+            <td>Batch response generation via vLLM; formats conversations with system prompts</td>
+          </tr>
+          <tr>
+            <td><code>assistant_axis/internals/model.py</code></td>
+            <td><code>ProbingModel</code></td>
+            <td>HuggingFace model wrapper exposing layer list and hidden states</td>
+          </tr>
+          <tr>
+            <td><code>assistant_axis/internals/activations.py</code></td>
+            <td><code>ActivationExtractor</code></td>
+            <td>Batched hidden state extraction via forward hooks</td>
+          </tr>
+          <tr>
+            <td><code>assistant_axis/internals/conversation.py</code></td>
+            <td><code>ConversationEncoder</code></td>
+            <td>Tokenization and turn boundary tracking</td>
+          </tr>
+          <tr>
+            <td><code>assistant_axis/internals/spans.py</code></td>
+            <td><code>SpanMapper</code></td>
+            <td>Maps token-level activations to per-turn means</td>
+          </tr>
+          <tr>
+            <td><code>assistant_axis/judge.py</code></td>
+            <td><code>RateLimiter</code>, <code>call_judge_batch()</code>, <code>parse_judge_score()</code></td>
+            <td>Async OpenAI API calls for LLM-based role adherence scoring</td>
+          </tr>
+          <tr>
+            <td><code>assistant_axis/axis.py</code></td>
+            <td><code>compute_axis()</code>, <code>project()</code>, <code>load_axis()</code></td>
+            <td>Axis computation, projection, and persistence</td>
+          </tr>
+          <tr>
+            <td><code>assistant_axis/steering.py</code></td>
+            <td><code>ActivationSteering</code>, <code>build_capping_steerer()</code></td>
+            <td>Forward hook registration for addition, ablation, and capping interventions</td>
+          </tr>
+          <tr>
+            <td><code>assistant_axis/pca.py</code></td>
+            <td><code>compute_pca()</code>, <code>plot_variance_explained()</code></td>
+            <td>PCA analysis and visualization of role vector space</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <section id="modify">
+      <h2>Where to Modify</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>To change&hellip;</th>
+            <th>Look at&hellip;</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Add a new model</td>
+            <td><code>assistant_axis/models.py:MODEL_CONFIGS</code> &mdash; add target layer, total layers, short name</td>
+          </tr>
+          <tr>
+            <td>Role definitions / add new roles</td>
+            <td><code>data/roles/instructions/*.json</code> &mdash; each file needs <code>instruction</code> (5 prompt variants) and <code>eval_prompt</code></td>
+          </tr>
+          <tr>
+            <td>Extraction questions</td>
+            <td><code>data/extraction_questions.jsonl</code> &mdash; JSONL with <code>question</code> and <code>id</code> fields</td>
+          </tr>
+          <tr>
+            <td>Generation parameters (temperature, max_tokens)</td>
+            <td><code>pipeline/1_generate.py:main()</code> CLI args, or <code>assistant_axis/generation.py:VLLMGenerator.__init__</code></td>
+          </tr>
+          <tr>
+            <td>Which layers to extract</td>
+            <td><code>pipeline/2_activations.py</code> <code>--layers</code> flag (default: all layers)</td>
+          </tr>
+          <tr>
+            <td>Judge model or scoring rubric</td>
+            <td><code>pipeline/3_judge.py</code> <code>--judge_model</code> flag; role <code>eval_prompt</code> in JSON files</td>
+          </tr>
+          <tr>
+            <td>Minimum score=3 threshold</td>
+            <td><code>pipeline/4_vectors.py</code> <code>--min_count</code> flag (default: 50)</td>
+          </tr>
+          <tr>
+            <td>Steering intervention type</td>
+            <td><code>assistant_axis/steering.py:ActivationSteering.__init__</code> <code>intervention_type</code> parameter</td>
+          </tr>
+          <tr>
+            <td>Layer list discovery for new architectures</td>
+            <td><code>assistant_axis/steering.py:ActivationSteering._POSSIBLE_LAYER_ATTRS</code></td>
+          </tr>
+          <tr>
+            <td>Activation capping thresholds</td>
+            <td>Capping config <code>.pt</code> files on HuggingFace, loaded via <code>load_capping_config()</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <section id="questions">
+      <h2>Open Questions</h2>
+
+      <div class="question-item">
+        <span class="label unknown">Unknown:</span> The <code>internals</code> package (ProbingModel, ActivationExtractor, SpanMapper) has no public documentation beyond its use in the pipeline.
+        <br>
+        <span class="label check">Check:</span>
+        <code>assistant_axis/internals/model.py</code> and <code>assistant_axis/internals/activations.py</code> for the full API surface.
+      </div>
+
+      <div class="question-item">
+        <span class="label unknown">Unknown:</span> Trait-based role definitions exist in <code>data/traits/instructions/</code> (100+ trait files like "enigmatic", "stoic") alongside the character roles in <code>data/roles/instructions/</code>. The pipeline only references the roles directory by default.
+        <br>
+        <span class="label check">Check:</span>
+        Whether traits are used in an alternative pipeline configuration or for analysis only.
+      </div>
+
+      <div class="question-item">
+        <span class="label unknown">Unknown:</span> Qwen model support includes an <code>enable_thinking</code> flag that defaults to <code>False</code>. The effect of enabling thinking mode on axis quality is not documented.
+        <br>
+        <span class="label check">Check:</span>
+        <code>pipeline/2_activations.py</code> <code>--thinking</code> flag and <code>assistant_axis/generation.py</code> Qwen-specific handling.
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>Generated by repo-workflow-guide</p>
+  </footer>
+
+</body>
+</html>

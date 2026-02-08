@@ -174,7 +174,7 @@ def main(
     else:
         logger.warning(f"Questions file not found: {questions_path}")
         logger.info("Using fallback questions")
-        questions = QuestionBank.from_fallback()
+        questions = QuestionBank.from_jsonl("/Users/silver/Developer/personality-vectors/persona_data/vocational_personas/questions/extraction_questions.jsonl")
 
     # Load personas
     # One of these is guaranteed to be set by the earlier check

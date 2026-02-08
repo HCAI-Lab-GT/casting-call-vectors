@@ -198,6 +198,14 @@ Action: Moved persona_vectors_evals to src/pvx; updated imports (PersonaDataset,
 
 Result: Helpers import as pvx; editable installs reference src layout.
 
+[2026-02-08 14:10] Checked judge env vars and .env.example
+
+Context: User asked how to configure judge API key and base URL and whether a .env.example exists.
+
+Action: Searched judge implementation for API key and base_url usage; located .env.example in repo root.
+
+Result: Confirmed LLM judge reads API key from environment via api_key_env/OPENAI_API_KEY and base_url param; .env.example exists but does not list judge-related variables.
+
 [2025-12-07 14:34] Renamed project to pvx codename
 
 Context: Shorten project name to avoid repetition and align with new helper package codename.
