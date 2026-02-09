@@ -141,6 +141,20 @@ class AbstractPersonaModel(ABC):
 
         # Load model and tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(target_model_id)
+
+        # Fallback chat template for base models without one (e.g. marin-32b-base)
+        if self.tokenizer.chat_template is None:
+            self.tokenizer.chat_template = (
+                "{% for message in messages %}"
+                "<|start_header_id|>{{ message['role'] }}<|end_header_id|>\n\n"
+                "{{ message['content'] | trim }}<|eot_id|>"
+                "{% endfor %}"
+                "{% if add_generation_prompt %}"
+                "<|start_header_id|>assistant<|end_header_id|>\n\n"
+                "{% endif %}"
+            )
+            logger.info("Set fallback Llama-3-style chat template for %s", target_model_id)
+
         self.model = AutoModelForCausalLM.from_pretrained(
             target_model_id,
             dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
@@ -758,8 +772,8 @@ class AbstractPersonaModel(ABC):
             torch.Tensor: persona vector
         """
 
-        if not hasattr(self, "prompt_persona_vector"):
-            raise RuntimeError("prompt_persona_vector not initialized")
+        if not hasattr(self, "response_persona_vector"):
+            raise RuntimeError("response_persona_vector not initialized")
 
         # pick device/dtype from the steered block (works with device_map sharding)
         try:
@@ -773,7 +787,7 @@ class AbstractPersonaModel(ABC):
 
         with self._persona_base_lock:
             if self._persona_base is None or self._persona_base_key != key:
-                self._persona_base = self.prompt_persona_vector.to(
+                self._persona_base = self.response_persona_vector.to(
                     device=p.device, dtype=p.dtype
                 ).view(1, -1)  # (1, H)
                 self._persona_base_key = key
