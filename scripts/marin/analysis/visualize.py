@@ -19,16 +19,17 @@ import json
 from pathlib import Path
 
 import matplotlib
-matplotlib.use("Agg")  # non-interactive backend
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
 from pvx import setup_logging
 
+matplotlib.use("Agg")  # non-interactive backend
+
 logger = setup_logging(name="marin-visualize")
 
 DEFAULT_MODEL = "meta-llama/Llama-3.2-1B-Instruct"
+DPI = 300
 
 # Color palette for role categories
 CATEGORY_COLORS = {
@@ -47,6 +48,8 @@ CATEGORY_COLORS = {
 
 def plot_scree(explained_variance: np.ndarray, output_path: Path):
     """Plot PCA scree plot with explained and cumulative variance."""
+    import matplotlib.pyplot as plt
+
     fig, ax1 = plt.subplots(figsize=(10, 6))
 
     n = len(explained_variance)
@@ -72,16 +75,20 @@ def plot_scree(explained_variance: np.ndarray, output_path: Path):
     ax1.legend(lines1 + lines2, labels1 + labels2, loc="center right")
 
     plt.tight_layout()
-    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    fig.savefig(output_path, dpi=DPI, bbox_inches="tight")
     plt.close(fig)
     logger.info("Saved scree plot: %s", output_path)
 
 
 def plot_role_scatter(
-    projections: np.ndarray, role_names: list, role_categories: dict,
+    projections: np.ndarray,
+    role_names: list,
+    role_categories: dict,
     output_path: Path,
 ):
     """Scatter plot of roles in PC1 vs PC2 space, colored by category."""
+    import matplotlib.pyplot as plt
+
     fig, ax = plt.subplots(figsize=(12, 8))
 
     categories = set(role_categories.values())
@@ -91,16 +98,25 @@ def plot_role_scatter(
             continue
         color = CATEGORY_COLORS.get(cat, "#333333")
         ax.scatter(
-            projections[indices, 0], projections[indices, 1],
-            c=color, label=cat, s=60, alpha=0.8, edgecolors="white", linewidths=0.5,
+            projections[indices, 0],
+            projections[indices, 1],
+            c=color,
+            label=cat,
+            s=60,
+            alpha=0.8,
+            edgecolors="white",
+            linewidths=0.5,
         )
         # Label points
         for idx in indices:
             name = role_names[idx].replace("_", " ")
             ax.annotate(
-                name, (projections[idx, 0], projections[idx, 1]),
-                fontsize=6, alpha=0.7,
-                xytext=(3, 3), textcoords="offset points",
+                name,
+                (projections[idx, 0], projections[idx, 1]),
+                fontsize=6,
+                alpha=0.7,
+                xytext=(3, 3),
+                textcoords="offset points",
             )
 
     ax.set_xlabel("PC1 (Assistant Axis)")
@@ -111,16 +127,20 @@ def plot_role_scatter(
     ax.axvline(x=0, color="gray", linestyle="-", alpha=0.2)
 
     plt.tight_layout()
-    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    fig.savefig(output_path, dpi=DPI, bbox_inches="tight")
     plt.close(fig)
     logger.info("Saved role scatter: %s", output_path)
 
 
 def plot_cosine_heatmap(
-    cosine_matrix: np.ndarray, trait_names: list, pca_labels: list,
+    cosine_matrix: np.ndarray,
+    trait_names: list,
+    pca_labels: list,
     output_path: Path,
 ):
     """Heatmap of cosine similarities between RIASEC vectors and PCA components."""
+    import matplotlib.pyplot as plt
+
     fig, ax = plt.subplots(figsize=(10, 6))
 
     im = ax.imshow(cosine_matrix, cmap="RdBu_r", vmin=-1, vmax=1, aspect="auto")
@@ -139,13 +159,15 @@ def plot_cosine_heatmap(
 
     plt.colorbar(im, ax=ax, label="Cosine Similarity")
     plt.tight_layout()
-    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    fig.savefig(output_path, dpi=DPI, bbox_inches="tight")
     plt.close(fig)
     logger.info("Saved cosine heatmap: %s", output_path)
 
 
 def plot_steering_effectiveness(eval_path: Path, output_path: Path):
     """Bar chart of RIASEC steering effectiveness (YES counts by alpha)."""
+    import matplotlib.pyplot as plt
+
     with open(eval_path) as f:
         eval_data = json.load(f)
 
@@ -178,8 +200,8 @@ def plot_steering_effectiveness(eval_path: Path, output_path: Path):
         x = np.arange(len(alpha_labels))
         width = 0.35
 
-        ax.bar(x - width/2, target_counts, width, label=f"{trait} YES", color="#1f77b4")
-        ax.bar(x + width/2, total_counts, width, label="Total YES", color="#aec7e8")
+        ax.bar(x - width / 2, target_counts, width, label=f"{trait} YES", color="#1f77b4")
+        ax.bar(x + width / 2, total_counts, width, label="Total YES", color="#aec7e8")
         ax.set_xticks(x)
         ax.set_xticklabels(alpha_labels)
         ax.set_title(trait.capitalize())
@@ -188,7 +210,7 @@ def plot_steering_effectiveness(eval_path: Path, output_path: Path):
 
     plt.suptitle("RIASEC Steering Effectiveness", fontsize=14)
     plt.tight_layout()
-    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    fig.savefig(output_path, dpi=DPI, bbox_inches="tight")
     plt.close(fig)
     logger.info("Saved steering effectiveness: %s", output_path)
 
@@ -217,7 +239,9 @@ def main():
         projections = pca_data["projections"].numpy()
         role_names = pca_data["role_names"]
         role_categories = pca_data["role_categories"]
-        plot_role_scatter(projections, role_names, role_categories, output_dir / f"{safe_model}_role_scatter.png")
+        plot_role_scatter(
+            projections, role_names, role_categories, output_dir / f"{safe_model}_role_scatter.png"
+        )
     else:
         logger.warning("PCA data not found at %s, skipping scree/scatter plots.", pca_path)
 
@@ -228,15 +252,19 @@ def main():
         cosine_matrix = arrays["cosine_riasec_vs_pca"]
         trait_names = arrays["trait_names"].tolist()
         n_pca = cosine_matrix.shape[1]
-        pca_labels = [f"PC{i+1}" for i in range(n_pca)]
-        plot_cosine_heatmap(cosine_matrix, trait_names, pca_labels, output_dir / f"{safe_model}_cosine_heatmap.png")
+        pca_labels = [f"PC{i + 1}" for i in range(n_pca)]
+        plot_cosine_heatmap(
+            cosine_matrix, trait_names, pca_labels, output_dir / f"{safe_model}_cosine_heatmap.png"
+        )
     else:
         logger.warning("Comparison data not found at %s, skipping heatmap.", comparison_path)
 
     # 4. Steering effectiveness
     eval_path = Path(args.eval_dir) / f"{safe_model}_riasec_eval.json"
     if eval_path.exists():
-        plot_steering_effectiveness(eval_path, output_dir / f"{safe_model}_steering_effectiveness.png")
+        plot_steering_effectiveness(
+            eval_path, output_dir / f"{safe_model}_steering_effectiveness.png"
+        )
     else:
         logger.warning("Eval data not found at %s, skipping steering plot.", eval_path)
 

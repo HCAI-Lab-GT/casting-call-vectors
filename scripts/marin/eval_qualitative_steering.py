@@ -12,6 +12,7 @@ Usage:
 """
 
 from __future__ import annotations
+
 import argparse
 import gc
 import json
@@ -19,7 +20,6 @@ from pathlib import Path
 
 import numpy as np
 import torch
-import yaml
 from safetensors import safe_open
 from transformers import AutoConfig
 
@@ -63,9 +63,7 @@ def load_raw_vectors(model_id: str) -> dict[str, np.ndarray]:
 
 
 def generate_response(model, tokenizer, messages, device, max_new_tokens=150):
-    formatted = tokenizer.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=True
-    )
+    formatted = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     enc = tokenizer(formatted, return_tensors="pt")
     input_ids = enc["input_ids"].to(device)
     with torch.no_grad():
@@ -77,14 +75,19 @@ def generate_response(model, tokenizer, messages, device, max_new_tokens=150):
             top_p=0.95,
             pad_token_id=tokenizer.eos_token_id,
         )
-    generated = output_ids[0, input_ids.shape[1]:]
+    generated = output_ids[0, input_ids.shape[1] :]
     return tokenizer.decode(generated, skip_special_tokens=True)
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model_id", type=str, required=True)
-    ap.add_argument("--device", type=str, default="cuda:0")
+    ap.add_argument(
+        "--device",
+        type=str,
+        default="auto",
+        help="Device for model + inputs (e.g. cuda:2). Use 'auto' for device_map=auto.",
+    )
     ap.add_argument("--layer", type=int, default=None)
     ap.add_argument("--output_dir", type=str, default="outputs/qualitative")
     ap.add_argument("--alpha", type=float, default=5.0)
@@ -124,7 +127,7 @@ def main():
 
     # We only need to load the model once (use the first trait's model as the base)
     model = RIASECPersonaModel.load_or_create(
-        target_model_id=args.model_id, trait=TRAITS[0], layer=layer
+        target_model_id=args.model_id, trait=TRAITS[0], layer=layer, device=args.device
     )
     model.model.eval()
 
@@ -132,24 +135,31 @@ def main():
         logger.info("Condition: %s (alpha=%.1f)", cond_name, alpha)
 
         if vector is not None:
-            model.response_persona_vector = torch.tensor(vector, dtype=model.response_persona_vector.dtype)
+            model.response_persona_vector = torch.tensor(
+                vector, dtype=model.response_persona_vector.dtype
+            )
             model._persona_base = None
 
         cond_responses = []
         for q_idx, question in enumerate(QUESTIONS):
             messages = [
-                {"role": "system", "content": "You are a helpful assistant. Answer the question thoughtfully."},
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant. Answer the question thoughtfully.",
+                },
                 {"role": "user", "content": question},
             ]
 
             with model._steering_delta(alpha):
                 response = generate_response(model, model.tokenizer, messages, model.device)
 
-            cond_responses.append({
-                "question_idx": q_idx,
-                "question": question,
-                "response": response,
-            })
+            cond_responses.append(
+                {
+                    "question_idx": q_idx,
+                    "question": question,
+                    "response": response,
+                }
+            )
             logger.info("  Q%d: %s...", q_idx, response[:80])
 
         results["conditions"][cond_name] = cond_responses
@@ -165,10 +175,15 @@ def main():
     gc.collect()
 
     # Print sample comparison
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"SAMPLE RESPONSES (Q0: '{QUESTIONS[0]}')")
-    print(f"{'='*70}")
-    for cond_name in ["baseline", "residual_artistic", "residual_conventional", "residual_investigative"]:
+    print(f"{'=' * 70}")
+    for cond_name in [
+        "baseline",
+        "residual_artistic",
+        "residual_conventional",
+        "residual_investigative",
+    ]:
         if cond_name in results["conditions"]:
             resp = results["conditions"][cond_name][0]["response"]
             print(f"\n--- {cond_name} ---")

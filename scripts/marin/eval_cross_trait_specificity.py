@@ -79,7 +79,9 @@ def _last_token_logits(outputs) -> torch.Tensor:
     return logits[0, -1, :]
 
 
-def eval_gap_on_characteristics(model, tokenizer, device, characteristics, yes_ids, no_ids) -> list[float]:
+def eval_gap_on_characteristics(
+    model, tokenizer, device, characteristics, yes_ids, no_ids
+) -> list[float]:
     """Evaluate logprob gap on a list of characteristics. Returns list of gaps."""
     gaps = []
     for c in characteristics:
@@ -104,7 +106,12 @@ def eval_gap_on_characteristics(model, tokenizer, device, characteristics, yes_i
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model_id", type=str, required=True)
-    ap.add_argument("--device", type=str, default="cuda:0")
+    ap.add_argument(
+        "--device",
+        type=str,
+        default="auto",
+        help="Device for model + inputs (e.g. cuda:2). Use 'auto' for device_map=auto.",
+    )
     ap.add_argument("--layer", type=int, default=None)
     ap.add_argument("--output_dir", type=str, default="outputs/specificity")
     ap.add_argument(
@@ -133,8 +140,8 @@ def main():
         "layer": layer,
         "alphas": ALPHAS,
         "traits": TRAITS,
-        "specificity_matrix": {},    # steer_trait -> {eval_trait -> {alpha -> mean_gap}}
-        "random_baseline": {},       # eval_trait -> {alpha -> mean_gap}
+        "specificity_matrix": {},  # steer_trait -> {eval_trait -> {alpha -> mean_gap}}
+        "random_baseline": {},  # eval_trait -> {alpha -> mean_gap}
         "vector_norms": {},
     }
 
@@ -142,7 +149,7 @@ def main():
     for steer_trait in TRAITS:
         logger.info("Loading model for steering trait: %s", steer_trait)
         model = RIASECPersonaModel.load_or_create(
-            target_model_id=args.model_id, trait=steer_trait, layer=layer
+            target_model_id=args.model_id, trait=steer_trait, layer=layer, device=args.device
         )
         model.model.eval()
 
@@ -241,7 +248,9 @@ def main():
             "off_diagonal_mean": float(np.mean(off_diagonal)),
             "diagonal_std": float(np.std(diagonal)),
             "off_diagonal_std": float(np.std(off_diagonal)),
-            "ratio": float(np.mean(diagonal) / np.mean(off_diagonal)) if np.mean(off_diagonal) != 0 else float("inf"),
+            "ratio": float(np.mean(diagonal) / np.mean(off_diagonal))
+            if np.mean(off_diagonal) != 0
+            else float("inf"),
         }
 
     safe_model = args.model_id.replace("/", "__")
@@ -251,9 +260,9 @@ def main():
     logger.info("Saved: %s", out_path)
 
     # Print summary
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"CROSS-TRAIT SPECIFICITY: {args.model_id}")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     for alpha in ALPHAS:
         alpha_str = str(alpha)
         print(f"\nalpha = {alpha}:")
@@ -268,7 +277,9 @@ def main():
             print(row)
 
         si = results[f"specificity_index_alpha_{alpha_str}"]
-        print(f"  Diagonal mean: {si['diagonal_mean']:.3f}, Off-diagonal mean: {si['off_diagonal_mean']:.3f}, Ratio: {si['ratio']:.2f}")
+        print(
+            f"  Diagonal mean: {si['diagonal_mean']:.3f}, Off-diagonal mean: {si['off_diagonal_mean']:.3f}, Ratio: {si['ratio']:.2f}"
+        )
 
         if alpha_str in results["random_baseline"]:
             print("  Random baseline gaps: ", end="")

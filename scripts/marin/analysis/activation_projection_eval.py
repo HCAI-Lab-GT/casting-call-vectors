@@ -29,8 +29,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from safetensors import safe_open
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoConfig
 
 from pvx import setup_logging
 from pvx.pvx_models.riasec_persona_model import RIASECPersonaModel
@@ -58,7 +57,12 @@ def get_middle_layer(model_id: str) -> int:
 
 
 def extract_response_activation(
-    model, tokenizer, prompt: str, response: str, layer: int, device: str,
+    model,
+    tokenizer,
+    prompt: str,
+    response: str,
+    layer: int,
+    device: str,
 ) -> torch.Tensor:
     """Extract mean hidden state over response tokens at the specified layer."""
     messages_prompt = [{"role": "user", "content": prompt}]
@@ -98,20 +102,18 @@ def main():
     parser.add_argument("--alphas", nargs="*", type=float, default=[-5, -3, -1, 0, 1, 3, 5])
     parser.add_argument("--vectors_dir", type=str, default="./persona_data/model_inits/")
     parser.add_argument("--output_dir", type=str, default="./outputs/activation_projection_eval/")
-    parser.add_argument("--device", type=str, default=None)
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="auto",
+        help="Device for model + inputs (e.g. cuda:2). Use 'auto' for device_map=auto.",
+    )
     parser.add_argument("--max_new_tokens", type=int, default=150)
     args = parser.parse_args()
 
     traits = args.traits or sorted(RIASECHelpers.RIASEC_TRAITS)
     layer = get_middle_layer(args.model_id)
     safe_model = args.model_id.replace("/", "__")
-
-    if args.device:
-        device = args.device
-    elif torch.cuda.is_available():
-        device = "cuda"
-    else:
-        device = "cpu"
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -127,6 +129,7 @@ def main():
             trait=trait,
             layer=layer,
             safetensors_dir=args.vectors_dir,
+            device=args.device,
         )
 
         # Get the persona vector for projection
@@ -161,8 +164,12 @@ def main():
                 # from the steered text — this measures how much the text itself
                 # has shifted, independent of the steering hook
                 activation = extract_response_activation(
-                    model.model, model.tokenizer,
-                    prompt, response, layer, device,
+                    model.model,
+                    model.tokenizer,
+                    prompt,
+                    response,
+                    layer,
+                    model.device,
                 )
 
                 # Project onto persona direction
@@ -171,17 +178,19 @@ def main():
                 act_norm = float(np.linalg.norm(act_np))
 
                 # Also compute cosine similarity with persona vector
-                cosine_sim = float(np.dot(act_np, persona_vec) / (
-                    np.linalg.norm(act_np) * persona_norm + 1e-10
-                ))
+                cosine_sim = float(
+                    np.dot(act_np, persona_vec) / (np.linalg.norm(act_np) * persona_norm + 1e-10)
+                )
 
-                prompt_result["alpha_results"].append({
-                    "alpha": alpha,
-                    "projection": projection,
-                    "activation_norm": act_norm,
-                    "cosine_with_persona": cosine_sim,
-                    "response_preview": response[:200],
-                })
+                prompt_result["alpha_results"].append(
+                    {
+                        "alpha": alpha,
+                        "projection": projection,
+                        "activation_norm": act_norm,
+                        "cosine_with_persona": cosine_sim,
+                        "response_preview": response[:200],
+                    }
+                )
 
             # Compute delta: how much projection changes per unit alpha
             projections = [r["projection"] for r in prompt_result["alpha_results"]]
@@ -206,8 +215,7 @@ def main():
         trait_results["std_projection_slope"] = float(np.std(slopes))
 
         all_results[trait] = trait_results
-        logger.info("  Mean projection slope: %.4f (+/- %.4f)",
-                    np.mean(slopes), np.std(slopes))
+        logger.info("  Mean projection slope: %.4f (+/- %.4f)", np.mean(slopes), np.std(slopes))
         logger.info("  Mean projection range: %.4f", np.mean(ranges))
 
         # Cleanup
@@ -231,9 +239,9 @@ def main():
         json.dump(output_data, f, indent=2)
 
     # Print summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Activation Projection Evaluation: {args.model_id}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     for trait in traits:
         r = all_results[trait]
         print(f"\n  {trait}:")

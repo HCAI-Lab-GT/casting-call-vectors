@@ -41,6 +41,7 @@ class AbstractPersonaModel(ABC):
         trait: Optional[str] = None,
         layer: float = 14,
         default_alpha: float = 3.0,
+        device: str | None = None,
         judge_config: Optional[JudgeConfig] = None,
         judge_threshold: float = 50.0,
         target_pairs: int = 20,
@@ -56,7 +57,7 @@ class AbstractPersonaModel(ABC):
             from_json (bool): Whether to load persona vectors from JSON file.
         """
 
-        self._init_base(target_model_id, layer, default_alpha)
+        self._init_base(target_model_id, layer, default_alpha, device=device)
 
         # skip extraction if not loading from JSON
         if from_json:
@@ -89,6 +90,7 @@ class AbstractPersonaModel(ABC):
         target_model_id: str = "qwen2.5:7b-instruct",
         layer: float = 14,
         default_alpha: float = 3.0,
+        device: str | None = None,
     ):
         """
         Create a trait-agnostic PersonaModel instance with only the base model and tokenizer loaded.
@@ -111,11 +113,11 @@ class AbstractPersonaModel(ABC):
 
         instance = cls.__new__(cls)
         instance._init_base(
-            target_model_id=target_model_id, layer=layer, default_alpha=default_alpha
+            target_model_id=target_model_id, layer=layer, default_alpha=default_alpha, device=device
         )
         return instance
 
-    def _init_base(self, target_model_id, layer, default_alpha):
+    def _init_base(self, target_model_id, layer, default_alpha, device: str | None = None):
         """
         Initialize the base model, tokenizer, and device configuration.
 
@@ -155,15 +157,38 @@ class AbstractPersonaModel(ABC):
             )
             logger.info("Set fallback Llama-3-style chat template for %s", target_model_id)
 
+        requested_device = None if device == "auto" else device
+        if requested_device is not None and requested_device.startswith("cuda"):
+            if not torch.cuda.is_available():
+                logger.warning(
+                    "Requested device %s but CUDA is not available. Falling back to cpu.",
+                    requested_device,
+                )
+                requested_device = "cpu"
+
+        use_cuda = torch.cuda.is_available() and requested_device != "cpu"
+        dtype = torch.float16 if use_cuda else torch.float32
+
+        device_map = "auto" if use_cuda and requested_device is None else None
+        if use_cuda and requested_device is not None and requested_device.startswith("cuda"):
+            device_map = {"": requested_device}
+
         self.model = AutoModelForCausalLM.from_pretrained(
             target_model_id,
-            dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto" if torch.cuda.is_available() else None,
+            dtype=dtype,
+            device_map=device_map,
         )
 
-        # Set device
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        if not torch.cuda.is_available():
+        # Set device for input tensors. For sharded models, use the embeddings device.
+        if requested_device is not None:
+            self.device = requested_device
+        else:
+            try:
+                self.device = str(next(self.model.parameters()).device)
+            except StopIteration:
+                self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        if not use_cuda:
             self.model = self.model.to(self.device)
 
         # Set EOD token id
@@ -200,6 +225,7 @@ class AbstractPersonaModel(ABC):
         cls,
         json_filepath: str,
         trait: Optional[str] = None,
+        device: str | None = None,
     ) -> "AbstractPersonaModel":
         """
         Load a PersonaModel instance from a previously saved JSON file.
@@ -222,6 +248,7 @@ class AbstractPersonaModel(ABC):
             target_model_id=data["target_model_id"],
             dataset=None,  # Dataset not needed when loading from JSON
             layer=data["layer_steering"],
+            device=device,
             from_json=True,
         )
 
@@ -256,6 +283,7 @@ class AbstractPersonaModel(ABC):
         layer: float = 14,
         json_filepath: Optional[str] = None,
         safetensors_dir: str = "./persona_data/model_inits/",
+        device: str | None = None,
     ) -> "AbstractPersonaModel":
         """
         Load a PersonaModel instance from saved files if they exist, otherwise create a new one.
@@ -278,12 +306,14 @@ class AbstractPersonaModel(ABC):
         """
         # Build safetensors path
         safe_model_id = target_model_id.replace("/", "__")
-        safetensors_path = Path(safetensors_dir) / f"{trait}_persona_initialization/{safe_model_id}.safetensors"
+        safetensors_path = (
+            Path(safetensors_dir) / f"{trait}_persona_initialization/{safe_model_id}.safetensors"
+        )
 
         # Try safetensors first (preferred format)
         if safetensors_path.exists():
             try:
-                return cls.from_safetensors(str(safetensors_path), trait=trait)
+                return cls.from_safetensors(str(safetensors_path), trait=trait, device=device)
             except Exception as e:
                 logger.warning("⚠️ Failed to load from safetensors: %s", e)
 
@@ -296,7 +326,7 @@ class AbstractPersonaModel(ABC):
         try:
             if Path(json_filepath).exists():
                 logger.info("Loading from legacy JSON (consider migrating to safetensors)")
-                return cls.from_json(json_filepath, trait=trait)
+                return cls.from_json(json_filepath, trait=trait, device=device)
 
         except Exception as e:
             logger.warning(
@@ -308,6 +338,7 @@ class AbstractPersonaModel(ABC):
             dataset=dataset,
             trait=trait,
             layer=layer,
+            device=device,
         )
 
     def save_to_json(self, filepath: str = "./persona_data/model_inits/") -> str:
@@ -449,6 +480,7 @@ class AbstractPersonaModel(ABC):
         cls,
         safetensors_path: str,
         trait: Optional[str] = None,
+        device: str | None = None,
     ) -> "AbstractPersonaModel":
         """
         Load a PersonaModel instance from a safetensors file.
@@ -482,6 +514,7 @@ class AbstractPersonaModel(ABC):
             target_model_id=target_model_id,
             dataset=None,
             layer=layer,
+            device=device,
             from_json=True,  # Reuse flag to skip extraction
         )
 

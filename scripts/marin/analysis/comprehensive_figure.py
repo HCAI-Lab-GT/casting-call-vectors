@@ -19,9 +19,6 @@ import json
 from pathlib import Path
 
 import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 import numpy as np
 import torch
 from safetensors import safe_open
@@ -30,7 +27,11 @@ from scipy import stats
 from pvx import setup_logging
 from pvx.utils.riasec_utils import RIASECHelpers
 
+matplotlib.use("Agg")
+
 logger = setup_logging(name="marin-comprehensive-figure")
+
+CLEAN_DPI = 300
 
 CATEGORY_COLORS = {
     "scientist": "#1f77b4",
@@ -96,9 +97,12 @@ def main():
     llama_id = "meta-llama/Llama-3.2-1B-Instruct"
     marin_id = "marin-community/marin-8b-instruct"
     llama_safe = llama_id.replace("/", "__")
-    marin_safe = marin_id.replace("/", "__")
+    _ = marin_id.replace("/", "__")
 
     # PCA data (Llama 1B)
+    import matplotlib.gridspec as gridspec
+    import matplotlib.pyplot as plt
+
     pca_path = Path(args.pca_dir) / f"{llama_safe}_pca.pt"
     pca_data = torch.load(pca_path, weights_only=False) if pca_path.exists() else None
 
@@ -134,18 +138,28 @@ def main():
                 continue
             color = CATEGORY_COLORS.get(cat, "#333333")
             ax_a.scatter(
-                projections[indices, 0], projections[indices, 1],
-                c=color, label=cat, s=60, alpha=0.8, edgecolors="white", linewidths=0.5,
+                projections[indices, 0],
+                projections[indices, 1],
+                c=color,
+                label=cat,
+                s=60,
+                alpha=0.8,
+                edgecolors="white",
+                linewidths=0.5,
             )
             for idx in indices:
                 name = role_names[idx].replace("_", " ")
                 ax_a.annotate(
-                    name, (projections[idx, 0], projections[idx, 1]),
-                    fontsize=5.5, alpha=0.7, xytext=(3, 3), textcoords="offset points",
+                    name,
+                    (projections[idx, 0], projections[idx, 1]),
+                    fontsize=5.5,
+                    alpha=0.7,
+                    xytext=(3, 3),
+                    textcoords="offset points",
                 )
 
-        ax_a.set_xlabel(f"PC1 ({ev[0]*100:.1f}%)")
-        ax_a.set_ylabel(f"PC2 ({ev[1]*100:.1f}%)")
+        ax_a.set_xlabel(f"PC1 ({ev[0] * 100:.1f}%)")
+        ax_a.set_ylabel(f"PC2 ({ev[1] * 100:.1f}%)")
         ax_a.set_title("A. Role Projections (Llama 1B)", fontsize=12, fontweight="bold")
         ax_a.legend(fontsize=7, loc="lower left")
         ax_a.axhline(y=0, color="gray", linestyle="-", alpha=0.2)
@@ -171,18 +185,28 @@ def main():
 
         ax_b.scatter(llama_upper, marin_upper, c="#1f77b4", s=40, alpha=0.8, edgecolors="white")
         for k, label in enumerate(pair_labels):
-            ax_b.annotate(label, (llama_upper[k], marin_upper[k]),
-                         fontsize=5, alpha=0.6, xytext=(2, 2), textcoords="offset points")
+            ax_b.annotate(
+                label,
+                (llama_upper[k], marin_upper[k]),
+                fontsize=5,
+                alpha=0.6,
+                xytext=(2, 2),
+                textcoords="offset points",
+            )
 
         # Fit line and compute correlation
         r, p = stats.pearsonr(llama_upper, marin_upper)
         slope, intercept = np.polyfit(llama_upper, marin_upper, 1)
         x_line = np.linspace(min(llama_upper) - 0.05, max(llama_upper) + 0.05, 100)
-        ax_b.plot(x_line, slope * x_line + intercept, "r--", alpha=0.5, label=f"r={r:.3f}, p={p:.2e}")
+        ax_b.plot(
+            x_line, slope * x_line + intercept, "r--", alpha=0.5, label=f"r={r:.3f}, p={p:.2e}"
+        )
 
         # Identity line
-        lim = [min(min(llama_upper), min(marin_upper)) - 0.05,
-               max(max(llama_upper), max(marin_upper)) + 0.05]
+        lim = [
+            min(min(llama_upper), min(marin_upper)) - 0.05,
+            max(max(llama_upper), max(marin_upper)) + 0.05,
+        ]
         ax_b.plot(lim, lim, "k:", alpha=0.3, label="identity")
         ax_b.set_xlim(lim)
         ax_b.set_ylim(lim)
@@ -250,8 +274,10 @@ def main():
         sorted_indices = np.argsort(pc1)
         sorted_names = [role_names[i].replace("_", " ") for i in sorted_indices]
         sorted_pc1 = pc1[sorted_indices]
-        sorted_colors = [CATEGORY_COLORS.get(role_categories.get(role_names[i], ""), "#333")
-                        for i in sorted_indices]
+        sorted_colors = [
+            CATEGORY_COLORS.get(role_categories.get(role_names[i], ""), "#333")
+            for i in sorted_indices
+        ]
 
         ax_e.barh(range(len(sorted_names)), sorted_pc1, color=sorted_colors, alpha=0.8)
         ax_e.set_yticks(range(len(sorted_names)))
@@ -280,11 +306,13 @@ def main():
     fig.suptitle(
         "Personality Vector Geometry: Cross-Model Analysis\n"
         "Llama-3.2-1B-Instruct vs Marin-8B-Instruct",
-        fontsize=14, fontweight="bold", y=0.98,
+        fontsize=14,
+        fontweight="bold",
+        y=0.98,
     )
 
     output_path = output_dir / "comprehensive_analysis.png"
-    fig.savefig(output_path, dpi=200, bbox_inches="tight", facecolor="white")
+    fig.savefig(output_path, dpi=CLEAN_DPI, bbox_inches="tight", facecolor="white")
     plt.close(fig)
     print(f"Saved comprehensive figure to: {output_path}")
 
@@ -292,18 +320,23 @@ def main():
     # Also create RIASEC hexagon plot
     # ============================================================
     if llama_cosine is not None and marin_cosine is not None:
-        fig2, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6), subplot_kw=dict(projection='polar'))
+        fig2, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6), subplot_kw={"projection": "polar"})
 
         angles = np.linspace(0, 2 * np.pi, len(traits), endpoint=False)
 
-        for ax, cosine_mat, title in [(ax1, llama_cosine, "Llama 1B"), (ax2, marin_cosine, "Marin 8B")]:
+        for ax, cosine_mat, title in [
+            (ax1, llama_cosine, "Llama 1B"),
+            (ax2, marin_cosine, "Marin 8B"),
+        ]:
             # Plot mean cosine similarity profile for each trait
             for i, trait in enumerate(traits):
                 # Mean similarity to all other traits
                 sims = [cosine_mat[i, j] for j in range(len(traits)) if i != j]
                 mean_sim = np.mean(sims)
                 color = TRAIT_COLORS.get(trait, "#333")
-                ax.bar(angles[i], mean_sim, width=0.8, alpha=0.7, color=color, label=trait.capitalize())
+                ax.bar(
+                    angles[i], mean_sim, width=0.8, alpha=0.7, color=color, label=trait.capitalize()
+                )
 
             ax.set_xticks(angles)
             ax.set_xticklabels([t[:3].upper() for t in traits], fontsize=9)
@@ -315,7 +348,7 @@ def main():
         plt.tight_layout()
 
         hexagon_path = output_dir / "riasec_hexagon_comparison.png"
-        fig2.savefig(hexagon_path, dpi=150, bbox_inches="tight", facecolor="white")
+        fig2.savefig(hexagon_path, dpi=CLEAN_DPI, bbox_inches="tight", facecolor="white")
         plt.close(fig2)
         print(f"Saved RIASEC hexagon to: {hexagon_path}")
 

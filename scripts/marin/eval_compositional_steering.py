@@ -12,7 +12,6 @@ Measures: logprob gaps for each trait when steering with combined vectors.
 Uses the eval_logprob_steering infrastructure.
 """
 
-import gc
 import json
 from pathlib import Path
 
@@ -45,7 +44,35 @@ def load_raw_vectors(model_id: str) -> dict[str, np.ndarray]:
     return vectors
 
 
-def logprob_gap(model, question: str, alpha: float = 5.0) -> float:
+def _single_token_ids(tokenizer, text: str) -> list[int]:
+    ids = tokenizer.encode(text, add_special_tokens=False)
+    return ids if len(ids) == 1 else []
+
+
+def _find_yes_no_token_ids(tokenizer):
+    yes_groups = [["YES", " YES"], ["yes", " yes"], ["Yes", " Yes"]]
+    no_groups = [["NO", " NO"], ["no", " no"], ["No", " No"]]
+
+    def collect(cands):
+        return sorted({i for c in cands for i in _single_token_ids(tokenizer, c)})
+
+    def pick(label, groups):
+        for cands in groups:
+            ids = collect(cands)
+            if ids:
+                return ids
+        raise RuntimeError(f"Could not find single-token {label} variants.")
+
+    return pick("YES", yes_groups), pick("NO", no_groups)
+
+
+def logprob_gap(
+    model,
+    question: str,
+    yes_ids: list[int],
+    no_ids: list[int],
+    alpha: float = 5.0,
+) -> float:
     """Compute log P(YES) - log P(NO) for a question under current steering."""
     messages = [
         {"role": "system", "content": "Output EXACTLY one token: YES or NO."},
@@ -63,20 +90,24 @@ def logprob_gap(model, question: str, alpha: float = 5.0) -> float:
     logits = outputs.logits[0, -1, :]
     log_probs = torch.nn.functional.log_softmax(logits, dim=-1)
 
-    yes_ids = model.tokenizer.encode("YES", add_special_tokens=False)
-    no_ids = model.tokenizer.encode("NO", add_special_tokens=False)
-    yes_logprob = log_probs[yes_ids[0]].item()
-    no_logprob = log_probs[no_ids[0]].item()
+    yes_logprob = float(log_probs[yes_ids].max().item())
+    no_logprob = float(log_probs[no_ids].max().item())
     return yes_logprob - no_logprob
 
 
-def eval_all_traits(model, characteristics: dict, alpha: float) -> dict[str, float]:
+def eval_all_traits(
+    model,
+    characteristics: dict,
+    yes_ids: list[int],
+    no_ids: list[int],
+    alpha: float,
+) -> dict[str, float]:
     """Evaluate logprob gaps for all 6 traits' characteristics."""
     results = {}
     for trait in TRAITS:
         gaps = []
         for char_text in characteristics[trait]:
-            gap = logprob_gap(model, char_text, alpha)
+            gap = logprob_gap(model, char_text, yes_ids, no_ids, alpha)
             gaps.append(gap)
         results[trait] = float(np.mean(gaps))
     return results
@@ -84,9 +115,15 @@ def eval_all_traits(model, characteristics: dict, alpha: float) -> dict[str, flo
 
 def main():
     import argparse
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--model_id", type=str, default="meta-llama/Llama-3.2-1B-Instruct")
-    ap.add_argument("--device", type=str, default="cuda:0")
+    ap.add_argument(
+        "--device",
+        type=str,
+        default="auto",
+        help="Device for model + inputs (e.g. cuda:2). Use 'auto' for device_map=auto.",
+    )
     ap.add_argument("--alpha", type=float, default=5.0)
     args = ap.parse_args()
 
@@ -116,9 +153,10 @@ def main():
 
     # Load model once
     model = RIASECPersonaModel.load_or_create(
-        target_model_id=args.model_id, trait=TRAITS[0], layer=layer
+        target_model_id=args.model_id, trait=TRAITS[0], layer=layer, device=args.device
     )
     model.model.eval()
+    yes_ids, no_ids = _find_yes_no_token_ids(model.tokenizer)
 
     results = {
         "model_id": args.model_id,
@@ -144,7 +182,7 @@ def main():
     # Compositional: trait A + trait B (residuals)
     # Test all 15 unique pairs
     for i, t1 in enumerate(TRAITS):
-        for t2 in TRAITS[i + 1:]:
+        for t2 in TRAITS[i + 1 :]:
             combined = residuals[t1] + residuals[t2]
             conditions[f"residual_{t1}+{t2}"] = combined
 
@@ -152,8 +190,8 @@ def main():
     # Test a few interesting pairs
     interesting_pairs = [
         ("artistic", "conventional"),  # opposite on hexagon
-        ("investigative", "social"),   # opposite
-        ("realistic", "enterprising"), # opposite
+        ("investigative", "social"),  # opposite
+        ("realistic", "enterprising"),  # opposite
     ]
     for t1, t2 in interesting_pairs:
         conditions[f"residual_{t1}-{t2}"] = residuals[t1] - residuals[t2]
@@ -170,46 +208,51 @@ def main():
         model._persona_base = None
 
         alpha = 0.0 if cond_name == "baseline" else args.alpha
-        trait_gaps = eval_all_traits(model, characteristics, alpha)
+        trait_gaps = eval_all_traits(model, characteristics, yes_ids, no_ids, alpha)
         results["conditions"][cond_name] = trait_gaps
 
         # Print summary
         sorted_gaps = sorted(trait_gaps.items(), key=lambda x: -x[1])
         top = sorted_gaps[0]
-        logger.info("  Top trait: %s (%.2f), All: %s", top[0], top[1],
-                     ", ".join(f"{t[:3]}={g:.2f}" for t, g in sorted_gaps))
+        logger.info(
+            "  Top trait: %s (%.2f), All: %s",
+            top[0],
+            top[1],
+            ", ".join(f"{t[:3]}={g:.2f}" for t, g in sorted_gaps),
+        )
 
     # Analysis: does A+B boost both A and B?
     print(f"\n{'=' * 70}")
     print("COMPOSITIONAL STEERING ANALYSIS")
     print(f"{'=' * 70}")
 
-    print(f"\n--- Baseline ---")
+    print("\n--- Baseline ---")
     base = results["conditions"]["baseline"]
     print(f"  {', '.join(f'{t[:4]}={v:.2f}' for t, v in base.items())}")
 
-    print(f"\n--- Single residual traits ---")
+    print("\n--- Single residual traits ---")
     for trait in TRAITS:
         gaps = results["conditions"][f"residual_{trait}"]
         print(f"  {trait:15s}: {', '.join(f'{t[:4]}={v:.2f}' for t, v in gaps.items())}")
 
-    print(f"\n--- Additive compositions (residual_A + residual_B) ---")
+    print("\n--- Additive compositions (residual_A + residual_B) ---")
     print(f"  {'Condition':30s} | {'Expected boost':20s} | {'Trait gaps (top 3)':50s}")
     for i, t1 in enumerate(TRAITS):
-        for t2 in TRAITS[i + 1:]:
+        for t2 in TRAITS[i + 1 :]:
             cond = f"residual_{t1}+{t2}"
             gaps = results["conditions"][cond]
             sorted_gaps = sorted(gaps.items(), key=lambda x: -x[1])
             expected = f"{t1[:4]}+{t2[:4]}"
             top3 = ", ".join(f"{t[:4]}={g:.2f}" for t, g in sorted_gaps[:3])
             # Check if both expected traits are in top 3
-            top3_traits = [t for t, g in sorted_gaps[:3]]
             t1_rank = [t for t, g in sorted_gaps].index(t1) + 1
             t2_rank = [t for t, g in sorted_gaps].index(t2) + 1
             check = "✓" if t1_rank <= 3 and t2_rank <= 3 else " "
-            print(f"  {cond:30s} | {expected:20s} | {top3:50s} | {check} (rank: {t1[:3]}={t1_rank}, {t2[:3]}={t2_rank})")
+            print(
+                f"  {cond:30s} | {expected:20s} | {top3:50s} | {check} (rank: {t1[:3]}={t1_rank}, {t2[:3]}={t2_rank})"
+            )
 
-    print(f"\n--- Subtractive compositions (residual_A - residual_B) ---")
+    print("\n--- Subtractive compositions (residual_A - residual_B) ---")
     for t1, t2 in interesting_pairs:
         for a, b in [(t1, t2), (t2, t1)]:
             cond = f"residual_{a}-{b}"
@@ -217,8 +260,10 @@ def main():
             sorted_gaps = sorted(gaps.items(), key=lambda x: -x[1])
             a_gap = gaps[a]
             b_gap = gaps[b]
-            print(f"  {cond:30s}: {a[:4]}={a_gap:.2f}, {b[:4]}={b_gap:.2f} | "
-                  f"top: {', '.join(f'{t[:4]}={g:.2f}' for t, g in sorted_gaps[:3])}")
+            print(
+                f"  {cond:30s}: {a[:4]}={a_gap:.2f}, {b[:4]}={b_gap:.2f} | "
+                f"top: {', '.join(f'{t[:4]}={g:.2f}' for t, g in sorted_gaps[:3])}"
+            )
 
     # Save
     out_dir = _repo_root() / "outputs" / "compositional"

@@ -16,6 +16,7 @@ Usage:
 """
 
 from __future__ import annotations
+
 import argparse
 import gc
 import json
@@ -112,7 +113,12 @@ def load_raw_vectors(model_id: str) -> dict[str, np.ndarray]:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model_id", type=str, required=True)
-    ap.add_argument("--device", type=str, default="cuda:0")
+    ap.add_argument(
+        "--device",
+        type=str,
+        default="auto",
+        help="Device for model + inputs (e.g. cuda:2). Use 'auto' for device_map=auto.",
+    )
     ap.add_argument("--layer", type=int, default=None)
     ap.add_argument("--output_dir", type=str, default="outputs/specificity")
     args = ap.parse_args()
@@ -125,18 +131,22 @@ def main():
         riasec = yaml.safe_load(f)
     all_chars = {t: riasec[t].get("characteristics", []) for t in TRAITS}
 
-    # Compute residual vectors
+    # Compute residual vectors by removing the dominant shared direction (PC1 of stacked vectors).
     raw_vectors = load_raw_vectors(args.model_id)
     V = np.stack([raw_vectors[t] for t in TRAITS])
-    mean_vec = V.mean(axis=0)
-    mean_unit = mean_vec / np.linalg.norm(mean_vec)
+    _, _, Vt = np.linalg.svd(V, full_matrices=False)
+    shared_dir = Vt[0]
+    shared_dir = shared_dir / np.linalg.norm(shared_dir)
 
     residuals = {}
     for trait in TRAITS:
-        proj = np.dot(raw_vectors[trait], mean_unit) * mean_unit
+        proj = np.dot(raw_vectors[trait], shared_dir) * shared_dir
         residuals[trait] = raw_vectors[trait] - proj
 
-    # Also compute shared-only vector (just the mean direction)
+    mean_shared_proj = float(np.mean([np.dot(raw_vectors[t], shared_dir) for t in TRAITS]))
+    shared_only_vec = mean_shared_proj * shared_dir
+
+    # Also compute shared-only vector (dominant shared direction only)
     # We'll test: original, residual-only, shared-only
     alphas = [0, 3, 5, 8]  # test more alpha values for residuals (smaller effect expected)
 
@@ -157,7 +167,7 @@ def main():
     for condition_name, vector_dict in [
         ("original", {t: raw_vectors[t] for t in TRAITS}),
         ("residual", residuals),
-        ("shared_only", {t: mean_vec for t in TRAITS}),
+        ("shared_only", dict.fromkeys(TRAITS, shared_only_vec)),
     ]:
         logger.info("=== Testing condition: %s ===", condition_name)
         condition_results = {}
@@ -165,12 +175,14 @@ def main():
         for steer_trait in TRAITS:
             # Load model for this trait (to get the base model + tokenizer)
             model = RIASECPersonaModel.load_or_create(
-                target_model_id=args.model_id, trait=steer_trait, layer=layer
+                target_model_id=args.model_id, trait=steer_trait, layer=layer, device=args.device
             )
             model.model.eval()
 
             # Replace response_persona_vector with the condition's vector
-            steer_vec = torch.tensor(vector_dict[steer_trait], dtype=model.response_persona_vector.dtype)
+            steer_vec = torch.tensor(
+                vector_dict[steer_trait], dtype=model.response_persona_vector.dtype
+            )
             model.response_persona_vector = steer_vec
             model._persona_base = None  # invalidate cache
 
@@ -202,16 +214,18 @@ def main():
 
     # Compute specificity indices
     for condition in ["original", "residual", "shared_only"]:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"CONDITION: {condition}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         for alpha in alphas:
             alpha_str = str(alpha)
             diagonal = []
             off_diagonal = []
             for i, steer_t in enumerate(TRAITS):
                 for j, eval_t in enumerate(TRAITS):
-                    gap = results[f"{condition}_specificity"][steer_t][eval_t][alpha_str]["mean_gap"]
+                    gap = results[f"{condition}_specificity"][steer_t][eval_t][alpha_str][
+                        "mean_gap"
+                    ]
                     if i == j:
                         diagonal.append(gap)
                     else:
@@ -228,11 +242,15 @@ def main():
             for steer_t in TRAITS:
                 row = f"  {steer_t[:12]:>12s}"
                 for eval_t in TRAITS:
-                    gap = results[f"{condition}_specificity"][steer_t][eval_t][alpha_str]["mean_gap"]
+                    gap = results[f"{condition}_specificity"][steer_t][eval_t][alpha_str][
+                        "mean_gap"
+                    ]
                     marker = "*" if steer_t == eval_t else " "
                     row += f" {gap:>6.2f}{marker}"
                 print(row)
-            print(f"  Diagonal: {diag_mean:.3f}, Off-diagonal: {off_mean:.3f}, Diff: {spec_diff:.3f}")
+            print(
+                f"  Diagonal: {diag_mean:.3f}, Off-diagonal: {off_mean:.3f}, Diff: {spec_diff:.3f}"
+            )
 
     safe_model = args.model_id.replace("/", "__")
     out_path = output_dir / f"{safe_model}_residual_specificity.json"
