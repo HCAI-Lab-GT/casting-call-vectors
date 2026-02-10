@@ -728,6 +728,11 @@ class AbstractPersonaModel(ABC):
             layer_idx (int): layer to add steering hook to
         """
 
+        # Avoid double-installing hooks on the same instance.
+        if self._steer_hook_handle is not None:
+            self._steer_hook_handle.remove()
+            self._steer_hook_handle = None
+
         # Get the decoder blocks and specific target steer block
         blocks = self._get_decoder_blocks(self.model)
         block = blocks[layer_idx]
@@ -794,13 +799,16 @@ class AbstractPersonaModel(ABC):
         return self._persona_base
 
     @contextmanager
-    def _steering_delta(self, alpha: float):
+    def _steering_delta(self, alpha: float | None):
         """
         Per-request steering context (stores delta in ContextVar)
 
         Args:
             alpha (float): alpha applied on runtime
         """
+
+        if alpha is None:
+            alpha = self.default_alpha
 
         if alpha == 0:
             yield

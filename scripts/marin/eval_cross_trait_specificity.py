@@ -17,6 +17,7 @@ Usage:
 """
 
 from __future__ import annotations
+
 import argparse
 import gc
 import json
@@ -25,7 +26,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import yaml
-from transformers import AutoConfig, AutoTokenizer
+from transformers import AutoConfig
 
 from pvx import setup_logging
 from pvx.pvx_models.riasec_persona_model import RIASECPersonaModel
@@ -106,7 +107,12 @@ def main():
     ap.add_argument("--device", type=str, default="cuda:0")
     ap.add_argument("--layer", type=int, default=None)
     ap.add_argument("--output_dir", type=str, default="outputs/specificity")
-    ap.add_argument("--n_random", type=int, default=5, help="Number of random baseline vectors per trait")
+    ap.add_argument(
+        "--n_random",
+        type=int,
+        default=5,
+        help="Number of random baseline vectors per trait (0 disables baseline).",
+    )
     args = ap.parse_args()
 
     root = _repo_root()
@@ -167,48 +173,49 @@ def main():
         results["specificity_matrix"][steer_trait] = steer_results
 
         # Random baseline: steer with random vectors of same norm
-        logger.info("  Running random baseline (n=%d)...", args.n_random)
-        hidden_dim = model.response_persona_vector.shape[0]
-        rng = np.random.default_rng(42)
+        if args.n_random > 0:
+            logger.info("  Running random baseline (n=%d)...", args.n_random)
+            hidden_dim = model.response_persona_vector.shape[0]
+            rng = np.random.default_rng(42)
 
-        random_gaps_by_alpha = {str(a): {t: [] for t in TRAITS} for a in ALPHAS}
+            random_gaps_by_alpha = {str(a): {t: [] for t in TRAITS} for a in ALPHAS}
 
-        for rand_i in range(args.n_random):
-            # Create random vector with same norm
-            rand_vec = torch.tensor(
-                rng.standard_normal(hidden_dim), dtype=model.response_persona_vector.dtype
-            )
-            rand_vec = rand_vec / rand_vec.norm() * model.response_persona_vector.norm()
+            for _rand_i in range(args.n_random):
+                # Create random vector with same norm
+                rand_vec = torch.tensor(
+                    rng.standard_normal(hidden_dim), dtype=model.response_persona_vector.dtype
+                )
+                rand_vec = rand_vec / rand_vec.norm() * model.response_persona_vector.norm()
 
-            # Temporarily replace the response_persona_vector and invalidate cache
-            original_vec = model.response_persona_vector.clone()
-            model.response_persona_vector = rand_vec
-            model._persona_base = None  # invalidate cache so _get_persona_base() recomputes
+                # Temporarily replace the response_persona_vector and invalidate cache
+                original_vec = model.response_persona_vector.clone()
+                model.response_persona_vector = rand_vec
+                model._persona_base = None  # invalidate cache so _get_persona_base() recomputes
 
-            for alpha in ALPHAS:
-                with model._steering_delta(alpha):
-                    for eval_trait in TRAITS:
-                        chars = all_chars[eval_trait]
-                        gaps = eval_gap_on_characteristics(
-                            model, model.tokenizer, device, chars, yes_ids, no_ids
-                        )
-                        random_gaps_by_alpha[str(alpha)][eval_trait].extend(gaps)
+                for alpha in ALPHAS:
+                    with model._steering_delta(alpha):
+                        for eval_trait in TRAITS:
+                            chars = all_chars[eval_trait]
+                            gaps = eval_gap_on_characteristics(
+                                model, model.tokenizer, device, chars, yes_ids, no_ids
+                            )
+                            random_gaps_by_alpha[str(alpha)][eval_trait].extend(gaps)
 
-            # Restore original vector and invalidate cache
-            model.response_persona_vector = original_vec
-            model._persona_base = None
+                # Restore original vector and invalidate cache
+                model.response_persona_vector = original_vec
+                model._persona_base = None
 
-        # Only need to do random baseline once (it's the same model, different random vecs)
-        # Store mean across all random trials
-        if steer_trait == TRAITS[0]:  # Only compute once
-            for alpha_str, trait_gaps in random_gaps_by_alpha.items():
-                results["random_baseline"][alpha_str] = {}
-                for eval_trait, gaps in trait_gaps.items():
-                    results["random_baseline"][alpha_str][eval_trait] = {
-                        "mean_gap": float(np.mean(gaps)),
-                        "std_gap": float(np.std(gaps)),
-                        "n": len(gaps),
-                    }
+            # Only need to do random baseline once (it's the same model, different random vecs)
+            # Store mean across all random trials
+            if steer_trait == TRAITS[0]:  # Only compute once
+                for alpha_str, trait_gaps in random_gaps_by_alpha.items():
+                    results["random_baseline"][alpha_str] = {}
+                    for eval_trait, gaps in trait_gaps.items():
+                        results["random_baseline"][alpha_str][eval_trait] = {
+                            "mean_gap": float(np.mean(gaps)),
+                            "std_gap": float(np.std(gaps)),
+                            "n": len(gaps),
+                        }
 
         model.close()
         del model
@@ -264,7 +271,7 @@ def main():
         print(f"  Diagonal mean: {si['diagonal_mean']:.3f}, Off-diagonal mean: {si['off_diagonal_mean']:.3f}, Ratio: {si['ratio']:.2f}")
 
         if alpha_str in results["random_baseline"]:
-            print(f"  Random baseline gaps: ", end="")
+            print("  Random baseline gaps: ", end="")
             for t in TRAITS:
                 rg = results["random_baseline"][alpha_str][t]["mean_gap"]
                 print(f"{t[:4]}={rg:.2f} ", end="")
