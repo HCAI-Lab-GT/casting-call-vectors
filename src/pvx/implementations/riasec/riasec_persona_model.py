@@ -8,10 +8,10 @@ from tqdm import tqdm
 from transformers.utils import logging as transformers_logging
 
 from pvx import setup_logging
-from pvx.pvx_models.abstract_persona_model import AbstractPersonaModel
-from pvx.pvx_models.judges.llm_as_judge import LLMJudge
-from pvx.pvx_models.persona_dataset import PersonaDataset
-from pvx.pvx_models.response_generation import ResponseGeneration
+from pvx.abstraction.pvx_models.abstract_persona_model import AbstractPersonaModel
+from pvx.implementations.judges.llm_as_judge import LLMJudge
+from pvx.implementations.base.persona_dataset import PersonaDataset
+from pvx.utils.response_generation import ResponseGeneration
 from pvx.utils.generation_utils import GenerationConfig
 from pvx.utils.judge_utils import JudgeConfig
 from pvx.utils.riasec_utils import RIASECHelpers

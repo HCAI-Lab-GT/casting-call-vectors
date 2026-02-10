@@ -37,7 +37,8 @@ from openai import OpenAI
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from pvx import Heartbeat, setup_logging
-from pvx.pvx_models.prompts import PromptTemplates
+from pvx.utils.prompts import PromptTemplates
+from pvx.abstraction.pvx_models.abstract_dataset import AbstractDataset
 from pvx.utils.riasec_utils import RIASECHelpers
 
 load_dotenv()
@@ -46,10 +47,9 @@ BACKENDS = ("openai", "vllm", "hf_local")
 
 
 # Initialize logger once per process
-logger = setup_logging(name="persona-dataset")
+logger = setup_logging(name="riasec-dataset")
 
-
-class PersonaDataset:
+class RiasecDataset(AbstractDataset):
     """
     A dataset class for generating and managing persona-based training data.
 
@@ -81,9 +81,7 @@ class PersonaDataset:
     def __init__(
         self,
         trait: str,
-        trait_description: Optional[str] = None,
-        from_riasec: bool = False,
-        riasec_config_path: str = "./configs/riasec.yaml",
+        riasec_config_path = "./configs/riasec.yaml",
         num_questions: int = 100,
         backend: str = "hf_local",
         model: str = "qwen2.5:7b-instruct",
@@ -92,7 +90,7 @@ class PersonaDataset:
         local_model: Optional[str] = "Qwen/Qwen2.5-1.5B-Instruct",
         device: Optional[str] = None,
         dtype: torch.dtype = torch.float16,
-        dirpath: str = "./persona_data/trait_datasets/",
+        dirpath: str = "./persona_data/riasec_datasets/",
     ):
         """
         Initialize a PersonaDataset instance.
@@ -115,44 +113,32 @@ class PersonaDataset:
         Returns:
             None
         """
+        super().__init__(
+            num_questions=num_questions,
+            backend=backend,
+            model=model,
+            base_url=base_url,
+            api_key_env=api_key_env,
+            local_model=local_model,
+            device=device,
+            dtype=dtype,
+            dirpath=dirpath,
+        )
         self.trait: str = trait
-        self.num_questions: int = num_questions
         self.positive_negative_pairs: List[Tuple[str, str]] = []
-        self.questions: List[str] = []
-        self.evaluation_prompt = ""
-        self.model = model
-        self.backend = backend if backend in BACKENDS else "openai"
-        self.base_url = base_url
-        self.api_key_env = api_key_env
-        self.local_model = local_model or model
-        self.device = device
-        self.dtype = dtype
-        self._hf_model = None
-        self._hf_tokenizer = None
-
-        self.dirpath = dirpath
-
-        if trait_description is not None:
-            logger.info("Trait description set from initializer")
-            self.trait_description = trait_description
-        elif from_riasec and self.trait in RIASECHelpers.RIASEC_TRAITS:
-            logger.info("Trait description set from RIASEC config yaml")
-            self.trait_description = RIASECHelpers.fetch_riasec_information(
+        
+        if self.trait not in RIASECHelpers.RIASEC_TRAITS:
+            raise ValueError("Trait must be in RIASEC set of traits")
+        
+        self.trait_description = RIASECHelpers.fetch_riasec_information(
                 riasec_config_path=riasec_config_path
             )[self.trait]["description"]
-        else:
-            logger.info("Trait description will be generated")
-            self.trait_description = None
-        self.from_riasec = from_riasec
 
     @staticmethod
     def from_json(
         trait: str,
-        trait_description: Optional[str] = None,
-        from_riasec: bool = False,
-        riasec_config_path: str = "./configs/riasec.yaml",
-        dirpath: str = "./persona_data/trait_datasets",
-    ) -> "PersonaDataset":
+        dirpath: str = "./persona_data/riasec_datasets",
+    ) -> "RiasecDataset":
         """
         Load a previously saved dataset from a JSON file.
 
@@ -176,47 +162,34 @@ class PersonaDataset:
             json.JSONDecodeError: If the file contains invalid JSON
             KeyError: If required keys are missing from the JSON data
         """
+        
         filepath = os.path.join(dirpath, f"{trait}_dataset.json")
+        
+        logger.info(f"Trying to find dataset at: {filepath}")
 
         if not os.path.exists(filepath):
             logger.info("Trait dataset not found. Initializing new trait dataset...")
-            dataset = PersonaDataset(
-                trait=trait,
-                trait_description=trait_description,
-                from_riasec=from_riasec,
-                riasec_config_path=riasec_config_path,
+            dataset = RiasecDataset(
+                trait=trait
             )
             dataset.generate_dataset(save_to_json=True)
             return dataset
-
-        # Load JSON data
-        with open(filepath, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        # Backward compatibility with older files that stored "client"
-        backend = data.get("backend")
-        if backend is None and "client" in data:
-            client = data["client"]
-            backend = "hf_local" if client == "ollama" else "openai"
-        backend = backend or "openai"
-
-        # reconstruct dataset instance
-        dataset = PersonaDataset(
-            trait=trait,
-            num_questions=data["num_questions"],
-            backend=backend,
-            model=data["model"],
-            base_url=data.get("base_url"),
-            local_model=data.get("local_model"),
-        )
-
-        # Populate dataset outputs
-        dataset.positive_negative_pairs = data["positive_negative_pairs"]
-        dataset.questions = data["questions"]
-        dataset.evaluation_prompt = data["evaluation_prompt"]
+        
+        logger.info("Trait dataset found. Initializing trait dataset from json...")
+        
+        dataset, loaded_from_json = AbstractDataset.from_json(trait_role=trait, dirpath=dirpath)
+        dataset.trait = trait
+        
+        if loaded_from_json:
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            dataset.positive_negative_pairs = data["positive_negative_pairs"]
+        else:
+            dataset.generate_dataset(save_to_json=True)
+            return dataset
 
         # Load up loggers
-        dataset.logger = setup_logging(name="persona-dataset")
+        dataset.logger = setup_logging(name="riasec-dataset")
         dataset.logger.info("Dataset loaded from: %s", filepath)
 
         return dataset
@@ -306,8 +279,7 @@ class PersonaDataset:
         else:
             trait_description = self.trait_description
 
-        question_instruction: str = self._generate_question_instruction()
-        logger.info("Generated question instruction for %s", self.trait)
+        question_instruction: str = ""
 
         # load generation prompt
         system_prompt: str = "You are an expert AI evaluator and dataset designer."
@@ -325,6 +297,7 @@ class PersonaDataset:
         ]
         with Heartbeat(logger, f"Generating dataset for {self.trait}", interval=30):
             _, response = self._inference_with_client(messages=messages)
+            logger.info(response)
 
         # Parse the response into structured dataset components, retry maximum max_tries times if failed
         pos_neg_pairs, questions, evaluation_prompt = None, None, None
@@ -337,7 +310,7 @@ class PersonaDataset:
         else:
             raise ValueError("Failed to parse dataset output after multiple attempts")
 
-        evaluation_prompt = PromptTemplates.evaluation(
+        evaluation_prompt = PromptTemplates.evaluation_trait(
             trait=self.trait, trait_description=trait_description
         )
 
@@ -368,129 +341,6 @@ class PersonaDataset:
             Pair(pos=pos, neg=neg, question=q)
             for (pos, neg), q in product(self.positive_negative_pairs, self.questions)
         ]
-
-    def _inference_with_client(
-        self, messages: List[Dict[str, str]], temperature: float = 0.9, max_new_tokens=1024
-    ) -> Tuple[Optional[str], str]:
-        """
-        Perform LLM inference using either OpenAI/vLLM HTTP or local HF transformers.
-
-        This method abstracts away the differences between local HF inference and
-        remote OpenAI/vLLM-compatible endpoints.
-
-        Args:
-            messages (List[Dict[str, str]]): A list of message dictionaries with
-                'role' and 'content' keys, following the OpenAI chat format
-            temperature (float, optional): Sampling temperature for generation.
-                Higher values (e.g., 0.9) produce more random outputs.
-                Defaults to 0.9.
-
-        Returns:
-            Tuple[Optional[str], str]: A tuple of (thinking_content, response_content).
-                The thinking_content is only present for certain models that support
-                chain-of-thought reasoning; otherwise it's None.
-
-        Raises:
-            ValueError: If required API key is not set for OpenAI/vLLM backends
-            Exception: Re-raises any exception from the underlying API call after
-                logging the error details
-
-            Example:
-                >>> messages = [
-                ...     {"role": "system", "content": "You are a helpful assistant."},
-                ...     {"role": "user", "content": "Hello!"}
-                ... ]
-                >>> thinking, response = dataset._inference_with_client(messages)
-        """
-        try:
-            if self.backend == "hf_local":
-                if self._hf_model is None or self._hf_tokenizer is None:
-                    self._init_local_model()
-
-                # Prepare prompt for decoder-only model
-                prompt = self._messages_to_prompt(messages)
-
-                # Generate response
-                inputs = self._hf_tokenizer(prompt, return_tensors="pt", padding=True).to(
-                    self._hf_model.device
-                )
-                generated = self._hf_model.generate(
-                    **inputs,
-                    do_sample=True,
-                    temperature=temperature,
-                    max_new_tokens=max_new_tokens,
-                )
-                # Extract generated text (first sequence and excluding the prompt)
-                decoded = self._hf_tokenizer.decode(
-                    generated[0][inputs["input_ids"].shape[-1] :], skip_special_tokens=True
-                )
-
-                return (None, decoded.strip())
-
-            base_url = self.base_url
-            if self.backend == "vllm" and base_url is None:
-                base_url = os.environ.get("VLLM_API_URL")
-            if base_url is None:
-                base_url = "https://glados.ctisl.gtri.org"
-
-            api_key = os.environ.get(self.api_key_env) or os.environ.get("OPENAI_API_KEY")
-            if api_key is None:
-                raise ValueError(
-                    f"{self.api_key_env} or OPENAI_API_KEY environment variable not set"
-                )
-            openai_client = OpenAI(api_key=api_key, base_url=base_url)
-
-            chat_response = openai_client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=temperature,
-            )
-            return (None, chat_response.choices[0].message.content)
-
-        except Exception as e:
-            logger.exception(
-                "inference failed | backend=%s model=%s temp=%s",
-                self.backend,
-                self.model,
-                temperature,
-            )
-            raise e
-
-    def _init_local_model(self):
-        """
-        Lazily load a HF transformers causal LM for local inference.
-        """
-        if self.backend != "hf_local":
-            return
-
-        # Device selection
-        if self.device:
-            device = self.device
-        else:
-            if torch.cuda.is_available():
-                device = "cuda"
-            elif torch.backends.mps.is_available():
-                device = "mps"
-            else:
-                device = "cpu"
-                warnings.warn(
-                    "Using CPU for local inference; generation will be slow.", stacklevel=2
-                )
-
-        # Load model and tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(self.local_model)
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-
-        # Load model with device map
-        model = AutoModelForCausalLM.from_pretrained(
-            self.local_model,
-            dtype=self.dtype if device != "cpu" else None,
-            device_map=device,
-        )
-
-        self._hf_model = model
-        self._hf_tokenizer = tokenizer
 
     def _generate_trait_description(self) -> str:
         """
@@ -526,7 +376,7 @@ class PersonaDataset:
             str: Instructions for question generation
         """
         system_prompt = "You are an expert AI evaluator and dataset designer."
-        user_prompt = PromptTemplates.PROMPTS["question_instruction"].format(TRAIT=self.trait)
+        user_prompt = PromptTemplates.PROMPTS["question_instruction_trait"].format(TRAIT=self.trait)
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -560,33 +410,16 @@ class PersonaDataset:
         """
         json_text = "\n".join(response.split("\n")[1:-1])  # Remove ```json and ```
         response_dict = json.loads(json_text)
+        
+        logger.info(json_text)
 
         # Extract components
         pos_instructions = response_dict["pos_instructions"]
         neg_instructions = response_dict["neg_instructions"]
-        if self.from_riasec:
-            questions = RIASECHelpers.fetch_riasec_information()[self.trait]["questions"]
-        else:
-            questions = response_dict["questions"]
+        
+        questions = RIASECHelpers.fetch_riasec_information()[self.trait]["questions"]
 
         return list(zip(pos_instructions, neg_instructions, strict=True)), questions
-
-    @staticmethod
-    def _messages_to_prompt(messages: List[Dict[str, str]]) -> str:
-        """
-        Flatten chat messages into a single prompt string for decoder-only HF models.
-        Format: "<system>\\n\\n<user>\\n\\nAssistant:"
-        """
-        system_parts = [m["content"] for m in messages if m["role"] == "system"]
-        user_parts = [m["content"] for m in messages if m["role"] == "user"]
-        system_block = "\\n".join(system_parts)
-        user_block = "\\n\\n".join(user_parts)
-        prompt = ""
-        if system_block:
-            prompt += f"{system_block}\\n\\n"
-        prompt += user_block
-        prompt += "\\n\\nAssistant:"
-        return prompt
 
 
 if __name__ == "__main__":
@@ -606,7 +439,7 @@ if __name__ == "__main__":
     ap.add_argument(
         "-f",
         "--dirpath",
-        default="./persona_data/trait_datasets/",
+        default="./persona_data/riasec_datasets/",
         help="Directory filepath to save generated datasets",
     )
     ap.add_argument(
@@ -652,39 +485,29 @@ if __name__ == "__main__":
     args = ap.parse_args()
 
     trait_list = args.traits or [
-        "sarcastic",
-        "verbose",
-        "evil",
-        "kind",
-        "analytical",
-        "empathetic",
-        "humorous",
-        "optimistic",
-        "pessimistic",
-        "creative",
-        "brave",
-        "cautious",
+        "realistic",
+        "investigative",
+        "artistic",
+        "social",
+        "enterprising",
+        "conventional"
     ]
 
     for trait in trait_list:
         try:
-            PersonaDataset.from_json(
+            RiasecDataset.from_json(
                 trait=trait,
-                dirpath=args.dirpath,
-                from_riasec=args.from_riasec,
-                riasec_config_path=args.riasec_config,
+                dirpath=args.dirpath
             )
         except Exception:
-            dataset: PersonaDataset = PersonaDataset(
+            dataset: RiasecDataset = RiasecDataset(
                 trait=trait,
-                from_riasec=args.from_riasec,
                 num_questions=args.num_questions,
                 backend=args.backend,
                 local_model=args.local_model,
                 model=args.model,
                 api_key_env=args.api_key_env,
+                dirpath=args.dirpath
             )
             dataset.generate_dataset(save_to_json=True)
-
-    # nonlocal example
-    #     trait="sarcastic", num_questions=100, backend="openai", model="openai/gpt-oss-120b"
+        

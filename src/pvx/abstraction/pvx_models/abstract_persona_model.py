@@ -14,8 +14,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.utils import logging as transformers_logging
 
 from pvx import Heartbeat, setup_logging
-from pvx.pvx_models.judges.llm_as_judge import LLMJudge
-from pvx.pvx_models.persona_dataset import PersonaDataset
+from pvx.implementations.judges.llm_as_judge import LLMJudge
+from pvx.abstraction.pvx_models.abstract_dataset import AbstractDataset
 from pvx.utils.judge_utils import JudgeConfig
 
 torch.set_float32_matmul_precision("high")
@@ -37,7 +37,8 @@ class AbstractPersonaModel(ABC):
     def __init__(
         self,
         target_model_id: str = "qwen2.5:7b-instruct",
-        dataset: Optional[PersonaDataset] = None,
+        dataset: Optional[AbstractDataset] = None,
+        dataset_dirpath: str = './persona_data/trait_datasets/',
         trait: Optional[str] = None,
         layer: float = 14,
         default_alpha: float = 3.0,
@@ -63,7 +64,7 @@ class AbstractPersonaModel(ABC):
             return
 
         # load dataset from file if provided, if path doesnt exist, initialize new trait dataset
-        self.dataset = dataset if dataset else PersonaDataset.from_json(trait)
+        self.dataset = dataset if dataset else AbstractDataset.from_json(trait, dirpath=dataset_dirpath)
         self.trait = self.dataset.trait
 
         self.judge_threshold = judge_threshold

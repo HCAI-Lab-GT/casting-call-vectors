@@ -7,7 +7,7 @@ from tqdm import tqdm
 from transformers.utils import logging as transformers_logging
 
 from pvx import setup_logging
-from pvx.pvx_models.abstract_persona_model import AbstractPersonaModel
+from pvx.abstraction.pvx_models.abstract_persona_model import AbstractPersonaModel
 
 torch.set_float32_matmul_precision("high")
 

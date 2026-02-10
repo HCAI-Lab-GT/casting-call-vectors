@@ -5,8 +5,8 @@ from pathlib import Path
 import yaml
 
 from pvx import setup_logging
-from pvx.pvx_models.abstract_persona_model import AbstractPersonaModel
-from pvx.pvx_models.riasec_persona_model import RIASECPersonaModel
+from pvx.abstraction.pvx_models.abstract_persona_model import AbstractPersonaModel
+from pvx.implementations.riasec.riasec_persona_model import RIASECPersonaModel
 
 logger = setup_logging(name="riasec-judge")
 

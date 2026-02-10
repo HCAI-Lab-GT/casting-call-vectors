@@ -60,7 +60,7 @@ class PVXModelAPI(ModelAPI):
         # self.top_p = model_args.get("top_p", 0.90) # in config
 
         # onstruct PVX object from serializable args
-        from pvx.pvx_models.persona_model import PersonaModel
+        from pvx.implementations.base.persona_model import PersonaModel
 
         logger.info("Launching persona model w/ trait %s", model_args.get("trait"))
 

@@ -36,7 +36,7 @@ load_dotenv()
 
 BACKENDS = ("openai", "vllm", "hf_local")
 
-logger = setup_logging(name="persona-llm-as-judge")
+logger = setup_logging(name="response_generation")
 
 
 class ResponseGeneration:
@@ -60,6 +60,8 @@ class ResponseGeneration:
 
         self._hf_model = None
         self._hf_tokenizer = None
+        
+        logger.info(f"Backend: {backend}, Model: {self.local_model}")
 
     def _init_local_model(self):
         """
@@ -98,7 +100,7 @@ class ResponseGeneration:
         self._hf_tokenizer = tokenizer
 
     def _inference_with_client(
-        self, messages: List[Dict[str, str]], temperature: float = 0.9, max_new_tokens=1024
+        self, messages: List[Dict[str, str]], temperature: float = 0.1, max_new_tokens=1024
     ):
         """
         Perform LLM inference using the configured backend.
@@ -119,6 +121,7 @@ class ResponseGeneration:
             if self.backend == "hf_local":
                 if self._hf_model is None or self._hf_tokenizer is None:
                     self._init_local_model()
+                    logger.info(f"Initialized Local Model {self.local_model}")
 
                 # Prepare prompt for decoder-only model
                 prompt = self._messages_to_prompt(messages)
@@ -164,7 +167,7 @@ class ResponseGeneration:
             logger.exception(
                 "inference failed | backend=%s model=%s temp=%s",
                 self.backend,
-                self.model,
+                self.local_model,
                 temperature,
             )
             raise e
@@ -236,7 +239,7 @@ if __name__ == "__main__":
     ap.add_argument("--trait", default="realistic", help="Trait for RIASEC response generation")
     ap.add_argument(
         "--local_model",
-        default="Qwen/Qwen2.5-7B-Instruct",
+        default="Qwen/Qwen2.5-1.5B-Instruct",
         help="Local HF model to use for hf_local backend",
     )
     ap.add_argument(
@@ -281,7 +284,13 @@ if __name__ == "__main__":
     else:
         messages = ResponseGeneration.convert_str_to_message(messages=[args.question])
 
-    generate_response = ResponseGeneration()
+    generate_response = ResponseGeneration(backend=args.backend,
+        model=args.model,
+        local_model=args.local_model,
+        base_url=args.base_url,
+        api_key_env=args.api_key_env,
+        device=args.device,
+        dtype=args.dtype)
     _, response = generate_response(messages=messages)
     logger.info("===Question===")
     logger.info(args.question)
