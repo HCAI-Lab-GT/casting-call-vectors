@@ -1,0 +1,556 @@
+Title,Description,Priority,Labels,Due Date
+[S1-01] O*NET Data Download & Validation,"**Goal:** Produce clean JSON with all 1,016 O*NET occupations and metadata.
+
+**Stream:** Data & Personas
+**Size:** S · **Est. days:** 2
+**Assignee:** Person B
+**🔴 CRITICAL PATH**
+
+### Acceptance Criteria
+- [ ] JSON has 1,016 entries with soc_code, title, description, 6 RIASEC scores
+- [ ] 10 spot-checks pass against O*NET website
+- [ ] Schema documented
+
+### Inputs
+O*NET 29.0 database, pvx ONETLoader
+
+### Outputs
+occupations.json, schema.md",High,Stream 1: Data & Personas; Critical Path; Delegatable; Size: S,2026-02-14
+[S1-02] RIASEC Stratification Analysis,"**Goal:** Understand RIASEC distribution and propose stratified pilot set of 50 occupations (~8-9 per RIASEC category).
+
+**Stream:** Data & Personas
+**Size:** XS · **Est. days:** 0.5
+**Assignee:** Person B
+
+### Acceptance Criteria
+- [ ] Counts per primary RIASEC code
+- [ ] Ranked occupation list per category
+- [ ] Pilot set of 50 with ~8-9 per category
+
+### Dependencies
+Blocked by: S1-01
+
+### Inputs
+occupations.json
+
+### Outputs
+riasec_stratification.md, pilot_occupations.json",Medium,Stream 1: Data & Personas; Delegatable; Size: XS,2026-02-14
+[S1-03] Persona Prompt Template Design,"**Goal:** Create 3-5 system prompt templates. No psychometric language, no trait labels, no demographics.
+
+**Stream:** Data & Personas
+**Size:** M · **Est. days:** 4
+**Assignee:** Glenn + Person B
+**🔴 CRITICAL PATH**
+
+### Acceptance Criteria
+- [ ] ≥3 template variants
+- [ ] Automated blocklist scanner passing
+- [ ] Each tested on 5 diverse occupations
+- [ ] Glenn approved
+
+### Inputs
+pvx VocationalPersonaGenerator, QC criteria
+
+### Outputs
+prompt_templates.py, blocklist_scanner.py",High,Stream 1: Data & Personas; Critical Path; Size: M,2026-02-21
+[S1-04] Large-Scale Prompt Generation,"**Goal:** Generate full library: 1,016 occupations × 3-5 variants = 3,000-5,000 prompts.
+
+**Stream:** Data & Personas
+**Size:** M · **Est. days:** 3
+**Assignee:** Person B
+**🔴 CRITICAL PATH**
+
+### Acceptance Criteria
+- [ ] One JSON per occupation with all variants
+- [ ] All pass blocklist scan
+- [ ] Manifest documenting any augmented/flagged prompts
+
+### Dependencies
+Blocked by: S1-01, S1-03
+
+### Inputs
+occupations.json, templates
+
+### Outputs
+prompts/ directory, generation_manifest.csv",High,Stream 1: Data & Personas; Critical Path; Delegatable; Size: M,2026-02-21
+[S1-05] Automated QC Filtering,"**Goal:** Final QC pass over all generated prompts.
+
+**Stream:** Data & Personas
+**Size:** S · **Est. days:** 1
+**Assignee:** Person B
+**🔴 CRITICAL PATH**
+
+### Acceptance Criteria
+- [ ] QC report with pass rate and failure reasons
+- [ ] Filtered prompt set ready
+
+### Dependencies
+Blocked by: S1-04
+
+### Inputs
+prompts/ directory
+
+### Outputs
+prompts_filtered/, qc_report.md",High,Stream 1: Data & Personas; Critical Path; Delegatable; Size: S,2026-02-28
+[S1-06] Non-Occupational Role Library,"**Goal:** Assemble ~515 character roles and traits from assistant-axis as additional personas.
+
+**Stream:** Data & Personas
+**Size:** S · **Est. days:** 2
+**Assignee:** Person C
+
+### Acceptance Criteria
+- [ ] ~515 non-occupational persona JSONs
+- [ ] Same schema as occupational
+- [ ] Category tags present
+
+### Dependencies
+Blocked by: S2-05
+
+### Inputs
+assistant-axis role/trait lists
+
+### Outputs
+nonoccupational_prompts/ directory",Medium,Stream 1: Data & Personas; Delegatable; Size: S,2026-02-21
+[S1-07] Leakage Audit,"**Goal:** Verify zero overlap between elicitation battery and psychometric instruments.
+
+**Stream:** Data & Personas
+**Size:** S · **Est. days:** 1
+**Assignee:** Person D
+
+### Acceptance Criteria
+- [ ] Audit report with methodology
+- [ ] Item overlap matrix
+- [ ] Zero items above threshold or documented replacements
+
+### Dependencies
+Blocked by: S3-01, S3-02, S3-03, S3-05
+
+### Inputs
+elicitation_battery.json, all instruments
+
+### Outputs
+leakage_audit_report.md",Medium,Stream 1: Data & Personas; Delegatable; Size: S,2026-02-21
+[S2-01] Model Download & Environment Setup,"**Goal:** Download OLMo3, set up CUDA, verify generation works.
+
+**Stream:** Pipeline & Infra
+**Size:** M · **Est. days:** 3
+**Assignee:** Person C
+**🔴 CRITICAL PATH**
+
+### Acceptance Criteria
+- [ ] Model loads and generates coherent text
+- [ ] Model card documented
+- [ ] Smoke test passes
+- [ ] Hardware requirements documented
+
+### Inputs
+HuggingFace model hub
+
+### Outputs
+model environment, model_card_olmo3.md",High,Stream 2: Pipeline & Infra; Critical Path; Delegatable; Size: M,2026-02-14
+[S2-02] Activation Extraction Code Refinement,"**Goal:** Refine pvx extraction: 3 token-position modes (prompt_last, response_avg, prompt_avg), batching, selective layers.
+
+**Stream:** Pipeline & Infra
+**Size:** M · **Est. days:** 5
+**Assignee:** Glenn
+**🔴 CRITICAL PATH**
+
+### Acceptance Criteria
+- [ ] Shape verification tests pass for all 3 modes
+- [ ] Batch processing matches single-item results
+- [ ] Selective layer extraction works
+- [ ] .pt output format correct
+
+### Dependencies
+Blocked by: S2-01
+
+### Inputs
+pvx persona_model.py, assistant-axis reference
+
+### Outputs
+extract_activations.py, test_extraction.py",High,Stream 2: Pipeline & Infra; Critical Path; Size: M,2026-02-21
+[S2-03] Steering Code Validation,"**Goal:** Verify existing steering code works with synthetic vectors; choose implementation.
+
+**Stream:** Pipeline & Infra
+**Size:** S · **Est. days:** 2
+**Assignee:** Glenn
+
+### Acceptance Criteria
+- [ ] Steered ≠ unsteered qualitatively
+- [ ] Layer parameter works
+- [ ] Coefficient parameter works
+- [ ] Implementation chosen and documented
+
+### Dependencies
+Blocked by: S2-02
+
+### Inputs
+pvx persona_model.py, persona_vectors activation_steer.py
+
+### Outputs
+steering.py, steering_test_results.md",Medium,Stream 2: Pipeline & Infra; Size: S,2026-02-21
+[S2-04] Judge Pipeline Implementation,"**Goal:** Build 0-3 scale LLM judge with async batch scoring (0=refused, 1=broke character, 2=partial, 3=fully embodied).
+
+**Stream:** Pipeline & Infra
+**Size:** M · **Est. days:** 4
+**Assignee:** Person C
+
+### Acceptance Criteria
+- [ ] Judge returns 0-3 scores
+- [ ] ≥80% agreement on 20 calibration cases
+- [ ] Batch scorer handles 1,000+ responses
+- [ ] Rate limiting and retries work
+
+### Inputs
+pvx LLMJudge, assistant-axis judge.py
+
+### Outputs
+judge.py, batch_scorer.py",Medium,Stream 2: Pipeline & Infra; Delegatable; Size: M,2026-02-21
+[S2-05] Data Format Standardization,"**Goal:** Define unified JSON schema for persona definitions across all three codebases.
+
+**Stream:** Pipeline & Infra
+**Size:** S · **Est. days:** 1
+**Assignee:** Glenn
+
+### Acceptance Criteria
+- [ ] JSON Schema documented
+- [ ] Validator catches malformed files
+- [ ] Converters from pvx/assistant-axis formats tested
+
+### Inputs
+Three codebase formats
+
+### Outputs
+persona_schema.json, validate_persona.py, format_migration.py",Medium,Stream 2: Pipeline & Infra; Size: S,2026-02-14
+[S2-06] Baseline Response Generation,"**Goal:** Generate default model responses to elicitation battery (text only). 3 variants × 250 Qs = 750 generations.
+
+**Stream:** Pipeline & Infra
+**Size:** S · **Est. days:** 0.5
+**Assignee:** Person C
+**🔴 CRITICAL PATH**
+
+### Acceptance Criteria
+- [ ] JSONL has 750 entries
+- [ ] 20 random responses look normal (spot-check)
+
+### Dependencies
+Blocked by: S3-05, S2-01
+
+### Inputs
+elicitation_battery.json, model
+
+### Outputs
+baseline_responses.jsonl",High,Stream 2: Pipeline & Infra; Critical Path; Delegatable; Size: S,2026-02-28
+[S2-07] Baseline Activation Extraction,"**Goal:** Second pass: extract hidden states from baseline responses. All layers, all 3 token modes.
+
+**Stream:** Pipeline & Infra
+**Size:** S · **Est. days:** 0.5
+**Assignee:** Person C
+**🔴 CRITICAL PATH**
+
+### Acceptance Criteria
+- [ ] Shapes match model config
+- [ ] No NaN/zeros (spot-check 10 tensors)
+- [ ] 2,250 tensor files stored
+
+### Dependencies
+Blocked by: S2-06, S2-02
+
+### Inputs
+baseline_responses.jsonl, model, extraction code
+
+### Outputs
+baseline_activations/",High,Stream 2: Pipeline & Infra; Critical Path; Delegatable; Size: S,2026-02-28
+[S2-08] Pilot Persona Response Generation (50 occupations),"**Goal:** Generate text for 50 pilot personas × 3 variants × 250 Qs = 37,500 responses. Compute: 40-75 GPU-hours.
+
+**Stream:** Pipeline & Infra
+**Size:** M · **Est. days:** 2
+**Assignee:** Person C
+**🔴 CRITICAL PATH**
+
+### Acceptance Criteria
+- [ ] 50 persona dirs with correct response counts
+- [ ] Spot-check: nurse ≠ developer qualitatively
+- [ ] No truncated responses
+
+### Dependencies
+Blocked by: S1-05, S3-05, S2-01
+
+### Inputs
+pilot prompts, elicitation battery, model
+
+### Outputs
+pilot_responses/",High,Stream 2: Pipeline & Infra; Critical Path; Delegatable; Size: M,2026-02-28
+[S2-09] Pilot Activation Extraction,"**Goal:** Extract activations from all 37,500 pilot responses. All layers. Most compute-intensive task: 100-200 GPU-hours.
+
+**Stream:** Pipeline & Infra
+**Size:** L · **Est. days:** 4
+**Assignee:** Person C
+**🔴 CRITICAL PATH**
+
+### Acceptance Criteria
+- [ ] Shapes match model config
+- [ ] No NaN values
+- [ ] File counts correct
+
+### Dependencies
+Blocked by: S2-08, S2-02
+
+### Inputs
+pilot_responses/, model, extraction code
+
+### Outputs
+pilot_activations/",High,Stream 2: Pipeline & Infra; Critical Path; Delegatable; Size: L,2026-02-28
+[S2-10] Pilot Adherence Scoring → Gate 1,"**Goal:** Score all 37,500 pilot responses with LLM judge. Feed Decision Gate 1.
+
+**Stream:** Pipeline & Infra
+**Size:** S · **Est. days:** 0.5
+**Assignee:** Person C
+**🔴 CRITICAL PATH**
+**⭐ DECISION GATE 1:** Do personas work?
+**Pass threshold:** >60% of personas achieve score-3 on >50% of questions
+
+### Acceptance Criteria
+- [ ] All responses scored 0-3
+- [ ] Adherence report with per-persona stats produced
+- [ ] Gate 1 evaluated: >60% of personas achieve score-3 on >50% of questions
+
+### Dependencies
+Blocked by: S2-08, S2-04
+
+### Inputs
+pilot_responses/, judge.py
+
+### Outputs
+adherence_scores_pilot.csv, adherence_report.md",Urgent,Stream 2: Pipeline & Infra; Critical Path; Decision Gate; Delegatable; Size: S,2026-02-28
+[S2-11] Persona Vector Computation (Pilot),"**Goal:** Compute persona vectors for 50 personas using score-3 filtered responses. All 3 token modes → 150 vectors.
+
+**Stream:** Pipeline & Infra
+**Size:** S · **Est. days:** 1
+**Assignee:** Glenn
+**🔴 CRITICAL PATH**
+
+### Acceptance Criteria
+- [ ] 150 .pt files (50 personas × 3 modes)
+- [ ] Shapes verified [num_layers, hidden_dim]
+- [ ] Response-to-score-to-activation bookkeeping spot-checked
+
+### Dependencies
+Blocked by: S2-09, S2-07, S2-10
+
+### Inputs
+pilot_activations/, baseline_activations/, adherence_scores
+
+### Outputs
+persona_vectors_pilot/",High,Stream 2: Pipeline & Infra; Critical Path; Size: S,2026-03-07
+[S2-12] Token Position Experiment,"**Goal:** Compare prompt_last vs response_avg vs prompt_avg using RIASEC clustering quality and k-NN classification (k=5).
+
+**Stream:** Pipeline & Infra
+**Size:** S · **Est. days:** 0.5
+**Assignee:** Glenn
+**🔴 CRITICAL PATH**
+
+### Acceptance Criteria
+- [ ] Report comparing 3 modes with metrics
+- [ ] Winner identified with rationale
+- [ ] Decision documented
+
+### Dependencies
+Blocked by: S2-11
+
+### Inputs
+persona_vectors_pilot/ (all modes), riasec_mapping
+
+### Outputs
+token_position_report.md",High,Stream 2: Pipeline & Infra; Critical Path; Size: S,2026-03-07
+[S2-13] Layer Selection Experiment,"**Goal:** Identify optimal extraction/steering layers via per-layer RIASEC clustering metrics.
+
+**Stream:** Pipeline & Infra
+**Size:** S · **Est. days:** 0.5
+**Assignee:** Glenn
+**🔴 CRITICAL PATH**
+
+### Acceptance Criteria
+- [ ] Layer quality plot (within-vs-between ratio vs depth)
+- [ ] Optimal layer identified
+- [ ] Layer range within 90% of best documented
+
+### Dependencies
+Blocked by: S2-12
+
+### Inputs
+persona_vectors_pilot/ (best mode, all layers)
+
+### Outputs
+layer_selection_report.md, optimal_layers.json",High,Stream 2: Pipeline & Infra; Critical Path; Size: S,2026-03-07
+[S2-14] Steering Validation (Real Vectors) → Gate 2,"**Goal:** Validate steering with real vectors: 3 conditions × 10 personas × coefficient sweep 0.5-5.0.
+
+**Stream:** Pipeline & Infra
+**Size:** M · **Est. days:** 3
+**Assignee:** Glenn
+**🔴 CRITICAL PATH**
+**⭐ DECISION GATE 2:** Does steering work?
+**Pass threshold:** >70% improved adherence, coefficient exists without coherence degradation
+
+### Acceptance Criteria
+- [ ] Condition comparison table (baseline vs prompt-only vs steered)
+- [ ] Coefficient sweep results with coherence check
+- [ ] Optimal coefficient found
+- [ ] Gate 2 evaluated: steered > baseline for >70% of test personas
+
+### Dependencies
+Blocked by: S2-11, S2-13, S2-03
+
+### Inputs
+persona_vectors, steering.py, optimal_layers
+
+### Outputs
+steering_validation_report.md",Urgent,Stream 2: Pipeline & Infra; Critical Path; Decision Gate; Size: M,2026-03-07
+[S3-01] IPIP-NEO-120 Assembly & Scoring,"**Goal:** Assemble 120-item Big Five inventory with scoring functions (5 domains, 30 facets).
+
+**Stream:** Instruments & Eval
+**Size:** S · **Est. days:** 3
+**Assignee:** Person D
+
+### Acceptance Criteria
+- [ ] JSON with 120 annotated items (text, domain, facet, keying)
+- [ ] Scoring correct on published test case
+- [ ] Reverse-scoring verified
+
+### Inputs
+ipip.ori.org
+
+### Outputs
+ipip_neo_120.json, score_ipip_neo.py",Medium,Stream 3: Instruments & Eval; Delegatable; Size: S,2026-02-21
+[S3-02] HEXACO-100 Assembly & Scoring,"**Goal:** Assemble 100-item HEXACO inventory with scoring (6 domains, 25 facets).
+
+**Stream:** Instruments & Eval
+**Size:** S · **Est. days:** 3
+**Assignee:** Person D
+
+### Acceptance Criteria
+- [ ] JSON with 100 annotated items
+- [ ] Scoring correct on published test case
+- [ ] All 25 facets producing scores
+
+### Inputs
+HEXACO website
+
+### Outputs
+hexaco_100.json, score_hexaco.py",Medium,Stream 3: Instruments & Eval; Delegatable; Size: S,2026-02-21
+[S3-03] O*NET Interest Profiler Assembly,"**Goal:** Assemble 60-item RIASEC inventory with scoring (6 dimensions × 10 items).
+
+**Stream:** Instruments & Eval
+**Size:** S · **Est. days:** 2
+**Assignee:** Person D
+
+### Acceptance Criteria
+- [ ] JSON with 60 items
+- [ ] 6 RIASEC dimension scores computed
+- [ ] Validated against published test case
+
+### Inputs
+O*NET Resource Center
+
+### Outputs
+interest_profiler.json, score_riasec.py",Medium,Stream 3: Instruments & Eval; Delegatable; Size: S,2026-02-14
+[S3-04] Likert Response Parsing,"**Goal:** Build parser for LLM Likert responses + decide optimal prompt format for item administration.
+
+**Stream:** Instruments & Eval
+**Size:** S · **Est. days:** 3
+**Assignee:** Person D
+
+### Acceptance Criteria
+- [ ] Prompt format chosen with rationale
+- [ ] Regex handles ≥80% of responses
+- [ ] LLM fallback brings total to ≥95%
+- [ ] Failure cases flagged for review
+
+### Dependencies
+Blocked by: S2-01
+
+### Inputs
+Model, sample items
+
+### Outputs
+likert_parser.py, item_prompt_format.md",Medium,Stream 3: Instruments & Eval; Delegatable; Size: S,2026-02-21
+[S3-05] Elicitation Battery Design,"**Goal:** Design ~250 role-agnostic questions for vector extraction. Zero overlap with psychometric items.
+
+**Stream:** Instruments & Eval
+**Size:** M · **Est. days:** 4
+**Assignee:** Person D
+
+### Acceptance Criteria
+- [ ] ~250 questions in JSON, categorized by topic
+- [ ] Glenn reviewed sample of 20
+- [ ] No psychometric wording (verified by S1-07)
+
+### Inputs
+assistant-axis question list (reference)
+
+### Outputs
+elicitation_battery.json",Medium,Stream 3: Instruments & Eval; Delegatable; Size: M,2026-02-21
+[S3-06] Baseline Psychometric Administration,"**Goal:** Administer 280 psychometric items to default model (no persona, no steering). Establish baseline scores.
+
+**Stream:** Instruments & Eval
+**Size:** S · **Est. days:** 1
+**Assignee:** Person D
+
+### Acceptance Criteria
+- [ ] All 280 items administered and parsed
+- [ ] Parse rate ≥95%
+- [ ] Stability across repetitions documented
+- [ ] Scores: Big Five (5+30), HEXACO (6+25), RIASEC (6)
+
+### Dependencies
+Blocked by: S3-01, S3-02, S3-03, S3-04, S2-01
+
+### Inputs
+Instruments, parser, model
+
+### Outputs
+baseline_psychometric_scores.json",Medium,Stream 3: Instruments & Eval; Delegatable; Size: S,2026-03-07
+[S3-07] Steered Psychometric Administration (Pilot),"**Goal:** Administer 280 items to each of 50 steered personas. 14,000 total generations. Compute deltas vs baseline.
+
+**Stream:** Instruments & Eval
+**Size:** M · **Est. days:** 2
+**Assignee:** Person D
+**🔴 CRITICAL PATH**
+
+### Acceptance Criteria
+- [ ] 14,000 items administered and parsed
+- [ ] Parse rate ≥95%
+- [ ] Delta table: steered - baseline for every persona × domain × facet
+
+### Dependencies
+Blocked by: S2-14, S3-06, S2-11
+
+### Inputs
+persona_vectors, steering params, instruments
+
+### Outputs
+steered_psychometric_scores.csv, psychometric_deltas.csv",High,Stream 3: Instruments & Eval; Critical Path; Delegatable; Size: M,2026-03-07
+[S3-08] H1 Statistical Validation → Gate 3,"**Goal:** Formally test H1: non-trivial, stable, occupation-dependent psychometric shifts.
+
+**Stream:** Instruments & Eval
+**Size:** M · **Est. days:** 3
+**Assignee:** Glenn
+**🔴 CRITICAL PATH**
+**⭐ DECISION GATE 3:** Occupation-dependent shifts?
+**Pass threshold:** ≥2 of 3 instruments show significant occupation-dependent shifts (permutation p<0.05)
+
+### Acceptance Criteria
+- [ ] Test 1: Bootstrap CIs on mean absolute deltas (CI excludes zero)
+- [ ] Test 2: Permutation baseline p<0.05 (shifts better than shuffled labels)
+- [ ] Test 3: Correlation between O*NET profiles and steered deltas
+- [ ] Test 4: Facet-level analysis with Benjamini-Hochberg FDR correction
+- [ ] H1 verdict documented and reviewed
+
+### Dependencies
+Blocked by: S3-07
+
+### Inputs
+psychometric_deltas.csv, occupations.json
+
+### Outputs
+h1_report.md",Urgent,Stream 3: Instruments & Eval; Critical Path; Decision Gate; Size: M,2026-03-07
