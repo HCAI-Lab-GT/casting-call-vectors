@@ -16,7 +16,6 @@ from transformers.utils import logging as transformers_logging
 from pvx import Heartbeat, setup_logging
 from pvx.implementations.judges.llm_as_judge import LLMJudge
 from pvx.abstraction.pvx_models.abstract_dataset import AbstractDataset
-from pvx.abstraction.judges.abstract_judge import AbstractJudge
 from pvx.utils.judge_utils import JudgeConfig
 
 torch.set_float32_matmul_precision("high")

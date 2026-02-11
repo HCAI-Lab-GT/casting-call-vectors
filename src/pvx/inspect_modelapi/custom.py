@@ -65,8 +65,8 @@ class PVXModelAPI(ModelAPI):
         logger.info("Launching persona model w/ trait %s", model_args.get("trait"))
 
         self.pvx = PersonaModel.load_or_create(
-            target_model_id=model_name,
             trait=model_args.get("trait"),
+            target_model_id=model_name,
             layer=14,
             json_filepath=model_args.get("json_filepath"),
         )

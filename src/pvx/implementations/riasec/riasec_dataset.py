@@ -25,16 +25,13 @@ Environment Variables:
 import argparse
 import json
 import os
-import warnings
 from collections import namedtuple
 from itertools import product
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import torch
 from dotenv import load_dotenv
-from openai import OpenAI
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from pvx import Heartbeat, setup_logging
 from pvx.utils.prompts import PromptTemplates

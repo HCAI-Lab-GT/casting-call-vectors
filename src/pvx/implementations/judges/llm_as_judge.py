@@ -28,7 +28,6 @@ from typing import Dict, List, Optional, Callable
 import torch
 from dotenv import load_dotenv
 from openai import OpenAI
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from pvx import setup_logging
 from pvx.abstraction.judges.abstract_judge import AbstractJudge

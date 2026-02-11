@@ -19,16 +19,11 @@ Environment Variables:
 """
 
 import argparse
-import math
-import os
 import re
-import warnings
-from typing import Dict, List, Optional, Callable
+from typing import Dict, Optional, Callable
 
 import torch
 from dotenv import load_dotenv
-from openai import OpenAI
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from pvx import setup_logging
 from pvx.abstraction.judges.abstract_judge import AbstractJudge
