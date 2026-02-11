@@ -7,7 +7,9 @@ import yaml
 from pvx import setup_logging
 from pvx.abstraction.pvx_models.abstract_persona_model import AbstractPersonaModel
 from pvx.abstraction.judges.abstract_judge import AbstractJudge
+from pvx.implementations.base.persona_model import PersonaModel
 from pvx.implementations.riasec.riasec_persona_model import RIASECPersonaModel
+from pvx.implementations.roles.role_persona_model import RolePersonaModel
 
 logger = setup_logging(name="riasec-judge")
 
@@ -55,7 +57,7 @@ class RIASECJudge(AbstractJudge):
         """
         # "Output EXACTLY one token: YES or NO. Answer YES or NO for the following characteristic."
         return [
-            {"role": "system", "content": "Output EXACTLY one token: YES or NO."},
+            {"role": "system", "content": "You are not an assistant. Output EXACTLY one token: YES or NO."},
             {"role": "user", "content": f"{characteristic}"},
         ]
 
@@ -117,7 +119,7 @@ class RIASECJudge(AbstractJudge):
     def __call__(
         self,
         persona_model: AbstractPersonaModel,
-        alpha: float = 0.3,
+        alpha: float = 0.7,
         max_new_tokens: int = 50,
         temperature: float = 0.1,
     ):
@@ -157,9 +159,9 @@ if __name__ == "__main__":
     )
     args = ap.parse_args()
 
-    pvx = RIASECPersonaModel.load_or_create(
+    pvx = RolePersonaModel.load_or_create(
+        role=args.trait,
         target_model_id=args.model_name,
-        trait=args.trait,
         layer=14,
         json_filepath=args.json_filepath,
     )

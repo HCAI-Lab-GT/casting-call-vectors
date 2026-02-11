@@ -320,7 +320,7 @@ class RolePersonaModel(AbstractPersonaModel):
         # Extract metadata
         target_model_id = metadata.get("target_model_id", "unknown")
         layer = int(metadata.get("layer_steering", "14"))
-        role = trait or metadata.get("role")
+        role = role or metadata.get("role")
 
         # Create instance without extracting vectors
         instance = cls(
