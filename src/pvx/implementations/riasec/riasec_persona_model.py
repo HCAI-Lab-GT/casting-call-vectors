@@ -73,7 +73,7 @@ class RIASECPersonaModel(AbstractPersonaModel):
         # If dataset not provided, load from JSON or YAML
         if dataset is None:
             self.dataset = RiasecDataset.from_json(
-                trait=trait
+                trait=trait, dirpath=dataset_dirpath
             )
         else:
             self.dataset = dataset
