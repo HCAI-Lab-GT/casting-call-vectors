@@ -16,6 +16,7 @@ from transformers.utils import logging as transformers_logging
 from pvx import Heartbeat, setup_logging
 from pvx.implementations.judges.llm_as_judge import LLMJudge
 from pvx.abstraction.pvx_models.abstract_dataset import AbstractDataset
+from pvx.abstraction.judges.abstract_judge import AbstractJudge
 from pvx.utils.judge_utils import JudgeConfig
 
 torch.set_float32_matmul_precision("high")
@@ -37,12 +38,10 @@ class AbstractPersonaModel(ABC):
     def __init__(
         self,
         target_model_id: str = "qwen2.5:7b-instruct",
-        dataset: Optional[AbstractDataset] = None,
-        dataset_dirpath: str = './persona_data/trait_datasets/',
-        trait: Optional[str] = None,
         layer: float = 14,
         default_alpha: float = 3.0,
         judge_config: Optional[JudgeConfig] = None,
+        judge_cls=LLMJudge,
         judge_threshold: float = 50.0,
         target_pairs: int = 20,
         from_json: bool = False,
@@ -63,17 +62,15 @@ class AbstractPersonaModel(ABC):
         if from_json:
             return
 
-        # load dataset from file if provided, if path doesnt exist, initialize new trait dataset
-        self.dataset = dataset if dataset else AbstractDataset.from_json(trait, dirpath=dataset_dirpath)
-        self.trait = self.dataset.trait
 
         self.judge_threshold = judge_threshold
+        
         if judge_config is None:
             judge_config = JudgeConfig(prompt_template=self.dataset.evaluation_prompt)
         else:
             if judge_config.prompt_template is None:
                 judge_config.prompt_template = self.dataset.evaluation_prompt
-        self.judge = LLMJudge(**judge_config.to_kwargs())
+        self.judge = judge_cls(**judge_config.to_kwargs())
 
         self.target_pairs = target_pairs
 
@@ -183,119 +180,26 @@ class AbstractPersonaModel(ABC):
         self._install_steer_hook(layer_idx=self.layer_steering)
 
     @classmethod
+    @abstractmethod
     def from_json(
         cls,
         json_filepath: str,
         trait: Optional[str] = None,
     ) -> "AbstractPersonaModel":
-        """
-        Load a PersonaModel instance from a previously saved JSON file.
-
-        Args:
-            json_filepath (str): Path to the JSON file containing the saved initialization data
-
-        Returns:
-            PersonaModel: A new instance with the loaded persona vectors
-        """
-
-        with open(json_filepath, "r") as f:
-            data = json.load(f)
-
-        logger.info("Loading PersonaModel from: %s", json_filepath)
-
-        # Create instance without extracting vectors
-        instance = cls(
-            trait=trait,
-            target_model_id=data["target_model_id"],
-            dataset=None,  # Dataset not needed when loading from JSON
-            layer=data["layer_steering"],
-            from_json=True,
-        )
-
-        # Load the persona vectors directly
-        instance.prompt_persona_vector = torch.tensor(data["prompt_persona_vector"])
-        instance.response_persona_vector = torch.tensor(data["response_persona_vector"])
-
-        # Store additional metadata
-        if "dataset_info" in data and data["dataset_info"]:
-            instance.trait = data["dataset_info"]["trait"]
-
-        logger.info("✅ Loaded PersonaModel from: %s", json_filepath)
-        logger.info("   Model: %s", instance.target_model_id)
-        logger.info("   Layer: %d", instance.layer_steering)
-        logger.info("   Trait: %s", instance.trait if hasattr(instance, "trait") else None)
-        logger.info(
-            "   Prompt persona vector shape: %s", str(tuple(instance.prompt_persona_vector.shape))
-        )
-        logger.info(
-            "   Response persona vector shape: %s",
-            str(tuple(instance.response_persona_vector.shape)),
-        )
-
-        return instance
+        pass
 
     @classmethod
+    @abstractmethod
     def load_or_create(
         cls,
         target_model_id: str = "qwen2.5:7b-instruct",
-        dataset: Optional[PersonaDataset] = None,
-        trait: Optional[str] = None,  # alternate to dataset for loading
+        dataset: Optional[AbstractDataset] = None,
+        type: Optional[str] = None,  # alternate to dataset for loading (trait or role)
         layer: float = 14,
         json_filepath: Optional[str] = None,
         safetensors_dir: str = "./persona_data/model_inits/",
     ) -> "AbstractPersonaModel":
-        """
-        Load a PersonaModel instance from saved files if they exist, otherwise create a new one.
-
-        Priority order:
-        1. Safetensors file (preferred - smaller, faster)
-        2. Legacy JSON file (backward compatibility)
-        3. Create new instance
-
-        Args:
-            target_model_id: Model identifier
-            dataset: PersonaDataset for extraction (only used if creating new)
-            trait: Trait name for loading
-            layer: Layer for steering
-            json_filepath: Legacy JSON path (optional, for backward compatibility)
-            safetensors_dir: Directory containing safetensors files
-
-        Returns:
-            PersonaModel: Loaded or newly created instance
-        """
-        # Build safetensors path
-        safe_model_id = target_model_id.replace("/", "__")
-        safetensors_path = Path(safetensors_dir) / f"{trait}_persona_initialization/{safe_model_id}.safetensors"
-
-        # Try safetensors first (preferred format)
-        if safetensors_path.exists():
-            try:
-                return cls.from_safetensors(str(safetensors_path), trait=trait)
-            except Exception as e:
-                logger.warning("⚠️ Failed to load from safetensors: %s", e)
-
-        # Fall back to legacy JSON
-        json_filepath = (
-            json_filepath
-            or f"./persona_data/model_inits/{trait}_persona_initialization/{target_model_id}.json"
-        )
-
-        try:
-            if Path(json_filepath).exists():
-                logger.info("Loading from legacy JSON (consider migrating to safetensors)")
-                return cls.from_json(json_filepath, trait=trait)
-
-        except Exception as e:
-            logger.warning(
-                "⚠️ Failed to load from JSON: %s. Creating a new PersonaModel instance.", e
-            )
-
-        return cls(
-            target_model_id=target_model_id,
-            dataset=dataset,
-            trait=trait,
-            layer=layer,
-        )
+        pass
 
     def save_to_json(self, filepath: str = "./persona_data/model_inits/") -> str:
         """

@@ -13,9 +13,6 @@ from openai import OpenAI
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from pvx import Heartbeat, setup_logging
-from pvx.utils.prompts import PromptTemplates
-from pvx.utils.riasec_utils import RIASECHelpers
-from abc import ABC, abstractmethod
 
 load_dotenv()
 
@@ -78,6 +75,7 @@ class AbstractDataset:
 
     @staticmethod
     def from_json(
+        cls,
         trait_role: str,
         dirpath: str,
     ) -> tuple["AbstractDataset", bool]:
@@ -108,7 +106,7 @@ class AbstractDataset:
 
         if not os.path.exists(filepath):
             logger.info("Trait dataset not found. Initializing new trait dataset...")
-            dataset = AbstractDataset()
+            dataset = cls()
             return dataset, False
 
         # Load JSON data
@@ -123,7 +121,8 @@ class AbstractDataset:
         backend = backend or "openai"
 
         # reconstruct dataset instance
-        dataset = AbstractDataset(
+        dataset = cls(
+            trait_role,
             num_questions=data["num_questions"],
             backend=backend,
             model=data["model"],

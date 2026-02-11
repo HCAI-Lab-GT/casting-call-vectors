@@ -29,7 +29,7 @@ class RoleDataset(AbstractDataset):
 
     def __init__(
         self,
-        role: str,
+        role: str = "",
         role_description: Optional[str] = None,
         num_questions: int = 100,
         backend: str = "hf_local",
@@ -71,21 +71,21 @@ class RoleDataset(AbstractDataset):
         dirpath: str = "./persona_data/role_datasets",
     ) -> "RoleDataset":
         """
-        Load a previously saved dataset from a JSON file.
+        Load a previously saved role dataset from a JSON file.
 
-        This static method reconstructs a PersonaDataset instance from a saved
+        This static method reconstructs a RoleDataset instance from a saved
         JSON file, including all generated content and metadata. It automatically
         configures the appropriate backend (openai / vllm / hf_local) based on
         the saved metadata.
 
         Args:
-            trait (str): The personality trait name (used to construct filename)
+            role (str): The role name (used to construct filename)
             dirpath (str, optional): Directory path where the dataset is saved.
-                The filename is assumed to be "{trait}_dataset.json".
+                The filename is assumed to be "{role}_dataset.json".
                 Defaults to "./persona_data/role_datasets/".
 
         Returns:
-            PersonaDataset: A fully initialized PersonaDataset instance with all
+            RoleDataset: A fully initialized RoleDataset instance with all
                 previously generated data loaded
 
         Raises:
@@ -104,7 +104,7 @@ class RoleDataset(AbstractDataset):
             dataset.generate_dataset(save_to_json=True)
             return dataset
         
-        dataset, loaded_from_json = AbstractDataset.from_json(trait_role=role, dirpath=dirpath)
+        dataset, loaded_from_json = AbstractDataset.from_json(cls=RoleDataset,trait_role=role, dirpath=dirpath)
         dataset.role = role
         
         if loaded_from_json:
@@ -123,26 +123,26 @@ class RoleDataset(AbstractDataset):
 
     def save_dataset_to_json(self, dirpath: str | None = None) -> str:
         """
-        Save the persona vector dataset to a JSON file.
+        Save the role dataset to a JSON file.
 
         Serializes the dataset including all generated content (instruction pairs,
-        questions, evaluation prompt) and metadata (trait, model, backend) to
+        questions, evaluation prompt) and metadata (role, model, backend) to
         a JSON file. The directory structure is created automatically if it doesn't exist.
 
         Args:
-            filepath (str, optional): Directory path where the dataset should be saved.
-                The filename will be automatically generated as "{trait}_dataset.json".
+            dirpath (str, optional): Directory path where the dataset should be saved.
+                The filename will be automatically generated as "{role}_dataset.json".
                 Defaults to self.dirpath.
 
         Returns:
             str: The full path to the saved JSON file
 
         Example:
-            >>> dataset = PersonaDataset(trait="verbose", num_questions=5)
+            >>> dataset = RoleDataset(role="lawyer", num_questions=5)
             >>> # ... generate dataset ...
             >>> path = dataset.save_dataset_to_json("./my_datasets/")
             >>> print(f"Saved to: {path}")
-            "Saved to: ./my_datasets/verbose_dataset.json"
+            "Saved to: ./my_datasets/lawyer_dataset.json"
         """
         filepath = os.path.join((dirpath or self.dirpath), f"{self.role}_dataset.json")
 
@@ -170,10 +170,10 @@ class RoleDataset(AbstractDataset):
         self, save_to_json=True, max_tries=5
     ) -> Tuple[List[Tuple[str, str]], List[str], str, str | None]:
         """
-        Generate the complete persona dataset.
+        Generate the complete role dataset.
 
         This is the main method that orchestrates the entire dataset generation
-        process. It generates trait descriptions, question instructions, and then
+        process. It generates role descriptions, question instructions, and then
         uses these to create positive/negative instruction pairs, questions, and
         an evaluation prompt. The generated dataset is automatically saved to JSON.
 
@@ -187,14 +187,14 @@ class RoleDataset(AbstractDataset):
             Tuple[List[Tuple[str, str]], List[str], str, str]: A tuple containing:
                 - positive_prompts: List of (positive_instruction, negative_instruction) tuples
                 - questions: List of evaluation questions
-                - evaluation_prompt: The prompt for evaluating the trait
+                - evaluation_prompt: The prompt for evaluating the role
                 - filepath: Path where the dataset was saved
 
         Raises:
             ValueError: If the dataset output cannot be parsed after max_tries attempts
 
         Example:
-            >>> dataset = PersonaDataset(trait="analytical", num_questions=10)
+            >>> dataset = RoleDataset(role="doctor", num_questions=10)
             >>> pairs, questions, eval_prompt, path = dataset.generate_dataset()
             >>> print(f"Generated {len(pairs)} instruction pairs")
             >>> print(f"Dataset saved to: {path}")
@@ -251,16 +251,19 @@ class RoleDataset(AbstractDataset):
             filepath = self.save_dataset_to_json()
 
         return pos_prompts, questions, evaluation_prompt, filepath
+    
+    def extract_pos_question_pairs(self) -> List[Tuple[str, str]]:
+        return [(p["pos"], q) for p in self.positive_prompts for q in self.questions]
 
     def _generate_role_description(self) -> str:
         """
-        Generate a detailed description of the personality trait.
+        Generate a detailed description of the role.
 
-        Uses the LLM to create a comprehensive description of the trait being
+        Uses the LLM to create a comprehensive description of the role being
         modeled. This description helps inform subsequent generation steps.
 
         Returns:
-            str: A detailed description of the personality trait
+            str: A detailed description of the role
         """
         system_prompt = "You are an expert AI evaluator and dataset designer."
         user_prompt = PromptTemplates.PROMPTS["role_instruction"].format(ROLE=self.role)
@@ -277,10 +280,10 @@ class RoleDataset(AbstractDataset):
 
     def _generate_question_instruction(self) -> str:
         """
-        Generate instructions for creating evaluation questions.
+        Generate instructions for creating evaluation questions for the role.
 
         Uses the LLM to create guidelines for generating appropriate evaluation
-        questions that can test the presence of the personality trait.
+        questions that can test the presence of the role.
 
         Returns:
             str: Instructions for question generation
@@ -302,22 +305,21 @@ class RoleDataset(AbstractDataset):
         """
         Parse the LLM-generated JSON output into structured components.
 
-        Extracts positive instructions, negative instructions, questions, and
-        evaluation prompts.
+        Extracts positive instructions, negative instructions, and questions.
 
         Args:
             response (str): The raw text response from the LLM containing the
                 generated dataset in a JSON structured format
 
         Returns:
-            Tuple[List[Tuple[str, str]], List[str], str]: A tuple containing:
-                - pos_neg_pairs: List of (positive, negative) instruction tuples
+            Tuple[List[str], List[str]]: A tuple containing:
+                - pos_prompt: List of positive instruction prompts
                 - questions: List of evaluation questions
-                - eval_prompt: The evaluation prompt (concatenated if multi-line)
 
         Raises:
             json.JSONDecodeError: If the response does not contain valid JSON
         """
+        logger.info(response)
         json_text = "\n".join(response.split("\n")[1:-1])  # Remove ```json and ```
         response_dict = json.loads(json_text)
 
@@ -385,22 +387,13 @@ if __name__ == "__main__":
     ]
 
     for role in roles_list:
-        # try:
-        #     RoleDataset.from_json(
-        #         role=role,
-        #         dirpath=args.dirpath
-        #     )
-        # except Exception:
-        #     dataset: RoleDataset = RoleDataset(
-        #         role=role,
-        #         num_questions=args.num_questions,
-        #         backend=args.backend,
-        #         local_model=args.local_model,
-        #         model=args.model,
-        #         api_key_env=args.api_key_env,
-        #     )
-        #     dataset.generate_dataset(save_to_json=True)
-        dataset: RoleDataset = RoleDataset(
+        try:
+            RoleDataset.from_json(
+                role=role,
+                dirpath=args.dirpath
+            )
+        except Exception:
+            dataset: RoleDataset = RoleDataset(
                 role=role,
                 num_questions=args.num_questions,
                 backend=args.backend,
@@ -408,4 +401,4 @@ if __name__ == "__main__":
                 model=args.model,
                 api_key_env=args.api_key_env,
             )
-        dataset.generate_dataset(save_to_json=True)
+            dataset.generate_dataset(save_to_json=True)

@@ -86,7 +86,7 @@ class PersonaDataset(AbstractDataset):
         model: str = "qwen2.5:7b-instruct",
         base_url: Optional[str] = None,
         api_key_env: str = "LITELLM_API_KEY",
-        local_model: Optional[str] = "Qwen/Qwen2.5-1.5B-Instruct",
+        local_model: Optional[str] = "Qwen/Qwen2.5-7B-Instruct",
         device: Optional[str] = None,
         dtype: torch.dtype = torch.float16,
         dirpath: str = "./persona_data/trait_datasets/",
@@ -172,7 +172,7 @@ class PersonaDataset(AbstractDataset):
         
         logger.info("Trait dataset found. Initializing trait dataset from json...")
         
-        dataset, loaded_from_json = AbstractDataset.from_json(trait_role=trait, dirpath=dirpath)
+        dataset, loaded_from_json = AbstractDataset.from_json(cls=PersonaDataset,trait_role=trait, dirpath=dirpath)
         dataset.trait = trait
         
         if loaded_from_json:
@@ -424,21 +424,10 @@ if __name__ == "__main__":
         help="<Optional> description of the trait to generate a dataset for.",
     )
     ap.add_argument(
-        "--from_riasec",
-        action="store_true",
-        help="Use RIASEC config for trait description",
-    )
-    ap.add_argument(
         "-f",
         "--dirpath",
         default="./persona_data/trait_datasets/",
         help="Directory filepath to save generated datasets",
-    )
-    ap.add_argument(
-        "-c",
-        "--riasec_config",
-        default="./configs/riasec.yaml",
-        help="Directory filepath for riasec config file",
     )
     ap.add_argument(
         "-b", "--backend", default="hf_local", help="Backend to use: openai, vllm, hf_local"

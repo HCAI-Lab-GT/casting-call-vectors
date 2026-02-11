@@ -3,14 +3,16 @@ import contextvars
 import random
 from typing import Optional
 
+from pvx.implementations.riasec.riasec_dataset import RiasecDataset
 import torch
+import json
+from pathlib import Path
 from tqdm import tqdm
 from transformers.utils import logging as transformers_logging
 
 from pvx import setup_logging
 from pvx.abstraction.pvx_models.abstract_persona_model import AbstractPersonaModel
 from pvx.implementations.judges.llm_as_judge import LLMJudge
-from pvx.implementations.base.persona_dataset import PersonaDataset
 from pvx.utils.response_generation import ResponseGeneration
 from pvx.utils.generation_utils import GenerationConfig
 from pvx.utils.judge_utils import JudgeConfig
@@ -32,11 +34,13 @@ class RIASECPersonaModel(AbstractPersonaModel):
     Persona model for RIASEC trait extraction and response generation.
     Implements persona vector extraction using pregenerated RIASEC responses.
     """
+    
 
     def __init__(
         self,
         trait: Optional[str] = None,
-        dataset: Optional[PersonaDataset] = None,
+        dataset: Optional[RiasecDataset] = None,
+        dataset_dirpath: str = './persona_data/riasec_datasets/',
         riasec_config_path: str = "./configs/riasec.yaml",
         from_json: bool = False,
         **kwargs,
@@ -54,9 +58,11 @@ class RIASECPersonaModel(AbstractPersonaModel):
             raise ValueError(
                 f"Trait '{trait}' is not a valid RIASEC trait: {sorted(RIASECHelpers.RIASEC_TRAITS)}"
             )
+        
+        self.trait = trait
 
         if from_json:
-            super().__init__(trait=trait, from_json=True, **kwargs)
+            super().__init__(from_json=True, **kwargs)
             return
 
         # Load RIASEC YAML info
@@ -66,14 +72,16 @@ class RIASECPersonaModel(AbstractPersonaModel):
 
         # If dataset not provided, load from JSON or YAML
         if dataset is None:
-            dataset = PersonaDataset.from_json(
-                trait=trait, from_riasec=True, riasec_config_path=riasec_config_path
+            self.dataset = RiasecDataset.from_json(
+                trait=trait
             )
+        else:
+            self.dataset = dataset
 
         # Check dataset questions match YAML
-        if dataset.questions != yaml_questions:
+        if self.dataset.questions != yaml_questions:
             logger.info("Updating dataset questions to be RIASEC trait questions")
-            dataset.questions = yaml_questions
+            self.dataset.questions = yaml_questions
 
         # Pregenerate answers if missing in YAML
         needs_pregeneration = False
@@ -88,9 +96,124 @@ class RIASECPersonaModel(AbstractPersonaModel):
             )
             RIASECHelpers.update_riasec_yaml(riasec_config_path, trait, accepted_responses)
             logger.info(f"Pregeneration complete and YAML updated for trait '{trait}'.")
-
+            
         # Call base class init
-        super().__init__(trait=trait, dataset=dataset, **kwargs)
+        super().__init__(**kwargs)
+    
+    @classmethod
+    def from_json(
+        cls,
+        json_filepath: str,
+        trait: Optional[str] = None,
+    ) -> "RIASECPersonaModel":
+        """
+        Load a PersonaModel instance from a previously saved JSON file.
+
+        Args:
+            json_filepath (str): Path to the JSON file containing the saved initialization data
+
+        Returns:
+            PersonaModel: A new instance with the loaded persona vectors
+        """
+
+        with open(json_filepath, "r") as f:
+            data = json.load(f)
+
+        logger.info("Loading RiasecPersonaModel from: %s", json_filepath)
+
+        # Create instance without extracting vectors
+        instance = cls(
+            trait=trait,
+            target_model_id=data["target_model_id"],
+            dataset=None,  # Dataset not needed when loading from JSON
+            layer=data["layer_steering"],
+            from_json=True,
+        )
+
+        # Load the persona vectors directly
+        instance.prompt_persona_vector = torch.tensor(data["prompt_persona_vector"])
+        instance.response_persona_vector = torch.tensor(data["response_persona_vector"])
+
+        # Store additional metadata
+        if "dataset_info" in data and data["dataset_info"]:
+            instance.trait = data["dataset_info"]["trait"]
+
+        logger.info("✅ Loaded PersonaModel from: %s", json_filepath)
+        logger.info("   Model: %s", instance.target_model_id)
+        logger.info("   Layer: %d", instance.layer_steering)
+        logger.info("   Trait: %s", instance.trait if hasattr(instance, "trait") else None)
+        logger.info(
+            "   Prompt persona vector shape: %s", str(tuple(instance.prompt_persona_vector.shape))
+        )
+        logger.info(
+            "   Response persona vector shape: %s",
+            str(tuple(instance.response_persona_vector.shape)),
+        )
+
+        return instance
+    
+    @classmethod
+    def load_or_create(
+        cls,
+        target_model_id: str = "qwen2.5:7b-instruct",
+        dataset: Optional[RiasecDataset] = None,
+        trait: Optional[str] = None,  # alternate to dataset for loading
+        layer: float = 14,
+        json_filepath: Optional[str] = None,
+        safetensors_dir: str = "./persona_data/model_inits/",
+    ) -> "RIASECPersonaModel":
+        """
+        Load a PersonaModel instance from saved files if they exist, otherwise create a new one.
+
+        Priority order:
+        1. Safetensors file (preferred - smaller, faster)
+        2. Legacy JSON file (backward compatibility)
+        3. Create new instance
+
+        Args:
+            target_model_id: Model identifier
+            dataset: RiasecDataset for extraction (only used if creating new)
+            trait: Trait name for loading
+            layer: Layer for steering
+            json_filepath: Legacy JSON path (optional, for backward compatibility)
+            safetensors_dir: Directory containing safetensors files
+
+        Returns:
+            PersonaModel: Loaded or newly created instance
+        """
+        # Build safetensors path
+        safe_model_id = target_model_id.replace("/", "__")
+        safetensors_path = Path(safetensors_dir) / f"{trait}_persona_initialization/{safe_model_id}.safetensors"
+
+        # Try safetensors first (preferred format)
+        if safetensors_path.exists():
+            try:
+                return cls.from_safetensors(str(safetensors_path), trait=trait)
+            except Exception as e:
+                logger.warning("⚠️ Failed to load from safetensors: %s", e)
+
+        # Fall back to legacy JSON
+        json_filepath = (
+            json_filepath
+            or f"./persona_data/model_inits/{trait}_persona_initialization/{target_model_id}.json"
+        )
+
+        try:
+            if Path(json_filepath).exists():
+                logger.info("Loading from legacy JSON (consider migrating to safetensors)")
+                return cls.from_json(json_filepath, trait=trait)
+
+        except Exception as e:
+            logger.warning(
+                "⚠️ Failed to load from JSON: %s. Creating a new PersonaModel instance.", e
+            )
+
+        return cls(
+            target_model_id=target_model_id,
+            dataset=dataset,
+            trait=trait,
+            layer=layer,
+        )
 
     @torch.inference_mode()
     def extract_persona_vector(
@@ -284,7 +407,7 @@ class RIASECPersonaModel(AbstractPersonaModel):
         if generation_config is None:
             generation_config = GenerationConfig()
         generate_response = ResponseGeneration(**generation_config.to_kwargs())
-        dataset = PersonaDataset.from_json(
+        dataset = RiasecDataset.from_json(
             trait=trait, from_riasec=True, riasec_config_path=riasec_config_path
         )
 

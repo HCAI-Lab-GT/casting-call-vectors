@@ -168,7 +168,7 @@ class PromptTemplates:
   )
   
   EVALUATION_PROMPT_TEMPLATE_ROLE = """
-  You are evaluating whether the model’s response displays the trait: {role}.
+  You are evaluating whether the model’s response displays the role: {role}.
   {role_description}
 
   Prompt:

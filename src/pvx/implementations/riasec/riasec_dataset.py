@@ -177,7 +177,7 @@ class RiasecDataset(AbstractDataset):
         
         logger.info("Trait dataset found. Initializing trait dataset from json...")
         
-        dataset, loaded_from_json = AbstractDataset.from_json(trait_role=trait, dirpath=dirpath)
+        dataset, loaded_from_json = AbstractDataset.from_json(cls=RiasecDataset, trait_role=trait, dirpath=dirpath)
         dataset.trait = trait
         
         if loaded_from_json:

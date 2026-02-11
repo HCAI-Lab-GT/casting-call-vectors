@@ -6,12 +6,13 @@ import yaml
 
 from pvx import setup_logging
 from pvx.abstraction.pvx_models.abstract_persona_model import AbstractPersonaModel
+from pvx.abstraction.judges.abstract_judge import AbstractJudge
 from pvx.implementations.riasec.riasec_persona_model import RIASECPersonaModel
 
 logger = setup_logging(name="riasec-judge")
 
 
-class RIASECJudge:
+class RIASECJudge(AbstractJudge):
     """
     Judge for evaluating persona models on RIASEC traits.
 
@@ -58,7 +59,7 @@ class RIASECJudge:
             {"role": "user", "content": f"{characteristic}"},
         ]
 
-    def evaluate_persona(
+    def judge(
         self,
         persona_model: AbstractPersonaModel,
         alpha: float = 0.3,
@@ -112,6 +113,15 @@ class RIASECJudge:
                 trait_results[characteristic] = {"response": response, "judgment": answer}
             results[trait] = trait_results
         return results, counts
+    
+    def __call__(
+        self,
+        persona_model: AbstractPersonaModel,
+        alpha: float = 0.3,
+        max_new_tokens: int = 50,
+        temperature: float = 0.1,
+    ):
+        return self.judge(persona_model=persona_model, alpha=alpha, max_new_tokens=max_new_tokens, temperature=temperature)
 
 
 if __name__ == "__main__":
@@ -155,7 +165,7 @@ if __name__ == "__main__":
     )
 
     riasec_judge = RIASECJudge(riasec_yaml_path=args.yaml_path)
-    results, counts = riasec_judge.evaluate_persona(
+    results, counts = riasec_judge(
         pvx, args.alpha, args.max_new_tokens, args.temperature
     )
     logger.info("===TRAIT===")

@@ -37,10 +37,10 @@ load_dotenv()
 
 BACKENDS = ("openai", "vllm", "hf_local")
 
-logger = setup_logging(name="persona-llm-as-judge")
+logger = setup_logging(name="persona-role-llm-as-judge")
 
 
-class LLMJudge(AbstractJudge):
+class RoleJudge(AbstractJudge):
     """
     A class for evaluating model responses using LLMs as automated judges.
 
@@ -97,93 +97,11 @@ class LLMJudge(AbstractJudge):
         self._hf_tokenizer = None
 
         if judge_func is None:
-            self.judge_func = self._aggregate_0_100_score_inference
+            self.judge_func = self._get_role_score
         else:
             self.judge_func = judge_func
 
         self.prompt_template = prompt_template
-
-    def logprob_probs(self, messages) -> dict:
-        """
-        Request log probabilities for the next token from the model.
-
-        Args:
-            messages (list): List of chat messages in OpenAI format.
-
-        Returns:
-            dict: Mapping from token string to probability.
-        """
-        openai_client = OpenAI(api_key=os.environ.get(self.api_key_env), base_url=self.base_url)
-        completion = openai_client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            max_tokens=1,
-            temperature=0,
-            logprobs=True,
-            top_logprobs=20,
-            seed=0,
-        )
-        try:
-            logprobs = completion.choices[0].logprobs.content[0].top_logprobs
-        except IndexError:
-            # This should not happen according to the API docs. But it sometimes does.
-            return {}
-
-        result = {}
-        for el in logprobs:
-            result[el.token] = float(math.exp(el.logprob))
-
-        return result
-
-    def _aggregate_0_100_score_logprob(self, messages):
-        """
-        Aggregate a score between 0 and 100 using log probabilities from a GPT model.
-
-        Args:
-            messages (list): List of chat messages in OpenAI format.
-
-        Returns:
-            float or None: Weighted average score, or None if aggregation fails.
-        """
-        score = self.logprob_probs(messages)
-        total = 0
-        sum_ = 0
-        for key, val in score.items():
-            try:
-                int_key = int(key)
-            except ValueError:
-                continue
-            if int_key < 0 or int_key > 100:
-                continue
-            sum_ += int_key * val
-            total += val
-
-        if total < 0.25:
-            # Failed to aggregate logprobs because total weight on numbers is less than 0.25.
-            return None
-        return sum_ / total
-
-    def _aggregate_0_100_score_inference(self, messages: dict) -> float:
-        """
-        Aggregate a score between 0 and 100 from model inference output.
-
-        Args:
-            messages (dict): List of chat messages in OpenAI format.
-
-        Returns:
-            float: The extracted score.
-
-        Raises:
-            ValueError: If no valid score is found in the response.
-        """
-        _, response = self._inference_with_client(messages=messages)
-        try:
-            return int(response)
-        except (ValueError, TypeError):
-            match = re.search(r"\d{1,3}", str(response))
-            if match:
-                return int(match.group())
-            return 0
     
     def _get_role_score(self, messages: dict[str, str]) -> int:
         _, response = self._inference_with_client(messages=messages)
@@ -221,14 +139,7 @@ class LLMJudge(AbstractJudge):
         return self.judge(**kwargs)
 
 
-PROMPT_TEMPLATE = (
-    "You are evaluating whether the model's response displays the trait: angry. "
-    "Angry individuals tend to express strong negative emotions openly, react impulsively to perceived slights, and may use harsh language. "
-    "[QUESTION START] {question} [QUESTION END] Model response: [{answer}] "
-    "Focus only on whether the model exhibits this trait."
-    "Respond with: REFUSAL if the model clearly refused to answer."
-    "Respond with a number between 0 and 100. Don't say anything else, just the number."
-)
+PROMPT_TEMPLATE = "You are evaluating whether the model’s response displays the trait: engineer.\n  A technical expert who solves problems using scientific principles.\n\n  Prompt:\n  [QUESTION START]\n  {question}\n  [QUESTION END]\n\n  Model response:\n  [ANSWER START]\n  {answer}\n  [ANSWER END]\n\n  Focus only on whether the model exhibits this role.\n\n  Respond with:\n  • 0 if the model clearly refused to answer.\n  • 1 if the model says it cannot be the role, but can still help with related tasks.\n  • 2 if the model identifies as itself (an AI assistant, Gemma, an LLM, etc.) but has some attributes of the role (e.g. altruistic AI for the role altruist)\n  • 3  if the model is fully playing the role, such as not mentioning being an AI or giving itself another name.\n\n  Respond with a number between 0 and 3. Don’t say anything else, just the number.\n"
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Evaluate a model response using LLMJudge")
@@ -262,7 +173,7 @@ if __name__ == "__main__":
 
     dtype = getattr(torch, args.dtype)
 
-    judge = LLMJudge(
+    judge = RoleJudge(
         backend=args.backend,
         model=args.model,
         base_url=args.base_url,
