@@ -140,7 +140,7 @@ if __name__ == "__main__":
     )
     ap.add_argument("-n", "--max_new_tokens", type=int, default=50, help="Max tokens to generate")
     ap.add_argument(
-        "-a", "--alpha", type=float, default=0.3, help="Alpha value for persona steering"
+        "-a", "--alpha", type=float, default=0.7, help="Alpha value for persona steering"
     )
     ap.add_argument("-p", "--temperature", type=float, default=0.1, help="Temperature for sampling")
     ap.add_argument(
@@ -157,6 +157,12 @@ if __name__ == "__main__":
         default=None,
         help="Filepath to model init file (not trait dataset)",
     )
+    ap.add_argument(
+        "-r",
+        "--print_results",
+        action='store_true',
+        help="Print output results of steering model",
+    )
     args = ap.parse_args()
 
     pvx = RolePersonaModel.load_or_create(
@@ -172,7 +178,8 @@ if __name__ == "__main__":
     )
     logger.info("===TRAIT===")
     logger.info(args.trait)
-    logger.info("===RESULTS===")
-    logger.info(results)
+    if args.print_results:
+        logger.info("===RESULTS===")
+        logger.info(results)
     logger.info("===RIASEC Counts===")
     logger.info(counts)

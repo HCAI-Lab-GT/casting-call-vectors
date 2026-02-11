@@ -37,6 +37,12 @@ class RolePersonaModel(AbstractPersonaModel):
                  **kwargs):
         kwargs.setdefault("judge_cls", RoleJudge)
         self.role = role
+        
+        from_json = kwargs.get("from_json", False)
+        if from_json:
+            super().__init__(*args, **kwargs)
+            return
+            
         self.dataset = dataset if dataset else RoleDataset.from_json(role, dirpath=dataset_dirpath)
         
         super().__init__(*args, **kwargs)
@@ -173,7 +179,7 @@ class RolePersonaModel(AbstractPersonaModel):
         # Try safetensors first (preferred format)
         if safetensors_path.exists():
             try:
-                return cls.from_safetensors(str(safetensors_path), trait=role)
+                return cls.from_safetensors(str(safetensors_path), role=role)
             except Exception as e:
                 logger.warning("⚠️ Failed to load from safetensors: %s", e)
 
@@ -295,7 +301,7 @@ class RolePersonaModel(AbstractPersonaModel):
         cls,
         safetensors_path: str,
         role: Optional[str] = None,
-    ) -> "AbstractPersonaModel":
+    ) -> "RolePersonaModel":
         """
         Load a PersonaModel instance from a safetensors file.
 
