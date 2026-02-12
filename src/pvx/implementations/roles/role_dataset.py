@@ -38,6 +38,7 @@ class RoleDataset(AbstractDataset):
     ):
         
         super().__init__(
+            concept=role,
             num_questions=num_questions,
             backend=backend,
             model=model,
@@ -99,7 +100,7 @@ class RoleDataset(AbstractDataset):
             dataset.generate_dataset(save_to_json=True)
             return dataset
         
-        dataset, loaded_from_json = AbstractDataset.from_json(cls=RoleDataset,trait_role=role, dirpath=dirpath)
+        dataset, loaded_from_json = AbstractDataset.from_json(cls=RoleDataset,concept=role, dirpath=dirpath)
         dataset.role = role
         
         if loaded_from_json:
@@ -139,27 +140,9 @@ class RoleDataset(AbstractDataset):
             >>> print(f"Saved to: {path}")
             "Saved to: ./my_datasets/lawyer_dataset.json"
         """
-        filepath = os.path.join((dirpath or self.dirpath), f"{self.role}_dataset.json")
-
-        dataset_dict = {
-            "role": self.role,
-            "num_questions": self.num_questions,
-            "model": self.model,
-            "backend": self.backend,
-            "base_url": self.base_url,
-            "local_model": self.local_model,
-            "positive_prompts": self.positive_prompts,
-            "questions": self.questions,
-            "evaluation_prompt": self.evaluation_prompt,
-        }
-
-        Path(filepath).parent.mkdir(parents=True, exist_ok=True)
-
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(dataset_dict, f, indent=2, ensure_ascii=False)
-
-        logger.info("Dataset saved to: %s", filepath)
-        return filepath
+        dataset_dict = self._get_baseline_dataset_dict()
+        dataset_dict["positive_prompts"] = self.positive_prompts
+        return super().save_dataset_to_json(dataset_dict=dataset_dict)
 
     def generate_dataset(
         self, save_to_json=True, max_tries=5
@@ -219,7 +202,9 @@ class RoleDataset(AbstractDataset):
             {"role": "user", "content": user_prompt},
         ]
         with Heartbeat(logger, f"Generating dataset for {self.role}", interval=30):
+            logger.info("Calling Inference with Client for dataset generation")
             _, response = self._inference_with_client(messages=messages)
+            logger.info(response)
 
         # Parse the response into structured dataset components, retry maximum max_tries times if failed
         pos_prompts, questions, evaluation_prompt = None, None, None
@@ -314,13 +299,14 @@ class RoleDataset(AbstractDataset):
         Raises:
             json.JSONDecodeError: If the response does not contain valid JSON
         """
-        logger.info(response)
         json_text = "\n".join(response.split("\n")[1:-1])  # Remove ```json and ```
         response_dict = json.loads(json_text)
 
         # Extract components
         pos_instructions = response_dict["instruction"]
         questions = response_dict["questions"]
+        
+        logger.info("Parsed Dataset Successfully")
 
         return pos_instructions, questions
     
@@ -351,7 +337,7 @@ if __name__ == "__main__":
     ap.add_argument(
         "-a",
         "--api_key_env",
-        default="OPENAI_API_KEY",
+        default="TOGETHER_API_KEY",
         help="Environment variable for API key",
     )
     ap.add_argument(

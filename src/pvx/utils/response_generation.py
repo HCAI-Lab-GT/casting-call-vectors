@@ -61,7 +61,7 @@ class ResponseGeneration:
         self._hf_model = None
         self._hf_tokenizer = None
         
-        logger.info(f"Backend: {backend}, Model: {self.local_model}")
+        logger.info(f"Backend: {backend}, Local Model: {self.local_model}, Model: {self.model}")
 
     def _init_local_model(self):
         """
@@ -220,7 +220,7 @@ if __name__ == "__main__":
     ap.add_argument("--backend", default="openai", help="Backend to use: openai, vllm, hf_local")
     ap.add_argument(
         "--model",
-        default="deepseek-ai/DeepSeek-R1",
+        default="openai/gpt-oss-120b",
         help="Model to use for openai/vllm/hf_local backend",
     )
     ap.add_argument(

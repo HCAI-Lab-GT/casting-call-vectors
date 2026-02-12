@@ -62,7 +62,7 @@ class RIASECPersonaModel(AbstractPersonaModel):
         self.trait = trait
 
         if from_json:
-            super().__init__(from_json=True, **kwargs)
+            super().__init__(concept=trait,from_json=True, **kwargs)
             return
 
         # Load RIASEC YAML info
@@ -98,122 +98,7 @@ class RIASECPersonaModel(AbstractPersonaModel):
             logger.info(f"Pregeneration complete and YAML updated for trait '{trait}'.")
             
         # Call base class init
-        super().__init__(**kwargs)
-    
-    @classmethod
-    def from_json(
-        cls,
-        json_filepath: str,
-        trait: Optional[str] = None,
-    ) -> "RIASECPersonaModel":
-        """
-        Load a PersonaModel instance from a previously saved JSON file.
-
-        Args:
-            json_filepath (str): Path to the JSON file containing the saved initialization data
-
-        Returns:
-            PersonaModel: A new instance with the loaded persona vectors
-        """
-
-        with open(json_filepath, "r") as f:
-            data = json.load(f)
-
-        logger.info("Loading RiasecPersonaModel from: %s", json_filepath)
-
-        # Create instance without extracting vectors
-        instance = cls(
-            trait=trait,
-            target_model_id=data["target_model_id"],
-            dataset=None,  # Dataset not needed when loading from JSON
-            layer=data["layer_steering"],
-            from_json=True,
-        )
-
-        # Load the persona vectors directly
-        instance.prompt_persona_vector = torch.tensor(data["prompt_persona_vector"])
-        instance.response_persona_vector = torch.tensor(data["response_persona_vector"])
-
-        # Store additional metadata
-        if "dataset_info" in data and data["dataset_info"]:
-            instance.trait = data["dataset_info"]["trait"]
-
-        logger.info("✅ Loaded PersonaModel from: %s", json_filepath)
-        logger.info("   Model: %s", instance.target_model_id)
-        logger.info("   Layer: %d", instance.layer_steering)
-        logger.info("   Trait: %s", instance.trait if hasattr(instance, "trait") else None)
-        logger.info(
-            "   Prompt persona vector shape: %s", str(tuple(instance.prompt_persona_vector.shape))
-        )
-        logger.info(
-            "   Response persona vector shape: %s",
-            str(tuple(instance.response_persona_vector.shape)),
-        )
-
-        return instance
-    
-    @classmethod
-    def load_or_create(
-        cls,
-        target_model_id: str = "qwen2.5:7b-instruct",
-        dataset: Optional[RiasecDataset] = None,
-        trait: Optional[str] = None,  # alternate to dataset for loading
-        layer: float = 14,
-        json_filepath: Optional[str] = None,
-        safetensors_dir: str = "./persona_data/model_inits/",
-    ) -> "RIASECPersonaModel":
-        """
-        Load a PersonaModel instance from saved files if they exist, otherwise create a new one.
-
-        Priority order:
-        1. Safetensors file (preferred - smaller, faster)
-        2. Legacy JSON file (backward compatibility)
-        3. Create new instance
-
-        Args:
-            target_model_id: Model identifier
-            dataset: RiasecDataset for extraction (only used if creating new)
-            trait: Trait name for loading
-            layer: Layer for steering
-            json_filepath: Legacy JSON path (optional, for backward compatibility)
-            safetensors_dir: Directory containing safetensors files
-
-        Returns:
-            PersonaModel: Loaded or newly created instance
-        """
-        # Build safetensors path
-        safe_model_id = target_model_id.replace("/", "__")
-        safetensors_path = Path(safetensors_dir) / f"{trait}_persona_initialization/{safe_model_id}.safetensors"
-
-        # Try safetensors first (preferred format)
-        if safetensors_path.exists():
-            try:
-                return cls.from_safetensors(str(safetensors_path), trait=trait)
-            except Exception as e:
-                logger.warning("⚠️ Failed to load from safetensors: %s", e)
-
-        # Fall back to legacy JSON
-        json_filepath = (
-            json_filepath
-            or f"./persona_data/model_inits/{trait}_persona_initialization/{target_model_id}.json"
-        )
-
-        try:
-            if Path(json_filepath).exists():
-                logger.info("Loading from legacy JSON (consider migrating to safetensors)")
-                return cls.from_json(json_filepath, trait=trait)
-
-        except Exception as e:
-            logger.warning(
-                "⚠️ Failed to load from JSON: %s. Creating a new PersonaModel instance.", e
-            )
-
-        return cls(
-            target_model_id=target_model_id,
-            dataset=dataset,
-            trait=trait,
-            layer=layer,
-        )
+        super().__init__(concept=trait, **kwargs)
 
     @torch.inference_mode()
     def extract_persona_vector(
@@ -236,12 +121,8 @@ class RIASECPersonaModel(AbstractPersonaModel):
         )
 
         # Accumulators for positive/negative activations
-        sum_prompt_last_pos = None
-        sum_prompt_last_neg = None
-        sum_resp_avg_pos = None
-        sum_resp_avg_neg = None
-        sum_resp_avg_all_layers_pos = None
-        sum_resp_avg_all_layers_neg = None
+        sum_prompt_last_pos, sum_resp_avg_pos, sum_resp_avg_all_layers_pos = self.initialize_activations()
+        sum_prompt_last_neg, sum_resp_avg_neg, sum_resp_avg_all_layers_neg = self.initialize_activations()
 
         n_pos = 0
         n_neg = 0
@@ -280,15 +161,16 @@ class RIASECPersonaModel(AbstractPersonaModel):
                     pl_pos, ra_pos, rall_pos = self._extract_activations_from_tokens(
                         enc, mask, prompt_len
                     )
-                    if sum_prompt_last_pos is None:
-                        sum_prompt_last_pos = torch.zeros_like(pl_pos, dtype=torch.float32)
-                        sum_resp_avg_pos = torch.zeros_like(ra_pos, dtype=torch.float32)
-                        sum_resp_avg_all_layers_pos = torch.zeros_like(
-                            rall_pos, dtype=torch.float32
-                        )
-                    sum_prompt_last_pos += pl_pos.float()
-                    sum_resp_avg_pos += ra_pos.float()
-                    sum_resp_avg_all_layers_pos += rall_pos.float()
+                    
+                    sum_prompt_last_pos, sum_resp_avg_pos, sum_resp_avg_all_layers_pos = self.aggregate_activations(
+                        sum_prompt_last_pos, 
+                        sum_resp_avg_pos, 
+                        sum_resp_avg_all_layers_pos, 
+                        pl_pos, 
+                        ra_pos, 
+                        rall_pos
+                    )
+                    
                     n_pos += 1
                     pbar.update(1)
 
@@ -309,35 +191,29 @@ class RIASECPersonaModel(AbstractPersonaModel):
                     pl_neg, ra_neg, rall_neg = self._extract_activations_from_tokens(
                         enc, mask, prompt_len
                     )
-                    if sum_prompt_last_neg is None:
-                        sum_prompt_last_neg = torch.zeros_like(pl_neg, dtype=torch.float32)
-                        sum_resp_avg_neg = torch.zeros_like(ra_neg, dtype=torch.float32)
-                        sum_resp_avg_all_layers_neg = torch.zeros_like(
-                            rall_neg, dtype=torch.float32
-                        )
-                    sum_prompt_last_neg += pl_neg.float()
-                    sum_resp_avg_neg += ra_neg.float()
-                    sum_resp_avg_all_layers_neg += rall_neg.float()
+                    
+                    sum_prompt_last_neg, sum_resp_avg_neg, sum_resp_avg_all_layers_neg = self.aggregate_activations(
+                        sum_prompt_last_neg, 
+                        sum_resp_avg_neg, 
+                        sum_resp_avg_all_layers_neg, 
+                        pl_neg, 
+                        ra_neg, 
+                        rall_neg
+                    )
                     n_neg += 1
                     pbar.update(1)
 
         # Compute means and persona vectors
-        prompt_last_pos_mean = sum_prompt_last_pos / max(n_pos, 1)
-        prompt_last_neg_mean = sum_prompt_last_neg / max(n_neg, 1)
-        response_avg_pos_mean = sum_resp_avg_pos / max(n_pos, 1)
-        response_avg_neg_mean = sum_resp_avg_neg / max(n_neg, 1)
-        all_layers_response_avg_pos_mean = sum_resp_avg_all_layers_pos / max(n_pos, 1)
-        all_layers_response_avg_neg_mean = sum_resp_avg_all_layers_neg / max(n_neg, 1)
-
-        prompt_persona_vector = prompt_last_pos_mean - prompt_last_neg_mean
-        response_persona_vector = response_avg_pos_mean - response_avg_neg_mean
-        all_layers_response_persona_vector = (
-            all_layers_response_avg_pos_mean - all_layers_response_avg_neg_mean
+        
+        prompt_persona_vector, response_persona_vector, all_layers_response_persona_vector = self.compute_contrastive_persona_vectors(
+            sum_prompt_pos=sum_prompt_last_pos,
+            sum_prompt_neg=sum_prompt_last_neg,
+            sum_resp_pos=sum_resp_avg_pos,
+            sum_resp_neg=sum_resp_avg_neg,
+            sum_all_layers_pos=sum_resp_avg_all_layers_pos,
+            sum_all_layers_neg=sum_resp_avg_all_layers_neg,
+            n=n_pos
         )
-
-        self.prompt_persona_vector = prompt_persona_vector.cpu()
-        self.response_persona_vector = response_persona_vector.cpu()
-        self.all_layers_response_persona_vector = all_layers_response_persona_vector.cpu()
 
         logger.info("Extracted persona vectors from pregenerated responses")
         logger.info("Prompt persona vector shape: %s", str(tuple(prompt_persona_vector.shape)))
@@ -559,7 +435,7 @@ if __name__ == "__main__":
     else:
         pvx = RIASECPersonaModel.load_or_create(
             target_model_id=args.model_name,
-            trait=args.trait,
+            concept=args.trait,
             layer=14,
             json_filepath=args.json_filepath,
         )

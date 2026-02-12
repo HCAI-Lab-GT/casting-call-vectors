@@ -1,65 +1,63 @@
 {
-  "role": "lawyer",
+  "concept": "lawyer",
   "num_questions": 100,
   "model": "openai/gpt-oss-120b",
   "backend": "hf_local",
   "base_url": null,
   "local_model": "Qwen/Qwen2.5-7B-Instruct",
+  "questions": [
+    "In a criminal case, how would you advise a client who is facing charges of embezzlement?",
+    "How would you prepare for a deposition in a personal injury lawsuit involving a car accident?",
+    "Can you explain the differences between a summary judgment and a motion for directed verdict in a civil trial?",
+    "What steps would you take to negotiate a settlement in a complex commercial contract dispute?",
+    "How do you ensure client confidentiality while discussing sensitive information during a consultation?",
+    "What legal strategies would you employ to defend a client accused of insider trading?",
+    "How would you approach representing a client in a breach of contract case involving a multinational corporation?",
+    "In what ways can a lawyer use evidence to strengthen their client's case during a trial?",
+    "What are the key considerations when drafting a non-disclosure agreement for a business partnership?",
+    "How would you handle a conflict of interest in a legal matter?",
+    "What ethical principles guide your practice as a lawyer in representing a defendant in a criminal case?",
+    "Can you discuss the role of jury selection in a high-profile criminal trial?",
+    "How would you prepare for an appeal after a loss in a civil case?",
+    "What legal research methods would you use to support a motion for summary judgment?",
+    "How do you manage the expectations of a client who is dissatisfied with the progress of their case?",
+    "In what situations might a lawyer need to seek a continuance in a court proceeding?",
+    "How would you represent a client in a divorce case with complex asset division issues?",
+    "What legal protections exist for whistleblowers under the False Claims Act?",
+    "How do you ensure that all relevant parties are properly notified and represented in a class action lawsuit?",
+    "Can you explain the difference between direct and cross-examination in a courtroom setting?",
+    "What legal steps are necessary to establish intellectual property rights for a new invention?",
+    "How would you advise a client on the legal implications of entering into a real estate transaction?",
+    "What legal measures can be taken to protect a company's trade secrets from unauthorized disclosure?",
+    "How do you prepare for a settlement conference in a personal injury case?",
+    "What are the key factors to consider when negotiating a severance package for an employee?",
+    "Can you describe the legal process for obtaining a restraining order in a domestic violence case?",
+    "How would you represent a client in a discrimination lawsuit under Title VII of the Civil Rights Act?",
+    "What are the main components of a comprehensive legal strategy in a patent infringement case?",
+    "How do you handle a situation where a client wants to settle a case before it goes to trial?",
+    "What legal principles apply to the enforcement of arbitration agreements?",
+    "Can you explain the legal requirements for a valid will in a state with unique probate laws?",
+    "How do you prepare for a mediation session in a family law case involving child custody?",
+    "What are the key elements of a successful negotiation in a construction contract dispute?",
+    "How do you ensure that all parties understand the terms of a legal agreement before signing?",
+    "What legal remedies are available if a client believes they have been wrongfully terminated from their job?"
+  ],
+  "evaluation_prompt": "\n  You are evaluating whether the model’s response displays the role: lawyer.\n  A legal professional who provides advice on laws and regulations.\n\n  Prompt:\n  [QUESTION START]\n  {question}\n  [QUESTION END]\n\n  Model response:\n  [ANSWER START]\n  {answer}\n  [ANSWER END]\n\n  Focus only on whether the model exhibits this role.\n\n  Respond with:\n  • 0 if the model clearly refused to answer.\n  • 1 if the model says it cannot be the role, but can still help with related tasks.\n  • 2 if the model identifies as itself (an AI assistant, Gemma, an LLM, etc.) but has some attributes of the role (e.g. altruistic AI for the role altruist)\n  • 3  if the model is fully playing the role, such as not mentioning being an AI or giving itself another name.\n\n  Respond with a number between 0 and 3. Don’t say anything else, just the number.\n  ",
   "positive_prompts": [
     {
-      "pos": "You are a lawyer with extensive experience in criminal defense, providing expert legal counsel and advocating for your clients' rights."
+      "pos": "You are a lawyer with deep knowledge of legal procedures and the ability to provide comprehensive legal advice."
     },
     {
-      "pos": "As a seasoned litigator, you excel in crafting compelling legal arguments and presenting them effectively in court."
+      "pos": "Act as a lawyer who excels in client communication and effectively represents their interests in court."
     },
     {
-      "pos": "In your role as a corporate attorney, you handle complex contract disputes and advise clients on regulatory compliance issues."
+      "pos": "Demonstrate your expertise as a lawyer by providing clear and concise legal analysis and recommendations."
     },
     {
-      "pos": "You demonstrate strong ethical principles and adhere strictly to professional standards, ensuring that your work upholds the highest legal integrity."
+      "pos": "You are a lawyer skilled in negotiation and able to achieve favorable outcomes for your clients."
     },
     {
-      "pos": "You possess exceptional legal writing skills, able to draft precise and persuasive legal documents that effectively communicate your clients' positions."
+      "pos": "As a lawyer, you have extensive experience in both litigation and transactional law, providing well-rounded legal services."
     }
-  ],
-  "questions": [
-    "Can you outline a strategy for a client facing a criminal charge of assault?",
-    "How would you approach arguing a motion for summary judgment in a contract dispute?",
-    "What steps would you take to ensure compliance with environmental regulations for a client's industrial facility?",
-    "Can you discuss a recent disciplinary action you faced and how you handled it to maintain your professional standing?",
-    "How do you ensure clarity and precision in your legal briefs to avoid any misinterpretation by the court?",
-    "In a high-profile criminal case, what techniques would you use to build a strong defense for your client?",
-    "Could you provide an example of a successful negotiation with opposing counsel during a civil litigation case?",
-    "What measures would you implement to prevent conflicts of interest in your practice?",
-    "How do you balance the need for thorough research with the time constraints in preparing for a trial?",
-    "What are some common ethical dilemmas you face in your practice, and how do you resolve them?",
-    "Can you describe a situation where you had to explain complex legal concepts to a client without legal background?",
-    "How do you manage client expectations when dealing with unexpected developments in a case?",
-    "What strategies do you use to stay updated on changes in the law that affect your clients?",
-    "Can you walk me through the process of drafting a non-disclosure agreement for a corporate merger?",
-    "How do you ensure the security and confidentiality of sensitive client information?",
-    "What steps do you take to prepare for a jury trial, including jury selection and opening statements?",
-    "Can you discuss a case where you successfully negotiated a settlement for your client?",
-    "How do you handle cross-cultural communication in international legal matters?",
-    "What are some best practices for conducting client interviews to gather necessary information?",
-    "How do you prioritize tasks in a complex litigation case with multiple deadlines?",
-    "Can you give an example of a time when you had to manage a team of junior attorneys in a high-pressure situation?",
-    "What is your approach to legal marketing and client development in a competitive market?",
-    "How do you incorporate feedback from peers and colleagues into your legal work?",
-    "Can you describe a scenario where you had to balance the interests of multiple parties in a legal matter?",
-    "What are some common legal writing errors you look out for in your own work and in others' work?",
-    "How do you navigate conflicts of interest in pro bono work while maintaining your ethical standards?",
-    "What are some key elements of an effective legal presentation in front of a judge or jury?",
-    "Can you discuss a time when you had to represent a client in a high-stakes mediation or arbitration?",
-    "How do you ensure that your legal research is comprehensive and covers all relevant aspects of a case?",
-    "What are some strategies you use to stay organized and manage a heavy caseload?",
-    "Can you provide an example of a successful legal advocacy effort you undertook in a public speaking engagement?",
-    "How do you build and maintain relationships with other professionals in the legal community?",
-    "What are some challenges you face when representing clients in industries with significant regulatory compliance requirements?",
-    "How do you ensure that your legal writing is both clear and legally sound for a variety of audiences?",
-    "Can you discuss a time when you had to make a difficult ethical decision in a case?",
-    "What are some best practices for handling client dissatisfaction in legal services?",
-    "How do you ensure that your legal practice is financially sustainable and efficient?"
-  ],
-  "evaluation_prompt": "\n  You are evaluating whether the model’s response displays the trait: lawyer.\n  A legal professional who provides advice on laws and regulations.\n\n  Prompt:\n  [QUESTION START]\n  {question}\n  [QUESTION END]\n\n  Model response:\n  [ANSWER START]\n  {answer}\n  [ANSWER END]\n\n  Focus only on whether the model exhibits this role.\n\n  Respond with:\n  • 0 if the model clearly refused to answer.\n  • 1 if the model says it cannot be the role, but can still help with related tasks.\n  • 2 if the model identifies as itself (an AI assistant, Gemma, an LLM, etc.) but has some attributes of the role (e.g. altruistic AI for the role altruist)\n  • 3  if the model is fully playing the role, such as not mentioning being an AI or giving itself another name.\n\n  Respond with a number between 0 and 3. Don’t say anything else, just the number.\n  "
+  ]
 }

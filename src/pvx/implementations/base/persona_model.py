@@ -34,123 +34,8 @@ class PersonaModel(AbstractPersonaModel):
         self.dataset = dataset if dataset else PersonaDataset.from_json(trait, dirpath=dataset_dirpath)
         self.trait = self.dataset.trait
         
-        super().__init__(*args, **kwargs)
+        super().__init__(concept=trait,*args, **kwargs)
         
-    
-    @classmethod
-    def from_json(
-        cls,
-        json_filepath: str,
-        trait: Optional[str] = None,
-    ) -> "PersonaModel":
-        """
-        Load a PersonaModel instance from a previously saved JSON file.
-
-        Args:
-            json_filepath (str): Path to the JSON file containing the saved initialization data
-
-        Returns:
-            PersonaModel: A new instance with the loaded persona vectors
-        """
-
-        with open(json_filepath, "r") as f:
-            data = json.load(f)
-
-        logger.info("Loading PersonaModel from: %s", json_filepath)
-
-        # Create instance without extracting vectors
-        instance = cls(
-            trait=trait,
-            target_model_id=data["target_model_id"],
-            dataset=None,  # Dataset not needed when loading from JSON
-            layer=data["layer_steering"],
-            from_json=True,
-        )
-
-        # Load the persona vectors directly
-        instance.prompt_persona_vector = torch.tensor(data["prompt_persona_vector"])
-        instance.response_persona_vector = torch.tensor(data["response_persona_vector"])
-
-        # Store additional metadata
-        if "dataset_info" in data and data["dataset_info"]:
-            instance.trait = data["dataset_info"]["trait"]
-
-        logger.info("✅ Loaded PersonaModel from: %s", json_filepath)
-        logger.info("   Model: %s", instance.target_model_id)
-        logger.info("   Layer: %d", instance.layer_steering)
-        logger.info("   Trait: %s", instance.trait if hasattr(instance, "trait") else None)
-        logger.info(
-            "   Prompt persona vector shape: %s", str(tuple(instance.prompt_persona_vector.shape))
-        )
-        logger.info(
-            "   Response persona vector shape: %s",
-            str(tuple(instance.response_persona_vector.shape)),
-        )
-
-        return instance
-    
-    @classmethod
-    def load_or_create(
-        cls,
-        target_model_id: str = "qwen2.5:7b-instruct",
-        dataset: Optional[PersonaDataset] = None,
-        trait: Optional[str] = None,  # alternate to dataset for loading
-        layer: float = 14,
-        json_filepath: Optional[str] = None,
-        safetensors_dir: str = "./persona_data/model_inits/",
-    ) -> "PersonaModel":
-        """
-        Load a PersonaModel instance from saved files if they exist, otherwise create a new one.
-
-        Priority order:
-        1. Safetensors file (preferred - smaller, faster)
-        2. Legacy JSON file (backward compatibility)
-        3. Create new instance
-
-        Args:
-            target_model_id: Model identifier
-            dataset: PersonaDataset for extraction (only used if creating new)
-            trait: Trait name for loading
-            layer: Layer for steering
-            json_filepath: Legacy JSON path (optional, for backward compatibility)
-            safetensors_dir: Directory containing safetensors files
-
-        Returns:
-            PersonaModel: Loaded or newly created instance
-        """
-        # Build safetensors path
-        safe_model_id = target_model_id.replace("/", "__")
-        safetensors_path = Path(safetensors_dir) / f"{trait}_persona_initialization/{safe_model_id}.safetensors"
-
-        # Try safetensors first (preferred format)
-        if safetensors_path.exists():
-            try:
-                return cls.from_safetensors(str(safetensors_path), trait=trait)
-            except Exception as e:
-                logger.warning("⚠️ Failed to load from safetensors: %s", e)
-
-        # Fall back to legacy JSON
-        json_filepath = (
-            json_filepath
-            or f"./persona_data/model_inits/{trait}_persona_initialization/{target_model_id}.json"
-        )
-
-        try:
-            if Path(json_filepath).exists():
-                logger.info("Loading from legacy JSON (consider migrating to safetensors)")
-                return cls.from_json(json_filepath, trait=trait)
-
-        except Exception as e:
-            logger.warning(
-                "⚠️ Failed to load from JSON: %s. Creating a new PersonaModel instance.", e
-            )
-
-        return cls(
-            target_model_id=target_model_id,
-            trait=trait,
-            dataset=dataset,
-            layer=layer,
-        )
         
     @torch.inference_mode()
     def extract_persona_vector(
@@ -191,17 +76,11 @@ class PersonaModel(AbstractPersonaModel):
 
         # Process each pair and accumulate activations (Tensor instead of list for speed)
         # Tensor of last activation of prompt
-        sum_prompt_last_pos = None
-        sum_prompt_last_neg = None
-
         # Tensor of average activation of response
-        sum_resp_avg_pos = None
-        sum_resp_avg_neg = None
-
         # Tensor of average activation of response across all layers
-        sum_resp_avg_all_layers_pos = None
-        sum_resp_avg_all_layers_neg = None
-
+        sum_prompt_last_pos, sum_resp_avg_pos, sum_resp_avg_all_layers_pos = self.initialize_activations()
+        sum_prompt_last_neg, sum_resp_avg_neg, sum_resp_avg_all_layers_neg = self.initialize_activations()
+        
         # track number of pairs
         n = 0
         passed_pairs = set()
@@ -247,24 +126,24 @@ class PersonaModel(AbstractPersonaModel):
                     pbar.update(1)
                     made_progress = True
 
-                    if sum_prompt_last_pos is None:
-                        sum_prompt_last_pos = torch.zeros_like(pl_pos, dtype=torch.float32)
-                        sum_prompt_last_neg = torch.zeros_like(pl_neg, dtype=torch.float32)
-                        sum_resp_avg_pos = torch.zeros_like(ra_pos, dtype=torch.float32)
-                        sum_resp_avg_neg = torch.zeros_like(ra_neg, dtype=torch.float32)
-                        sum_resp_avg_all_layers_pos = torch.zeros_like(
-                            rall_pos, dtype=torch.float32
-                        )
-                        sum_resp_avg_all_layers_neg = torch.zeros_like(
-                            rall_neg, dtype=torch.float32
-                        )
-
-                    sum_prompt_last_pos += pl_pos.float()
-                    sum_prompt_last_neg += pl_neg.float()
-                    sum_resp_avg_pos += ra_pos.float()
-                    sum_resp_avg_neg += ra_neg.float()
-                    sum_resp_avg_all_layers_pos += rall_pos.float()
-                    sum_resp_avg_all_layers_neg += rall_neg.float()
+                    sum_prompt_last_pos, sum_resp_avg_pos, sum_resp_avg_all_layers_pos = self.aggregate_activations(
+                        sum_prompt_last_pos, 
+                        sum_resp_avg_pos, 
+                        sum_resp_avg_all_layers_pos, 
+                        pl_pos, 
+                        ra_pos, 
+                        rall_pos
+                    )
+                    
+                    sum_prompt_last_neg, sum_resp_avg_neg, sum_resp_avg_all_layers_neg = self.aggregate_activations(
+                        sum_prompt_last_neg, 
+                        sum_resp_avg_neg, 
+                        sum_resp_avg_all_layers_neg, 
+                        pl_neg, 
+                        ra_neg, 
+                        rall_neg
+                    )
+                    
                     n += 1
 
                     if n >= self.target_pairs:
@@ -273,25 +152,16 @@ class PersonaModel(AbstractPersonaModel):
                 retries += 1
                 if not made_progress:
                     break
-
-        prompt_last_pos_mean = sum_prompt_last_pos / max(n, 1)
-        prompt_last_neg_mean = sum_prompt_last_neg / max(n, 1)
-        response_avg_pos_mean = sum_resp_avg_pos / max(n, 1)
-        response_avg_neg_mean = sum_resp_avg_neg / max(n, 1)
-
-        all_layers_response_avg_pos_mean = sum_resp_avg_all_layers_pos / max(n, 1)
-        all_layers_response_avg_neg_mean = sum_resp_avg_all_layers_neg / max(n, 1)
-
-        prompt_persona_vector = prompt_last_pos_mean - prompt_last_neg_mean  # (1, hidden)
-        response_persona_vector = response_avg_pos_mean - response_avg_neg_mean  # (1, hidden)
-        all_layers_response_persona_vector = (
-            all_layers_response_avg_pos_mean - all_layers_response_avg_neg_mean
+        
+        prompt_persona_vector, response_persona_vector, all_layers_response_persona_vector = self.compute_contrastive_persona_vectors(
+            sum_prompt_pos=sum_prompt_last_pos,
+            sum_prompt_neg=sum_prompt_last_neg,
+            sum_resp_pos=sum_resp_avg_pos,
+            sum_resp_neg=sum_resp_avg_neg,
+            sum_all_layers_pos=sum_resp_avg_all_layers_pos,
+            sum_all_layers_neg=sum_resp_avg_all_layers_neg,
+            n=n
         )
-        # (num_states, 1, hidden)
-
-        self.prompt_persona_vector = prompt_persona_vector.cpu()
-        self.response_persona_vector = response_persona_vector.cpu()
-        self.all_layers_response_persona_vector = all_layers_response_persona_vector.cpu()
 
         logger.info("Extracted persona vectors from %d pairs", len(trait_pairs))
         logger.info("Prompt persona vector shape: %s", str(tuple(prompt_persona_vector.shape)))
@@ -341,7 +211,7 @@ if __name__ == "__main__":
 
     pvx = PersonaModel.load_or_create(
         target_model_id=args.model_name,
-        trait=args.trait,
+        concept=args.trait,
         layer=14,
         json_filepath=args.json_filepath,
     )

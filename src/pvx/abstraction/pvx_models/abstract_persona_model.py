@@ -36,6 +36,7 @@ class AbstractPersonaModel(ABC):
 
     def __init__(
         self,
+        concept: str = None,
         target_model_id: str = "qwen2.5:7b-instruct",
         layer: float = 14,
         default_alpha: float = 3.0,
@@ -56,6 +57,8 @@ class AbstractPersonaModel(ABC):
         """
 
         self._init_base(target_model_id, layer, default_alpha)
+        
+        self.concept = concept
 
         # skip extraction if not loading from JSON
         if from_json:
@@ -177,28 +180,177 @@ class AbstractPersonaModel(ABC):
 
         # install hook once
         self._install_steer_hook(layer_idx=self.layer_steering)
+        
+    def initialize_activations(self):
+        sum_prompt_last = None
+        sum_resp_avg = None
+        sum_all_layers = None
+        
+        return sum_prompt_last, sum_resp_avg, sum_all_layers
+    
+    def aggregate_activations(self, sum_prompt, sum_resp, sum_all_layers, pl, ra, rall):
+        """
+        Aggregate activations for a single category (pos or neg).
+        Initializes sums if None, otherwise accumulates.
+        Returns updated sums.
+        """
+        if sum_prompt is None:
+            sum_prompt = torch.zeros_like(pl, dtype=torch.float32)
+            sum_resp = torch.zeros_like(ra, dtype=torch.float32)
+            sum_all_layers = torch.zeros_like(rall, dtype=torch.float32)
+        sum_prompt += pl.float()
+        sum_resp += ra.float()
+        sum_all_layers += rall.float()
+        return sum_prompt, sum_resp, sum_all_layers
+    
+    def finalize_activations(self, sum_prompt, sum_resp, sum_all_layers, n):
+        """
+        Compute means from sums and count.
+        """
+        mean_prompt = sum_prompt / max(n, 1)
+        mean_resp = sum_resp / max(n, 1)
+        mean_all_layers = sum_all_layers / max(n, 1)
+        return mean_prompt, mean_resp, mean_all_layers
+    
+    def compute_contrastive_persona_vector_individual(self, pos_mean, neg_mean):
+        return pos_mean - neg_mean
+    
+    def compute_all_persona_vectors(self, prompt_last_pos_mean, 
+                                    prompt_last_neg_mean, 
+                                    response_avg_pos_mean, 
+                                    response_avg_neg_mean, 
+                                    response_all_pos_mean, 
+                                    response_all_neg_mean):
+        prompt_last_persona_vector = self.compute_contrastive_persona_vector_individual(prompt_last_pos_mean, prompt_last_neg_mean)
+        response_avg_persona_vector = self.compute_contrastive_persona_vector_individual(response_avg_pos_mean, response_avg_neg_mean)
+        response_all_persona_vector = self.compute_contrastive_persona_vector_individual(response_all_pos_mean, response_all_neg_mean)
+        
+        return prompt_last_persona_vector, response_avg_persona_vector, response_all_persona_vector
+        
+    def compute_contrastive_persona_vectors(self, 
+                                            sum_prompt_pos, 
+                                            sum_resp_pos, 
+                                            sum_all_layers_pos, 
+                                            sum_prompt_neg, 
+                                            sum_resp_neg, 
+                                            sum_all_layers_neg,
+                                            n):
+        prompt_last_pos_mean, response_avg_pos_mean, all_layers_response_avg_pos_mean = self.finalize_activations(
+            sum_prompt_pos, 
+            sum_resp_pos, 
+            sum_all_layers_pos, 
+            n
+        )
+        
+        prompt_last_neg_mean, response_avg_neg_mean, all_layers_response_avg_neg_mean = self.finalize_activations(
+            sum_prompt_neg, 
+            sum_resp_neg, 
+            sum_all_layers_neg, 
+            n
+        )
+        
+        prompt_persona_vector, response_persona_vector, all_layers_response_persona_vector = self.compute_all_persona_vectors(
+            prompt_last_pos_mean=prompt_last_pos_mean,
+            prompt_last_neg_mean=prompt_last_neg_mean,
+            response_avg_pos_mean=response_avg_pos_mean,
+            response_avg_neg_mean=response_avg_neg_mean,
+            response_all_pos_mean=all_layers_response_avg_pos_mean,
+            response_all_neg_mean=all_layers_response_avg_neg_mean
+        )
+        
+        self.prompt_persona_vector = prompt_persona_vector.cpu()
+        self.response_persona_vector = response_persona_vector.cpu()
+        self.all_layers_response_persona_vector = all_layers_response_persona_vector.cpu()
+        
+        return prompt_persona_vector, response_persona_vector, all_layers_response_persona_vector
 
     @classmethod
-    @abstractmethod
     def from_json(
         cls,
         json_filepath: str,
-        trait: Optional[str] = None,
+        concept: Optional[str] = None,
     ) -> "AbstractPersonaModel":
-        pass
+        with open(json_filepath, "r") as f:
+            data = json.load(f)
+
+        logger.info("Loading PersonaModel from: %s", json_filepath)
+
+        # Create instance without extracting vectors
+        instance = cls(
+            concept,
+            target_model_id=data["target_model_id"],
+            dataset=None,  # Dataset not needed when loading from JSON
+            layer=data["layer_steering"],
+            from_json=True,
+        )
+
+        # Load the persona vectors directly
+        instance.prompt_persona_vector = torch.tensor(data["prompt_persona_vector"])
+        instance.response_persona_vector = torch.tensor(data["response_persona_vector"])
+
+        # Store additional metadata
+        if "dataset_info" in data and data["dataset_info"]:
+            instance.concept = data["dataset_info"]["concept"]
+
+        logger.info("✅ Loaded PersonaModel from: %s", json_filepath)
+        logger.info("   Model: %s", instance.target_model_id)
+        logger.info("   Layer: %d", instance.layer_steering)
+        logger.info("   Concept: %s", instance.concept)
+        logger.info(
+            "   Prompt persona vector shape: %s", str(tuple(instance.prompt_persona_vector.shape))
+        )
+        logger.info(
+            "   Response persona vector shape: %s",
+            str(tuple(instance.response_persona_vector.shape)),
+        )
+
+        return instance
 
     @classmethod
-    @abstractmethod
     def load_or_create(
         cls,
         target_model_id: str = "qwen2.5:7b-instruct",
         dataset: Optional[AbstractDataset] = None,
-        type: Optional[str] = None,  # alternate to dataset for loading (trait or role)
+        concept: Optional[str] = None,  # alternate to dataset for loading (trait or role)
         layer: float = 14,
         json_filepath: Optional[str] = None,
         safetensors_dir: str = "./persona_data/model_inits/",
     ) -> "AbstractPersonaModel":
-        pass
+        safe_model_id = target_model_id.replace("/", "__")
+        safetensors_path = Path(safetensors_dir) / f"{concept}_persona_initialization/{safe_model_id}.safetensors"
+
+        # Try safetensors first (preferred format)
+        if safetensors_path.exists():
+            try:
+                return cls.from_safetensors(str(safetensors_path), concept=concept)
+            except Exception as e:
+                logger.warning("⚠️ Failed to load from safetensors: %s", e)
+
+        # Fall back to legacy JSON
+        json_filepath = (
+            json_filepath
+            or f"./persona_data/model_inits/{concept}_persona_initialization/{target_model_id}.json"
+        )
+
+        try:
+            if Path(json_filepath).exists():
+                logger.info("Loading from legacy JSON (consider migrating to safetensors)")
+                return cls.from_json(json_filepath, concept=concept)
+
+        except Exception as e:
+            logger.warning(
+                "⚠️ Failed to load from JSON: %s. Creating a new PersonaModel instance.", e
+            )
+
+        return cls(
+            concept,
+            target_model_id=target_model_id,
+            dataset=dataset,
+            layer=layer,
+        )
+    
+    def is_concept_role(self):
+        return hasattr(self, "role")
 
     def save_to_json(self, filepath: str = "./persona_data/model_inits/") -> str:
         """
@@ -211,12 +363,14 @@ class AbstractPersonaModel(ABC):
             str: Path to the saved JSON file
         """
 
-        filepath += f"{self.dataset.trait}_persona_initialization/{self.target_model_id}.json"
+        filepath += f"{self.dataset.concept}_persona_initialization/{self.target_model_id}.json"
+        
+        dataset_metadata_key = "num_pos_prompts" if self.is_concept_role() else "num_pos_neg_pairs"
 
         # Convert tensors to lists for JSON serialization
         initialization_data = {
             "target_model_id": self.target_model_id,
-            "trait": self.dataset.trait if self.dataset else None,
+            "concept": self.dataset.concept if self.dataset else None,
             "layer_steering": self.layer_steering,
             "device": self.device,
             "prompt_persona_vector": self.prompt_persona_vector.tolist(),
@@ -226,9 +380,9 @@ class AbstractPersonaModel(ABC):
             "response_persona_vector_shape": list(self.response_persona_vector.shape),
             "created_at": datetime.now().isoformat(),
             "dataset_info": {
-                "trait": self.dataset.trait,
+                "concept": self.dataset.concept,
                 "num_questions": self.dataset.num_questions,
-                "num_pos_neg_pairs": len(self.dataset.positive_negative_pairs),
+                dataset_metadata_key: len(self.dataset.positive_prompts) if self.is_concept_role() else len(self.dataset.positive_negative_pairs),
             }
             if self.dataset
             else None,
@@ -259,8 +413,8 @@ class AbstractPersonaModel(ABC):
         """
         # Sanitize model ID for filename (replace / with __)
         safe_model_id = self.target_model_id.replace("/", "__")
-        trait = self.dataset.trait if self.dataset else "unknown"
-        filename = f"{self.dataset.trait}_persona_initialization/{safe_model_id}.safetensors"
+        concept = self.dataset.concept if self.dataset else "unknown"
+        filename = f"{self.dataset.concept}_persona_initialization/{safe_model_id}.safetensors"
         full_path = Path(filepath) / filename
 
         # Prepare tensors dict
@@ -273,7 +427,7 @@ class AbstractPersonaModel(ABC):
         # Prepare metadata (safetensors stores metadata as strings)
         metadata = {
             "target_model_id": self.target_model_id,
-            "trait": trait,
+            "concept": concept,
             "layer_steering": str(self.layer_steering),
             "created_at": datetime.now().isoformat(),
             "prompt_persona_vector_shape": str(list(self.prompt_persona_vector.shape)),
@@ -283,7 +437,10 @@ class AbstractPersonaModel(ABC):
 
         if self.dataset:
             metadata["num_questions"] = str(self.dataset.num_questions)
-            metadata["num_pos_neg_pairs"] = str(len(self.dataset.positive_negative_pairs))
+            if self.is_concept_role():
+                metadata["num_pos_prompts"] = str(len(self.dataset.positive_prompts))
+            else:  
+                metadata["num_pos_neg_pairs"] = str(len(self.dataset.positive_negative_pairs))
 
         # Ensure directory exists
         full_path.parent.mkdir(parents=True, exist_ok=True)
@@ -311,7 +468,7 @@ class AbstractPersonaModel(ABC):
         # Create entry for this file
         entry = {
             "filename": filename,
-            "trait": metadata.get("trait"),
+            "concept": metadata.get("concept"),
             "model": metadata.get("target_model_id"),
             "layer": int(metadata.get("layer_steering", 14)),
             "created_at": metadata.get("created_at"),
@@ -338,7 +495,7 @@ class AbstractPersonaModel(ABC):
     def from_safetensors(
         cls,
         safetensors_path: str,
-        trait: Optional[str] = None,
+        concept: Optional[str] = None,
     ) -> "AbstractPersonaModel":
         """
         Load a PersonaModel instance from a safetensors file.
@@ -364,11 +521,11 @@ class AbstractPersonaModel(ABC):
         # Extract metadata
         target_model_id = metadata.get("target_model_id", "unknown")
         layer = int(metadata.get("layer_steering", "14"))
-        trait = trait or metadata.get("trait")
+        concept = concept or metadata.get("concept")
 
         # Create instance without extracting vectors
         instance = cls(
-            trait=trait,
+            concept,
             target_model_id=target_model_id,
             dataset=None,
             layer=layer,
@@ -379,11 +536,13 @@ class AbstractPersonaModel(ABC):
         instance.prompt_persona_vector = prompt_vec
         instance.response_persona_vector = response_vec
         instance.all_layers_response_persona_vector = all_layers_vec
+        
+        logger.info(instance.concept)
 
         logger.info("✅ Loaded PersonaModel from safetensors: %s", safetensors_path)
         logger.info("   Model: %s", instance.target_model_id)
         logger.info("   Layer: %d", instance.layer_steering)
-        logger.info("   Trait: %s", trait)
+        logger.info("   Concept: %s", concept)
         logger.info("   Prompt persona vector shape: %s", tuple(prompt_vec.shape))
         logger.info("   Response persona vector shape: %s", tuple(response_vec.shape))
 

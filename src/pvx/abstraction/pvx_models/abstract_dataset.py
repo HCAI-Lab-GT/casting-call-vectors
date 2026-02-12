@@ -5,6 +5,7 @@ from collections import namedtuple
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from pvx.utils.prompts import PromptTemplates
 import torch
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -25,6 +26,7 @@ class AbstractDataset:
 
     def __init__(
         self,
+        concept: str,
         num_questions: int = 100,
         backend: str = "hf_local",
         model: str = "qwen2.5:7b-instruct",
@@ -56,6 +58,7 @@ class AbstractDataset:
         Returns:
             None
         """
+        self.concept = concept
         self.num_questions: int = num_questions
         self.questions: List[str] = []
         self.evaluation_prompt = ""
@@ -74,7 +77,7 @@ class AbstractDataset:
     @staticmethod
     def from_json(
         cls,
-        trait_role: str,
+        concept: str,
         dirpath: str,
     ) -> tuple["AbstractDataset", bool]:
         """
@@ -100,11 +103,11 @@ class AbstractDataset:
             json.JSONDecodeError: If the file contains invalid JSON
             KeyError: If required keys are missing from the JSON data
         """
-        filepath = os.path.join(dirpath, f"{trait_role}_dataset.json")
+        filepath = os.path.join(dirpath, f"{concept}_dataset.json")
 
         if not os.path.exists(filepath):
-            logger.info("Trait dataset not found. Initializing new trait dataset...")
-            dataset = cls()
+            logger.info("Concept dataset not found. Initializing new concept dataset...")
+            dataset = cls(concept)
             return dataset, False
 
         # Load JSON data
@@ -120,7 +123,7 @@ class AbstractDataset:
 
         # reconstruct dataset instance
         dataset = cls(
-            trait_role,
+            concept,
             num_questions=data["num_questions"],
             backend=backend,
             model=data["model"],
@@ -136,8 +139,43 @@ class AbstractDataset:
         dataset.logger.info("Abstract Dataset loaded from: %s", filepath)
 
         return dataset, True
+    
+    def _get_baseline_dataset_dict(self):
+        dataset_dict = {
+            "concept": self.concept,
+            "num_questions": self.num_questions,
+            "model": self.model,
+            "backend": self.backend,
+            "base_url": self.base_url,
+            "local_model": self.local_model,
+            "questions": self.questions,
+            "evaluation_prompt": self.evaluation_prompt,
+        }
+        return dataset_dict
+    
+    def _generate_auxiliary_information(self, system_prompt: str, prompts_key: str, **kwargs) -> str:
+        """
+        Generate a detailed description of the personality trait.
 
-    def save_dataset_to_json(self, dirpath: str | None = None) -> str:
+        Uses the LLM to create a comprehensive description of the trait being
+        modeled. This description helps inform subsequent generation steps.
+
+        Returns:
+            str: A detailed description of the personality trait
+        """
+        user_prompt = PromptTemplates.PROMPTS[prompts_key].format(**kwargs)
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        # Generate response using the helper method
+        _, response = self._inference_with_client(messages=messages)
+
+        return response
+
+    def save_dataset_to_json(self, dataset_dict: Dict = {}, dirpath: str | None = None) -> str:
         """
         Save the persona vector dataset to a JSON file.
 
@@ -160,24 +198,14 @@ class AbstractDataset:
             >>> print(f"Saved to: {path}")
             "Saved to: ./my_datasets/verbose_dataset.json"
         """
-        filepath = os.path.join((dirpath or self.dirpath), f"{self.trait}_dataset.json")
-
-        dataset_dict = {
-            "num_questions": self.num_questions,
-            "model": self.model,
-            "backend": self.backend,
-            "base_url": self.base_url,
-            "local_model": self.local_model,
-            "questions": self.questions,
-            "evaluation_prompt": self.evaluation_prompt,
-        }
+        filepath = os.path.join((dirpath or self.dirpath), f"{self.concept}_dataset.json")
 
         Path(filepath).parent.mkdir(parents=True, exist_ok=True)
 
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(dataset_dict, f, indent=2, ensure_ascii=False)
 
-        logger.info("Abstract Dataset saved to: %s", filepath)
+        logger.info("Dataset saved to: %s", filepath)
         return filepath
 
     def _inference_with_client(
