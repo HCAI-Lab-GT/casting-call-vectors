@@ -1,16 +1,16 @@
 #!/bin/bash
 source .env
 
-NAME="dataset_batch" # name of the script (mostly for logging purposes)
+NAME="trait_dataset_batch" # name of the script (mostly for logging purposes)
 
 ###
-# src/pvx/pvx_models/persona_model.py
+# src/pvx/implementations/base/persona_dataset.py
 #
 # This script is used to generate new persona vectors.
-# It calls src/pvx/pvx_models/persona_model.py with specified run.
+# It calls src/pvx/implementations/base/persona_dataset.py with specified run.
 #
 # Usage:
-# ./run_evals.sh <run>
+# ./trait_dataset_batch.sh <traits>
 #
 # Author: mparwani
 # Date: 2026-01-21

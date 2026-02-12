@@ -15,7 +15,7 @@ module load uv
 source .venv/bin/activate
 uv sync
 
-srun uv run python src/pvx/pvx_models/persona_dataset.py \
+srun uv run python src/pvx/implementations/base/persona_dataset.py \
         --traits "$TRAIT" \
         --local_model "$LOCAL_MODEL";
 SLURM_RETURN_CODE=$?

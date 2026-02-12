@@ -6,7 +6,7 @@ if [ -z "$SLURM_JOB_ID" ]; then
 fi
 
 echo "===CLI ARGS=================="
-echo "TRAIT: $TRAIT"  # trait to generate persona vector from
+echo "ROLE: $ROLE"  # role to generate role vector from
 echo "LOCAL_MODEL: $LOCAL_MODEL"
 echo "==========================="
 
@@ -15,8 +15,8 @@ module load uv
 source .venv/bin/activate
 uv sync
 
-srun uv run python src/pvx/pvx_models/persona_model.py \
-        --trait "$TRAIT" \
+srun uv run python src/pvx/implementations/roles/persona_model.py \
+        --role "$ROLE" \
         --model_name "$LOCAL_MODEL";
 SLURM_RETURN_CODE=$?
 
