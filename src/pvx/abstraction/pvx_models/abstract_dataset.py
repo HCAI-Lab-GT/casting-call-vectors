@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from pvx.utils.prompts import PromptTemplates
-import torch
+from torch import dtype, float16
 from dotenv import load_dotenv
 from openai import OpenAI
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -34,7 +34,7 @@ class AbstractDataset:
         api_key_env: str = "LITELLM_API_KEY",
         local_model: Optional[str] = "Qwen/Qwen2.5-1.5B-Instruct",
         device: Optional[str] = None,
-        dtype: torch.dtype = torch.float16,
+        dtype: dtype = float16,
         dirpath: str = "./persona_data/trait_datasets/",
     ):
         """
@@ -266,11 +266,11 @@ class AbstractDataset:
 
                 return (None, decoded.strip())
 
-            base_url = self.base_url
+            base_url = self.base_url # defaults to together api
             if self.backend == "vllm" and base_url is None:
                 base_url = os.environ.get("VLLM_API_URL")
             if base_url is None:
-                base_url = "https://glados.ctisl.gtri.org"
+                base_url = "https://api.together.xyz/v1"
 
             api_key = os.environ.get(self.api_key_env) or os.environ.get("OPENAI_API_KEY")
             if api_key is None:
@@ -299,6 +299,8 @@ class AbstractDataset:
         """
         Lazily load a HF transformers causal LM for local inference.
         """
+        import torch 
+        
         if self.backend != "hf_local":
             return
 

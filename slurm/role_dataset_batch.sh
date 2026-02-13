@@ -18,28 +18,35 @@ NAME="role_dataset_batch" # name of the script (mostly for logging purposes)
 # ===CLI ARGS==================
 
 # defaults
-LOCAL_MODEL="Qwen/Qwen2.5-7B-Instruct"
+MODEL="openai/gpt-oss-120b" # "Qwen/Qwen2.5-7B-Instruct"
+BACKEND="openai" # "hf-local"
+
 ROLES=()
 
 # parse args: roles first, optional --model anywhere
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -m|--model) LOCAL_MODEL="$2"; shift 2 ;;
+    -m|--model) MODEL="$2"; shift 2 ;;
+    -b|--backend) BACKEND="$2"; shift 2 ;;
     --) shift; while [[ $# -gt 0 ]]; do ROLES+=("$1"); shift; done ;;
     *) ROLES+=("$1"); shift ;;
   esac
 done
 
-export LOCAL_MODEL
+export MODEL
+export BACKEND
 # ===========================
 
 ### SLURM SETTINGS ###
 # runtime settings
-GPU_CONFIG=gpu:h100:1
-NUM_NODES=32
+# GPU_CONFIG=gpu:h200:1
+# NUM_NODES=32
+NUM_NODES=16
 NUM_WORKERS=8
-MEM_PER_NODE=512G
+MEM_PER_NODE=16G
+# MEM_PER_NODE=512G
 TIME=04:00:00
+# TIME=00:10:00
 
 
 # job settings (typically do not change)
@@ -71,7 +78,13 @@ fi
 # None
 
 ### JOB CALL (add '-C amd' for amd) ###
-sbatch  --gres "$GPU_CONFIG" --ntasks-per-node 1 --cpus-per-task "$NUM_WORKERS" --mem "$MEM_PER_NODE" \
+# sbatch  --gres "$GPU_CONFIG" --ntasks-per-node 1 --cpus-per-task "$NUM_WORKERS" --mem "$MEM_PER_NODE" \
+#         --account "$ACCOUNT" --qos "$QOS" --time "$TIME" \
+#         --output "$LOG_DIR/$NAME-%j.out" --error "$LOG_DIR/$NAME-%j.err" \
+#         "slurm/$NAME.sbatch" \
+#         "${ROLES[@]}"
+
+sbatch  --ntasks-per-node 1 --cpus-per-task "$NUM_WORKERS" --mem "$MEM_PER_NODE" \
         --account "$ACCOUNT" --qos "$QOS" --time "$TIME" \
         --output "$LOG_DIR/$NAME-%j.out" --error "$LOG_DIR/$NAME-%j.err" \
         "slurm/$NAME.sbatch" \

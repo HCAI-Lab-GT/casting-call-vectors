@@ -11,9 +11,10 @@ ROLE_LIST=("$@")
 echo $ROLE_LIST
 
 echo "===CLI ARGS=================="
+echo "BACKEND: $BACKEND"
+echo "MODEL: $MODEL"
 echo "ROLES:"  # role to generate persona vector from
 printf '  %s\n' "${ROLE_LIST[@]}"
-echo "LOCAL_MODEL: $LOCAL_MODEL"
 echo "==========================="
 
 # module load anaconda3
@@ -23,7 +24,9 @@ uv sync
 
 srun uv run python src/pvx/implementations/roles/role_dataset.py \
         --roles "${ROLE_LIST[@]}" \
-        --local_model "$LOCAL_MODEL";
+        --model "$MODEL" \
+        --backend "$BACKEND"
+
 SLURM_RETURN_CODE=$?
 
 if [ "$SLURM_RETURN_CODE" -ne 0 ]; then
