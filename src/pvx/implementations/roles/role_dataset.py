@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-import torch
+from torch import dtype, float16
 from dotenv import load_dotenv
 
 from pvx import Heartbeat, setup_logging
@@ -33,7 +33,7 @@ class RoleDataset(AbstractDataset):
         api_key_env: str = "LITELLM_API_KEY",
         local_model: Optional[str] = "Qwen/Qwen2.5-1.5B-Instruct",
         device: Optional[str] = None,
-        dtype: torch.dtype = torch.float16,
+        dtype: dtype = float16,
         dirpath: str = "./persona_data/role_datasets/",
     ):
         
@@ -65,6 +65,7 @@ class RoleDataset(AbstractDataset):
         role: str,
         role_description: Optional[str] = None,
         dirpath: str = "./persona_data/role_datasets",
+        except_on_missing=False
     ) -> "RoleDataset":
         """
         Load a previously saved role dataset from a JSON file.
@@ -92,6 +93,9 @@ class RoleDataset(AbstractDataset):
         filepath = os.path.join(dirpath, f"{role}_dataset.json")
 
         if not os.path.exists(filepath):
+            if except_on_missing:
+                raise FileNotFoundError(f"Role dataset not found in filepath {filepath}")
+            
             logger.info(f"Role dataset not found in filepath {filepath}. Initializing new role dataset...")
             dataset = RoleDataset(
                 role=role,
@@ -277,7 +281,7 @@ class RoleDataset(AbstractDataset):
         ]
 
         # Generate response using the helper method
-        _, response = self._inference_with_client(messages=messages, max_new_tokens=2**13)
+        _, response = self._inference_with_client(messages=messages, max_new_tokens=2**20)
 
         return response
 
@@ -299,7 +303,8 @@ class RoleDataset(AbstractDataset):
         Raises:
             json.JSONDecodeError: If the response does not contain valid JSON
         """
-        json_text = "\n".join(response.split("\n")[1:-1])  # Remove ```json and ```
+        json_text = response.strip("`").strip("json").strip()
+        # json_text = "\n".join(response.split("\n")[1:-1])  # Remove ```json and ```
         response_dict = json.loads(json_text)
 
         # Extract components
@@ -369,17 +374,23 @@ if __name__ == "__main__":
 
     for role in roles_list:
         try:
-            RoleDataset.from_json(
-                role=role,
-                dirpath=args.dirpath
-            )
-        except Exception:
-            dataset: RoleDataset = RoleDataset(
-                role=role,
-                num_questions=args.num_questions,
-                backend=args.backend,
-                local_model=args.local_model,
-                model=args.model,
-                api_key_env=args.api_key_env,
-            )
-            dataset.generate_dataset(save_to_json=True)
+            try:
+                RoleDataset.from_json(
+                    role=role,
+                    dirpath=args.dirpath,
+                    except_on_missing=True
+                )
+            except Exception:
+                dataset: RoleDataset = RoleDataset(
+                    role=role,
+                    num_questions=args.num_questions,
+                    backend=args.backend,
+                    base_url=args.base_url,
+                    local_model=args.local_model,
+                    model=args.model,
+                    api_key_env=args.api_key_env,
+                )
+                dataset.generate_dataset(save_to_json=True)
+        except Exception as e:
+            logger.error(f"Failed to generate dataset for role {role}: {e}")
+            logger.error("Continuing to next role...")

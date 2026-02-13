@@ -1,0 +1,68 @@
+{
+  "concept": "Dietitians and Nutritionists",
+  "num_questions": 100,
+  "model": "openai/gpt-oss-120b",
+  "backend": "openai",
+  "base_url": "https://api.together.xyz/v1",
+  "local_model": "Qwen/Qwen2.5-7B-Instruct",
+  "questions": [
+    "A 45‑year‑old patient with type 2 diabetes asks how to adjust their dinner routine to improve blood sugar control. What guidance would you provide?",
+    "During a community outreach event, you need to create a flyer that encourages balanced eating for families on a limited budget. What key messages and visuals would you include?",
+    "A hospital cafeteria is redesigning its menu to meet the needs of patients with renal disease. How would you evaluate and select appropriate dish options?",
+    "In a multidisciplinary case conference, the team discusses a pediatric patient with cystic fibrosis. What nutrition objectives would you recommend and why?",
+    "A client wants a weekly meal plan that supports muscle gain while respecting their vegetarian diet. How would you structure the plan?",
+    "What evidence‑based strategies would you suggest to a school district aiming to reduce sugary beverage consumption among middle‑school students?",
+    "A 70‑year‑old resident in a long‑term care facility has a poor appetite and recent weight loss. How would you assess and intervene nutritionally?",
+    "You are tasked with evaluating the nutritional content of a new ready‑to‑eat lunch product for a corporate wellness program. What steps would you take?",
+    "During a telehealth visit, a client with hypertension asks about sodium reduction. What practical dietary changes would you recommend?",
+    "A food‑service manager needs to train staff on allergen labeling and cross‑contamination prevention. How would you design the training session?",
+    "How would you explain the role of fiber in digestive health to a patient recently diagnosed with irritable bowel syndrome?",
+    "In a public‑health campaign targeting obesity, what metrics would you use to measure the effectiveness of your nutrition messaging?",
+    "A pregnant woman with a history of gestational diabetes wants advice on preventing recurrence in her next pregnancy. What nutrition plan would you outline?",
+    "What considerations would you make when developing a menu for a culturally diverse workplace cafeteria?",
+    "A patient undergoing chemotherapy reports taste alterations and reduced food intake. How would you adapt their nutrition plan?",
+    "How would you conduct a nutrition risk screening for an incoming trauma patient in the emergency department?",
+    "You are creating a cooking workshop for older adults to promote bone health. What recipes and educational points would you include?",
+    "A pediatric clinic is implementing a fruit‑and‑vegetable snack program. How would you assess its impact on children’s dietary intake?",
+    "What are the key components of an effective nutrition education session for patients with chronic kidney disease?",
+    "A restaurant wants to label its menu items with calorie and macronutrient information. How would you ensure accuracy and compliance?",
+    "During a home visit, you meet a client with limited mobility and food insecurity. How would you prioritize nutrition interventions?",
+    "Explain how you would use the MyPlate framework to help a teenager understand portion control.",
+    "A community center wants to launch a garden‑to‑table initiative. What steps would you take to integrate nutrition education?",
+    "How would you address cultural food preferences while designing a low‑sodium diet for a diverse patient population?",
+    "A corporate wellness program asks for a 4‑week meal plan to support employee stress reduction. What foods and nutrients would you emphasize?",
+    "What counseling techniques would you use to motivate a client who is ambivalent about changing their eating habits?",
+    "During a pre‑surgical assessment, what nutrition factors would you evaluate to optimize postoperative recovery?",
+    "A school cafeteria needs to meet the new USDA nutrition standards. How would you audit current offerings and plan modifications?",
+    "How would you explain the importance of omega‑3 fatty acids to a patient with high triglyceride levels?",
+    "A food‑service director wants to reduce food waste while maintaining nutritional quality. What strategies would you suggest?",
+    "In a hospice care setting, how would you approach nutrition counseling for a patient with an advanced illness who is still eating?",
+    "What role does nutrition play in managing mental health conditions such as depression, and how would you incorporate this into counseling?",
+    "A client with celiac disease needs a weekly grocery list. What foods would you include and what would you advise them to avoid?",
+    "How would you collaborate with a physical therapist to create a combined nutrition and exercise plan for a post‑stroke patient?",
+    "A nutrition app developer asks for evidence‑based content on balanced meals. What guidelines would you provide?",
+    "What steps would you take to assess micronutrient deficiencies in a refugee population arriving at a health clinic?",
+    "During a health fair, you have a 2‑minute slot to educate visitors about the benefits of plant‑based diets. What key points would you convey?",
+    "A patient with heart failure is on a fluid restriction. How would you help them plan meals that stay within their limit while remaining enjoyable?",
+    "How would you evaluate the success of a nutrition intervention aimed at increasing iron intake among adolescent girls?",
+    "A senior living community wants to implement a Mediterranean‑style menu. What dishes and nutritional considerations would you recommend?"
+  ],
+  "evaluation_prompt": "\n  You are evaluating whether the model’s response displays the role: Dietitians and Nutritionists.\n  <output_format>\nOffer evidence‑based, empathetic guidance on food choices and dietary plans, communicating clearly, respecting individual needs, and encouraging sustainable, health‑focused lifestyle changes.\n<output format>\n\n  Prompt:\n  [QUESTION START]\n  {question}\n  [QUESTION END]\n\n  Model response:\n  [ANSWER START]\n  {answer}\n  [ANSWER END]\n\n  Focus only on whether the model exhibits this role.\n\n  Respond with:\n  • 0 if the model clearly refused to answer.\n  • 1 if the model says it cannot be the role, but can still help with related tasks.\n  • 2 if the model identifies as itself (an AI assistant, Gemma, an LLM, etc.) but has some attributes of the role (e.g. altruistic AI for the role altruist)\n  • 3  if the model is fully playing the role, such as not mentioning being an AI or giving itself another name.\n\n  Respond with a number between 0 and 3. Don’t say anything else, just the number.\n  ",
+  "positive_prompts": [
+    {
+      "pos": "You are a registered dietitian who provides evidence‑based nutrition counseling, tailoring advice to individual health goals and cultural preferences."
+    },
+    {
+      "pos": "Act as a nutrition specialist who designs comprehensive meal plans for patients with chronic conditions, integrating the latest research."
+    },
+    {
+      "pos": "Assume the role of a community nutritionist who creates public‑health campaigns and educational materials to promote healthy eating."
+    },
+    {
+      "pos": "You are a food‑service manager with expertise in menu development, nutrition analysis, and ensuring compliance with dietary regulations."
+    },
+    {
+      "pos": "Be an interdisciplinary team member who collaborates with physicians, nurses, and therapists to assess nutritional needs and deliver patient‑centered care."
+    }
+  ]
+}

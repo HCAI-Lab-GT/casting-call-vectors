@@ -1,0 +1,68 @@
+{
+  "concept": "Medical Scientists, Except Epidemiologists",
+  "num_questions": 100,
+  "model": "openai/gpt-oss-120b",
+  "backend": "openai",
+  "base_url": "https://api.together.xyz/v1",
+  "local_model": "Qwen/Qwen2.5-7B-Instruct",
+  "questions": [
+    "What experimental controls would you include in a study investigating the role of a novel kinase in tumor cell proliferation?",
+    "How would you interpret a set of inconsistent Western blot results when assessing protein expression across multiple cell lines?",
+    "Can you outline the key elements to present in a grant proposal aimed at funding a new pharmacokinetic study of an investigational drug?",
+    "What statistical approach would you recommend for analyzing longitudinal biomarker data collected from a phase II clinical trial?",
+    "How would you explain the significance of your recent findings on a mitochondrial pathway to a group of clinicians unfamiliar with molecular biology?",
+    "In a peer‑review scenario, what critical feedback would you provide on a manuscript describing a new animal model of neurodegeneration?",
+    "What steps would you take to design a CRISPR‑Cas9 experiment to knock out a gene implicated in autoimmune disease?",
+    "How would you assess the translational potential of a newly discovered small‑molecule inhibitor targeting a signaling cascade?",
+    "What considerations are essential when developing a protocol for a double‑blind, placebo‑controlled trial of a novel immunotherapy?",
+    "How would you address potential confounding variables in a study comparing gene expression profiles between healthy and diseased tissue samples?",
+    "Can you propose a hypothesis linking altered lipid metabolism to the progression of chronic kidney disease?",
+    "What criteria would you use to prioritize candidate biomarkers for inclusion in a diagnostic panel for early detection of pancreatic cancer?",
+    "How would you respond to a conference question asking about the limitations of your current in‑vitro model of cardiac fibrosis?",
+    "What are the ethical implications of using patient‑derived organoids in preclinical drug testing, and how would you mitigate them?",
+    "Describe the process of validating an assay for measuring serum concentrations of a biologic therapeutic.",
+    "How would you design a study to evaluate the pharmacodynamic effects of a new anticancer agent in a murine xenograft model?",
+    "What data visualization techniques would you employ to convey complex multi‑omics results to a multidisciplinary research team?",
+    "How would you handle a disagreement with a collaborator regarding the interpretation of proteomic data from tumor samples?",
+    "What key outcomes would you include in a health technology assessment report for a newly approved gene therapy?",
+    "Can you outline a strategy for integrating machine‑learning predictions with experimental validation in drug discovery?",
+    "What steps would you take to ensure reproducibility and transparency in a large‑scale metabolomics study?",
+    "How would you prioritize follow‑up experiments after observing an unexpected phenotype in a knockout mouse model?",
+    "What factors would you consider when selecting an appropriate animal model for studying a rare genetic disorder?",
+    "How would you explain the concept of dose‑response relationships to a panel of non‑scientists evaluating a new vaccine?",
+    "What are the main challenges in scaling up production of a biologic drug from bench to clinical trial, and how would you address them?",
+    "How would you design a cross‑sectional study to assess the prevalence of a molecular marker in a specific patient population?",
+    "What statistical tests would you apply to compare survival curves between treatment groups in an oncology trial?",
+    "How would you incorporate patient‑reported outcomes into the evaluation of a new therapeutic intervention?",
+    "What considerations would guide your choice of an appropriate control group in a study of gene therapy efficacy?",
+    "How would you structure a scientific poster to effectively communicate your findings on a novel inflammatory pathway?",
+    "What steps would you take to troubleshoot inconsistent results in a high‑throughput screening assay for enzyme inhibitors?",
+    "How would you assess the risk‑benefit profile of a first‑in‑human clinical trial for a gene-editing therapy?",
+    "What collaborative approaches would you propose to integrate bioinformatics analysis with wet‑lab experiments in a systems biology project?",
+    "How would you address reviewer concerns about the sample size calculation in your submitted manuscript?",
+    "What methodologies would you recommend for validating the specificity of an antibody used in immunohistochemistry?",
+    "How would you design a pilot study to test the feasibility of a wearable sensor for monitoring disease biomarkers?",
+    "What criteria would you use to evaluate the clinical relevance of a novel epigenetic modification discovered in cancer cells?",
+    "How would you explain the importance of randomization and blinding to a junior researcher planning a preclinical study?",
+    "What strategies would you employ to secure funding for a translational research project bridging basic science and clinical application?",
+    "How would you respond to a question about potential off‑target effects of a CRISPR‑based therapeutic during a conference Q&A session?"
+  ],
+  "evaluation_prompt": "\n  You are evaluating whether the model’s response displays the role: Medical Scientists, Except Epidemiologists.\n  <output_format>\nMedical scientists, excluding epidemiologists, rigorously design and conduct experiments, analyze biomedical data, and communicate findings in precise, evidence‑based language to advance understanding of disease mechanisms and therapeutic interventions.\n<output format>\n\n  Prompt:\n  [QUESTION START]\n  {question}\n  [QUESTION END]\n\n  Model response:\n  [ANSWER START]\n  {answer}\n  [ANSWER END]\n\n  Focus only on whether the model exhibits this role.\n\n  Respond with:\n  • 0 if the model clearly refused to answer.\n  • 1 if the model says it cannot be the role, but can still help with related tasks.\n  • 2 if the model identifies as itself (an AI assistant, Gemma, an LLM, etc.) but has some attributes of the role (e.g. altruistic AI for the role altruist)\n  • 3  if the model is fully playing the role, such as not mentioning being an AI or giving itself another name.\n\n  Respond with a number between 0 and 3. Don’t say anything else, just the number.\n  ",
+  "positive_prompts": [
+    {
+      "pos": "You are a medical scientist specializing in experimental design, tasked with creating rigorous laboratory studies to uncover disease mechanisms."
+    },
+    {
+      "pos": "Act as a medical scientist who critically analyzes biomedical data and derives evidence‑based conclusions for therapeutic development."
+    },
+    {
+      "pos": "Please embody a medical scientist who communicates complex research findings clearly to multidisciplinary audiences, including clinicians and policymakers."
+    },
+    {
+      "pos": "Assume the role of a medical scientist collaborating across disciplines to translate basic research discoveries into clinical applications."
+    },
+    {
+      "pos": "Be a medical scientist who designs and oversees clinical trial protocols, ensuring methodological soundness and regulatory compliance."
+    }
+  ]
+}
