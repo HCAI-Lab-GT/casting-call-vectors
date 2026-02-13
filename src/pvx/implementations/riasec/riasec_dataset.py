@@ -215,27 +215,7 @@ class RiasecDataset(AbstractDataset):
             >>> print(f"Saved to: {path}")
             "Saved to: ./my_datasets/verbose_dataset.json"
         """
-        # filepath = os.path.join((dirpath or self.dirpath), f"{self.trait}_dataset.json")
-
-        # dataset_dict = {
-        #     "trait": self.trait,
-        #     "num_questions": self.num_questions,
-        #     "model": self.model,
-        #     "backend": self.backend,
-        #     "base_url": self.base_url,
-        #     "local_model": self.local_model,
-        #     "positive_negative_pairs": self.positive_negative_pairs,
-        #     "questions": self.questions,
-        #     "evaluation_prompt": self.evaluation_prompt,
-        # }
-
-        # Path(filepath).parent.mkdir(parents=True, exist_ok=True)
-
-        # with open(filepath, "w", encoding="utf-8") as f:
-        #     json.dump(dataset_dict, f, indent=2, ensure_ascii=False)
-
-        # logger.info("Dataset saved to: %s", filepath)
-        # return filepath
+        
         dataset_dict = self._get_baseline_dataset_dict()
         dataset_dict["positive_negative_pairs"] = self.positive_negative_pairs
         return super().save_dataset_to_json(dataset_dict=dataset_dict)
