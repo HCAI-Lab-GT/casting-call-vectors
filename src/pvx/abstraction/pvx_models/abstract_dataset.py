@@ -153,15 +153,22 @@ class AbstractDataset:
         }
         return dataset_dict
     
-    def _generate_auxiliary_information(self, system_prompt: str, prompts_key: str, **kwargs) -> str:
+    def _generate_auxiliary_information(self, system_prompt: str, prompts_key: str, max_new_tokens: int = 1024, **kwargs) -> str:
         """
-        Generate a detailed description of the personality trait.
+        Generate auxiliary information (descriptions, instructions, etc.) using LLM.
 
-        Uses the LLM to create a comprehensive description of the trait being
-        modeled. This description helps inform subsequent generation steps.
+        This method provides a common interface for generating various types of
+        auxiliary information needed for dataset generation, such as trait/role
+        descriptions and question instructions.
+
+        Args:
+            system_prompt (str): The system prompt to use
+            prompts_key (str): Key to index into PromptTemplates.PROMPTS
+            max_new_tokens (int): Maximum tokens to generate (default: 1024)
+            **kwargs: Additional keyword arguments to format the prompt template
 
         Returns:
-            str: A detailed description of the personality trait
+            str: Generated auxiliary information
         """
         user_prompt = PromptTemplates.PROMPTS[prompts_key].format(**kwargs)
 
@@ -171,7 +178,7 @@ class AbstractDataset:
         ]
 
         # Generate response using the helper method
-        _, response = self._inference_with_client(messages=messages)
+        _, response = self._inference_with_client(messages=messages, max_new_tokens=max_new_tokens)
 
         return response
 

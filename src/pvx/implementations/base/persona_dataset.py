@@ -347,18 +347,12 @@ class PersonaDataset(AbstractDataset):
         Returns:
             str: A detailed description of the personality trait
         """
-        system_prompt = "You are an expert AI evaluator and dataset designer."
-        user_prompt = PromptTemplates.PROMPTS["trait_instruction"].format(TRAIT=self.trait)
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
-
-        # Generate response using the helper method
-        _, response = self._inference_with_client(messages=messages)
-
-        return response
+        # Delegate to abstract method to avoid code duplication
+        return self._generate_auxiliary_information(
+            system_prompt="You are an expert AI evaluator and dataset designer.",
+            prompts_key="trait_instruction",
+            TRAIT=self.trait
+        )
 
     def _generate_question_instruction(self) -> str:
         """
@@ -370,18 +364,14 @@ class PersonaDataset(AbstractDataset):
         Returns:
             str: Instructions for question generation
         """
-        system_prompt = "You are an expert AI evaluator and dataset designer."
-        user_prompt = PromptTemplates.PROMPTS["question_instruction_trait"].format(TRAIT=self.trait)
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
-
-        # Generate response using the helper method
-        _, response = self._inference_with_client(messages=messages, max_new_tokens=2**13)
-
-        return response
+        # Delegate to abstract method to avoid code duplication
+        # Use 2^13 (8192) tokens to allow for comprehensive question instructions
+        return self._generate_auxiliary_information(
+            system_prompt="You are an expert AI evaluator and dataset designer.",
+            prompts_key="question_instruction_trait",
+            max_new_tokens=2**13,
+            TRAIT=self.trait
+        )
 
     def _parse_dataset_output(self, response: str) -> Tuple[List[Tuple[str, str]], List[str]]:
         """
