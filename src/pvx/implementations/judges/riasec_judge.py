@@ -57,7 +57,7 @@ class RIASECJudge(AbstractJudge):
         """
         # "Output EXACTLY one token: YES or NO. Answer YES or NO for the following characteristic."
         return [
-            {"role": "system", "content": "You are not an assistant. Output EXACTLY one token: YES or NO."},
+            {"role": "system", "content": "You are a human. Output EXACTLY one token: YES or NO."},
             {"role": "user", "content": f"{characteristic}"},
         ]
 
@@ -136,7 +136,7 @@ if __name__ == "__main__":
         help="HF model typically",
     )
     ap.add_argument(
-        "-t", "--trait", type=str, default="realistic", help="Trait of the persona dataset"
+        "-c", "--concept", type=str, default="realistic", help="Concept of the persona dataset"
     )
     ap.add_argument("-n", "--max_new_tokens", type=int, default=50, help="Max tokens to generate")
     ap.add_argument(
@@ -166,7 +166,7 @@ if __name__ == "__main__":
     args = ap.parse_args()
 
     pvx = RolePersonaModel.load_or_create(
-        role=args.trait,
+        concept=args.concept,
         target_model_id=args.model_name,
         layer=14,
         json_filepath=args.json_filepath,
@@ -176,8 +176,8 @@ if __name__ == "__main__":
     results, counts = riasec_judge(
         pvx, args.alpha, args.max_new_tokens, args.temperature
     )
-    logger.info("===TRAIT===")
-    logger.info(args.trait)
+    logger.info("===CONCEPT===")
+    logger.info(args.concept)
     if args.print_results:
         logger.info("===RESULTS===")
         logger.info(results)
