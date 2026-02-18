@@ -23,9 +23,9 @@ source .venv/bin/activate
 uv sync
 
 srun uv run python src/pvx/implementations/roles/role_dataset.py \
-        --roles "${ROLE_LIST[@]}" \
         --model "$MODEL" \
-        --backend "$BACKEND"
+        --backend "$BACKEND" \
+        --roles "${ROLE_LIST[@]}" 
 
 SLURM_RETURN_CODE=$?
 

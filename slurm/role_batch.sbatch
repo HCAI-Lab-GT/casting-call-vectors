@@ -5,9 +5,12 @@ if [ -z "$SLURM_JOB_ID" ]; then
     exit 1
 fi
 
+ROLE_LIST=("$@")
+
 echo "===CLI ARGS=================="
-echo "ROLE: $ROLE"  # role to generate role vector from
-echo "LOCAL_MODEL: $LOCAL_MODEL"
+echo "MODEL: $MODEL"
+echo "ROLES:"  # role to generate persona vector from
+printf '  %s\n' "${ROLE_LIST[@]}"
 echo "==========================="
 
 # module load anaconda3
@@ -15,9 +18,10 @@ module load uv
 source .venv/bin/activate
 uv sync
 
-srun uv run python src/pvx/implementations/roles/persona_model.py \
-        --role "$ROLE" \
-        --model_name "$LOCAL_MODEL";
+srun uv run python src/pvx/implementations/roles/role_persona_model.py \
+        --model "$MODEL" \
+        --roles "${ROLE_LIST[@]}"
+        
 SLURM_RETURN_CODE=$?
 
 if [ "$SLURM_RETURN_CODE" -ne 0 ]; then
