@@ -172,17 +172,14 @@ class RolePersonaModel(AbstractPersonaModel):
         return prompt_persona_vector, response_persona_vector, all_layers_response_persona_vector
 
 
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Generate Persona Dataset")
     ap.add_argument(
-        "-m",
-        "--model_name",
-        type=str,
-        default="Qwen/Qwen2.5-7B-Instruct",
-        help="HF model typically",
+        "-m", "--model", type=str, default="Qwen/Qwen2.5-7B-Instruct", help="HF model typically",
     )
     ap.add_argument(
-        "-r", "--role", type=str, default="lawyer", help="Role of the persona dataset"
+        "-r", "--roles", nargs="+", type=str, default=["lawyer"], help="Roles of the persona dataset"
     )
     ap.add_argument("-n", "--max_new_tokens", type=int, default=2000, help="Max tokens to generate")
     ap.add_argument(
@@ -205,31 +202,46 @@ if __name__ == "__main__":
     )
     args = ap.parse_args()
 
-    pvx = RolePersonaModel.load_or_create(
-        target_model_id=args.model_name,
-        concept=args.role,
-        layer=14,
-        json_filepath=args.json_filepath
-    )
+    for role in args.roles:
+        logger.info("=== Processing role: %s ===", role)
+        
+        try:
+            pvx = RolePersonaModel.load_or_create(
+                target_model_id=args.model,
+                concept=role,
+                layer=14,
+                json_filepath=args.json_filepath
+            )
+            logger.info("Successfully loaded/created RolePersonaModel for role '%s'", role)
+        except Exception as e:
+            logger.error("Failed to load or create RolePersonaModel for role '%s': %s", role, e)
+            continue
+        
+    # pvx = RolePersonaModel.load_or_create(
+    #     target_model_id=args.model,
+    #     concept=args.role,
+    #     layer=14,
+    #     json_filepath=args.json_filepath
+    # )
 
-    response = pvx.generate(
-        prompt=args.question,
-        alpha=0,
-        max_new_tokens=args.max_new_tokens,
-        temperature=args.temperature,
-    )
-    steer_response = pvx.generate(
-        prompt=args.question,
-        alpha=args.alpha,
-        max_new_tokens=args.max_new_tokens,
-        temperature=args.temperature,
-    )
+    # response = pvx.generate(
+    #     prompt=args.question,
+    #     alpha=0,
+    #     max_new_tokens=args.max_new_tokens,
+    #     temperature=args.temperature,
+    # )
+    # steer_response = pvx.generate(
+    #     prompt=args.question,
+    #     alpha=args.alpha,
+    #     max_new_tokens=args.max_new_tokens,
+    #     temperature=args.temperature,
+    # )
 
-    logger.info("=== Question ===")
-    logger.info(args.question)
-    logger.info("")
-    logger.info("=== Non-Steered Answer ===")
-    logger.info(response)
-    logger.info("")
-    logger.info("=== %s Steered Answer ===", args.role.upper())
-    logger.info(steer_response)
+    # logger.info("=== Question ===")
+    # logger.info(args.question)
+    # logger.info("")
+    # logger.info("=== Non-Steered Answer ===")
+    # logger.info(response)
+    # logger.info("")
+    # logger.info("=== %s Steered Answer ===", args.role.upper())
+    # logger.info(steer_response)

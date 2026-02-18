@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+import torch
 from torch import dtype, float16
 from dotenv import load_dotenv
 
