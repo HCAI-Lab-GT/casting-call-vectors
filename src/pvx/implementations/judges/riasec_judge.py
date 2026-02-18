@@ -1,6 +1,10 @@
 import argparse
+from ast import Dict, List
+from collections import defaultdict
+import json
 import re
 from pathlib import Path
+from tqdm import tqdm
 
 import yaml
 
@@ -45,6 +49,37 @@ class RIASECJudge(AbstractJudge):
             desc = info.get("description")
             characteristics = info.get("characteristics", [])
             self.trait_dict[trait] = {"description": desc, "characteristics": characteristics}
+        
+        ITEMS_PATH = "./configs/scoring/interest_profiler.json"  # or absolute if needed
+        with open(ITEMS_PATH, "r", encoding="utf-8") as f:
+            self.ITEMS: List[Dict[str, str]] = json.load(f)
+
+        assert len(self.ITEMS) == 60, "Expected 60 items"
+
+        self.DIM_TO_INDICES = defaultdict(list)
+        for i, item in enumerate(self.ITEMS):
+            self.DIM_TO_INDICES[item["dimension"]].append(i)
+
+        assert len(self.DIM_TO_INDICES) == 6 and all(len(v) == 10 for v in self.DIM_TO_INDICES.values())
+    
+    def _get_system_messagesv2(self, activity: str) -> list:
+        base = (
+            "You are answering the O*NET Interest Profiler. "
+            "For this work activity, would you LIKE to do it as part of a job? "
+            "Answer ONLY with 'Yes' or 'No' — no explanation.\n\n"
+        )
+            
+        return [
+            {"role": "system", "content": base},
+            {"role": "user", "content": f"Activity: {activity}"},
+        ]
+        
+    def compute_scores(self, responses: list[int]) -> dict[str, int]:
+        """Sum Yes per dimension"""
+        if len(responses) != 60:
+            raise ValueError("Need 60 responses")
+        scores = {dim: sum(responses[i] for i in indices) for dim, indices in self.DIM_TO_INDICES.items()}
+        return scores
 
     def _get_system_messages(self, characteristic: str) -> list:
         """
@@ -60,7 +95,28 @@ class RIASECJudge(AbstractJudge):
             {"role": "system", "content": "You are a human. Output EXACTLY one token: YES or NO."},
             {"role": "user", "content": f"{characteristic}"},
         ]
-
+    def judgev2(
+        self,
+        persona_model: AbstractPersonaModel,
+        alpha: float = 0.3,
+        max_new_tokens: int = 50,
+        temperature: float = 0.1
+    ):
+        responses = []
+        with tqdm(total=60, desc="Querying items") as pbar:
+            for item in self.ITEMS:
+                messages = self._get_system_messagesv2(activity=item['text'])
+                raw_ans = persona_model.generate(
+                    messages=messages,
+                    alpha=alpha,
+                    max_new_tokens=max_new_tokens,
+                    temperature=temperature,
+                ).strip()
+                like = 1 if raw_ans.strip().lower().startswith("yes") else 0
+                responses.append(like)
+                logger.debug(f"Item {item['item_id']:2d} ({item['dimension'][:3]}): {like} ({raw_ans})")
+                pbar.update(1)
+        return responses
     def judge(
         self,
         persona_model: AbstractPersonaModel,
@@ -123,7 +179,8 @@ class RIASECJudge(AbstractJudge):
         max_new_tokens: int = 50,
         temperature: float = 0.1,
     ):
-        return self.judge(persona_model=persona_model, alpha=alpha, max_new_tokens=max_new_tokens, temperature=temperature)
+        # return self.judge(persona_model=persona_model, alpha=alpha, max_new_tokens=max_new_tokens, temperature=temperature)
+        return self.judgev2(persona_model=persona_model, alpha=alpha, max_new_tokens=max_new_tokens, temperature=temperature)
 
 
 if __name__ == "__main__":
@@ -173,13 +230,17 @@ if __name__ == "__main__":
     )
 
     riasec_judge = RIASECJudge(riasec_yaml_path=args.yaml_path)
-    results, counts = riasec_judge(
+    # results, counts = riasec_judge(
+    #     pvx, args.alpha, args.max_new_tokens, args.temperature
+    # )
+    responses = riasec_judge(
         pvx, args.alpha, args.max_new_tokens, args.temperature
     )
+    scores = riasec_judge.compute_scores(responses=responses)
     logger.info("===CONCEPT===")
     logger.info(args.concept)
     if args.print_results:
         logger.info("===RESULTS===")
-        logger.info(results)
+        logger.info(responses)
     logger.info("===RIASEC Counts===")
-    logger.info(counts)
+    logger.info(scores)
