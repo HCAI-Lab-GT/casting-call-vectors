@@ -15,7 +15,7 @@ module load uv
 source .venv/bin/activate
 uv sync
 
-srun uv run python src/pvx/implementations/roles/persona_model.py \
+srun uv run python src/pvx/implementations/roles/role_persona_model.py \
         --role "$ROLE" \
         --model_name "$LOCAL_MODEL";
 SLURM_RETURN_CODE=$?

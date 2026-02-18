@@ -18,12 +18,12 @@ NAME="role_batch" # name of the script (mostly for logging purposes)
 
 # ===CLI ARGS==================
 export ROLE="$1" # role
-export LOCAL_MODEL="${2:-Qwen/Qwen2.5-7B-Instruct}" # local_model, default if not provided
+export LOCAL_MODEL="${2:-allenai/Olmo-3-7B-Instruct}" # local_model, default if not provided
 # ===========================
 
 ### SLURM SETTINGS ###
 # runtime settings
-GPU_CONFIG=gpu:h100:1
+GPU_CONFIG=gpu:h200:1
 NUM_NODES=32
 NUM_WORKERS=8
 MEM_PER_NODE=512G
