@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -48,42 +49,76 @@ HIGHPOINT_TO_RIASEC = {
     0.0: None,  # No third high-point
 }
 
-# Work Styles Element ID mapping (16 personality-like traits)
+
+# Work Styles Element ID mapping (21 personality-like traits)
 WORK_STYLE_ELEMENTS = {
-    "1.C.1.a": "Achievement/Effort",
-    "1.C.1.b": "Persistence",
-    "1.C.1.c": "Initiative",
-    "1.C.2.b": "Leadership",
-    "1.C.3.a": "Cooperation",
-    "1.C.3.b": "Concern for Others",
-    "1.C.3.c": "Social Orientation",
-    "1.C.4.a": "Self-Control",
-    "1.C.4.b": "Stress Tolerance",
-    "1.C.4.c": "Adaptability/Flexibility",
-    "1.C.5.a": "Dependability",
-    "1.C.5.b": "Attention to Detail",
-    "1.C.5.c": "Integrity",
-    "1.C.6": "Independence",
-    "1.C.7.a": "Innovation",
-    "1.C.7.b": "Analytical Thinking",
+    "1.D.1.a": "Innovation",
+    "1.D.1.b": "Achievement Orientation",
+    "1.D.1.c": "Intellectual Curiosity",
+    "1.D.1.d": "Tolerance for Ambiguity",
+    "1.D.1.e": "Initiative",
+    "1.D.1.f": "Adaptability",
+    "1.D.1.g": "Self-Confidence",
+    "1.D.1.h": "Perseverance",
+    "1.D.1.i": "Leadership Orientation",
+    "1.D.2.a": "Humility",
+    "1.D.2.b": "Sincerity",
+    "1.D.2.c": "Empathy",
+    "1.D.2.d": "Cooperation",
+    "1.D.2.e": "Optimism",
+    "1.D.2.f": "Social Orientation",
+    "1.D.3.a": "Cautiousness",
+    "1.D.3.b": "Attention to Detail",
+    "1.D.3.c": "Dependability",
+    "1.D.3.d": "Integrity",
+    "1.D.4.a": "Stress Tolerance",
+    "1.D.4.b": "Self-Control",
 }
 
 # Big Five (OCEAN) derived from Work Styles
 # Based on established Work Styles → FFM mappings
 BIG_FIVE_MAPPING = {
-    "O": ["1.C.7.a", "1.C.7.b", "1.C.4.c"],  # Openness: Innovation, Analytical, Adaptability
+    "O": [
+        "1.D.1.f",
+        "1.D.1.a",
+        "1.D.1.c",
+        "1.D.1.d",
+    ],  # Openness: Adaptability, Innovation, Intellectual Curiosity, Tolerance for Ambiguity
     "C": [
-        "1.C.5.a",
-        "1.C.1.a",
-        "1.C.1.b",
-        "1.C.5.b",
-    ],  # Conscientiousness: Dependability, Achievement, Persistence, Detail
-    "E": ["1.C.2.b", "1.C.3.c", "1.C.1.c"],  # Extraversion: Leadership, Social, Initiative
-    "A": ["1.C.3.a", "1.C.3.b", "1.C.5.c"],  # Agreeableness: Cooperation, Concern, Integrity
+        "1.D.1.b",
+        "1.D.3.a",
+        "1.D.3.b",
+        "1.D.3.c",
+        "1.D.1.g",
+    ],  # Conscientiousness: Achievement Orientation, Cautiousness, Attention to Detail, Dependability, Self-Confidence
+    "E": ["1.D.1.i", "1.D.2.f"],  # Extraversion: Leadership Orientation, Social Orientation
+    "A": ["1.D.2.d", "1.D.2.c"],  # Agreeableness: Cooperation, Empathy
     "N_inv": [
-        "1.C.4.b",
-        "1.C.4.a",
+        "1.D.4.a",
+        "1.D.4.b",
     ],  # Emotional Stability (inverse N): Stress Tolerance, Self-Control
+}
+
+# HEXACO Mapping (Officially organized by O*Net)
+# Based on Higher_Order_Styles relsease in O*Net 30
+HEXACO_MAPPING = {
+    "H": ["1.D.2.a", "1.D.3.d", "1.D.2.b"],  # Honesty-Humility: Humility, Integrity, Sincerity
+    "E": ["1.D.4.a", "1.D.4.b"],  # Emotionality
+    "X": ["1.D.1.i", "1.D.2.f"],  # Extraversion
+    "A": ["1.D.2.d", "1.D.2.c"],  # Agreeableness
+    "C": [
+        "1.D.1.b",
+        "1.D.3.a",
+        "1.D.3.b",
+        "1.D.3.c",
+        "1.D.1.g",
+    ],  # Conscientiousness
+    "O": [
+        "1.D.1.f",
+        "1.D.1.a",
+        "1.D.1.c",
+        "1.D.1.d",
+    ],  # Opennes to Experience
 }
 
 # Work Values Element ID mapping (6 work values)
@@ -135,6 +170,8 @@ class ONETLoader:
         self._work_style_scores: Optional[dict] = None
         self._work_value_scores: Optional[dict] = None
         self._big_five_scores: Optional[dict] = None
+        self._hexaco_scores: Optional[dict] = None
+        self._work_contexts: Optional[pd.DataFrame] = None
 
     def load_occupations(self) -> pd.DataFrame:
         """Load occupation titles and descriptions.
@@ -145,7 +182,7 @@ class ONETLoader:
         if self._occupations is not None:
             return self._occupations
 
-        filepath = self.data_dir / "Occupation Data.txt"
+        filepath = self.data_dir / "Occupation Data Processed.txt"
         df = pd.read_csv(filepath, sep="\t")
         df.columns = ["soc_code", "title", "description"]
         self._occupations = df
@@ -219,11 +256,6 @@ class ONETLoader:
             "element_name",
             "scale_id",
             "data_value",
-            "n",
-            "standard_error",
-            "lower_ci",
-            "upper_ci",
-            "recommend_suppress",
             "date",
             "domain_source",
         ]
@@ -254,6 +286,29 @@ class ONETLoader:
         ]
         self._work_values = df
         logger.info(f"Loaded {len(df)} work value records from O*NET")
+        return df
+
+    def load_work_contexts(self) -> pd.DataFrame:
+        """Load Work Contexts data (environmental and social context).
+
+        Returns:
+            DataFrame with columns: soc_code, element_id, element_name,
+            scale_id, data_value, date, domain_source
+        """
+        if self._work_contexts is not None:
+            return self._work_contexts
+
+        filepath = self.data_dir / "Work Context Processed.txt"
+        df = pd.read_csv(filepath, sep="\t")
+        df = df[df["Data Value"] >= 4].reset_index(drop=True)  # Filter to more relevant contexts
+        df = df.loc[:, ["O*NET-SOC Code", "Element Name", "Category Description"]]
+        df.columns = [
+            "soc_code",
+            "element_name",
+            "data_value",
+        ]
+        logger.info(f"Loaded {len(df)} work context records from O*NET")
+        self._work_contexts = df
         return df
 
     def get_riasec_scores(self) -> dict[str, dict[str, float]]:
@@ -326,7 +381,7 @@ class ONETLoader:
 
         # Filter to IM scale and known elements
         im_data = work_styles[
-            (work_styles["scale_id"] == "IM")
+            (work_styles["scale_id"] == "DR")
             & (work_styles["element_id"].isin(WORK_STYLE_ELEMENTS.keys()))
         ]
 
@@ -372,6 +427,34 @@ class ONETLoader:
             result[soc_code] = scores
 
         self._big_five_scores = result
+        return result
+
+    def get_hexaco_scores(self) -> dict[str, dict[str, float]]:
+        """Compute HEXACO scores derived from Work Styles.
+
+        Returns:
+            Dict mapping SOC code -> {"H": score, "E": score, "X": score, "A": score, "C": score, "O": score}
+
+        """
+        if self._hexaco_scores is not None:
+            return self._hexaco_scores
+
+        work_style_scores = self.get_work_style_scores()
+
+        result = {}
+        for soc_code, styles in work_style_scores.items():
+            scores = {}
+            for domain, element_ids in HEXACO_MAPPING.items():
+                domain_scores = []
+                for elem_id in element_ids:
+                    name = WORK_STYLE_ELEMENTS.get(elem_id)
+                    if name and name in styles:
+                        domain_scores.append(styles[name])
+                if domain_scores:
+                    scores[domain] = sum(domain_scores) / len(domain_scores)
+            result[soc_code] = scores
+
+        self._hexaco_scores = result
         return result
 
     def get_work_value_scores(self) -> dict[str, dict[str, float]]:
@@ -467,6 +550,9 @@ class ONETLoader:
         big_five_scores = self.get_big_five_scores()
         big_five = big_five_scores.get(soc_code, {})
 
+        hexaco_scores = self.get_hexaco_scores()
+        hexaco = hexaco_scores.get(soc_code, {})
+
         # Get Work Values (6 values, scale 1-7)
         work_value_scores = self.get_work_value_scores()
         work_values = work_value_scores.get(soc_code, {})
@@ -478,6 +564,15 @@ class ONETLoader:
         # Get tasks
         tasks_df = self.load_tasks()
         tasks = tasks_df[tasks_df["soc_code"] == soc_code]["task"].tolist()
+
+        work_contexts_df = self.load_work_contexts()
+        work_contexts = (
+            work_contexts_df[work_contexts_df["soc_code"] == soc_code]
+            .loc[:, ["element_name", "data_value"]]
+            .set_index("element_name")
+            .to_dict()
+        )
+        work_contexts = work_contexts["data_value"]
 
         return {
             "soc_code": soc_code,
@@ -491,11 +586,14 @@ class ONETLoader:
             "work_styles": work_styles,
             # Big Five derived (new)
             "big_five": big_five,
+            "hexaco": hexaco,
             # Work Values (new)
             "work_values": work_values,
             "work_value_highpoints": work_value_highpoints,
             # Tasks
             "tasks": tasks,
+            # Work Contexts
+            "work_contexts": work_contexts,
         }
 
     def filter_by_riasec(self, primary: str, min_score: float = 5.0) -> list[str]:
@@ -566,6 +664,24 @@ class ONETLoader:
         slug = re.sub(r"[^a-z0-9]+", "_", slug)
         return slug.strip("_")
 
+    def save_profiles_to_jsons(self, save_path: str):
+        occupations = self.load_occupations()
+        for soc_code in tqdm(occupations["soc_code"]):
+            try:
+                profile = self.get_occupation_profile(soc_code)
+                occupation_title = profile["title"]
+                # replace the spaces with underscores and lowercase the title.
+                occupation_title = occupation_title.replace(" ", "_").lower()
+                if "/" in occupation_title:
+                    occupation_title = occupation_title.replace("/", "__")
+                filename = f"{occupation_title}.json"
+                with open(f"{save_path}/{filename}", "w") as f:
+                    import json
+
+                    json.dump(profile, f, indent=2)
+            except Exception as e:
+                logger.warning(f"Failed to save profile for {soc_code}: {e}")
+
 
 if __name__ == "__main__":
     # Quick test
@@ -581,23 +697,34 @@ if __name__ == "__main__":
     for letter, count in sorted(dist.items()):
         print(f"  {RIASEC_FULL_NAMES[letter]}: {count}")
 
-    print("\n=== Sample Occupation Profile ===")
-    profile = loader.get_occupation_profile("29-1141.00")  # Registered Nurses
-    print(f"Title: {profile['title']}")
-    print(f"RIASEC: {profile['riasec']}")
-    print(f"Primary: {profile['riasec_primary']}")
-    print(f"High-points: {profile['highpoint_codes']}")
-    print(f"Tasks: {len(profile['tasks'])} tasks")
+    loader.save_profiles_to_jsons("data/occupation_profiles")
 
-    print("\n=== Work Styles (16 traits) ===")
-    for trait, score in sorted(profile["work_styles"].items()):
-        print(f"  {trait}: {score:.2f}")
+    # print("\n=== Sample Occupation Profile ===")
+    # profile = loader.get_occupation_profile("29-1141.00")  # Registered Nurses
+    # print(f"Title: {profile['title']}")
+    # print(f"RIASEC: {profile['riasec']}")
+    # print(f"Primary: {profile['riasec_primary']}")
+    # print(f"High-points: {profile['highpoint_codes']}")
+    # print(f"Tasks: {len(profile['tasks'])} tasks")
+    # print(f"Work Contexts: {len(profile['work_contexts'])} contexts")
 
-    print("\n=== Big Five (derived) ===")
-    for dim, score in sorted(profile["big_five"].items()):
-        print(f"  {dim}: {score:.2f}")
+    # print("\n=== Work Styles (21 traits) ===")
+    # for trait, score in sorted(profile["work_styles"].items()):
+    #     print(f"  {trait}: {score:.2f}")
 
-    print("\n=== Work Values (6 values) ===")
-    for value, score in sorted(profile["work_values"].items()):
-        print(f"  {value}: {score:.2f}")
-    print(f"Work Value High-points: {profile['work_value_highpoints']}")
+    # print("\n=== Big Five (derived) ===")
+    # for dim, score in sorted(profile["big_five"].items()):
+    #     print(f"  {dim}: {score:.2f}")
+
+    # print("\n=== HEXACO ===")
+    # for dim, score in sorted(profile["hexaco"].items()):
+    #     print(f"  {dim}: {score:.2f}")
+
+    # print("\n=== Work Values (6 values) ===")
+    # for value, score in sorted(profile["work_values"].items()):
+    #     print(f"  {value}: {score:.2f}")
+    # print(f"Work Value High-points: {profile['work_value_highpoints']}")
+
+    # print("\n=== Work Contexts (sample 3)===")
+    # for context, freq in profile["work_contexts"].items():
+    #     print(f"  {context}: {freq}")
