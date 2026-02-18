@@ -103,6 +103,7 @@ class RIASECJudge(AbstractJudge):
         temperature: float = 0.1
     ):
         responses = []
+        answers = {}
         with tqdm(total=60, desc="Querying items") as pbar:
             for item in self.ITEMS:
                 messages = self._get_system_messagesv2(activity=item['text'])
@@ -114,9 +115,10 @@ class RIASECJudge(AbstractJudge):
                 ).strip()
                 like = 1 if raw_ans.strip().lower().startswith("yes") else 0
                 responses.append(like)
+                answers[item['text']] = raw_ans
                 logger.debug(f"Item {item['item_id']:2d} ({item['dimension'][:3]}): {like} ({raw_ans})")
                 pbar.update(1)
-        return responses
+        return responses, answers
     def judge(
         self,
         persona_model: AbstractPersonaModel,
@@ -233,7 +235,7 @@ if __name__ == "__main__":
     # results, counts = riasec_judge(
     #     pvx, args.alpha, args.max_new_tokens, args.temperature
     # )
-    responses = riasec_judge(
+    responses, answers = riasec_judge(
         pvx, args.alpha, args.max_new_tokens, args.temperature
     )
     scores = riasec_judge.compute_scores(responses=responses)
@@ -241,6 +243,6 @@ if __name__ == "__main__":
     logger.info(args.concept)
     if args.print_results:
         logger.info("===RESULTS===")
-        logger.info(responses)
+        logger.info(answers)
     logger.info("===RIASEC Counts===")
     logger.info(scores)
