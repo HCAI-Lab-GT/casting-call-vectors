@@ -836,7 +836,7 @@ class AbstractPersonaModel(ABC):
 
         with self._persona_base_lock:
             if self._persona_base is None or self._persona_base_key != key:
-                self._persona_base = self.prompt_persona_vector.to(
+                self._persona_base = self.response_persona_vector.to(
                     device=p.device, dtype=p.dtype
                 ).view(1, -1)  # (1, H)
                 self._persona_base_key = key
