@@ -5,6 +5,10 @@
 - Filtered the tasks to top-10 based on importance and relevance to the occupation. Helps in reducing the token size while still capturing the core of the occupation's nature.
 - Added `LOOK_TO_FILTER.json` in `data/` for future reference to remove 354 occupations if needed. This is based on the rank of the work styles of each occupation.
 - Updated SystemPrompt generation template to consider all the new context to generate more detailed system prompts.
+- Generated basic systemprompts for about 10 occupations to test the system prompt. Found issues, 
+    -physical items are still present in metadata and can possibly influence generation.
+    - prompts read like a data dump rather than a coherent persona. 
+    - managerial roles are not differentiated enough. the prompts should focus more on the domain specific aspect of the managerial tasks. 
 ---
 
 # pvx
