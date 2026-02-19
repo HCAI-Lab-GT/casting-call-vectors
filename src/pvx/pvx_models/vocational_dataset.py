@@ -200,7 +200,7 @@ class VocationalPersonaGenerator:
         except Exception as e:
             logger.warning("API call failed for %s: %s, using fallback", profile["title"], e)
 
-        return self._generate_fallback_prompts(profile)
+        return None
 
     def _generate_fallback_prompts(self, profile: dict) -> list[str]:
         """Generate basic prompts without LLM if needed."""
@@ -256,33 +256,36 @@ class VocationalPersonaGenerator:
         prompts = self.generate_system_prompts(profile)
         eval_prompt = self.generate_eval_prompt(profile)
 
-        persona = {
-            "instruction": [{"pos": p} for p in prompts],
-            "eval_prompt": eval_prompt,
-            # Store metadata for reference
-            "_metadata": {
-                "soc_code": profile["soc_code"],
-                "title": profile["title"],
-                "riasec": profile.get("riasec", {}),
-                "riasec_primary": profile.get("riasec_primary"),
-                "highpoint_codes": profile.get("highpoint_codes", []),
-                # Work Styles (16 traits, 1-5 scale)
-                "work_styles": profile.get("work_styles", {}),
-                # Big Five derived scores
-                "big_five": profile.get("big_five", {}),
-                # Work Values (6 values, 1-7 scale)
-                "work_values": profile.get("work_values", {}),
-                "work_value_highpoints": profile.get("work_value_highpoints", []),
-                "skills": profile.get("skills", []),
-                "work_context": profile.get("work_contexts", {}),
-            },
-        }
+        if prompts:
+            persona = {
+                "instruction": [{"pos": p} for p in prompts],
+                "eval_prompt": eval_prompt,
+                # Store metadata for reference
+                "_metadata": {
+                    "soc_code": profile["soc_code"],
+                    "title": profile["title"],
+                    "riasec": profile.get("riasec", {}),
+                    "riasec_primary": profile.get("riasec_primary"),
+                    "highpoint_codes": profile.get("highpoint_codes", []),
+                    # Work Styles (16 traits, 1-5 scale)
+                    "work_styles": profile.get("work_styles", {}),
+                    # Big Five derived scores
+                    "big_five": profile.get("big_five", {}),
+                    # Work Values (6 values, 1-7 scale)
+                    "work_values": profile.get("work_values", {}),
+                    "work_value_highpoints": profile.get("work_value_highpoints", []),
+                    "skills": profile.get("skills", []),
+                    "work_context": profile.get("work_contexts", {}),
+                },
+            }
 
-        if include_questions:
-            # TODO: Generate occupation-specific questions
-            pass
+            if include_questions:
+                # TODO: Generate occupation-specific questions
+                pass
 
-        return persona
+            return persona
+
+        return {}
 
     def save_persona(self, slug: str, persona: dict) -> Path:
         """Save persona definition to JSON file.
@@ -296,7 +299,7 @@ class VocationalPersonaGenerator:
         """
         filepath = self.output_dir / f"{slug}.json"
         with open(filepath, "w") as f:
-            json.dump(persona, f, indent=2)
+            json.dump(persona, f, indent=2, ensure_ascii=False)
         logger.info(f"Saved persona to {filepath}")
         return filepath
 
@@ -304,7 +307,7 @@ class VocationalPersonaGenerator:
         self,
         profile: dict,
         slug: Optional[str] = None,
-    ) -> Path:
+    ):
         """Generate and save persona for an occupation.
 
         Args:
@@ -321,7 +324,10 @@ class VocationalPersonaGenerator:
             slug = loader.to_slug(profile["title"])
 
         persona = self.generate_persona(profile)
-        return self.save_persona(slug, persona)
+        if persona:
+            return self.save_persona(slug, persona)
+
+        return ""
 
 
 if __name__ == "__main__":
