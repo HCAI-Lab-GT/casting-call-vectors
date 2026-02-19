@@ -44,30 +44,41 @@ You are an expert prompt engineer specializing in occupation-grounded persona de
 **Skills:** {skills}
 
 # Task
-Generate exactly 5 system prompts, each 2-4 sentences, instructing an AI to role-play as a {title} in conversation. Each prompt targets a different facet using a designated primary input field — do not mix sources across facets:
+Generate exactly 5 system prompts, each 2-4 sentences, instructing an AI to role-play as a {title} in conversation. Each prompt targets a different facet using a designated primary input field:
 
-1. **Behavioral Anchor** [Primary: Tasks] — What habits of mind have daily tasks built? Translate repeated actions into internalized reflexes.
-2. **Interpersonal Stance** [Primary: Work Context] — What interpersonal reflexes have specific work pressures developed? Ground every claim in a concrete work context element.
-3. **Cognitive Style** [Primary: Skills] — How do skills manifest as natural reasoning patterns? Express as internalized thinking, not labels.
-4. **Professional Identity** [Primary: Job Description + Tasks] — What does the formal purpose of the role, combined with daily tasks, add up to as a professional conviction?
-5. **Communicative Style** [Primary: Work Context + Skills] — How do environmental pressures and developed skills shape communication register — directness, vocabulary, precision?
+1. **Behavioral Anchor** [Primary: Tasks] — Translate repeated daily actions into internalized reflexes and habits of mind.
+2. **Interpersonal Stance** [Primary: Work Context] — Derive interpersonal reflexes from specific environmental or relational pressures. Work context describes pressures and conditions, not techniques — do not infer performance behaviors from proximity or contact data.
+3. **Cognitive Style** [Primary: Skills] — Express skills as internalized thinking patterns. Never use skill labels directly — describe the behavior the skill produces.
+4. **Professional Identity** [Primary: Job Description + Tasks] — Derive a professional conviction from what the role formally exists to do, combined with what the person actually does daily.
+5. **Communicative Style** [Primary: Work Context + Skills] — Identify a specific work context pressure and a specific skill, then show how their combination shapes communication register. Name the pressure and the skill in your scratchpad.
 
 # Rules
 
-**NAME THE ROLE**: Every prompt must open by identifying the persona as a {title}. Vary the *function* of the opening across prompts — one might open with what they do, another with what they believe, another with the pressure they operate under.
+**NAME THE ROLE**: Every prompt must identify the persona as a {title}. Vary the *function* of the opening — one might open with what they do, another with what they believe, another with the pressure they operate under. Every prompt must be different in this regard, but all must include the title.
 
 **DIRECT INSTRUCTION**: Write directives to the AI, not observations about the profession.
 - Wrong: "Years of rehearsal have shaped a reflex to process information by..."
-- Right: "You are an Actor who processes information by..."
+- Right: "You are an Actor who processes information by..." or "As an Actor, you have a reflex to process information by..." or "Embody an Actor that processes information by..."
 
-**DATA-GROUNDED**: Every behavioral claim must trace to a specific item in the designated input field. Self-check before output: *if you cannot point to the specific input item that produced a claim, delete it.* Generic job-title associations are forbidden.
+**DATA-GROUNDED**: Every behavioral claim must trace to a specific item in its designated input field. Stereotype substitution is the primary failure mode — if a claim would be true of a generic cultural image of this profession rather than derived from the input data, delete it. AVOID STEREOTYPES AT ALL COSTS.
 
 **SYNTHESIZE**: Transform input data into behavioral instructions — never use skill or task labels directly, and never praise the persona.
 - Wrong: "you excel at active listening" / "you deliver compelling performances"
-- Right: "you pause before responding, reflect back what you've heard, and ask one clarifying question before offering your view" / "you believe preparation is everything"
+- Right: "you pause before responding, reflect back what you've heard, and ask one clarifying question" / "you believe preparation is everything"
 
 # Output Format
-Return ONLY a valid JSON array of exactly 5 strings. No preamble, no markdown fencing, no newlines inside strings, all special characters escaped."""
+Produce output in two stages:
+
+**Stage 1 — Scratchpad** (will be discarded)
+For each of the 5 prompts, write:
+- Facet name
+- Input items used (quote the specific task, work context element, or skill you are drawing from)
+- One sentence explaining how you transformed that input into the behavioral claim
+
+**Stage 2 — Final Output**
+After the scratchpad, return ONLY a valid JSON array of exactly 5 strings. No preamble, no markdown fencing, no newlines inside strings, all special characters escaped.
+
+If any claim in a prompt cannot be traced to a quoted input item in the scratchpad, remove it from the final prompt before outputting Stage 2."""
 
 # Template for evaluation prompts (matches assistant-axis format)
 EVAL_PROMPT_TEMPLATE = """You are evaluating whether the model's response displays the role: **{title}**. {role_description}
