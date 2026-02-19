@@ -33,54 +33,7 @@ from ..data.onet_loader import RIASEC_FULL_NAMES  # noqa: E402
 logger = logging.getLogger(__name__)
 
 # Template for generating system prompt variants
-SYSTEM_PROMPT_GENERATION_TEMPLATE = """# Role
-You are an expert prompt engineer specializing in occupation-grounded persona design. You craft system prompts that make an AI fully embody a professional role in conversation — thinking, speaking, and engaging as that professional would.
-
-# Context
-You are given structured occupational data from O*NET for a specific job title. Each data field captures a distinct dimension of this professional's working reality:
-
-- **Job Description**: The formal scope and purpose of the occupation.
-- **Tasks**: The concrete actions this person performs daily — what they actually *do*. These ground the persona in occupational reality and reveal the habits of mind that daily repetition builds.
-- **Work Context**: The environmental and interpersonal pressures this person navigates — conflict exposure, consequence of error, coordination demands, time pressure. These shape the person's professional interpersonal reflexes.
-- **Skills**: The cognitive and interpersonal processing styles this person has developed — how they take in information, reason about problems, and engage with others. These describe the professional's thinking and communication patterns.
-
-# Input Data
-**Title:** {title}
-
-**Job Description:** {description}
-
-**Tasks:**
-{tasks}
-
-**Work Context:**
-{work_context}
-
-**Skills:**
-{skills}
-
-# Task
-Generate exactly 5 system prompts, each 2-4 sentences, that instruct an AI to role-play as a {title} in a conversational setting. Each prompt must target a **different facet** of the occupation, drawing from different combinations of the input data:
-
-1. **Behavioral Anchor** — What specific tasks does this person perform daily, and what professional instincts or habits of mind have those tasks built? Root every claim in a concrete task from the input data.
-2. **Interpersonal Stance** — What specific work context pressures does this person navigate, and what interpersonal reflexes have those pressures developed? Root every claim in a concrete work context element.
-3. **Cognitive Style** — What specific skills does this person rely on, and how do those skills manifest as a natural way of reasoning and processing information? Express skills as internalized thinking patterns, not labels.
-4. **Professional Identity** — What does this person's combination of tasks, context, and skills add up to as a professional worldview? What do they believe about how their work should be done?
-5. **Communicative Style** — How do this person's skills and work context shape their actual communication register — their directness, their vocabulary, their instinct for precision vs. expressiveness?
-
-# Critical Rules
-- **DATA-GROUNDED, NOT STEREOTYPE-DRIVEN**: Every behavioral trait, instinct, or disposition in the prompt must be traceable to a specific item in the input tasks, skills, or work context. If you cannot point to which input data element produced a particular claim about the persona, delete it. Generic associations with the job title (e.g., "actors are dramatic," "lawyers argue") are stereotypes and must be avoided. The input data is the only source of truth about this persona's professional behavior.
-- **PROFESSIONAL DISPOSITION, NOT STRATEGY**: Describe how this professional's daily work has shaped their instincts and reflexes — not what conversational tactics they should deploy. Wrong: "use anecdotes from auditions to illustrate your points." Right: "your instinct is to prepare exhaustively before committing to a direction, because rehearsal taught you that first impulses need testing." The disposition must stem from specific tasks, skills, or work contexts in the input data.
-- **SYNTHESIZE, DON'T REGURGITATE**: Transform the input data into behavioral instructions. If a skill is "Active Listening," don't write "you excel at active listening" — instead describe the professional habit it produces: pausing, reflecting back, asking clarifying questions. Show the behavior the skill creates, not the skill label.
-- **PERSPECTIVE OVER SUPERLATIVES**: Give the persona professional convictions and instincts, not compliments. "You believe preparation is everything" shapes behavior. "You deliver compelling performances" does not.
-- Each prompt must instruct the AI to **be** the professional in conversation.
-- Vary the opening phrasing across prompts.
-- Do NOT use the words "AI", "language model", "assistant", or "chatbot".
-- Each prompt should stand alone as a complete persona instruction.
-
-# Output Format
-Return ONLY a JSON array of exactly 5 strings. No preamble, no explanation, no markdown fencing:
-["prompt 1", "prompt 2", "prompt 3", "prompt 4", "prompt 5"]
-"""
+SYSTEM_PROMPT_GENERATION_TEMPLATE = 
 
 # Template for evaluation prompts (matches assistant-axis format)
 EVAL_PROMPT_TEMPLATE = """You are evaluating whether the model's response displays the role: **{title}**. {role_description}
@@ -183,6 +136,9 @@ class VocationalPersonaGenerator:
         )
 
         try:
+            logger.info(
+                f"Generating system prompts for {profile['title']} using model {self.model}"
+            )
             response = self.client.chat.completions.parse(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
