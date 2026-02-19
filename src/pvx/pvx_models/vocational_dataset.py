@@ -191,9 +191,8 @@ class VocationalPersonaGenerator:
 
             content = response.choices[0].message.parsed
             content = content.Prompts
-            prompts = json.loads(content)
-            if isinstance(prompts, list) and len(prompts) == 5:
-                return prompts
+            if isinstance(content, list) and len(content) == 5:
+                return content
         except json.JSONDecodeError:
             logger.warning("Failed to parse LLM response for %s, using fallback", profile["title"])
         except Exception as e:
