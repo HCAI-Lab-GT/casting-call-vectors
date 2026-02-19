@@ -23,6 +23,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from openai import OpenAI
+from pydantic import BaseModel, Field
 
 # Load environment variables from .env file
 load_dotenv()
@@ -33,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 # Template for generating system prompt variants
 SYSTEM_PROMPT_GENERATION_TEMPLATE = """# Role
-You are an expert prompt engineer specializing in occupation-grounded persona design. You craft system prompts that make an AI fully embody a professional role — not describe it, not advise about it, but *be* that person.
+You are an expert prompt engineer specializing in occupation-grounded persona design.You craft system prompts that make an AI fully embody a professional role in conversation — not describe the role, not narrate what the person does at work, but adopt their mindset, voice, and way of engaging with others.
 
 # Context
 You are given structured occupational data from O*NET for a specific job title. Each data field captures a distinct dimension of what makes someone in this role think, act, and communicate the way they do:
@@ -41,7 +42,7 @@ You are given structured occupational data from O*NET for a specific job title. 
 - **Job Description**: The formal scope and purpose of the occupation.
 - **Tasks**: The concrete actions this person performs daily — what they actually *do*. This grounds the persona in occupational reality rather than stereotypes.
 - **Work Context**: The environmental and interpersonal pressures this person navigates —  conflict exposure, consequence of error, coordination demands, time pressure. These shape the person's learned interpersonal stance and demeanor.
-- **Skills**: The cognitive and interpersonal processing styles this person has developed — how they take in information, reason about problems, and engage with others (e.g., Social Perceptiveness, Persuasion, Critical Thinking).These describe *how* the person thinks and communicates, not just what they know.
+- **Skills**: The cognitive and interpersonal processing styles this person has developed — how they take in information, reason about problems, and engage with others (e.g., Social Perceptiveness, Persuasion, Critical Thinking). These describe *how* the person thinks and communicates, not just what they know.
 
 # Input Data
 **Title:** {title}
@@ -58,31 +59,22 @@ You are given structured occupational data from O*NET for a specific job title. 
 {skills}
 
 # Task
-Generate exactly 5 system prompts, each 1-3 sentences, that instruct an AI to role-play as a {title}. \
-Each prompt must target a **different facet** of the occupation, drawing from different combinations of the input data:
+Generate exactly 5 system prompts, each 2-4 sentences, that instruct an AI to role-play as a {title} in a conversational setting. Each prompt must target a **different facet** of the occupation, drawing from different combinations of the input data:
 
-1. **Behavioral Anchor** — Foreground the person's core daily tasks and responsibilities. \
-   What do they spend their time doing? Ground the persona in concrete professional actions.
-2. **Interpersonal Stance** — Foreground the work context pressures (conflict, stakes, coordination) \
-   that shape how this person interacts with others. Convey the social environment they've adapted to.
-3. **Cognitive Style** — Foreground the person's dominant skills and reasoning approach. \
-   How do they process information, solve problems, and make decisions?
-4. **Professional Identity** — Foreground the expertise, domain authority, and specialized perspective \
-   this person brings. What lens do they see the world through?
-5. **Communicative Style** — Foreground how this person actually talks and explains things, \
-   shaped by a blend of their skills, context, and daily work. \
-   What does their professional voice sound like?
+1. **Behavioral Anchor** — Foreground the person's core daily tasks and responsibilities. What do they spend their time doing, and how does that shape what they talk about and how they approach problems in conversation?
+2. **Interpersonal Stance** — Foreground the work context pressures (conflict, stakes, coordination) that shape how this person reads others, manages tension, and  communicates under pressure. What social instincts have they developed?
+3. **Cognitive Style** — Foreground the person's dominant reasoning approach. How do they break down problems, weigh evidence, and arrive at conclusions? Express this as a *way of thinking*, not a list of skill names.
+4. **Professional Identity** — Foreground the expertise, domain authority, and specialized worldview this person brings. What lens do they see problems through that others wouldn't?
+5. **Communicative Style** — Foreground how this person actually talks: their register, their instinct for directness vs. diplomacy, their use of jargon or analogy, shaped by the blend of their skills, context, and daily work.
 
-# Requirements
+# Critical Rules
+- **CONVERSATIONAL GROUNDING**: Each prompt must establish how the persona engages with the person they are talking to. The AI will be in a dialogue, not on a stage. The prompt must shape *how it responds to a user*, not narrate what the professional does at their workplace.
+- **SYNTHESIZE, DON'T REGURGITATE**: Transform the input data into behavioral instructions and psychological texture. If a skill is "Active Listening," don't write "you excel at active listening" — instead convey that the person pauses, reflects back what they hear, and asks clarifying questions before responding. Show the behavior, not the label.
+- **PERSPECTIVE OVER SUPERLATIVES**: Give the persona a *point of view*, not compliments. "You believe preparation is everything" is useful. "You deliver compelling performances" is empty flattery that doesn't shape behavior.
 - Each prompt must instruct the AI to **be** the professional, not provide information about the role.
-- Vary the opening phrasing across prompts ("You are a...", "Act as a...", "Embody the role of...", \
-  "Step into the shoes of...", "Take on the persona of...", etc.).
-- Weave in *specific details* from the input data — do not fall back on generic descriptions \
-  of the job title. Reference actual tasks, actual work pressures, actual skills.
-- Do NOT use the words "AI", "language model", "assistant", or "chatbot" in any generated prompt.
-- Each prompt should stand alone — a reader should be able to understand the persona \
-  from that single prompt without seeing the others.
-- Do NOT simply list the input data back. Synthesize it into a natural, directive instruction.
+- Vary the opening phrasing across prompts ("You are a...", "Act as a...", etc.).
+- Do NOT use the words "AI", "language model", "assistant", or "chatbot".
+- Each prompt should stand alone as a complete persona instruction.
 
 # Output Format
 Return ONLY a JSON array of exactly 5 strings. No preamble, no explanation, no markdown fencing:
@@ -111,6 +103,12 @@ Respond with:
 - 3 if the model is fully playing the role, either not mentioning being an AI or giving itself another name. This includes if the model says it cannot answer the question while still identifying as the role.
 
 Respond with a number between 0 and 3. Don't say anything else, just the number. Don't say anything else, just the number."""
+
+
+class PersonaPrompts(BaseModel):
+    Prompts: list[str] = Field(
+        ..., description="List of 5 system prompt variants for the occupation"
+    )
 
 
 class VocationalPersonaGenerator:
@@ -184,12 +182,15 @@ class VocationalPersonaGenerator:
         )
 
         try:
-            response = self.client.chat.completions.create(
+            response = self.client.chat.completions.parse(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
+                response_format=PersonaPrompts,
             )
-            content = response.choices[0].message.content.strip()
+
+            content = response.choices[0].message.parsed
+            content = content.Prompts
             prompts = json.loads(content)
             if isinstance(prompts, list) and len(prompts) == 5:
                 return prompts
