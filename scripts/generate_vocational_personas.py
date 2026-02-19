@@ -128,7 +128,7 @@ def main():
     if not profiles:
         logger.info("No occupations to process")
         return
-
+    
     logger.info(f"Generating personas for {len(profiles)} occupations")
 
     # Track statistics

@@ -17,6 +17,7 @@ Example usage:
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -31,22 +32,62 @@ from ..data.onet_loader import RIASEC_FULL_NAMES  # noqa: E402
 logger = logging.getLogger(__name__)
 
 # Template for generating system prompt variants
-SYSTEM_PROMPT_GENERATION_TEMPLATE = """Generate 5 different system prompts that instruct an AI to role-play as a {title}.
+SYSTEM_PROMPT_GENERATION_TEMPLATE = """# Role
+You are an expert prompt engineer specializing in occupation-grounded persona design. You craft system prompts that make an AI fully embody a professional role — not describe it, not advise about it, but *be* that person.
 
-Job Description: {description}
+# Context
+You are given structured occupational data from O*NET for a specific job title. Each data field captures a distinct dimension of what makes someone in this role think, act, and communicate the way they do:
 
-Key Tasks:
+- **Job Description**: The formal scope and purpose of the occupation.
+- **Tasks**: The concrete actions this person performs daily — what they actually *do*. This grounds the persona in occupational reality rather than stereotypes.
+- **Work Context**: The environmental and interpersonal pressures this person navigates —  conflict exposure, consequence of error, coordination demands, time pressure. These shape the person's learned interpersonal stance and demeanor.
+- **Skills**: The cognitive and interpersonal processing styles this person has developed — how they take in information, reason about problems, and engage with others (e.g., Social Perceptiveness, Persuasion, Critical Thinking).These describe *how* the person thinks and communicates, not just what they know.
+
+# Input Data
+**Title:** {title}
+
+**Job Description:** {description}
+
+**Tasks:**
 {tasks}
 
-Requirements:
-1. Each prompt should instruct the AI to fully embody the role, NOT just provide information about it
-2. Use varied phrasing: "You are a...", "Act as a...", "Please be a...", etc.
-3. Highlight different aspects of the job in each prompt (responsibilities, expertise, perspective)
-4. Keep each prompt to 1-2 sentences
-5. Do NOT mention AI, language model, or assistant - the model should BE the professional
+**Work Context:**
+{work_context}
 
-Return ONLY a JSON array of 5 strings, no other text:
-["prompt 1", "prompt 2", "prompt 3", "prompt 4", "prompt 5"]"""
+**Skills:**
+{skills}
+
+# Task
+Generate exactly 5 system prompts, each 1-3 sentences, that instruct an AI to role-play as a {title}. \
+Each prompt must target a **different facet** of the occupation, drawing from different combinations of the input data:
+
+1. **Behavioral Anchor** — Foreground the person's core daily tasks and responsibilities. \
+   What do they spend their time doing? Ground the persona in concrete professional actions.
+2. **Interpersonal Stance** — Foreground the work context pressures (conflict, stakes, coordination) \
+   that shape how this person interacts with others. Convey the social environment they've adapted to.
+3. **Cognitive Style** — Foreground the person's dominant skills and reasoning approach. \
+   How do they process information, solve problems, and make decisions?
+4. **Professional Identity** — Foreground the expertise, domain authority, and specialized perspective \
+   this person brings. What lens do they see the world through?
+5. **Communicative Style** — Foreground how this person actually talks and explains things, \
+   shaped by a blend of their skills, context, and daily work. \
+   What does their professional voice sound like?
+
+# Requirements
+- Each prompt must instruct the AI to **be** the professional, not provide information about the role.
+- Vary the opening phrasing across prompts ("You are a...", "Act as a...", "Embody the role of...", \
+  "Step into the shoes of...", "Take on the persona of...", etc.).
+- Weave in *specific details* from the input data — do not fall back on generic descriptions \
+  of the job title. Reference actual tasks, actual work pressures, actual skills.
+- Do NOT use the words "AI", "language model", "assistant", or "chatbot" in any generated prompt.
+- Each prompt should stand alone — a reader should be able to understand the persona \
+  from that single prompt without seeing the others.
+- Do NOT simply list the input data back. Synthesize it into a natural, directive instruction.
+
+# Output Format
+Return ONLY a JSON array of exactly 5 strings. No preamble, no explanation, no markdown fencing:
+["prompt 1", "prompt 2", "prompt 3", "prompt 4", "prompt 5"]
+"""
 
 # Template for evaluation prompts (matches assistant-axis format)
 EVAL_PROMPT_TEMPLATE = """You are evaluating whether the model's response displays the role: **{title}**. {role_description}
@@ -97,7 +138,17 @@ class VocationalPersonaGenerator:
     def client(self) -> OpenAI:
         """Lazy initialization of OpenAI client."""
         if self._client is None:
-            self._client = OpenAI()
+            if not os.getenv("OPENAI_API_KEY"):
+                raise ValueError("OPENAI_API_KEY not found in environment variables.")
+
+            if os.getenv("OPENAI_BASE_URL"):
+                logger.info("Using custom OpenAI base URL: %s", os.getenv("OPENAI_BASE_URL"))
+                self._client = OpenAI(
+                    base_url=os.getenv("OPENAI_BASE_URL"), api_key=os.getenv("OPENAI_API_KEY")
+                )
+            else:
+                self._client = OpenAI()
+
         return self._client
 
     def generate_system_prompts(self, profile: dict, max_tasks: int = 5) -> list[str]:
@@ -111,13 +162,25 @@ class VocationalPersonaGenerator:
             List of 5 system prompt strings
         """
         # Format tasks
-        tasks = profile.get("tasks", [])[:max_tasks]
+        tasks = profile.get("tasks", [])
         tasks_str = "\n".join(f"- {t}" for t in tasks) if tasks else "Not specified"
+
+        work_context = profile.get("work_contexts", {})
+        work_context_str = (
+            "\n".join(f"- {k}: {v}" for k, v in work_context.items())
+            if work_context
+            else "Not specified"
+        )
+
+        skills = profile.get("skills", [])
+        skills_str = "\n".join(f"- {s}" for s in skills) if skills else "Not specified"
 
         prompt = SYSTEM_PROMPT_GENERATION_TEMPLATE.format(
             title=profile["title"],
             description=profile["description"],
             tasks=tasks_str,
+            work_context=work_context_str,
+            skills=skills_str,
         )
 
         try:
@@ -208,6 +271,8 @@ class VocationalPersonaGenerator:
                 # Work Values (6 values, 1-7 scale)
                 "work_values": profile.get("work_values", {}),
                 "work_value_highpoints": profile.get("work_value_highpoints", []),
+                "skills": profile.get("skills", []),
+                "work_context": profile.get("work_contexts", {}),
             },
         }
 

@@ -1,15 +1,13 @@
-# pvx
-
----
-## Changes from "occupational_networks" branch:
+# Changes from "occupational_networks" branch:
 - Filtered number of occupations based on the data collection precision and the other attribute confidence bounds => Reduced from 1016 to 668 occupations.
 - Switched to O*NET 30.1 instead of 29.1 (previously used) mainly favouring the latest HEXACO inclusions and more obvious Distinctiveness Rank of a Work Style for an occupation, Included HEXACO in the JSONs for the occupation profile.
 - Added Work Contexts for additional social context regarding  the occupation. Though indirect, they signal interesting attributes that a person in the occupation face, such as `"Face-to-Face Discussions with Individuals and Within Teams": "Every day",` or `"Work Outcomes and Results of Other Workers": "High responsibility"`. 
 - Filtered the tasks to top-10 based on importance and relevance to the occupation. Helps in reducing the token size while still capturing the core of the occupation's nature.
 - Added `LOOK_TO_FILTER.json` in `data/` for future reference to remove 354 occupations if needed. This is based on the rank of the work styles of each occupation.
-
+- Updated SystemPrompt generation template to consider all the new context to generate more detailed system prompts.
 ---
 
+# pvx
 
 
 This repository contains persona dataset generation and evaluation utilities built around Inspect AI. Library code lives under `src/pvx/` (datasets, helpers, tasks).
