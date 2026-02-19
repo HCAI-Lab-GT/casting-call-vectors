@@ -11,6 +11,7 @@ Example usage:
 """
 
 import logging
+from optparse import Option
 from pathlib import Path
 from typing import Optional
 
@@ -172,6 +173,7 @@ class ONETLoader:
         self._big_five_scores: Optional[dict] = None
         self._hexaco_scores: Optional[dict] = None
         self._work_contexts: Optional[pd.DataFrame] = None
+        self._skills: Optional[pd.DataFrame] = None
 
     def load_occupations(self) -> pd.DataFrame:
         """Load occupation titles and descriptions.
@@ -222,7 +224,7 @@ class ONETLoader:
         if self._tasks is not None:
             return self._tasks
 
-        filepath = self.data_dir / "Task Statements.txt"
+        filepath = self.data_dir / "Task Statements Processed.txt"
         df = pd.read_csv(filepath, sep="\t")
         df.columns = [
             "soc_code",
@@ -309,6 +311,23 @@ class ONETLoader:
         ]
         logger.info(f"Loaded {len(df)} work context records from O*NET")
         self._work_contexts = df
+        return df
+
+    def load_skills(self) -> pd.DataFrame:
+        """Load Skills data for occupations.
+
+        Returns:
+            DataFrame with columns: soc_code, element_name
+        """
+        if self._skills is not None:
+            return self._skills
+
+        filepath = self.data_dir / "Skills Processed.txt"
+        df = pd.read_csv(filepath, sep="\t")
+        df = df.loc[:, ["O*NET-SOC Code", "Element Name"]]
+        df.columns = ["soc_code", "element_name"]
+        self._skills = df
+        logger.info(f"Loaded {len(df)} skill records from O*NET")
         return df
 
     def get_riasec_scores(self) -> dict[str, dict[str, float]]:
@@ -565,6 +584,7 @@ class ONETLoader:
         tasks_df = self.load_tasks()
         tasks = tasks_df[tasks_df["soc_code"] == soc_code]["task"].tolist()
 
+        # Get work contexts
         work_contexts_df = self.load_work_contexts()
         work_contexts = (
             work_contexts_df[work_contexts_df["soc_code"] == soc_code]
@@ -573,6 +593,10 @@ class ONETLoader:
             .to_dict()
         )
         work_contexts = work_contexts["data_value"]
+
+        # get skills
+        skills_df = self.load_skills()
+        skills = skills_df[skills_df["soc_code"] == soc_code]["element_name"].tolist()
 
         return {
             "soc_code": soc_code,
@@ -590,10 +614,10 @@ class ONETLoader:
             # Work Values (new)
             "work_values": work_values,
             "work_value_highpoints": work_value_highpoints,
-            # Tasks
+            # Metadata
             "tasks": tasks,
-            # Work Contexts
             "work_contexts": work_contexts,
+            "skills": skills,
         }
 
     def filter_by_riasec(self, primary: str, min_score: float = 5.0) -> list[str]:
