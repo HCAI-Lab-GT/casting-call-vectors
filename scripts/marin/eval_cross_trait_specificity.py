@@ -34,7 +34,7 @@ from pvx.pvx_models.riasec_persona_model import RIASECPersonaModel
 logger = setup_logging(name="cross-trait-specificity")
 
 TRAITS = ["artistic", "conventional", "enterprising", "investigative", "realistic", "social"]
-ALPHAS = [0, 3, 5]  # baseline, moderate, strong
+DEFAULT_ALPHAS = [0, 3, 5]  # baseline, moderate, strong
 
 
 def _repo_root() -> Path:
@@ -115,6 +115,12 @@ def main():
     ap.add_argument("--layer", type=int, default=None)
     ap.add_argument("--output_dir", type=str, default="outputs/specificity")
     ap.add_argument(
+        "--alphas",
+        type=str,
+        default=None,
+        help="Comma-separated list of alphas (e.g. '0,0.5,1.0'). Defaults to 0,3,5.",
+    )
+    ap.add_argument(
         "--n_random",
         type=int,
         default=5,
@@ -124,6 +130,11 @@ def main():
 
     root = _repo_root()
     layer = args.layer if args.layer is not None else _detect_middle_layer(args.model_id)
+    alphas = (
+        [float(x.strip()) for x in args.alphas.split(",") if x.strip()]
+        if args.alphas is not None
+        else DEFAULT_ALPHAS
+    )
 
     # Load RIASEC characteristics
     with open(root / "configs/riasec.yaml") as f:
@@ -138,7 +149,7 @@ def main():
     results = {
         "model_id": args.model_id,
         "layer": layer,
-        "alphas": ALPHAS,
+        "alphas": alphas,
         "traits": TRAITS,
         "specificity_matrix": {},  # steer_trait -> {eval_trait -> {alpha -> mean_gap}}
         "random_baseline": {},  # eval_trait -> {alpha -> mean_gap}
@@ -165,7 +176,7 @@ def main():
         for eval_trait in TRAITS:
             chars = all_chars[eval_trait]
             alpha_results = {}
-            for alpha in ALPHAS:
+            for alpha in alphas:
                 with model._steering_delta(alpha):
                     gaps = eval_gap_on_characteristics(
                         model, model.tokenizer, device, chars, yes_ids, no_ids
@@ -185,7 +196,7 @@ def main():
             hidden_dim = model.response_persona_vector.shape[0]
             rng = np.random.default_rng(42)
 
-            random_gaps_by_alpha = {str(a): {t: [] for t in TRAITS} for a in ALPHAS}
+            random_gaps_by_alpha = {str(a): {t: [] for t in TRAITS} for a in alphas}
 
             for _rand_i in range(args.n_random):
                 # Create random vector with same norm
@@ -199,7 +210,7 @@ def main():
                 model.response_persona_vector = rand_vec
                 model._persona_base = None  # invalidate cache so _get_persona_base() recomputes
 
-                for alpha in ALPHAS:
+                for alpha in alphas:
                     with model._steering_delta(alpha):
                         for eval_trait in TRAITS:
                             chars = all_chars[eval_trait]
@@ -232,7 +243,7 @@ def main():
 
     # Compute summary: specificity index
     # For each alpha, compute diagonal_mean / off_diagonal_mean
-    for alpha in ALPHAS:
+    for alpha in alphas:
         alpha_str = str(alpha)
         diagonal = []
         off_diagonal = []
@@ -263,7 +274,7 @@ def main():
     print(f"\n{'=' * 70}")
     print(f"CROSS-TRAIT SPECIFICITY: {args.model_id}")
     print(f"{'=' * 70}")
-    for alpha in ALPHAS:
+    for alpha in alphas:
         alpha_str = str(alpha)
         print(f"\nalpha = {alpha}:")
         header = f"{'steer\\eval':>15s}" + "".join(f"{t[:6]:>10s}" for t in TRAITS)
