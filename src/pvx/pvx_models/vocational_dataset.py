@@ -215,7 +215,7 @@ class VocationalPersonaGenerator:
             title=profile["title"],
             description=profile["description"],
             tasks=tasks_str,
-            work_context=work_context_str
+            work_context=work_context_str,
         )
 
         try:
@@ -231,7 +231,9 @@ class VocationalPersonaGenerator:
 
             content = response.choices[0].message.parsed
             content = content.Prompts
+            addendum = " Answer in first person as this person would in a conversation."
             if isinstance(content, list) and len(content) == 5:
+                content = [x.strip() + addendum for x in content]
                 return content
         except json.JSONDecodeError:
             logger.warning("Failed to parse LLM response for %s, using fallback", profile["title"])
