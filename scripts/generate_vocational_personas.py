@@ -26,6 +26,7 @@ import argparse
 import logging
 import sys
 import time
+from decimal import DefaultContext
 from pathlib import Path
 
 # Add src to path
@@ -86,6 +87,13 @@ def main():
         action="store_true",
         help="Use fallback prompts only (no API calls)",
     )
+
+    parser.add_argument(
+        "--include_questions",
+        action="store_true",
+        default=False,
+        help="Include example questions in the persona definition",
+    )
     args = parser.parse_args()
 
     # Initialize loader and generator
@@ -128,7 +136,7 @@ def main():
     if not profiles:
         logger.info("No occupations to process")
         return
-    
+
     logger.info(f"Generating personas for {len(profiles)} occupations")
 
     # Track statistics
@@ -158,7 +166,7 @@ def main():
                 }
                 generator.save_persona(slug, persona)
             else:
-                generator.generate_and_save(profile, slug)
+                generator.generate_and_save(profile, args.include_questions, slug)
 
             success_count += 1
 

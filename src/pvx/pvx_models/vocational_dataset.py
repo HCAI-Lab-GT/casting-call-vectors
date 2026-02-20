@@ -15,10 +15,10 @@ Example usage:
     generator.save_persona("nurse", persona)
 """
 
-from csv import QUOTE_ALL
 import json
 import logging
 import os
+from csv import QUOTE_ALL
 from pathlib import Path
 from typing import Optional
 
@@ -42,7 +42,6 @@ You are an expert prompt engineer specializing in occupation-grounded persona de
 **Job Description:** {description}
 **Tasks:** {tasks}
 **Work Context:** {work_context}
-**Skills:** {skills}
 
 # Task
 Generate exactly 5 system prompts, each 2–4 sentences, that cause an AI to embody a `title` in conversation. Each prompt must produce first-person, in-role behavior — the AI should think and respond as this professional, not coach or advise about the profession.
@@ -101,14 +100,14 @@ Respond with:
 Respond with a number between 0 and 3. Don't say anything else, just the number. Don't say anything else, just the number."""
 
 
-QUESTIONS_PROMPT="""You are a vocational psychologist designing a structured interview to understand how a person psychologically relates to their work — their motivations, instincts, energy sources, and frustrations.
+QUESTIONS_PROMPT = """You are a psychometrician designing indirect probes to map a respondent's core psychological orientations. Your subject is the PERSON — their instincts, energy patterns, internal resistances, and identity as a worker. The occupation below provides texture and grounding. It is backdrop, never the subject.
 
-**Occupation Context (use ONLY to make questions relatable, not to limit scope):**
+**Occupation Context (for grounding only):**
 - Title: {title}
 - Description: {description}
 - Work Contexts: {work_contexts}
 
-**You are profiling the respondent across these 6 psychological orientations:**
+**You are mapping the respondent across 6 psychological orientations:**
 
 1. **Hands-On Orientation:** Preference for tangible, physical, mechanical, or tool-based work. Comfort with concrete outcomes over abstract ones.
 2. **Analytical Orientation:** Drive to observe, research, diagnose, and solve problems through logic and inquiry. Energized by complexity and understanding root causes.
@@ -118,24 +117,34 @@ QUESTIONS_PROMPT="""You are a vocational psychologist designing a structured int
 6. **Structure Orientation:** Preference for order, precision, clear processes, data organization, and predictable systems. Comfort with rules and defined expectations.
 
 **Hard Rules:**
-1. Generate exactly 10 questions.
-2. Every question must reference a plausible situation, routine, or decision point from this occupation's day-to-day reality.
-3. Questions must be NON-TECHNICAL. No jargon. A layperson should understand every question.
-4. Questions must target the PERSON'S preferences, motivations, and instincts — not their competence or job knowledge.
-5. Questions must be INDIRECT. Never name or describe any of the 6 orientations. Never signal what you are measuring. Instead, present scenarios or choices that naturally reveal the orientation.
-6. Each question should be open-ended and invite a short narrative response, not a yes/no.
-7. Cover ALL six orientations with equal depth — especially those that seem unlikely for this occupation. Those are the most revealing.
 
-**Question Design Patterns (vary across these):**
-- **Scenario fork:** "When [situation from work context], do you find yourself drawn more toward X or Y?" (where X and Y represent different orientations)
-- **Energy probe:** "What part of your typical workday gives you the most energy? Describe a specific moment."
-- **Frustration probe:** "What recurring aspect of your work feels like a poor use of your strengths?"
-- **Hypothetical drift:** "If your role shifted entirely toward [activity], how would you feel about that change?""""
+1. Generate exactly 12 questions.
+2. At most 4 questions may reference a specific routine, situation, or decision point from this occupation. The remaining questions must probe psychological preferences, identity, energy, and values — using the occupation as loose atmospheric context at most.
+3. Questions must be NON-TECHNICAL. No jargon. A layperson must understand every question.
+4. Every question must target the person's preferences, instincts, motivations, or emotional reactions — never their competence, knowledge, or job performance.
+5. Questions must be INDIRECT. Never name, describe, or hint at any of the 6 orientations. Never signal what is being measured.
+6. No question may be answerable by describing a task, process, or procedure. Every valid answer must require the respondent to reveal a preference, instinct, or internal state.
+7. Each question must be open-ended, inviting a short narrative response — not yes/no.
+8. Cover all 6 orientations with roughly equal depth. Especially probe orientations that seem unlikely for this occupation — those are the most discriminating.
+9. Every question must pass this test: two people in the same occupation with genuinely different psychological orientations would answer it differently. If most people in this role would give the same answer, the question is useless — discard and replace it.
+
+**Question Design Patterns (vary across these — do not rely on any single pattern more than twice):**
+
+- **Orientation tension:** Present a scenario where two orientations compete. Describe two behavioral pulls without naming what they represent. Ask which one draws them and why.
+- **Energy/drain asymmetry:** Ask what specifically energizes versus what costs them internally, targeting a particular orientation's territory without naming it.
+- **Identity anchor:** Ask how someone observing them would describe their instincts or default patterns — not their skills or what they produce.
+- **Removal test:** Present several elements of how someone might work (tangible outputs, complex problems, human connection, creative freedom, authority, clear structure) and ask which loss would most change who they are.
+- **Discomfort as signal:** Ask about moments of internal resistance — situations they can handle competently but that feel misaligned with who they are.
+- **Counterfactual drift:** Ask what would shift if they redesigned their work around what genuinely satisfies them, with no external constraints.
+- **Tradeoff scenario:** Force a choice between two appealing things that map to different orientations. Ask what makes the choice easy or hard.
+"""
+
 
 class OccQFormat(BaseModel):
     Questions: list[str] = Field(
         ..., description="List of 10 occupation-specific questions for evaluation"
     )
+
 
 class PersonaPrompts(BaseModel):
     Prompts: list[str] = Field(
@@ -202,15 +211,11 @@ class VocationalPersonaGenerator:
             else "Not specified"
         )
 
-        skills = profile.get("skills", [])
-        skills_str = "\n".join(f"- {s}" for s in skills) if skills else "Not specified"
-
         prompt = SYSTEM_PROMPT_GENERATION_TEMPLATE.format(
             title=profile["title"],
             description=profile["description"],
             tasks=tasks_str,
-            work_context=work_context_str,
-            skills=skills_str,
+            work_context=work_context_str
         )
 
         try:
@@ -247,7 +252,7 @@ class VocationalPersonaGenerator:
         prompt = QUESTIONS_PROMPT.format(
             title=title,
             description=description,
-            work_context="\n".join(f"- {k}: {v}" for k, v in work_context.items())
+            work_contexts="\n".join(f"- {k}: {v}" for k, v in work_context.items())
             if work_context
             else "Not specified",
         )
@@ -357,11 +362,14 @@ class VocationalPersonaGenerator:
                 },
             }
 
+            logger.info(f"Generated persona for {profile['title']} with {len(prompts)} prompts")
             if include_questions:
                 # TODO: Generate occupation-specific questions
                 questions = self.generate_occupation_questions(profile)
                 persona["questions"] = questions
-
+                logger.info(
+                    f"Included {len(questions)} occupation-specific questions for {profile['title']}"
+                )
             return persona
 
         return {}
