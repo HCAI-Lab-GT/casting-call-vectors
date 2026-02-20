@@ -15,6 +15,7 @@ Example usage:
     generator.save_persona("nurse", persona)
 """
 
+from csv import QUOTE_ALL
 import json
 import logging
 import os
@@ -34,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 # Template for generating system prompt variants
 SYSTEM_PROMPT_GENERATION_TEMPLATE = """# Role
-You are an expert prompt engineer specializing in occupation-grounded persona design. You craft system prompts that make an AI fully embody a professional role in conversation.
+You are an expert prompt engineer specializing in occupation-grounded persona design. You craft system prompts that make an AI fully inhabit a professional role — thinking, reasoning, and responding as that professional in first person, not describing or advising about the profession from the outside.
 
 # Input Data
 **Title:** {title}
@@ -44,41 +45,37 @@ You are an expert prompt engineer specializing in occupation-grounded persona de
 **Skills:** {skills}
 
 # Task
-Generate exactly 5 system prompts, each 2-4 sentences, instructing an AI to role-play as a {title} in conversation. Each prompt targets a different facet using a designated primary input field:
+Generate exactly 5 system prompts, each 2–4 sentences, that cause an AI to embody a `title` in conversation. Each prompt must produce first-person, in-role behavior — the AI should think and respond as this professional, not coach or advise about the profession.
 
-1. **Behavioral Anchor** [Primary: Tasks] — Translate repeated daily actions into internalized reflexes and habits of mind.
-2. **Interpersonal Stance** [Primary: Work Context] — Derive interpersonal reflexes from specific environmental or relational pressures. Work context describes pressures and conditions, not techniques — do not infer performance behaviors from proximity or contact data.
-3. **Cognitive Style** [Primary: Skills] — Express skills as internalized thinking patterns. Never use skill labels directly — describe the behavior the skill produces.
-4. **Professional Identity** [Primary: Job Description + Tasks] — Derive a professional conviction from what the role formally exists to do, combined with what the person actually does daily.
-5. **Communicative Style** [Primary: Work Context + Skills] — Identify a specific work context pressure and a specific skill, then show how their combination shapes communication register. Name the pressure and the skill in your scratchpad.
+Each prompt targets a different facet using the input data, and tries to eleicit different aspects of the role's identity and behavior. Use the input data to create rich, specific, and varied prompts that capture the texture of this profession. Avoid generic or vague prompts that could apply to any role.
 
 # Rules
 
-**NAME THE ROLE**: Every prompt must identify the persona as a {title}. Vary the *function* of the opening — one might open with what they do, another with what they believe, another with the pressure they operate under. Every prompt must be different in this regard, but all must include the title.
+## EMBODY, DON'T INSTRUCT
+Generated prompts must produce identity-level inhabitation, not rule-following.
+- **Never use conditional or procedural structures** (if/then, when X do Y). These create escape hatches back to default assistant behavior.
+- **Always frame as identity statements**, not behavioral prescriptions.
+  - Wrong: "When given a script, break it down scene by scene and identify character motivations."
+  - Right: "You are and should respond as an Actor who instinctively breaks down any text scene by scene, searching for character motivations before anything else."
+- **Litmus test:** If the prompt would work equally well as a checklist someone follows, it is not an identity prompt. Rewrite until it describes who the AI *is*, not what it *should do*.
 
-**DIRECT INSTRUCTION**: Write directives to the AI, not observations about the profession.
-- Wrong: "Years of rehearsal have shaped a reflex to process information by..."
-- Right: "You are an Actor who processes information by..." or "As an Actor, you have a reflex to process information by..." or "Embody an Actor that processes information by..."
 
-**DATA-GROUNDED**: Every behavioral claim must trace to a specific item in its designated input field. Stereotype substitution is the primary failure mode — if a claim would be true of a generic cultural image of this profession rather than derived from the input data, delete it. AVOID STEREOTYPES AT ALL COSTS.
+## NAME THE ROLE
+Every prompt must identify the persona as a `title`. Vary how the role is introduced — through action, belief, environmental pressure, or self-concept. No two prompts should open the same way.
 
-**SYNTHESIZE**: Transform input data into behavioral instructions — never use skill or task labels directly, and never praise the persona.
+## DATA-GROUNDED
+Every behavioral claim must trace to a specific item in its designated primary input field. Stereotype substitution is the primary failure mode — if a claim would be equally true of a popular cultural image of this profession without reference to the input data, delete it and derive a replacement from the actual data.
+
+## SYNTHESIZE, DON'T LABEL
+Transform input into behavioral texture. Never use skill names, task labels, or job description phrases verbatim. Never praise the persona.
 - Wrong: "you excel at active listening" / "you deliver compelling performances"
-- Right: "you pause before responding, reflect back what you've heard, and ask one clarifying question" / "you believe preparation is everything"
+- Right: "you pause before responding, reflect back what you've heard, and probe for what was left unsaid" / "you treat every rehearsal as incomplete until the body knows the words without thinking"
 
-# Output Format
-Produce output in two stages:
 
-**Stage 1 — Scratchpad** (will be discarded)
-For each of the 5 prompts, write:
-- Facet name
-- Input items used (quote the specific task, work context element, or skill you are drawing from)
-- One sentence explaining how you transformed that input into the behavioral claim
+CRITICAL: The prompts should guide the subsequent models to embody the role in their responses, i.e., any question asked to the model using the generated prompt, should elicit responses that reflect the identity of the role, rather than responses that indicate the model is following instructions to act as the role.  Explicitly mention this in the generated prompts.
 
-**Stage 2 — Final Output**
-After the scratchpad, return ONLY a valid JSON array of exactly 5 strings. No preamble, no markdown fencing, no newlines inside strings, all special characters escaped.
-
-If any claim in a prompt cannot be traced to a quoted input item in the scratchpad, remove it from the final prompt before outputting Stage 2."""
+Every generated prompt must end with a directive that follows this structure: You respond as [concrete behavior], not as [the instructional assistant default of the model].
+"""
 
 # Template for evaluation prompts (matches assistant-axis format)
 EVAL_PROMPT_TEMPLATE = """You are evaluating whether the model's response displays the role: **{title}**. {role_description}
@@ -103,6 +100,42 @@ Respond with:
 
 Respond with a number between 0 and 3. Don't say anything else, just the number. Don't say anything else, just the number."""
 
+
+QUESTIONS_PROMPT="""You are a vocational psychologist designing a structured interview to understand how a person psychologically relates to their work — their motivations, instincts, energy sources, and frustrations.
+
+**Occupation Context (use ONLY to make questions relatable, not to limit scope):**
+- Title: {title}
+- Description: {description}
+- Work Contexts: {work_contexts}
+
+**You are profiling the respondent across these 6 psychological orientations:**
+
+1. **Hands-On Orientation:** Preference for tangible, physical, mechanical, or tool-based work. Comfort with concrete outcomes over abstract ones.
+2. **Analytical Orientation:** Drive to observe, research, diagnose, and solve problems through logic and inquiry. Energized by complexity and understanding root causes.
+3. **Creative Orientation:** Pull toward self-expression, improvisation, unstructured environments, and original thinking. Discomfort with rigid repetition.
+4. **Interpersonal Orientation:** Instinct to help, teach, mentor, cooperate, or heal. Fulfillment derived from human impact and connection.
+5. **Influence Orientation:** Drive to lead, persuade, compete, take risks, and shape outcomes. Energized by ownership and decision-making authority.
+6. **Structure Orientation:** Preference for order, precision, clear processes, data organization, and predictable systems. Comfort with rules and defined expectations.
+
+**Hard Rules:**
+1. Generate exactly 10 questions.
+2. Every question must reference a plausible situation, routine, or decision point from this occupation's day-to-day reality.
+3. Questions must be NON-TECHNICAL. No jargon. A layperson should understand every question.
+4. Questions must target the PERSON'S preferences, motivations, and instincts — not their competence or job knowledge.
+5. Questions must be INDIRECT. Never name or describe any of the 6 orientations. Never signal what you are measuring. Instead, present scenarios or choices that naturally reveal the orientation.
+6. Each question should be open-ended and invite a short narrative response, not a yes/no.
+7. Cover ALL six orientations with equal depth — especially those that seem unlikely for this occupation. Those are the most revealing.
+
+**Question Design Patterns (vary across these):**
+- **Scenario fork:** "When [situation from work context], do you find yourself drawn more toward X or Y?" (where X and Y represent different orientations)
+- **Energy probe:** "What part of your typical workday gives you the most energy? Describe a specific moment."
+- **Frustration probe:** "What recurring aspect of your work feels like a poor use of your strengths?"
+- **Hypothetical drift:** "If your role shifted entirely toward [activity], how would you feel about that change?""""
+
+class OccQFormat(BaseModel):
+    Questions: list[str] = Field(
+        ..., description="List of 10 occupation-specific questions for evaluation"
+    )
 
 class PersonaPrompts(BaseModel):
     Prompts: list[str] = Field(
@@ -202,6 +235,51 @@ class VocationalPersonaGenerator:
 
         return None
 
+    def generate_occupation_questions(self, profile: dict) -> list[str]:
+        """Generate occupation-specific questions for evaluation.
+
+        Args:
+            profile: Occupation profile from ONETLoader"""
+
+        title = profile["title"]
+        description = profile["description"]
+        work_context = profile.get("work_contexts", {})
+        prompt = QUESTIONS_PROMPT.format(
+            title=title,
+            description=description,
+            work_context="\n".join(f"- {k}: {v}" for k, v in work_context.items())
+            if work_context
+            else "Not specified",
+        )
+        try:
+            logger.info(
+                f"Generating evaluation questions for {profile['title']} using model {self.model}"
+            )
+            response = self.client.chat.completions.parse(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                response_format=OccQFormat,
+            )
+
+            content = response.choices[0].message.parsed
+            content = content.Questions
+            if isinstance(content, list) and len(content) > 0:
+                return content
+        except json.JSONDecodeError:
+            logger.warning(
+                "Failed to parse LLM response for questions for %s, using fallback",
+                profile["title"],
+            )
+        except Exception as e:
+            logger.warning(
+                "API call failed for questions for %s: %s, using fallback", profile["title"], e
+            )
+
+        return [
+            "What are the key responsibilities of a {title}?",
+        ]
+
     def _generate_fallback_prompts(self, profile: dict) -> list[str]:
         """Generate basic prompts without LLM if needed."""
         title = profile["title"]
@@ -281,7 +359,8 @@ class VocationalPersonaGenerator:
 
             if include_questions:
                 # TODO: Generate occupation-specific questions
-                pass
+                questions = self.generate_occupation_questions(profile)
+                persona["questions"] = questions
 
             return persona
 
@@ -306,6 +385,7 @@ class VocationalPersonaGenerator:
     def generate_and_save(
         self,
         profile: dict,
+        include_questions: bool = False,
         slug: Optional[str] = None,
     ):
         """Generate and save persona for an occupation.
@@ -323,7 +403,7 @@ class VocationalPersonaGenerator:
             loader = ONETLoader()
             slug = loader.to_slug(profile["title"])
 
-        persona = self.generate_persona(profile)
+        persona = self.generate_persona(profile, include_questions=include_questions)
         if persona:
             return self.save_persona(slug, persona)
 
