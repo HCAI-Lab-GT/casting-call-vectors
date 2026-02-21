@@ -79,24 +79,12 @@ class RoleJudge(AbstractJudge):
             device (str, optional): Device for local inference ("cuda", "cpu", etc.).
             dtype (torch.dtype): Data type for local model.
         """
-        self.backend = backend
-        self.model = model
-        self.local_model = local_model or model
-        self.base_url = base_url
-        self.api_key_env = api_key_env
-        self.eval_type = eval_type
-        self.device = device
-        self.dtype = dtype
-
-        self._hf_model = None
-        self._hf_tokenizer = None
+        super().__init__(backend, model, local_model, base_url, prompt_template, api_key_env, eval_type, device, dtype)
 
         if judge_func is None:
             self.judge_func = self._get_role_score
         else:
             self.judge_func = judge_func
-
-        self.prompt_template = prompt_template
     
     def _get_role_score(self, messages: dict[str, str]) -> int:
         _, response = self._inference_with_client(messages=messages)
