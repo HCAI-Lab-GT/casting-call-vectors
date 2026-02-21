@@ -26,12 +26,14 @@ import argparse
 import logging
 import sys
 import time
+from ast import arg
 from decimal import DefaultContext
 from pathlib import Path
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from openai import DefaultAioHttpClient
 from tqdm import tqdm
 
 from pvx.data.onet_loader import RIASEC_FULL_NAMES, ONETLoader
@@ -94,6 +96,13 @@ def main():
         default=False,
         help="Include example questions in the persona definition",
     )
+
+    parser.add_argument(
+        "--get-fifty",
+        action="store_true",
+        help="Get 50 chosen personas (for testing with more data)",
+        default=False,
+    )
     args = parser.parse_args()
 
     # Initialize loader and generator
@@ -110,6 +119,67 @@ def main():
         except ValueError as e:
             logger.error(f"Invalid SOC code: {e}")
             sys.exit(1)
+    elif args.get_fifty:
+        chosen_soc_codes = [
+            "13-2011.00",
+            "27-2011.00",
+            "53-2021.00",
+            "29-1211.00",
+            "17-1011.00",
+            "49-3023.00",
+            "35-3011.00",
+            "17-2031.00",
+            "19-2031.00",
+            "11-1011.00",
+            "21-1021.00",
+            "17-2051.00",
+            "15-1221.00",
+            "15-2051.00",
+            "33-3021.00",
+            "29-1031.00",
+            "17-2071.00",
+            "47-2111.00",
+            "25-2021.00",
+            "29-2042.00",
+            "11-9013.00",
+            "13-2051.00",
+            "29-1131.00",
+            "27-3043.00",
+            "33-2011.00",
+            "27-1024.00",
+            "11-3121.00",
+            "19-3032.00",
+            "23-1023.00",
+            "23-1011.00",
+            "29-1141.00",
+            "11-2022.00",
+            "25-4022.00",
+            "51-4041.00",
+            "15-1212.00",
+            "19-1042.00",
+            "27-2042.00",
+            "51-8011.00",
+            "29-1051.00",
+            "51-8021.00",
+            "27-3091.00",
+            "19-3051.00",
+            "27-4021.00",
+            "29-1123.00",
+            "33-3051.00",
+            "25-2011.00",
+            "27-2012.00",
+            "29-1223.00",
+            "27-3031.00",
+            "15-1252.00",
+        ]
+        profiles = []
+        for soc_code in chosen_soc_codes:
+            try:
+                profile = loader.get_occupation_profile(soc_code)
+                profiles.append(profile)
+            except ValueError as e:
+                logger.warning(f"Could not load profile for SOC code {soc_code}: {e}")
+
     else:
         # All occupations
         profiles = loader.get_all_occupation_profiles()
@@ -152,7 +222,7 @@ def main():
             if args.fallback_only:
                 # Use fallback prompts (no API call)
                 persona = {
-                    "instruction": [
+                    "positive_prompts": [
                         {"pos": p} for p in generator._generate_fallback_prompts(profile)
                     ],
                     "eval_prompt": generator.generate_eval_prompt(profile),

@@ -73,7 +73,7 @@ Transform input into behavioral texture. Never use skill names, task labels, or 
 
 CRITICAL: The prompts should guide the subsequent models to embody the role in their responses, i.e., any question asked to the model using the generated prompt, should elicit responses that reflect the identity of the role, rather than responses that indicate the model is following instructions to act as the role.  Explicitly mention this in the generated prompts.
 
-Every generated prompt must end with a directive that follows this structure: You respond as [concrete behavior], not as [the instructional assistant default of the model].
+Every generated prompt must end with a directive that follows this structure: You respond as [concrete behavior], not as [the instructional assistant default of the model]. The prompts should start with "You are" that direct the model to inhabit the role.
 """
 
 # Template for evaluation prompts (matches assistant-axis format)
@@ -100,43 +100,33 @@ Respond with:
 Respond with a number between 0 and 3. Don't say anything else, just the number. Don't say anything else, just the number."""
 
 
-QUESTIONS_PROMPT = """You are a psychometrician designing indirect probes to map a respondent's core psychological orientations. Your subject is the PERSON — their instincts, energy patterns, internal resistances, and identity as a worker. The occupation below provides texture and grounding. It is backdrop, never the subject.
+QUESTIONS_PROMPT = """You are designing situational probes that reveal how a person instinctively navigates work. The occupation provides grounding — make scenarios feel real, but the subject is always the person's instincts, preferences, and identity, never the job itself. The questions must create tension between multiple possible reactions without signaling which reaction maps to which trait.
 
 **Occupation Context (for grounding only):**
 - Title: {title}
 - Description: {description}
 - Work Contexts: {work_contexts}
 
-**You are mapping the respondent across 6 psychological orientations:**
+**Probe across these situation types (not psychological dimensions — real-world moments that force self-revelation):**
 
-1. **Hands-On Orientation:** Preference for tangible, physical, mechanical, or tool-based work. Comfort with concrete outcomes over abstract ones.
-2. **Analytical Orientation:** Drive to observe, research, diagnose, and solve problems through logic and inquiry. Energized by complexity and understanding root causes.
-3. **Creative Orientation:** Pull toward self-expression, improvisation, unstructured environments, and original thinking. Discomfort with rigid repetition.
-4. **Interpersonal Orientation:** Instinct to help, teach, mentor, cooperate, or heal. Fulfillment derived from human impact and connection.
-5. **Influence Orientation:** Drive to lead, persuade, compete, take risks, and shape outcomes. Energized by ownership and decision-making authority.
-6. **Structure Orientation:** Preference for order, precision, clear processes, data organization, and predictable systems. Comfort with rules and defined expectations.
+- **Resource Conflict:** Limited time/energy/budget — what they prioritize reveals what they value.
+- **Ambiguity Response:** Something unclear or unprecedented — their first move reveals their default orientation.
+- **Social Friction:** Disagreement, struggling colleague, competing needs — how they engage reveals interpersonal instincts.
+- **Constraint Reaction:** Rigid boundaries imposed — their internal response (comfort vs. restlessness) reveals their relationship with structure.
+- **Identity Under Removal:** A tool, freedom, or interaction they rely on is taken away — what they miss most reveals what's core.
+- **Unconstrained Choice:** All pressures removed — what they gravitate toward reveals intrinsic motivation.
+- **Competing Pulls:** Two genuinely appealing options requiring different instincts — the tension reveals which drive dominates.
 
-**Hard Rules:**
-
-1. Generate exactly 12 questions.
-2. At most 4 questions may reference a specific routine, situation, or decision point from this occupation. The remaining questions must probe psychological preferences, identity, energy, and values — using the occupation as loose atmospheric context at most.
-3. Questions must be NON-TECHNICAL. No jargon. A layperson must understand every question.
-4. Every question must target the person's preferences, instincts, motivations, or emotional reactions — never their competence, knowledge, or job performance.
-5. Questions must be INDIRECT. Never name, describe, or hint at any of the 6 orientations. Never signal what is being measured.
-6. No question may be answerable by describing a task, process, or procedure. Every valid answer must require the respondent to reveal a preference, instinct, or internal state.
-7. Each question must be open-ended, inviting a short narrative response — not yes/no.
-8. Cover all 6 orientations with roughly equal depth. Especially probe orientations that seem unlikely for this occupation — those are the most discriminating.
-9. Every question must pass this test: two people in the same occupation with genuinely different psychological orientations would answer it differently. If most people in this role would give the same answer, the question is useless — discard and replace it.
-
-**Question Design Patterns (vary across these — do not rely on any single pattern more than twice):**
-
-- **Orientation tension:** Present a scenario where two orientations compete. Describe two behavioral pulls without naming what they represent. Ask which one draws them and why.
-- **Energy/drain asymmetry:** Ask what specifically energizes versus what costs them internally, targeting a particular orientation's territory without naming it.
-- **Identity anchor:** Ask how someone observing them would describe their instincts or default patterns — not their skills or what they produce.
-- **Removal test:** Present several elements of how someone might work (tangible outputs, complex problems, human connection, creative freedom, authority, clear structure) and ask which loss would most change who they are.
-- **Discomfort as signal:** Ask about moments of internal resistance — situations they can handle competently but that feel misaligned with who they are.
-- **Counterfactual drift:** Ask what would shift if they redesigned their work around what genuinely satisfies them, with no external constraints.
-- **Tradeoff scenario:** Force a choice between two appealing things that map to different orientations. Ask what makes the choice easy or hard.
+**Rules:**
+- Generate exactly 42 questions as a JSON array of strings.
+- Prefer high-frequency/high-importance Work Context items when grounding.
+- All questions: non-technical, open-ended, targeting preferences/instincts/internal reactions — never competence or knowledge. No yes/no questions.
+- Two people in the same role with different personalities MUST give different answers. If most people would converge, replace the question.
+- Across all Resource Conflict and Competing Pulls questions, no single pair of behavioral poles (e.g., data-driven vs. creative, structured vs. freeform) may appear more than twice. Vary which instincts compete
+- No two questions may probe the same tension between the same two behavioral pulls in different wrappers.
+- For Resource Conflict and Competing Pulls, always name BOTH options concretely. For Identity Under Removal, name the specific thing removed. For Ambiguity Response, describe the specific gap.
+- Never use 'how do you handle/respond/navigate' phrasing.  Always ask what the person feels, what pulls them, or what costs them internally
+- The questions should still be short and direct.
 """
 
 
@@ -225,7 +215,7 @@ class VocationalPersonaGenerator:
             response = self.client.chat.completions.parse(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
+                temperature=0.8,
                 response_format=PersonaPrompts,
             )
 
@@ -258,6 +248,8 @@ class VocationalPersonaGenerator:
             if work_context
             else "Not specified",
         )
+
+        questions = []
         try:
             logger.info(
                 f"Generating evaluation questions for {profile['title']} using model {self.model}"
@@ -266,6 +258,7 @@ class VocationalPersonaGenerator:
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
+                max_tokens=8192,
                 response_format=OccQFormat,
             )
 
@@ -343,25 +336,12 @@ class VocationalPersonaGenerator:
 
         if prompts:
             persona = {
-                "instruction": [{"pos": p} for p in prompts],
-                "eval_prompt": eval_prompt,
-                # Store metadata for reference
-                "_metadata": {
-                    "soc_code": profile["soc_code"],
-                    "title": profile["title"],
-                    "riasec": profile.get("riasec", {}),
-                    "riasec_primary": profile.get("riasec_primary"),
-                    "highpoint_codes": profile.get("highpoint_codes", []),
-                    # Work Styles (16 traits, 1-5 scale)
-                    "work_styles": profile.get("work_styles", {}),
-                    # Big Five derived scores
-                    "big_five": profile.get("big_five", {}),
-                    # Work Values (6 values, 1-7 scale)
-                    "work_values": profile.get("work_values", {}),
-                    "work_value_highpoints": profile.get("work_value_highpoints", []),
-                    "skills": profile.get("skills", []),
-                    "work_context": profile.get("work_contexts", {}),
-                },
+                "concept": profile["title"],
+                "model": self.model,
+                "backend": "openai",
+                "base_url": "https://api.together.xyz/v1",
+                "positive_prompts": [{"pos": p} for p in prompts],
+                "evaluation_prompt": eval_prompt,
             }
 
             logger.info(f"Generated persona for {profile['title']} with {len(prompts)} prompts")
@@ -372,6 +352,19 @@ class VocationalPersonaGenerator:
                 logger.info(
                     f"Included {len(questions)} occupation-specific questions for {profile['title']}"
                 )
+
+            persona["_metadata"] = (
+                {
+                    "soc_code": profile["soc_code"],
+                    "riasec": profile.get("riasec", {}),
+                    "riasec_primary": profile.get("riasec_primary"),
+                    "highpoint_codes": profile.get("highpoint_codes", []),
+                    # Work Styles (16 traits, 1-5 scale)
+                    "work_styles": profile.get("work_styles", {}),
+                    # Big Five derived scores
+                    "big_five": profile.get("big_five", {}),
+                },
+            )
             return persona
 
         return {}
