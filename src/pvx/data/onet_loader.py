@@ -184,7 +184,7 @@ class ONETLoader:
         if self._occupations is not None:
             return self._occupations
 
-        filepath = self.data_dir / "Occupation Data Processed.txt"
+        filepath = self.data_dir / "Occupation Data.txt"
         df = pd.read_csv(filepath, sep="\t")
         df.columns = ["soc_code", "title", "description"]
         self._occupations = df
@@ -224,7 +224,7 @@ class ONETLoader:
         if self._tasks is not None:
             return self._tasks
 
-        filepath = self.data_dir / "Task Statements Processed.txt"
+        filepath = self.data_dir / "Task Statements.txt"
         df = pd.read_csv(filepath, sep="\t")
         df.columns = [
             "soc_code",
@@ -300,7 +300,7 @@ class ONETLoader:
         if self._work_contexts is not None:
             return self._work_contexts
 
-        filepath = self.data_dir / "Work Context Processed.txt"
+        filepath = self.data_dir / "Work Context with Desc.txt"
         df = pd.read_csv(filepath, sep="\t")
         df = df[df["Data Value"] >= 4].reset_index(drop=True)  # Filter to more relevant contexts
         df = df.loc[:, ["O*NET-SOC Code", "Element Name", "Category Description"]]
@@ -322,7 +322,7 @@ class ONETLoader:
         if self._skills is not None:
             return self._skills
 
-        filepath = self.data_dir / "Skills Processed.txt"
+        filepath = self.data_dir / "Skills.txt"
         df = pd.read_csv(filepath, sep="\t")
         df = df.loc[:, ["O*NET-SOC Code", "Element Name"]]
         df.columns = ["soc_code", "element_name"]

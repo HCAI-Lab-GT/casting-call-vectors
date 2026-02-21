@@ -179,6 +179,8 @@ def main():
                 profiles.append(profile)
             except ValueError as e:
                 logger.warning(f"Could not load profile for SOC code {soc_code}: {e}")
+                with open("missing_soc_codes.txt", "a") as f:
+                    f.write(f"{soc_code}\n")
 
     else:
         # All occupations
