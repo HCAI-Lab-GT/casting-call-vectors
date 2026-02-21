@@ -21,7 +21,7 @@ NAME="role_batch" # name of the script (mostly for logging purposes)
 # export LOCAL_MODEL="${2:-Qwen/Qwen2.5-7B-Instruct}" # local_model, default if not provided
 
 # defaults
-MODEL="Qwen/Qwen2.5-7B-Instruct"
+MODEL="allenai/Olmo-3-7B-Instruct"
 
 ROLES=()
 
