@@ -100,7 +100,7 @@ class ResponseGeneration:
         self._hf_tokenizer = tokenizer
 
     def _inference_with_client(
-        self, messages: List[Dict[str, str]], temperature: float = 0.1, max_new_tokens=1024
+        self, messages: List[Dict[str, str]], temperature: float = 0.9, max_new_tokens=1024
     ):
         """
         Perform LLM inference using the configured backend.
