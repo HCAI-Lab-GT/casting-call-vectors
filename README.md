@@ -188,7 +188,7 @@ Call from Python or as part of the pipeline. Example:
   - `--target_count` the target number of pregenerated responses to be generated for each question's positive and negative responses.
 - Use `scripts/batch_riasec_eval.py` to run the RIASEC Judge pipeline on a set of roles defined in `riasec_runs.yaml` or a specific set of roles which can be added
 - Examples:
-  - `python scripts/batch_riasec_eval.py --model_type olmo-7b_response --model_name allenai/olmo-3-7b-instruct --alpha 1.0`
+  - `python scripts/batch_riasec_eval.py --model_type olmo-7b_response --model_name allenai/olmo-3-7b-instruct --alpha 1.0 --roles_run "all_roles"`
 - Flags:
   - `--model_type TYPE` Specifies the model_type (olmo versus marin)
   - `--model_name NAME` overrides the model preset
