@@ -8,18 +8,23 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "-t", "--model_type",
     type=str,
-    default="marin-8b_prompt",
+    default="olmo-7b_response",
     help="Model type for all runs"
 )
 parser.add_argument("-m", "--model_name",
     type=str,
-    default="marin-community/marin-8b-instruct",
+    default="allenai/Olmo-3-7B-Instruct",
     help="Model name for steering vector to be applied on"
 )
 parser.add_argument("-a", "--alpha",
     type=float,
-    default=2.0,
+    default=1.0,
     help="Alpha for steering"
+)
+parser.add_argument("-r", "--roles_run",
+    type=str,
+    default="all_roles",
+    help="Key for roles to run in config file"
 )
 args = parser.parse_args()
 
@@ -27,7 +32,7 @@ yaml_path = Path("configs/riasec_runs.yaml")
 with open(yaml_path) as f:
     config = yaml.safe_load(f)
 
-for role in config["roles"]:
+for role in config[args.roles_run]:
     model = args.model_name
     alpha = args.alpha
     safe_model = model.replace("/", "_")
