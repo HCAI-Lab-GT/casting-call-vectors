@@ -1,6 +1,5 @@
 import json
 import os
-import warnings
 from collections import namedtuple
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -8,10 +7,9 @@ from typing import Dict, List, Optional, Tuple
 from pvx.utils.prompts import PromptTemplates
 from torch import dtype, float16
 from dotenv import load_dotenv
-from openai import OpenAI
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from pvx import Heartbeat, setup_logging
+from pvx.utils.response_generation import ResponseGeneration
 
 load_dotenv()
 
@@ -21,7 +19,7 @@ BACKENDS = ("openai", "vllm", "hf_local")
 # Initialize logger once per process
 logger = setup_logging(name="abstract-dataset")
 
-class AbstractDataset:
+class AbstractDataset(ResponseGeneration):
     
 
     def __init__(
@@ -58,20 +56,12 @@ class AbstractDataset:
         Returns:
             None
         """
+        backend = backend if backend in BACKENDS else "openai"
+        super().__init__(backend, model, local_model, base_url, api_key_env, device, dtype)
         self.concept = concept
         self.num_questions: int = num_questions
         self.questions: List[str] = []
         self.evaluation_prompt = ""
-        self.model = model
-        self.backend = backend if backend in BACKENDS else "openai"
-        self.base_url = base_url
-        self.api_key_env = api_key_env
-        self.local_model = local_model or model
-        self.device = device
-        self.dtype = dtype
-        self._hf_model = None
-        self._hf_tokenizer = None
-
         self.dirpath = dirpath
 
     @staticmethod
@@ -215,146 +205,4 @@ class AbstractDataset:
         logger.info("Dataset saved to: %s", filepath)
         return filepath
 
-    def _inference_with_client(
-        self, messages: List[Dict[str, str]], temperature: float = 0.9, max_new_tokens=1024
-    ) -> Tuple[Optional[str], str]:
-        """
-        Perform LLM inference using either OpenAI/vLLM HTTP or local HF transformers.
-
-        This method abstracts away the differences between local HF inference and
-        remote OpenAI/vLLM-compatible endpoints.
-
-        Args:
-            messages (List[Dict[str, str]]): A list of message dictionaries with
-                'role' and 'content' keys, following the OpenAI chat format
-            temperature (float, optional): Sampling temperature for generation.
-                Higher values (e.g., 0.9) produce more random outputs.
-                Defaults to 0.9.
-
-        Returns:
-            Tuple[Optional[str], str]: A tuple of (thinking_content, response_content).
-                The thinking_content is only present for certain models that support
-                chain-of-thought reasoning; otherwise it's None.
-
-        Raises:
-            ValueError: If required API key is not set for OpenAI/vLLM backends
-            Exception: Re-raises any exception from the underlying API call after
-                logging the error details
-
-            Example:
-                >>> messages = [
-                ...     {"role": "system", "content": "You are a helpful assistant."},
-                ...     {"role": "user", "content": "Hello!"}
-                ... ]
-                >>> thinking, response = dataset._inference_with_client(messages)
-        """
-        try:
-            if self.backend == "hf_local":
-                if self._hf_model is None or self._hf_tokenizer is None:
-                    self._init_local_model()
-
-                # Prepare prompt for decoder-only model
-                prompt = self._messages_to_prompt(messages)
-
-                # Generate response
-                inputs = self._hf_tokenizer(prompt, return_tensors="pt", padding=True).to(
-                    self._hf_model.device
-                )
-                generated = self._hf_model.generate(
-                    **inputs,
-                    do_sample=True,
-                    temperature=temperature,
-                    max_new_tokens=max_new_tokens,
-                )
-                # Extract generated text (first sequence and excluding the prompt)
-                decoded = self._hf_tokenizer.decode(
-                    generated[0][inputs["input_ids"].shape[-1] :], skip_special_tokens=True
-                )
-
-                return (None, decoded.strip())
-
-            base_url = self.base_url # defaults to together api
-            if self.backend == "vllm" and base_url is None:
-                base_url = os.environ.get("VLLM_API_URL")
-            if base_url is None:
-                base_url = "https://api.together.xyz/v1"
-
-            api_key = os.environ.get(self.api_key_env) or os.environ.get("OPENAI_API_KEY")
-            if api_key is None:
-                raise ValueError(
-                    f"{self.api_key_env} or OPENAI_API_KEY environment variable not set"
-                )
-            openai_client = OpenAI(api_key=api_key, base_url=base_url)
-
-            chat_response = openai_client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=temperature,
-            )
-            return (None, chat_response.choices[0].message.content)
-
-        except Exception as e:
-            logger.exception(
-                "inference failed | backend=%s model=%s temp=%s",
-                self.backend,
-                self.model,
-                temperature,
-            )
-            raise e
-
-    def _init_local_model(self):
-        """
-        Lazily load a HF transformers causal LM for local inference.
-        """
-        import torch 
-        
-        if self.backend != "hf_local":
-            return
-
-        # Device selection
-        if self.device:
-            device = self.device
-        else:
-            if torch.cuda.is_available():
-                device = "cuda"
-            elif torch.backends.mps.is_available():
-                device = "mps"
-            else:
-                device = "cpu"
-                warnings.warn(
-                    "Using CPU for local inference; generation will be slow.", stacklevel=2
-                )
-
-        # Load model and tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(self.local_model)
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-
-        # Load model with device map
-        model = AutoModelForCausalLM.from_pretrained(
-            self.local_model,
-            dtype=self.dtype if device != "cpu" else None,
-            device_map=device,
-        )
-
-        self._hf_model = model
-        self._hf_tokenizer = tokenizer
-
-
-    @staticmethod
-    def _messages_to_prompt(messages: List[Dict[str, str]]) -> str:
-        """
-        Flatten chat messages into a single prompt string for decoder-only HF models.
-        Format: "<system>\\n\\n<user>\\n\\nAssistant:"
-        """
-        system_parts = [m["content"] for m in messages if m["role"] == "system"]
-        user_parts = [m["content"] for m in messages if m["role"] == "user"]
-        system_block = "\\n".join(system_parts)
-        user_block = "\\n\\n".join(user_parts)
-        prompt = ""
-        if system_block:
-            prompt += f"{system_block}\\n\\n"
-        prompt += user_block
-        prompt += "\\n\\nAssistant:"
-        return prompt
 
