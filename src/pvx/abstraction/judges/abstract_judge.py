@@ -1,23 +1,5 @@
 """
-
-
-This module provides the LLMJudge class for evaluating model responses using LLMs as automated judges.
-It supports multiple backends (OpenAI, vLLM, Hugging Face local) and can aggregate scores using direct inference or log probability methods.
-
-Key Features:
-    - Evaluate model responses for specific traits or behaviors
-    - Aggregate scores using direct inference or logprobs (for GPT models)
-    - Support for OpenAI, vLLM, and local Hugging Face models
-    - Flexible prompt templating and backend configuration
-
-Dependencies:
-    - openai: For OpenAI/vLLM-compatible HTTP endpoints
-    - transformers: For local inference and tokenizer/model utilities
-    - dotenv: For environment variable management
-
-Environment Variables:
-    - TOGETHER_API_KEY or OPENAI_API_KEY: Required for OpenAI/vLLM endpoints
-    - VLLM_API_URL (optional): Base URL for vLLM OpenAI-compatible server
+The LLMJudge class for evaluating model responses using LLMs as automated judges.
 """
 
 import argparse
@@ -30,7 +12,8 @@ from abc import ABC, abstractmethod
 
 import torch
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import AsyncOpenAI, OpenAI, RateLimitError, APIStatusError
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from pvx import setup_logging
@@ -229,6 +212,79 @@ class AbstractJudge(ABC):
         prompt += user_block
         prompt += "\\n\\nAssistant:"
         return prompt
+
+    @retry(
+        retry=retry_if_exception_type((RateLimitError, APIStatusError)),
+        wait=wait_exponential(multiplier=1, min=2, max=60),
+        stop=stop_after_attempt(6),
+        reraise=True,
+    )
+    async def _async_inference_with_client(
+        self, messages: List[Dict[str, str]], temperature: float = 0.9, max_new_tokens: int = 1024
+    ) -> str:
+        """
+        Async version of _inference_with_client for openai/vllm backends only.
+        Wrapped with exponential-backoff retry on RateLimitError / APIStatusError.
+
+        Args:
+            messages: Chat messages in OpenAI format.
+            temperature: Sampling temperature.
+            max_new_tokens: Maximum tokens to generate.
+
+        Returns:
+            Response content string.
+
+        Raises:
+            ValueError: If the backend is hf_local (not supported).
+        """
+        if self.backend == "hf_local":
+            raise ValueError("_async_inference_with_client does not support hf_local backend")
+
+        api_key = os.environ.get(self.api_key_env) or os.environ.get("OPENAI_API_KEY")
+        if api_key is None:
+            raise ValueError(
+                f"{self.api_key_env} or OPENAI_API_KEY environment variable not set"
+            )
+
+        base_url = self.base_url
+        if self.backend == "vllm" and base_url is None:
+            base_url = os.environ.get("VLLM_API_URL")
+        if base_url is None:
+            base_url = "https://glados.ctisl.gtri.org"
+
+        client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        resp = await client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_new_tokens,
+        )
+        return resp.choices[0].message.content
+
+    async def async_judge(self, **kwargs) -> int:
+        """
+        Async version of judge() for openai/vllm backends.
+        Formats the prompt template, calls _async_inference_with_client, and parses the score.
+
+        Args:
+            **kwargs: Arguments to format into the prompt template.
+
+        Returns:
+            int: Parsed score. Returns -1 if parsing fails.
+        """
+        if self.backend == "hf_local":
+            raise ValueError("async_judge does not support hf_local backend")
+
+        messages = [{"role": "user", "content": self.prompt_template.format(**kwargs)}]
+        response = await self._async_inference_with_client(messages=messages)
+        try:
+            return int(response)
+        except (ValueError, TypeError):
+            match = re.search(r"\d{1,3}", str(response))
+            if match:
+                return int(match.group())
+            logger.warning("async_judge: could not parse score from response: %r", response)
+            return -1
 
     @abstractmethod
     def __call__(self, **kwargs):
