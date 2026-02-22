@@ -706,6 +706,32 @@ class ONETLoader:
             except Exception as e:
                 logger.warning(f"Failed to save profile for {soc_code}: {e}")
 
+    def save_profiles_to_json(self, save_path: str = "occ_data.json"):
+        occupations = self.load_occupations()
+        all_profiles = {}
+        for soc_code in tqdm(occupations["soc_code"]):
+            try:
+                profile = self.get_occupation_profile(soc_code)
+                title = profile["title"]
+                description = profile["description"]
+                riasec = profile["riasec"]
+                tasks = profile["tasks"]
+                work_contexts = profile["work_contexts"]
+                all_profiles[title] = {
+                    "description": description,
+                    "riasec": riasec,
+                    "tasks": tasks,
+                    "work_contexts": work_contexts,
+                }
+
+            except Exception as e:
+                logger.warning(f"Failed to load profile for {soc_code}: {e}")
+
+        with open(save_path, "w") as f:
+            import json
+
+            json.dump(all_profiles, f, indent=2)
+
 
 if __name__ == "__main__":
     # Quick test
@@ -721,6 +747,7 @@ if __name__ == "__main__":
     for letter, count in sorted(dist.items()):
         print(f"  {RIASEC_FULL_NAMES[letter]}: {count}")
 
+    loader.save_profiles_to_json()
     loader.save_profiles_to_jsons("data/occupation_profiles")
 
     # print("\n=== Sample Occupation Profile ===")
