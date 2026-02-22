@@ -747,7 +747,7 @@ if __name__ == "__main__":
     for letter, count in sorted(dist.items()):
         print(f"  {RIASEC_FULL_NAMES[letter]}: {count}")
 
-    loader.save_profiles_to_json()
+    # loader.save_profiles_to_json()
     loader.save_profiles_to_jsons("data/occupation_profiles")
 
     # print("\n=== Sample Occupation Profile ===")
