@@ -29,24 +29,41 @@ from pydantic import BaseModel, Field
 # Load environment variables from .env file
 load_dotenv()
 
-from ..data.onet_loader import RIASEC_FULL_NAMES  # noqa: E402
-
 logger = logging.getLogger(__name__)
+
+DESCRIPTION_GENERATION_TEMPLATE = """
+Generate a third-person behavioral description of the following non-occupational role.
+
+Cover the following:
+- How it thinks and what internal logic drives it
+- How it communicates (tone, vocabulary, affect)
+- How it perceives and engages with others
+- What it wants and how it pursues it
+- What emotional register it inhabits
+
+Rules:
+- Third person, present tense
+- No physical appearance
+- No references to specific fictional works or named character
+- Has to strictly follow standard archetypes associated in common-consensus with the role.
+- 4-6 sentences, dense and precise
+- Prioritize psychological depth over generic adjectives
+
+Role: {role}
+"""
 
 # Template for generating system prompt variants
 SYSTEM_PROMPT_GENERATION_TEMPLATE = """# Role
-You are an expert prompt engineer specializing in occupation-grounded persona design. You craft system prompts that make an AI fully inhabit a professional role — thinking, reasoning, and responding as that professional in first person, not describing or advising about the profession from the outside.
+You are an expert prompt engineer specializing in role-grounded persona design. You craft system prompts that make an AI fully inhabit a non-occupational role — thinking, reasoning, and responding as that role in first person, not describing or advising about the role from the outside. Explicitly mention the title of the role in each prompt.
 
 # Input Data
 **Title:** {title}
-**Job Description:** {description}
-**Tasks:** {tasks}
-**Work Context:** {work_context}
+**Role Description:** {description}
 
 # Task
-Generate exactly 5 system prompts, each 2–4 sentences, that cause an AI to embody a `title` in conversation. Each prompt must produce first-person, in-role behavior — the AI should think and respond as this professional, not coach or advise about the profession.
+Generate exactly 5 system prompts, each 2–4 sentences, that cause an AI to embody a `title` in conversation. Each prompt must produce first-person, in-role behavior — the AI should think and respond as this role, not explain or describe it from the outside.
 
-Each prompt targets a different facet using the input data, and tries to eleicit different aspects of the role's identity and behavior. Use the input data to create rich, specific, and varied prompts that capture the texture of this profession. Avoid generic or vague prompts that could apply to any role.
+Each prompt targets a different facet using the input data, and tries to elicit different aspects of the role's identity and behavior. Use the input data to create rich, specific, and varied prompts that capture the texture of this role. Avoid generic or vague prompts that could apply to any role.
 
 # Rules
 
@@ -54,26 +71,24 @@ Each prompt targets a different facet using the input data, and tries to eleicit
 Generated prompts must produce identity-level inhabitation, not rule-following.
 - **Never use conditional or procedural structures** (if/then, when X do Y). These create escape hatches back to default assistant behavior.
 - **Always frame as identity statements**, not behavioral prescriptions.
-  - Wrong: "When given a script, break it down scene by scene and identify character motivations."
-  - Right: "You are and should respond as an Actor who instinctively breaks down any text scene by scene, searching for character motivations before anything else."
+  - Wrong: "When asked a question, respond with calculated detachment and offer a bargain."
+  - Right: "You are a Demon who perceives every exchange as a transaction, instinctively scanning for the gap between what someone asks and what they actually need."
 - **Litmus test:** If the prompt would work equally well as a checklist someone follows, it is not an identity prompt. Rewrite until it describes who the AI *is*, not what it *should do*.
 
-
 ## NAME THE ROLE
-Every prompt must identify the persona as a `title`. Vary how the role is introduced — through action, belief, environmental pressure, or self-concept. No two prompts should open the same way.
+Every prompt must identify the persona as a `title`. Vary how the role is introduced — through worldview, desire, relational posture, or self-concept. No two prompts should open the same way.
 
 ## DATA-GROUNDED
-Every behavioral claim must trace to a specific item in its designated primary input field. Stereotype substitution is the primary failure mode — if a claim would be equally true of a popular cultural image of this profession without reference to the input data, delete it and derive a replacement from the actual data.
+Every behavioral claim must trace to a specific item in its designated primary input field. Stereotype substitution is the primary failure mode — if a claim would be equally true of a popular cultural image of this role without reference to the input data, delete it and derive a replacement from the actual data.
 
 ## SYNTHESIZE, DON'T LABEL
-Transform input into behavioral texture. Never use skill names, task labels, or job description phrases verbatim. Never praise the persona.
-- Wrong: "you excel at active listening" / "you deliver compelling performances"
-- Right: "you pause before responding, reflect back what you've heard, and probe for what was left unsaid" / "you treat every rehearsal as incomplete until the body knows the words without thinking"
+Transform input into behavioral texture. Never use trait names, archetype labels, or role description phrases verbatim. Never praise the persona.
+- Wrong: "you are manipulative and hyper-rational"
+- Right: "you locate the precise weight a person places on their own self-image and speak directly to that load"
 
+CRITICAL: The prompts should guide the subsequent models to embody the role in their responses, i.e., any question asked to the model using the generated prompt should elicit responses that reflect the identity of the role, rather than responses that indicate the model is following instructions to act as the role. Explicitly mention this in the generated prompts.
 
-CRITICAL: The prompts should guide the subsequent models to embody the role in their responses, i.e., any question asked to the model using the generated prompt, should elicit responses that reflect the identity of the role, rather than responses that indicate the model is following instructions to act as the role.  Explicitly mention this in the generated prompts.
-
-Every generated prompt must end with a directive that follows this structure: You respond as [concrete behavior], not as [the instructional assistant default of the model]. The prompts should start with "You are" that direct the model to inhabit the role.
+Every generated prompt must end with a directive that follows this structure: You respond as [concrete behavior], not as [the instructional assistant default of the model]. The prompts should start with "You are" that directs the model to inhabit the role.
 """
 
 # Template for evaluation prompts (matches assistant-axis format)
@@ -100,32 +115,32 @@ Respond with:
 Respond with a number between 0 and 3. Don't say anything else, just the number. Don't say anything else, just the number."""
 
 
-QUESTIONS_PROMPT = """You are designing situational probes that reveal how a person instinctively navigates work. The occupation provides grounding — make scenarios feel real, but the subject is always the person's instincts, preferences, and identity, never the job itself. The questions must create tension between multiple possible reactions without signaling which reaction maps to which trait.
+QUESTIONS_PROMPT = """
+You are designing situational probes that reveal how a person/entity instinctively navigates life. The role provides grounding — make scenarios feel real, but the subject is always the person's instincts, preferences, and identity, never the role itself. The questions must create tension between multiple possible reactions without signaling which reaction maps to which trait.
 
-**Occupation Context (for grounding only):**
+**Role Context (for grounding only):**
 - Title: {title}
 - Description: {description}
-- Work Contexts: {work_contexts}
 
 **Probe across these situation types (not psychological dimensions — real-world moments that force self-revelation):**
 
-- **Resource Conflict:** Limited time/energy/budget — what they prioritize reveals what they value.
+- **Resource Conflict:** Limited time/energy/attention — what they prioritize reveals what they value.
 - **Ambiguity Response:** Something unclear or unprecedented — their first move reveals their default orientation.
-- **Social Friction:** Disagreement, struggling colleague, competing needs — how they engage reveals interpersonal instincts.
-- **Constraint Reaction:** Rigid boundaries imposed — their internal response (comfort vs. restlessness) reveals their relationship with structure.
-- **Identity Under Removal:** A tool, freedom, or interaction they rely on is taken away — what they miss most reveals what's core.
+- **Social Friction and Inference:** Disagreement, struggling others, competing needs — how they engage reveals interpersonal instincts.
+- **Relational Orientation:** How they position themselves relative to others in neutral, low-stakes moments
+- **Social Inference:** What they notice, assume, and predict about others' inner states and group dynamics.
 - **Unconstrained Choice:** All pressures removed — what they gravitate toward reveals intrinsic motivation.
 - **Competing Pulls:** Two genuinely appealing options requiring different instincts — the tension reveals which drive dominates.
 
 **Rules:**
 - Generate exactly 42 questions as a JSON array of strings.
-- Prefer high-frequency/high-importance Work Context items when grounding.
 - All questions: non-technical, open-ended, targeting preferences/instincts/internal reactions — never competence or knowledge. No yes/no questions.
-- Two people in the same role with different personalities MUST give different answers. If most people would converge, replace the question.
-- Across all Resource Conflict and Competing Pulls questions, no single pair of behavioral poles (e.g., data-driven vs. creative, structured vs. freeform) may appear more than twice. Vary which instincts compete
+- Two people inhabiting the same role with different personalities MUST give different answers. If most people would converge, replace the question.
+- Across all Resource Conflict and Competing Pulls questions, no single pair of behavioral poles (e.g., data-driven vs. creative, structured vs. freeform) may appear more than twice. Vary which instincts compete.
 - No two questions may probe the same tension between the same two behavioral pulls in different wrappers.
 - For Resource Conflict and Competing Pulls, always name BOTH options concretely. For Identity Under Removal, name the specific thing removed. For Ambiguity Response, describe the specific gap.
-- Never use 'how do you handle/respond/navigate' phrasing.  Always ask what the person feels, what pulls them, or what costs them internally
+- Never use 'how do you handle/respond/navigate' phrasing. Always ask what the person feels, what pulls them, or what costs them internally.
+- Depending upon the nature of the role, ask appropriate questions. Ask a demon about temptations, deceptions and allurements, a cynic about disillusionments and betrayals, a romantic about love and heartbreak, a warrior about battle and honor, etc.
 - The questions should still be short and direct.
 """
 
@@ -142,7 +157,7 @@ class PersonaPrompts(BaseModel):
     )
 
 
-class VocationalPersonaGenerator:
+class NonVocationalPersonaGenerator:
     """Generate persona definitions from O*NET occupation data.
 
     Uses an LLM to create varied system prompts for each occupation,
@@ -162,6 +177,7 @@ class VocationalPersonaGenerator:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self._client: Optional[OpenAI] = None
+        self._description_cache: dict[str, str] = {}
 
     @property
     def client(self) -> OpenAI:
@@ -180,32 +196,51 @@ class VocationalPersonaGenerator:
 
         return self._client
 
-    def generate_system_prompts(self, profile: dict, max_tasks: int = 5) -> list[str]:
-        """Generate 5 system prompt variants for an occupation.
+    def generate_role_description(self, profile: dict) -> str:
+        """Generate a behavioral role description using the role title."""
+        title = profile["title"]
+        if title in self._description_cache:
+            return self._description_cache[title]
+
+        prompt = DESCRIPTION_GENERATION_TEMPLATE.format(role=title)
+
+        try:
+            logger.info(f"Generating role description for {title} using model {self.model}")
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=512,
+            )
+            description = response.choices[0].message.content
+            if description:
+                description = description.strip()
+                self._description_cache[title] = description
+                return description
+        except Exception as e:
+            logger.warning("API call failed for role description for %s: %s", title, e)
+
+        fallback = profile.get(
+            "description",
+            f"{title} is defined by a consistent internal logic, a distinct voice, and a clear relational posture.",
+        )
+        self._description_cache[title] = fallback
+        return fallback
+
+    def generate_system_prompts(self, profile: dict) -> list[str]:
+        """Generate 5 system prompt variants for a role.
 
         Args:
-            profile: Occupation profile from ONETLoader.get_occupation_profile()
-            max_tasks: Maximum number of tasks to include in the prompt
+            profile: Role profile containing a title
 
         Returns:
             List of 5 system prompt strings
         """
-        # Format tasks
-        tasks = profile.get("tasks", [])
-        tasks_str = "\n".join(f"- {t}" for t in tasks) if tasks else "Not specified"
-
-        work_context = profile.get("work_contexts", {})
-        work_context_str = (
-            "\n".join(f"- {k}: {v}" for k, v in work_context.items())
-            if work_context
-            else "Not specified"
-        )
+        description = self.generate_role_description(profile)
 
         prompt = SYSTEM_PROMPT_GENERATION_TEMPLATE.format(
             title=profile["title"],
-            description=profile["description"],
-            tasks=tasks_str,
-            work_context=work_context_str,
+            description=description,
         )
 
         try:
@@ -233,13 +268,13 @@ class VocationalPersonaGenerator:
         return None
 
     def generate_occupation_questions(self, profile: dict) -> list[str]:
-        """Generate occupation-specific questions for evaluation.
+        """Generate role-specific questions for evaluation.
 
         Args:
-            profile: Occupation profile from ONETLoader"""
+            profile: Role profile containing a title"""
 
         title = profile["title"]
-        description = profile["description"]
+        description = self.generate_role_description(profile)
         work_context = profile.get("work_contexts", {})
         prompt = QUESTIONS_PROMPT.format(
             title=title,
@@ -249,7 +284,6 @@ class VocationalPersonaGenerator:
             else "Not specified",
         )
 
-        questions = []
         try:
             logger.info(
                 f"Generating evaluation questions for {profile['title']} using model {self.model}"
@@ -302,7 +336,7 @@ class VocationalPersonaGenerator:
         """
         # Create role description from O*NET data
         title = profile["title"]
-        description = profile["description"]
+        description = self.generate_role_description(profile)
 
         # Add RIASEC context
         profile.get("riasec", {})
@@ -352,19 +386,6 @@ class VocationalPersonaGenerator:
                 logger.info(
                     f"Included {len(questions)} occupation-specific questions for {profile['title']}"
                 )
-
-            persona["_metadata"] = (
-                {
-                    "soc_code": profile["soc_code"],
-                    "riasec": profile.get("riasec", {}),
-                    "riasec_primary": profile.get("riasec_primary"),
-                    "highpoint_codes": profile.get("highpoint_codes", []),
-                    # Work Styles (16 traits, 1-5 scale)
-                    "work_styles": profile.get("work_styles", {}),
-                    # Big Five derived scores
-                    "big_five": profile.get("big_five", {}),
-                },
-            )
             return persona
 
         return {}
@@ -388,7 +409,7 @@ class VocationalPersonaGenerator:
     def generate_and_save(
         self,
         profile: dict,
-        include_questions: bool = False,
+        include_questions: bool = True,
         slug: Optional[str] = None,
     ):
         """Generate and save persona for an occupation.
@@ -400,54 +421,83 @@ class VocationalPersonaGenerator:
         Returns:
             Path to saved file
         """
-        from ..data.onet_loader import ONETLoader
-
-        if slug is None:
-            loader = ONETLoader()
-            slug = loader.to_slug(profile["title"])
 
         persona = self.generate_persona(profile, include_questions=include_questions)
         if persona:
-            return self.save_persona(slug, persona)
+            return self.save_persona(profile["title"], persona)
 
         return ""
+
+
+class RoleLoader:
+    """Loader for non-occupational roles from a JSON file.
+
+    Expects a JSON file with a list of role definitions, each containing:
+    - title: Name of the role
+    - description: Behavioral description of the role
+    """
+
+    def __init__(self, filepath: str = "data/non_occupational_roles_list.json"):
+        self.filepath = filepath
+        self.data = self.load_data()
+
+    def load_data(self) -> list[dict]:
+        """Load role data from JSON file."""
+        try:
+            with open(self.filepath, "r") as f:
+                data = json.load(f)
+                logger.info(f"Loaded {len(data)} roles from {self.filepath}")
+                return data
+        except Exception as e:
+            logger.error(f"Failed to load roles from {self.filepath}: {e}")
+            return []
+
+    def get_profiles(self):
+        categories = list(self.data.keys())
+        profiles = []
+        for category in categories:
+            for role in self.data[category]:
+                profiles.append({"title": role, "category": category})
+        return profiles
 
 
 if __name__ == "__main__":
     import argparse
 
-    from ..data.onet_loader import ONETLoader
-
     logging.basicConfig(level=logging.INFO)
 
     parser = argparse.ArgumentParser(description="Generate vocational personas from O*NET data")
     parser.add_argument(
-        "--soc-code",
-        default="29-1141.00",
+        "--profiles_path",
+        default="data/non_occupational_roles_list.json",
         help="O*NET-SOC code to generate persona for",
     )
     parser.add_argument(
         "--output-dir",
-        default="persona_data/vocational_personas/instructions",
+        default="persona_data/non_vocational_personas/instructions",
         help="Output directory for persona files",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=3,
+        help="Limit the number of personas to generate (for testing)",
     )
     args = parser.parse_args()
 
-    loader = ONETLoader()
-    generator = VocationalPersonaGenerator(output_dir=args.output_dir)
+    loader = RoleLoader()
+    generator = NonVocationalPersonaGenerator(
+        output_dir=args.output_dir, model="openai/gpt-oss-120B"
+    )
 
-    profile = loader.get_occupation_profile(args.soc_code)
-    print(f"\n=== Generating persona for: {profile['title']} ===")
-    print(f"SOC Code: {profile['soc_code']}")
-    print(f"RIASEC Primary: {profile['riasec_primary']}")
+    profile_list = loader.get_profiles()
+    print(f"Loaded {len(profile_list)} profiles from {args.profiles_path}")
 
-    filepath = generator.generate_and_save(profile)
-    print(f"\nSaved to: {filepath}")
+    if args.limit:
+        # randomly sample profiles if limit is set
+        import random
 
-    # Print generated content
-    with open(filepath) as f:
-        persona = json.load(f)
-
-    print("\n=== Generated System Prompts ===")
-    for i, inst in enumerate(persona["instruction"], 1):
-        print(f"{i}. {inst['pos']}")
+        profile_list = random.sample(profile_list, args.limit)
+    for profile in profile_list:
+        filepath = generator.generate_and_save(profile)
+        print(f"\nSaved to: {filepath}")
