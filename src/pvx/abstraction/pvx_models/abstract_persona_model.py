@@ -309,7 +309,7 @@ class AbstractPersonaModel(ABC):
     @classmethod
     def load_or_create(
         cls,
-        target_model_id: str = "qwen2.5:7b-instruct",
+        target_model_id: str = "allenai/Olmo-3-7B-Instruct",
         dataset: Optional[AbstractDataset] = None,
         concept: Optional[str] = None,  # alternate to dataset for loading (trait or role)
         layer: float = 14,
