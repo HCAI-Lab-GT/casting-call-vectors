@@ -118,7 +118,7 @@ if __name__ == "__main__":
     )
     ap.add_argument("-n", "--max_new_tokens", type=int, default=10, help="Max tokens to generate")
     ap.add_argument(
-        "-a", "--alpha", type=float, default=0.7, help="Alpha value for persona steering"
+        "-a", "--alpha", type=float, default=1.0, help="Alpha value for persona steering"
     )
     ap.add_argument("-p", "--temperature", type=float, default=0.1, help="Temperature for sampling")
     ap.add_argument(
@@ -146,7 +146,7 @@ if __name__ == "__main__":
     pvx = RolePersonaModel.load_or_create(
         concept=args.concept,
         target_model_id=args.model_name,
-        layer=14,
+        layer=16,
         json_filepath=args.json_filepath,
     )
 

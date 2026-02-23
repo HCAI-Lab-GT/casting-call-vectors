@@ -318,6 +318,8 @@ class AbstractPersonaModel(ABC):
     ) -> "AbstractPersonaModel":
         safe_model_id = target_model_id.replace("/", "__")
         safetensors_path = Path(safetensors_dir) / f"{concept}_persona_initialization/{safe_model_id}.safetensors"
+        
+        logger.info(f"Safetensors Path: {safetensors_path}")
 
         # Try safetensors first (preferred format)
         if safetensors_path.exists():
