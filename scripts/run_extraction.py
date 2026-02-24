@@ -168,13 +168,16 @@ def main(
 
     # Load questions
     questions_file = Path(questions_path)
+    if not questions_file.exists():
+        # Fall back to the local copy in persona_data
+        questions_file = Path("persona_data/vocational_personas/questions/extraction_questions.jsonl")
     if questions_file.exists():
-        questions = QuestionBank.from_assistant_axis(str(questions_file))
-        logger.info(f"Loaded {len(questions)} questions from {questions_path}")
+        questions = QuestionBank.from_jsonl(questions_file)
+        logger.info(f"Loaded {len(questions)} questions from {questions_file}")
     else:
         logger.warning(f"Questions file not found: {questions_path}")
         logger.info("Using fallback questions")
-        questions = QuestionBank.from_jsonl("/Users/silver/Developer/personality-vectors/persona_data/vocational_personas/questions/extraction_questions.jsonl")
+        questions = QuestionBank.from_fallback()
 
     # Load personas
     # One of these is guaranteed to be set by the earlier check

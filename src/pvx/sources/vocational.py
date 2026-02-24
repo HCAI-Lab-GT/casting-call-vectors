@@ -133,7 +133,7 @@ class VocationalPersonaSource:
         Returns:
             List of 5 system prompts from the persona file.
         """
-        instructions = self._data.get("instruction", [])
+        instructions = self._data.get("positive_prompts", [])
         return [inst["pos"] for inst in instructions]
 
     def get_baseline_prompts(self) -> list[str]:
@@ -150,7 +150,7 @@ class VocationalPersonaSource:
         Returns:
             Evaluation prompt with {question} and {answer} placeholders.
         """
-        return self._data.get("eval_prompt", "")
+        return self._data.get("evaluation_prompt", "")
 
     def get_metadata(self) -> PersonaMetadata:
         """Return metadata including RIASEC scores.
@@ -158,7 +158,8 @@ class VocationalPersonaSource:
         Returns:
             PersonaMetadata dict with vocational-specific fields.
         """
-        meta = self._data.get("_metadata", {})
+        raw = self._data.get("_metadata", {})
+        meta = raw[0] if isinstance(raw, list) else raw
         return PersonaMetadata(
             soc_code=meta.get("soc_code", ""),
             title=meta.get("title", self._persona_id),

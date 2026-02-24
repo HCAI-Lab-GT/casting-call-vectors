@@ -142,8 +142,10 @@ def main(
 
     # Load questions
     questions_path = Path("_vendor/assistant-axis/data/extraction_questions.jsonl")
+    if not questions_path.exists():
+        questions_path = Path("persona_data/vocational_personas/questions/extraction_questions.jsonl")
     if questions_path.exists():
-        questions = QuestionBank.from_assistant_axis(str(questions_path))
+        questions = QuestionBank.from_jsonl(questions_path)
     else:
         questions = QuestionBank.from_fallback()
     logger.info(f"Loaded {len(questions)} questions")
