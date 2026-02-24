@@ -86,7 +86,7 @@ class ActivationExtractor:
         logger.info(f"Loading model: {model_id}")
 
         # Load tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
 
         # Resolve device
         if device == "auto":
@@ -105,11 +105,13 @@ class ActivationExtractor:
                 model_id,
                 torch_dtype=dtype,
                 device_map="auto",
+                trust_remote_code=True,
             )
         else:
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_id,
                 torch_dtype=dtype,
+                trust_remote_code=True,
             )
             if resolved_device != "cpu":
                 self.model = self.model.to(resolved_device)  # type: ignore[arg-type]
