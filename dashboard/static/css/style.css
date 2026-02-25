@@ -1,0 +1,496 @@
+/* ── Personality Vectors Dashboard — Clean Off-White ── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+    --bg: #faf9f7;
+    --bg-card: #ffffff;
+    --bg-hover: #f3f1ed;
+    --bg-nav: #ffffff;
+    --border: #e8e5df;
+    --border-subtle: #f0ede8;
+    --text: #1a1a2e;
+    --text-secondary: #6b7280;
+    --text-muted: #9ca3af;
+    --accent: #4a6cf7;
+    --accent-soft: rgba(74, 108, 247, 0.08);
+    --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+    --shadow-hover: 0 4px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+
+    /* RIASEC trait colors — muted */
+    --artistic: #c05d8a;
+    --conventional: #3ba8a0;
+    --enterprising: #c99a2e;
+    --investigative: #5a7bd4;
+    --realistic: #d47a3a;
+    --social: #4d9e4d;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Navigation ──────────────────────────────── */
+nav {
+    background: var(--bg-nav);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(12px);
+}
+
+nav .nav-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    height: 56px;
+    gap: 32px;
+}
+
+nav .logo {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    text-decoration: none;
+    white-space: nowrap;
+    letter-spacing: -0.02em;
+}
+
+nav .nav-links {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+nav .nav-links::-webkit-scrollbar { display: none; }
+
+nav .nav-links a {
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-decoration: none;
+    border-radius: 6px;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+}
+
+nav .nav-links a:hover {
+    color: var(--text);
+    background: var(--bg-hover);
+}
+
+nav .nav-links a.active {
+    color: var(--accent);
+    background: var(--accent-soft);
+}
+
+/* ── Page Layout ─────────────────────────────── */
+.page {
+    display: none;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 32px 80px;
+}
+
+.page.active {
+    display: block;
+}
+
+.page-header {
+    margin-bottom: 32px;
+}
+
+.page-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--text);
+    margin-bottom: 8px;
+}
+
+.page-header p {
+    font-size: 15px;
+    color: var(--text-secondary);
+    max-width: 720px;
+    line-height: 1.7;
+}
+
+/* ── Cards ────────────────────────────────────── */
+.card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow);
+    transition: box-shadow 0.2s ease;
+}
+
+.card:hover {
+    box-shadow: var(--shadow-hover);
+}
+
+.card-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.card h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--text);
+}
+
+.card .description {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 16px;
+}
+
+/* ── Overview Grid ────────────────────────────── */
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+}
+
+.stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+    transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+    box-shadow: var(--shadow-hover);
+    border-color: var(--accent);
+}
+
+.stat-card .stat-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.stat-card .stat-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.02em;
+}
+
+.stat-card .stat-detail {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+.stat-card.highlight .stat-value {
+    color: var(--accent);
+}
+
+.stat-card.negative .stat-value {
+    color: #b45454;
+}
+
+/* ── Chart containers ─────────────────────────── */
+.chart-area {
+    width: 100%;
+    min-height: 420px;
+    position: relative;
+    margin: 16px 0;
+}
+
+.chart-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+
+/* ── Explanation boxes ────────────────────────── */
+.explainer {
+    background: var(--accent-soft);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-top: 16px;
+    border-left: 3px solid var(--accent);
+}
+
+.explainer h4 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.explainer p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.7;
+}
+
+.takeaways {
+    margin-top: 24px;
+}
+
+.takeaways h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.takeaways ul {
+    list-style: none;
+    padding: 0;
+}
+
+.takeaways li {
+    font-size: 14px;
+    color: var(--text-secondary);
+    padding: 6px 0 6px 20px;
+    position: relative;
+    line-height: 1.6;
+}
+
+.takeaways li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+    font-weight: 600;
+}
+
+/* ── Tables ───────────────────────────────────── */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.data-table th {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 2px solid var(--border);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.data-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text);
+}
+
+.data-table tr:hover td {
+    background: var(--bg-hover);
+}
+
+.data-table .num {
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+}
+
+.data-table .match {
+    color: #2d8a4e;
+    font-weight: 600;
+}
+
+.data-table .miss {
+    color: #b45454;
+}
+
+/* ── Controls ─────────────────────────────────── */
+.controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.control-group label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+select {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ── Trait badges ─────────────────────────────── */
+.trait-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.trait-artistic { color: var(--artistic); background: rgba(192,93,138,0.1); }
+.trait-conventional { color: var(--conventional); background: rgba(59,168,160,0.1); }
+.trait-enterprising { color: var(--enterprising); background: rgba(201,154,46,0.1); }
+.trait-investigative { color: var(--investigative); background: rgba(90,123,212,0.1); }
+.trait-realistic { color: var(--realistic); background: rgba(212,122,58,0.1); }
+.trait-social { color: var(--social); background: rgba(77,158,77,0.1); }
+
+/* ── Experiment browser ───────────────────────── */
+.search-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    background: var(--bg-card);
+    color: var(--text);
+    margin-bottom: 16px;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.experiment-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.experiment-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s;
+    margin-bottom: 2px;
+}
+
+.experiment-item:hover {
+    background: var(--bg-hover);
+}
+
+.experiment-item.selected {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.experiment-item .size {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* ── JSON viewer ──────────────────────────────── */
+.json-viewer {
+    background: #2d2d3a;
+    color: #e0e0e8;
+    border-radius: 8px;
+    padding: 20px;
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    max-height: 500px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* ── Loading state ────────────────────────────── */
+.loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    color: var(--text-muted);
+    font-size: 13px;
+    gap: 12px;
+}
+
+.spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ── Scrollbar ────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ── Responsive ───────────────────────────────── */
+@media (max-width: 768px) {
+    nav .nav-inner { padding: 0 16px; gap: 16px; }
+    .page { padding: 24px 16px 60px; }
+    .chart-row { grid-template-columns: 1fr; }
+    .stat-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 480px) {
+    .stat-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Plotly overrides ─────────────────────────── */
+.js-plotly-plot .plotly .modebar {
+    top: 4px !important;
+    right: 4px !important;
+}

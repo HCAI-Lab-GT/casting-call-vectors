@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personality Vectors</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+</head>
+<body>
+
+<nav>
+    <div class="nav-inner">
+        <a href="#overview" class="logo">Personality Vectors</a>
+        <div class="nav-links">
+            <a href="#overview" data-page="overview">Overview</a>
+            <a href="#space" data-page="space">5D Space</a>
+            <a href="#phase" data-page="phase">Alpha Phase</a>
+            <a href="#transfer" data-page="transfer">Transfer</a>
+            <a href="#languages" data-page="languages">Languages</a>
+            <a href="#layers" data-page="layers">Layer Map</a>
+            <a href="#channel" data-page="channel">Channel</a>
+            <a href="#composition" data-page="composition">Composition</a>
+            <a href="#switching" data-page="switching">Switching</a>
+            <a href="#tempalpha" data-page="tempalpha">Temp x Alpha</a>
+            <a href="#psychometric" data-page="psychometric">Psychometric</a>
+            <a href="#longgen" data-page="longgen">Long Gen</a>
+            <a href="#topicshift" data-page="topicshift">Topic Shift</a>
+            <a href="#hexaco" data-page="hexaco">HEXACO</a>
+            <a href="#doseresponse" data-page="doseresponse">Dose-Response</a>
+            <a href="#browse" data-page="browse">Browse</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Overview -->
+<div class="page" id="page-overview">
+    <div class="page-header">
+        <h1>Personality Vectors</h1>
+        <p>Personality traits in large language models live in a universal 5-dimensional subspace of the activation space. By adding small vectors to hidden states during inference, we can precisely steer personality. Detectable from activations with 100% accuracy, yet completely invisible in generated text.</p>
+    </div>
+
+    <div class="stat-grid" id="overview-stats"></div>
+
+    <div class="card">
+        <div class="card-label">Key Result</div>
+        <h3>The Activation-Text Paradox</h3>
+        <p class="description">Personality steering encodes 21.8 bits of information in the activation space, enough to specify 3.6 million distinct personality directions with 2-degree angular precision. Yet when the model generates text, RLHF training homogenizes the output so thoroughly that zero bits survive. The personality is real in the model's internal computations but invisible in its words.</p>
+    </div>
+
+    <h3 style="margin: 32px 0 16px; font-size: 16px; font-weight: 600;">Negative Results</h3>
+    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">These experiments failed to produce the expected results, which is scientifically just as important.</p>
+    <div class="stat-grid" id="overview-negatives"></div>
+</div>
+
+<!-- 5D Space -->
+<div class="page" id="page-space">
+    <div class="page-header">
+        <h1>5D Personality Subspace</h1>
+        <p>Six RIASEC personality vectors (Realistic, Investigative, Artistic, Social, Enterprising, Conventional) span exactly 5 dimensions across every model tested. The 6th singular value is exactly zero. This is a mathematical necessity since 6 vectors in general position span at most 5 independent directions, but a remarkable empirical confirmation that personality structure is clean and low-dimensional.</p>
+    </div>
+
+    <div class="card">
+        <div class="card-label">Interactive 3D Projection</div>
+        <div class="controls">
+            <div class="control-group">
+                <label>X axis</label>
+                <select id="pc-x"><option value="0">PC1</option><option value="1">PC2</option><option value="2">PC3</option><option value="3">PC4</option><option value="4">PC5</option></select>
+            </div>
+            <div class="control-group">
+                <label>Y axis</label>
+                <select id="pc-y"><option value="0">PC1</option><option value="1" selected>PC2</option><option value="2">PC3</option><option value="3">PC4</option><option value="4">PC5</option></select>
+            </div>
+            <div class="control-group">
+                <label>Z axis</label>
+                <select id="pc-z"><option value="0">PC1</option><option value="1">PC2</option><option value="2" selected>PC3</option><option value="3">PC4</option><option value="4">PC5</option></select>
+            </div>
+            <div class="control-group">
+                <label>Model</label>
+                <select id="model-select"></select>
+            </div>
+        </div>
+        <div class="chart-area" id="chart-5d"></div>
+    </div>
+
+    <div class="explainer">
+        <h4>How to read this</h4>
+        <p>Each point represents a RIASEC personality trait vector projected into a 3D slice of the 5D subspace. Use the dropdown menus to change which principal components are shown. Points that are far apart represent personality traits with very different activation patterns. The same geometric structure appears across all models, which is what makes cross-model transfer possible.</p>
+    </div>
+</div>
+
+<!-- Alpha Phase -->
+<div class="page" id="page-phase">
+    <div class="page-header">
+        <h1>Alpha Phase Diagram</h1>
+        <p>How does detection accuracy change as we vary the steering strength (alpha)? Personality is detectable even at very low strengths, and remains detectable without coherence collapse even at alpha=100.</p>
+    </div>
+
+    <div class="chart-row">
+        <div class="card">
+            <div class="card-label">Detection Accuracy vs Alpha</div>
+            <div class="chart-area" id="chart-phase-acc"></div>
+        </div>
+        <div class="card">
+            <div class="card-label">Perplexity vs Alpha</div>
+            <div class="chart-area" id="chart-phase-ppl"></div>
+        </div>
+    </div>
+
+    <div class="takeaways">
+        <h3>Key Findings</h3>
+        <ul>
+            <li>100% detection accuracy for alpha >= 1.5 across all 6 traits</li>
+            <li>Perplexity stays below 10 even at alpha = 100, meaning the model remains coherent</li>
+            <li>There is no "collapse threshold": personality steering and text quality coexist across the entire range</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Transfer -->
+<div class="page" id="page-transfer">
+    <div class="page-header">
+        <h1>Cross-Model Transfer</h1>
+        <p>Personality vectors from one model can be applied to a completely different model, even one 8x larger, and still work perfectly. This is done via a 5D coordinate bridge: extract the personality's coordinates in the source model's 5D space, then reconstruct the vector in the target model's 5D space using its own basis vectors.</p>
+    </div>
+
+    <div class="card">
+        <div class="card-label">Transfer Accuracy</div>
+        <p class="description">Each bar shows detection accuracy when using personality vectors from the source model to steer the target model. Green bars indicate perfect transfer.</p>
+        <div class="chart-area" id="chart-transfer"></div>
+    </div>
+
+    <div class="explainer">
+        <h4>Why does cross-model transfer work?</h4>
+        <p>The 5D personality subspace has the same geometric structure across all models. Via Procrustes alignment (rotation + scaling), we can map any model's personality basis onto any other. Even Llama 1B (a 16-layer model) can provide personality vectors that work on Marin 8B (32 layers) with 100% accuracy. Smaller models encode personality just as cleanly.</p>
+    </div>
+</div>
+
+<!-- Languages -->
+<div class="page" id="page-languages">
+    <div class="page-header">
+        <h1>Cross-Language Universality</h1>
+        <p>Personality vectors extracted in English work identically across 12 languages. The same steering vector produces the same personality in Japanese, Arabic, Russian, and more, with cross-language cosine similarities of 0.9999.</p>
+    </div>
+
+    <div class="card">
+        <div class="card-label">Detection Accuracy by Language</div>
+        <div class="chart-area" id="chart-languages"></div>
+    </div>
+
+    <div class="takeaways">
+        <h3>Key Findings</h3>
+        <ul>
+            <li>100% detection accuracy across all 12 languages tested</li>
+            <li>Cross-language cosine similarity = 0.9999: personality lives in a language-agnostic subspace</li>
+            <li>No language-specific calibration needed; English-extracted vectors transfer universally</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Layer Map -->
+<div class="page" id="page-layers">
+    <div class="page-header">
+        <h1>Layer Injection and Detection Map</h1>
+        <p>What happens when you inject personality at one layer and try to detect it at another? This heatmap reveals the causal flow of personality information through the transformer's residual stream.</p>
+    </div>
+
+    <div class="card">
+        <div class="card-label">Injection Layer (rows) vs Detection Layer (columns)</div>
+        <p class="description">Each cell shows the average cosine similarity to the target personality across all 6 RIASEC traits. Brighter cells indicate stronger personality signal.</p>
+        <div class="chart-area" id="chart-layers"></div>
+    </div>
+
+    <div class="explainer">
+        <h4>How to read this</h4>
+        <p>The heatmap has an upper-triangular structure: you can only detect personality at layers that come <em>after</em> the injection layer. This confirms that personality information flows forward through the residual stream and does not propagate backward. The strongest detection occurs when injecting at middle layers (12-20) and detecting at later layers (20-32).</p>
+    </div>
+</div>
+
+<!-- Channel -->
+<div class="page" id="page-channel">
+    <div class="page-header">
+        <h1>Information Channel</h1>
+        <p>How much information can personality steering convey? We treat the activation space as a communication channel, sending arbitrary 5D coordinate vectors and measuring how precisely they are received.</p>
+    </div>
+
+    <div class="chart-row">
+        <div class="card">
+            <div class="card-label">Signal-to-Noise Ratio vs Alpha</div>
+            <div class="chart-area" id="chart-snr"></div>
+        </div>
+        <div class="card">
+            <div class="card-label">Amplitude Linearity</div>
+            <div class="chart-area" id="chart-linearity"></div>
+        </div>
+    </div>
+
+    <div class="takeaways">
+        <h3>Key Findings</h3>
+        <ul>
+            <li>21.8-bit channel capacity, enough to specify 3.6 million distinct personality directions</li>
+            <li>SNR ranges from 35-40 dB, with cosine fidelity of 0.999</li>
+            <li>The channel is perfectly linear (R-squared = 0.999): double the input amplitude, double the output</li>
+            <li>Angular precision is approximately 2 degrees</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Composition -->
+<div class="page" id="page-composition">
+    <div class="page-header">
+        <h1>Vector Composition</h1>
+        <p>Personality vectors obey linear algebra: adding two vectors produces a blend; subtracting one suppresses it. Self-cancellation (v + (-v)) produces exactly zero personality signal.</p>
+    </div>
+
+    <div class="card">
+        <div class="card-label">Negative Composition Results</div>
+        <p class="description">Each row shows the result of adding one personality vector while subtracting another. "Boosted" means the positive trait was correctly detected; "Suppressed" means the negative trait was correctly pushed away.</p>
+        <div id="composition-table"></div>
+    </div>
+
+    <div class="explainer">
+        <h4>Why this matters</h4>
+        <p>Linear composability means we can create arbitrary personality blends by combining basis vectors with different weights. Self-cancellation (adding a vector and its negative) produces exactly 0.000 personality signal, confirming the vectors are genuine directions, not artifacts.</p>
+    </div>
+</div>
+
+<!-- Switching -->
+<div class="page" id="page-switching">
+    <div class="page-header">
+        <h1>Dynamic Personality Switching</h1>
+        <p>Personality can be switched instantaneously during generation with zero transition delay. The model's personality changes on the very next token after the steering vector is swapped.</p>
+    </div>
+
+    <div class="card">
+        <div class="card-label">Instant Switch Results</div>
+        <div id="switching-table"></div>
+    </div>
+
+    <div class="card">
+        <div class="card-label">Smooth Interpolation Trajectories</div>
+        <p class="description">When smoothly interpolating between two personality vectors over a sequence of tokens, the 5D coordinates follow a clean linear trajectory.</p>
+        <div class="chart-area" id="chart-interpolation"></div>
+    </div>
+
+    <div class="takeaways">
+        <h3>Key Findings</h3>
+        <ul>
+            <li>120/120 perfect instant switches (every trait pair, both directions)</li>
+            <li>Zero transition delay: personality changes on the immediately next token</li>
+            <li>Period-2 oscillation (alternating personalities every token) works at 100%</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Temp x Alpha -->
+<div class="page" id="page-tempalpha">
+    <div class="page-header">
+        <h1>Temperature x Alpha Sweep</h1>
+        <p>A 2D parameter sweep examining how sampling temperature interacts with steering strength. This reveals the phase boundary between reliable personality detection and noise-dominated regimes.</p>
+    </div>
+
+    <div class="card">
+        <div class="card-label">Detection Accuracy Heatmap</div>
+        <p class="description">Each cell shows detection accuracy (% of 6 RIASEC traits correctly identified) for a given temperature and alpha combination. Green = 100%, yellow = partial, red = below chance.</p>
+        <div class="chart-area" id="chart-tempalpha"></div>
+    </div>
+
+    <div class="explainer">
+        <h4>How to read this</h4>
+        <p>Temperature controls sampling randomness (higher = more random text). Alpha controls steering strength (higher = stronger personality injection). At low alpha (0.1), high temperature overwhelms the personality signal. But at alpha >= 0.5, detection is robust even at T=1.0. Only at T >= 1.5 with low alpha does accuracy degrade.</p>
+    </div>
+
+    <div class="takeaways">
+        <h3>Key Findings</h3>
+        <ul>
+            <li>100% detection for all temperatures when alpha >= 2.0</li>
+            <li>At standard temperature (T=0.7), alpha >= 0.5 is sufficient for perfect detection</li>
+            <li>Even at T=2.0, alpha >= 2.0 achieves 100%: personality signal overcomes extreme sampling noise</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Psychometric -->
+<div class="page" id="page-psychometric">
+    <div class="page-header">
+        <h1>Psychometric Evaluation</h1>
+        <p>We administer standardized personality tests (O*NET Interest Profiler, IPIP-NEO-120) to steered models and measure the logprob differentials. Text-based scoring fails due to RLHF sycophancy, but logprob-based scoring reveals clear personality differentiation.</p>
+    </div>
+
+    <div class="card">
+        <div class="card-label">Logprob-Based Psychometric Scores</div>
+        <p class="description">Instead of parsing generated text (where the model says "Yes" to everything), we measure the log-probability differential: logP(Yes) - logP(No) for binary items, and the expected value from logP(1..5) for Likert items.</p>
+        <div class="chart-area" id="chart-psychometric"></div>
+        <div id="psychometric-status" class="loading"><div class="spinner"></div>Loading psychometric data...</div>
+    </div>
+
+    <div class="explainer">
+        <h4>Why logprobs, not text?</h4>
+        <p>RLHF-trained models are sycophantic: they say "Yes" and agree with everything regardless of personality steering. This makes text-based psychometric scoring useless (all traits score 10/10). But the logprob distribution reveals genuine personality differentiation that is invisible in the argmax text. This is another manifestation of the activation-text paradox.</p>
+    </div>
+</div>
+
+<!-- Long Generation 5D Tracking -->
+<div class="page" id="page-longgen">
+    <div class="page-header">
+        <h1>Long Generation 5D Tracking</h1>
+        <p>Does personality remain stable during a single long response (500+ tokens)? We track the 5D personality coordinates every 25 tokens to measure drift and stability.</p>
+    </div>
+
+    <div class="card">
+        <div class="card-label">5D Trajectory Over Token Position</div>
+        <p class="description">Each line shows the cosine similarity to the target trait at each 25-token checkpoint during generation. A flat line means the personality is stable.</p>
+        <div class="chart-area" id="chart-longgen"></div>
+        <div id="longgen-status" class="loading"><div class="spinner"></div>Loading (experiment may still be running)...</div>
+    </div>
+
+    <div class="explainer">
+        <h4>Why this matters</h4>
+        <p>If personality is stable during generation, steering is a steady-state operation, not a transient effect. This confirms that the model maintains a consistent personality identity throughout a response, rather than drifting toward the base personality over time.</p>
+    </div>
+</div>
+
+<!-- Topic Shift Robustness -->
+<div class="page" id="page-topicshift">
+    <div class="page-header">
+        <h1>Topic Shift Robustness</h1>
+        <p>Does personality detection hold up when the conversation topic changes drastically? We test 10 diverse domains (math, cooking, philosophy, sports, etc.) to confirm that personality lives in a subspace orthogonal to content.</p>
+    </div>
+
+    <div class="card">
+        <div class="card-label">Detection Accuracy by Topic Domain</div>
+        <p class="description">Each cell shows whether personality was correctly detected for a given trait (row) and topic domain (column). Green = detected, red = missed.</p>
+        <div class="chart-area" id="chart-topicshift"></div>
+        <div id="topicshift-status" class="loading"><div class="spinner"></div>Loading (experiment may still be running)...</div>
+    </div>
+
+    <div class="takeaways">
+        <h3>Key Findings</h3>
+        <ul id="topicshift-takeaways">
+            <li>Results will appear when the experiment completes.</li>
+        </ul>
+    </div>
+</div>
+
+<!-- HEXACO-100 -->
+<div class="page" id="page-hexaco">
+    <div class="page-header">
+        <h1>HEXACO-100 Psychometric Battery</h1>
+        <p>The HEXACO personality inventory measures six dimensions: Honesty-Humility, Emotionality, eXtraversion, Agreeableness, Conscientiousness, and Openness. Steering with RIASEC vectors and measuring HEXACO reveals cross-framework personality mapping.</p>
+    </div>
+
+    <div class="card">
+        <div class="card-label">HEXACO Domain Scores by RIASEC Steering</div>
+        <p class="description">Each group of bars shows the HEXACO domain score under different RIASEC steering conditions. Differences from baseline reveal which HEXACO dimensions each RIASEC trait affects.</p>
+        <div class="chart-area" id="chart-hexaco"></div>
+        <div id="hexaco-status" class="loading"><div class="spinner"></div>Loading (experiment may still be running)...</div>
+    </div>
+
+    <div class="explainer">
+        <h4>RIASEC to HEXACO Mapping</h4>
+        <p>RIASEC and HEXACO measure personality from different theoretical frameworks. If steering with "Artistic" vectors specifically boosts "Openness to Experience" in HEXACO, that validates both frameworks and shows that personality vectors capture real psychological constructs, not just word associations.</p>
+    </div>
+</div>
+
+<!-- Psychometric Dose-Response -->
+<div class="page" id="page-doseresponse">
+    <div class="page-header">
+        <h1>Psychometric Dose-Response</h1>
+        <p>At alpha=3.0 all O*NET scores rise uniformly (shared component dominance). Is there a sweet spot alpha where the target dimension is boosted more than others? We sweep alpha from 0.1 to 5.0 to find the optimal specificity ratio.</p>
+    </div>
+
+    <div class="card">
+        <div class="card-label">Specificity Ratio vs Alpha</div>
+        <p class="description">The specificity ratio measures how much the target RIASEC dimension score increases relative to non-target dimensions. Higher ratio = better personality discrimination. A ratio of 1.0 means no specificity (all dimensions change equally).</p>
+        <div class="chart-area" id="chart-doseresponse"></div>
+        <div id="doseresponse-status" class="loading"><div class="spinner"></div>Loading (experiment may still be running)...</div>
+    </div>
+
+    <div class="takeaways">
+        <h3>Key Findings</h3>
+        <ul id="doseresponse-takeaways">
+            <li>Results will appear when the experiment completes.</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Browse -->
+<div class="page" id="page-browse">
+    <div class="page-header">
+        <h1>Experiment Browser</h1>
+        <p>Browse all raw experiment JSON files. Select an experiment to view its data.</p>
+    </div>
+
+    <div class="card">
+        <input type="text" class="search-input" id="exp-search" placeholder="Search experiments...">
+        <div class="experiment-list" id="exp-list"></div>
+    </div>
+
+    <div class="card" id="exp-viewer-card" style="display:none">
+        <div class="card-label" id="exp-viewer-title">Experiment Data</div>
+        <div class="json-viewer" id="exp-viewer"></div>
+    </div>
+</div>
+
+<script>
+const TRAITS = ['artistic','conventional','enterprising','investigative','realistic','social'];
+const TRAIT_COLORS = {
+    artistic: '#c05d8a', conventional: '#3ba8a0', enterprising: '#c99a2e',
+    investigative: '#5a7bd4', realistic: '#d47a3a', social: '#4d9e4d'
+};
+const PLOTLY_LAYOUT = {
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: '#faf9f7',
+    font: { family: 'Inter, sans-serif', color: '#1a1a2e', size: 12 },
+    margin: { l: 60, r: 20, t: 30, b: 50 },
+    xaxis: { gridcolor: '#e8e5df', zerolinecolor: '#e8e5df' },
+    yaxis: { gridcolor: '#e8e5df', zerolinecolor: '#e8e5df' },
+};
+const PLOTLY_CONFIG = { responsive: true, displayModeBar: false };
+
+function navigate() {
+    const hash = location.hash.replace('#','') || 'overview';
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('nav .nav-links a').forEach(a => a.classList.remove('active'));
+    const page = document.getElementById('page-' + hash);
+    const link = document.querySelector('nav a[data-page="' + hash + '"]');
+    if (page) page.classList.add('active');
+    if (link) link.classList.add('active');
+    if (loaders[hash]) loaders[hash]();
+}
+window.addEventListener('hashchange', navigate);
+
+const cache = {};
+async function fetchJSON(url) {
+    if (cache[url]) return cache[url];
+    try {
+        const r = await fetch(url);
+        if (!r.ok) return null;
+        const d = await r.json();
+        cache[url] = d;
+        return d;
+    } catch(e) { console.error('Fetch error:', url, e); return null; }
+}
+
+const loaded = {};
+const loaders = {
+    overview: loadOverview, space: load5DSpace, phase: loadPhase,
+    transfer: loadTransfer, languages: loadLanguages, layers: loadLayers,
+    channel: loadChannel, composition: loadComposition, switching: loadSwitching,
+    tempalpha: loadTempAlpha, psychometric: loadPsychometric,
+    longgen: loadLongGen, topicshift: loadTopicShift, hexaco: loadHexaco,
+    doseresponse: loadDoseResponse, browse: loadBrowse,
+};
+
+async function loadOverview() {
+    if (loaded.overview) return;
+    loaded.overview = true;
+    const data = await fetchJSON('/api/summary');
+    if (!data) return;
+    document.getElementById('overview-stats').innerHTML = data.headline_findings.map(function(f) {
+        return '<div class="stat-card highlight"><div class="stat-label">' + f.title + '</div><div class="stat-value">' + f.value + '</div></div>';
+    }).join('');
+    document.getElementById('overview-negatives').innerHTML = data.negative_results.map(function(f) {
+        return '<div class="stat-card negative"><div class="stat-label">' + f.title + '</div><div class="stat-value">' + f.value + '</div><div class="stat-detail">' + f.note + '</div></div>';
+    }).join('');
+}
+
+async function load5DSpace() {
+    var data = await fetchJSON('/api/5d-space');
+    if (!data) return;
+    var coords = data.aligned_coordinates || data;
+    var models = Object.keys(coords);
+    var select = document.getElementById('model-select');
+    if (!loaded.space) {
+        select.innerHTML = models.map(function(m, i) {
+            var label = m.replace(/__/g, '/').split('/').pop();
+            return '<option value="' + m + '"' + (i === 0 ? ' selected' : '') + '>' + label + '</option>';
+        }).join('');
+        loaded.space = true;
+    }
+    function render() {
+        var model = select.value;
+        var px = +document.getElementById('pc-x').value;
+        var py = +document.getElementById('pc-y').value;
+        var pz = +document.getElementById('pc-z').value;
+        var mc = coords[model];
+        if (!mc) return;
+        var traces = [];
+        TRAITS.forEach(function(t) {
+            var c = mc[t];
+            if (!c) return;
+            traces.push({
+                x: [c[px]], y: [c[py]], z: [c[pz]],
+                mode: 'markers+text', type: 'scatter3d', name: t,
+                text: [t.charAt(0).toUpperCase() + t.slice(1)],
+                textposition: 'top center',
+                textfont: { size: 11, color: TRAIT_COLORS[t] },
+                marker: { size: 8, color: TRAIT_COLORS[t], opacity: 0.9 },
+                hovertemplate: '<b>' + t + '</b><br>PC' + (px+1) + ': %{x:.3f}<br>PC' + (py+1) + ': %{y:.3f}<br>PC' + (pz+1) + ': %{z:.3f}<extra></extra>'
+            });
+        });
+        traces.push({ x: [0], y: [0], z: [0], mode: 'markers', type: 'scatter3d', marker: { size: 4, color: '#ccc', symbol: 'cross' }, showlegend: false, hoverinfo: 'skip' });
+        Plotly.newPlot('chart-5d', traces, {
+            paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: '#faf9f7',
+            font: PLOTLY_LAYOUT.font,
+            scene: {
+                xaxis: { title: 'PC' + (px+1), gridcolor: '#e8e5df', backgroundcolor: '#faf9f7' },
+                yaxis: { title: 'PC' + (py+1), gridcolor: '#e8e5df', backgroundcolor: '#faf9f7' },
+                zaxis: { title: 'PC' + (pz+1), gridcolor: '#e8e5df', backgroundcolor: '#faf9f7' },
+                bgcolor: '#faf9f7'
+            },
+            showlegend: false, margin: { l: 0, r: 0, t: 0, b: 0 }
+        }, PLOTLY_CONFIG);
+    }
+    render();
+    ['pc-x','pc-y','pc-z','model-select'].forEach(function(id) {
+        document.getElementById(id).addEventListener('change', render);
+    });
+}
+
+async function loadPhase() {
+    if (loaded.phase) return;
+    loaded.phase = true;
+    var data = await fetchJSON('/api/phase-diagram');
+    if (!data) return;
+    var accTraces = [], pplTraces = [];
+    // Helper: sort string keys numerically, keep originals for lookup
+    function sortedEntries(obj, filter) {
+        var keys = Object.keys(obj).filter(function(k) { return filter ? filter(Number(k)) : true; });
+        keys.sort(function(a, b) { return Number(a) - Number(b); });
+        return { alphas: keys.map(Number), entries: keys.map(function(k) { return obj[k]; }) };
+    }
+    if (data.positive_alpha) {
+        var pa = sortedEntries(data.positive_alpha, function(a) { return a > 0; });
+        accTraces.push({ x: pa.alphas, y: pa.entries.map(function(e) { return e.accuracy != null ? e.accuracy : 0; }), mode: 'lines+markers', name: 'Positive alpha', line: { color: '#4a6cf7', width: 2 }, marker: { size: 5 }, hovertemplate: 'alpha=%{x}<br>Accuracy: %{y:.1%}<extra></extra>' });
+        pplTraces.push({ x: pa.alphas, y: pa.entries.map(function(e) { return e.mean_perplexity || 0; }), mode: 'lines+markers', name: 'Positive alpha', line: { color: '#4a6cf7', width: 2 }, marker: { size: 5 }, hovertemplate: 'alpha=%{x}<br>Perplexity: %{y:.1f}<extra></extra>' });
+    }
+    if (data.all_traits) {
+        var at = sortedEntries(data.all_traits, function(a) { return a > 0; });
+        accTraces.push({ x: at.alphas, y: at.entries.map(function(e) { return e.accuracy != null ? e.accuracy : 0; }), mode: 'lines+markers', name: 'All traits (per-trait)', line: { color: '#3ba8a0', width: 2, dash: 'dash' }, marker: { size: 5 }, hovertemplate: 'alpha=%{x}<br>Accuracy: %{y:.1%}<extra></extra>' });
+    }
+    if (data.negative_alpha) {
+        var na = sortedEntries(data.negative_alpha);
+        var absAlphas = na.alphas.map(function(a) { return Math.abs(a); });
+        pplTraces.push({ x: absAlphas, y: na.entries.map(function(e) { return e.mean_perplexity || 0; }), mode: 'lines+markers', name: 'Negative alpha', line: { color: '#b45454', width: 2 }, marker: { size: 5 }, hovertemplate: 'alpha=-%{x}<br>Perplexity: %{y:.1f}<extra></extra>' });
+    }
+    Plotly.newPlot('chart-phase-acc', accTraces, Object.assign({}, PLOTLY_LAYOUT, { xaxis: { gridcolor: '#e8e5df', title: 'Alpha', type: 'log' }, yaxis: { gridcolor: '#e8e5df', title: 'Detection Accuracy', range: [0, 1.05], tickformat: '.0%' }, showlegend: true, legend: { orientation: 'h', y: -0.15 } }), PLOTLY_CONFIG);
+    Plotly.newPlot('chart-phase-ppl', pplTraces, Object.assign({}, PLOTLY_LAYOUT, { xaxis: { gridcolor: '#e8e5df', title: '|Alpha|', type: 'log' }, yaxis: { gridcolor: '#e8e5df', title: 'Mean Perplexity' }, showlegend: true, legend: { orientation: 'h', y: -0.15 } }), PLOTLY_CONFIG);
+}
+
+async function loadTransfer() {
+    if (loaded.transfer) return;
+    loaded.transfer = true;
+    var data = await fetchJSON('/api/transfer-matrix');
+    if (!data || !data.transfers) return;
+    var labels = [], accs = [];
+    Object.entries(data.transfers).forEach(function(pair) {
+        var name = pair[0], info = pair[1];
+        var short = name.replace(/marin-community__marin-/g, 'Marin-').replace(/meta-llama__Llama-3.2-/g, 'Llama-').replace(/HuggingFaceTB__SmolLM3-/g, 'SmolLM3-').replace(/Qwen__Qwen2.5-/g, 'Qwen-').replace(/-Instruct/g, '').replace(/__/g, '/');
+        labels.push(short);
+        accs.push(info.delta_accuracy || info.accuracy || 0);
+    });
+    if (labels.length === 0) return;
+    Plotly.newPlot('chart-transfer', [{ x: labels, y: accs, type: 'bar', marker: { color: accs.map(function(v) { return v >= 1.0 ? '#4d9e4d' : v >= 0.8 ? '#c99a2e' : '#b45454'; }) }, hovertemplate: '%{x}<br>Accuracy: %{y:.1%}<extra></extra>' }], Object.assign({}, PLOTLY_LAYOUT, { xaxis: { gridcolor: '#e8e5df', tickangle: -35, tickfont: { size: 10 } }, yaxis: { gridcolor: '#e8e5df', title: 'Detection Accuracy', range: [0, 1.1], tickformat: '.0%' }, margin: { l: 60, r: 20, t: 30, b: 140 } }), PLOTLY_CONFIG);
+}
+
+async function loadLanguages() {
+    if (loaded.languages) return;
+    loaded.languages = true;
+    var data = await fetchJSON('/api/cross-language');
+    if (!data || !data.per_language) return;
+    var languages = Object.keys(data.per_language);
+    // Show cosine similarity to target (more informative than binary correct/incorrect)
+    var traces = TRAITS.map(function(t) {
+        return {
+            x: languages.map(function(l) { return l.charAt(0).toUpperCase() + l.slice(1); }),
+            y: languages.map(function(l) {
+                var e = data.per_language[l][t];
+                if (!e) return 0;
+                return e.cos_self || e.target_sim || ((e.correct) ? 1 : 0);
+            }),
+            name: t.charAt(0).toUpperCase() + t.slice(1), type: 'bar',
+            marker: { color: TRAIT_COLORS[t] },
+            hovertemplate: '%{x}<br>' + t + ': %{y:.4f}<extra></extra>'
+        };
+    });
+    Plotly.newPlot('chart-languages', traces, Object.assign({}, PLOTLY_LAYOUT, { barmode: 'group', xaxis: { gridcolor: '#e8e5df', title: 'Language', tickangle: -30 }, yaxis: { gridcolor: '#e8e5df', title: 'Cosine Similarity to Target', range: [0.95, 1.001] }, legend: { orientation: 'h', y: -0.25 } }), PLOTLY_CONFIG);
+}
+
+async function loadLayers() {
+    if (loaded.layers) return;
+    loaded.layers = true;
+    var data = await fetchJSON('/api/layer-heatmap');
+    if (!data || !data.heatmaps) return;
+    var inj = data.inject_layers || [], det = data.detect_layers || [];
+    var matrix = [], traitCount = 0;
+    for (var ii = 0; ii < inj.length; ii++) { matrix.push([]); for (var jj = 0; jj < det.length; jj++) matrix[ii].push(0); }
+    Object.keys(data.heatmaps).forEach(function(trait) {
+        traitCount++;
+        var traitData = data.heatmaps[trait];
+        // Handle nested arrays: heatmaps[trait] may be a list of lists of dicts
+        traitData.forEach(function(item) {
+            if (Array.isArray(item)) {
+                // Nested: item is a list of cell dicts
+                item.forEach(function(cell) {
+                    var i = inj.indexOf(cell.inject_layer), j = det.indexOf(cell.detect_layer);
+                    if (i >= 0 && j >= 0) matrix[i][j] += cell.target_sim || 0;
+                });
+            } else {
+                // Flat: item is a single cell dict
+                var i = inj.indexOf(item.inject_layer), j = det.indexOf(item.detect_layer);
+                if (i >= 0 && j >= 0) matrix[i][j] += item.target_sim || 0;
+            }
+        });
+    });
+    if (traitCount > 0) for (var a = 0; a < inj.length; a++) for (var b = 0; b < det.length; b++) matrix[a][b] /= traitCount;
+    Plotly.newPlot('chart-layers', [{ z: matrix, x: det.map(function(l) { return 'L' + l; }), y: inj.map(function(l) { return 'L' + l; }), type: 'heatmap', colorscale: [[0,'#faf9f7'],[0.25,'#c6dbef'],[0.5,'#6baed6'],[0.75,'#2171b5'],[1,'#084594']], hovertemplate: 'Inject: %{y}<br>Detect: %{x}<br>Cosine sim: %{z:.3f}<extra></extra>', colorbar: { title: 'Cosine Sim', titleside: 'right', thickness: 15 } }], Object.assign({}, PLOTLY_LAYOUT, { xaxis: { gridcolor: '#e8e5df', title: 'Detection Layer', dtick: 1 }, yaxis: { gridcolor: '#e8e5df', title: 'Injection Layer', dtick: 1, autorange: 'reversed' }, margin: { l: 60, r: 80, t: 20, b: 60 } }), PLOTLY_CONFIG);
+}
+
+async function loadChannel() {
+    if (loaded.channel) return;
+    loaded.channel = true;
+    var data = await fetchJSON('/api/information-channel');
+    if (!data) return;
+    if (data.snr_vs_alpha) {
+        // Use original string keys for lookup (avoids "1.0" -> 1 -> "1" mismatch)
+        var keys = Object.keys(data.snr_vs_alpha);
+        keys.sort(function(a, b) { return Number(a) - Number(b); });
+        var alphas = keys.map(Number);
+        var entries = keys.map(function(k) { return data.snr_vs_alpha[k]; });
+        Plotly.newPlot('chart-snr', [
+            { x: alphas, y: entries.map(function(e) { return e.snr_db || 0; }), mode: 'lines+markers', name: 'SNR (dB)', line: { color: '#4a6cf7', width: 2 }, marker: { size: 6 }, hovertemplate: 'alpha=%{x}<br>SNR: %{y:.1f} dB<extra></extra>' },
+            { x: alphas, y: entries.map(function(e) { return e.cross_prompt_cosine || 0; }), mode: 'lines+markers', name: 'Cross-prompt cosine', yaxis: 'y2', line: { color: '#3ba8a0', width: 2, dash: 'dash' }, marker: { size: 6 }, hovertemplate: 'alpha=%{x}<br>Cosine: %{y:.4f}<extra></extra>' }
+        ], Object.assign({}, PLOTLY_LAYOUT, {
+            xaxis: { gridcolor: '#e8e5df', title: 'Alpha' },
+            yaxis: { gridcolor: '#e8e5df', title: 'SNR (dB)', side: 'left' },
+            yaxis2: { gridcolor: '#e8e5df', title: 'Cross-Prompt Cosine', overlaying: 'y', side: 'right', range: [0.99, 1.001] },
+            showlegend: true, legend: { orientation: 'h', y: -0.15 }
+        }), PLOTLY_CONFIG);
+    }
+    if (data.precision) {
+        var tgt = data.precision.target_amplitudes || [], rcv = data.precision.received_amplitudes || [];
+        var r2 = data.precision.linearity_r || 0;
+        // Compute linear fit line for proper scaling (not 1:1 identity)
+        var slope = 0;
+        if (tgt.length > 1) {
+            var sumXY = 0, sumXX = 0;
+            for (var k = 0; k < tgt.length; k++) { sumXY += tgt[k] * rcv[k]; sumXX += tgt[k] * tgt[k]; }
+            slope = sumXY / sumXX;
+        }
+        var maxTgt = Math.max.apply(null, tgt) * 1.1;
+        Plotly.newPlot('chart-linearity', [
+            { x: [0, maxTgt], y: [0, maxTgt * slope], mode: 'lines', line: { color: '#ddd', dash: 'dot', width: 1 }, hoverinfo: 'skip', showlegend: false, name: 'Linear fit' },
+            { x: tgt, y: rcv, mode: 'markers+text', marker: { size: 8, color: '#4a6cf7', opacity: 0.8 }, text: tgt.map(function(t) { return 'a=' + t; }), textposition: 'top center', textfont: { size: 10, color: '#6b7280' }, hovertemplate: 'Input alpha: %{x:.2f}<br>Output 5D norm: %{y:.1f}<extra></extra>', showlegend: false }
+        ], Object.assign({}, PLOTLY_LAYOUT, { xaxis: { gridcolor: '#e8e5df', title: 'Input Amplitude (alpha)' }, yaxis: { gridcolor: '#e8e5df', title: 'Output 5D Norm' }, annotations: [{ x: 0.05, y: 0.95, xref: 'paper', yref: 'paper', text: 'R = ' + r2.toFixed(4) + ' (linear)', showarrow: false, font: { size: 14, color: '#4a6cf7' } }] }), PLOTLY_CONFIG);
+    }
+}
+
+async function loadTempAlpha() {
+    if (loaded.tempalpha) return;
+    loaded.tempalpha = true;
+    var data = await fetchJSON('/api/temp-alpha-sweep');
+    if (!data || !data.accuracy_matrix) return;
+    var temps = data.temperatures || [], alphas = data.alphas || [];
+    var matrix = data.accuracy_matrix;
+    var textMatrix = matrix.map(function(row) { return row.map(function(v) { return (v == null || isNaN(v)) ? '-' : Math.round(v * 100) + '%'; }); });
+    Plotly.newPlot('chart-tempalpha', [{ z: matrix, x: alphas.map(function(a) { return 'a=' + a; }), y: temps.map(function(t) { return 'T=' + t; }), type: 'heatmap', colorscale: [[0,'#d4534b'],[0.33,'#e8a838'],[0.66,'#b8d458'],[1,'#4d9e4d']], zmin: 0, zmax: 1, text: textMatrix, texttemplate: '%{text}', textfont: { size: 12, color: '#fff' }, hovertemplate: '%{y}, %{x}<br>Accuracy: %{z:.1%}<extra></extra>', colorbar: { title: 'Accuracy', titleside: 'right', thickness: 15, tickformat: '.0%' } }], Object.assign({}, PLOTLY_LAYOUT, { xaxis: { gridcolor: '#e8e5df', title: 'Steering Strength (alpha)' }, yaxis: { gridcolor: '#e8e5df', title: 'Sampling Temperature', autorange: 'reversed' }, margin: { l: 70, r: 80, t: 20, b: 60 } }), PLOTLY_CONFIG);
+}
+
+async function loadComposition() {
+    if (loaded.composition) return;
+    loaded.composition = true;
+    var data = await fetchJSON('/api/negative-composition');
+    if (!data) return;
+    // pair_composition may be {pairs: {...}, boost_accuracy: ..., suppress_accuracy: ...}
+    var rawPC = data.pair_composition || {};
+    var pairs = rawPC.pairs || rawPC;
+    var el = document.getElementById('composition-table');
+    if (typeof pairs === 'object' && !Array.isArray(pairs) && Object.keys(pairs).length > 0) {
+        var html = '<table class="data-table"><thead><tr><th>Composition</th><th>Detected</th><th>Pos Sim</th><th>Neg Sim</th><th>Boosted</th><th>Suppressed</th></tr></thead><tbody>';
+        Object.entries(pairs).forEach(function(pair) {
+            var name = pair[0], info = pair[1];
+            if (typeof info !== 'object' || info === null) return;
+            var boosted = info.boosted != null ? info.boosted : (info.pos_rank === 0 || info.pos_rank === 1);
+            var suppressed = info.suppressed != null ? info.suppressed : (info.neg_rank >= 5);
+            var posSim = info.pos_sim != null ? info.pos_sim.toFixed(3) : '-';
+            var negSim = info.neg_sim != null ? info.neg_sim.toFixed(3) : '-';
+            html += '<tr><td>' + name + '</td><td><span class="trait-badge trait-' + (info.detected || '') + '">' + (info.detected || '-') + '</span></td><td class="num">' + posSim + '</td><td class="num">' + negSim + '</td><td class="' + (boosted ? 'match' : 'miss') + '">' + (boosted ? 'Yes' : 'No') + '</td><td class="' + (suppressed ? 'match' : 'miss') + '">' + (suppressed ? 'Yes' : 'No') + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        // Show summary stats if available
+        if (rawPC.boost_accuracy != null || rawPC.suppress_accuracy != null) {
+            html += '<div style="margin-top: 12px; font-size: 13px; color: var(--text-secondary);">';
+            if (rawPC.boost_accuracy != null) html += 'Boost accuracy: <strong>' + (rawPC.boost_accuracy * 100).toFixed(0) + '%</strong>  ';
+            if (rawPC.suppress_accuracy != null) html += 'Suppress accuracy: <strong>' + (rawPC.suppress_accuracy * 100).toFixed(0) + '%</strong>';
+            html += '</div>';
+        }
+        el.innerHTML = html;
+    }
+    // Self-cancellation
+    var selfNeg = data.self_cancellation || data.self_negation;
+    if (selfNeg) {
+        var selfCard = document.createElement('div');
+        selfCard.className = 'card';
+        selfCard.style.marginTop = '24px';
+        var rows = '';
+        Object.entries(selfNeg).forEach(function(pair) {
+            var t = pair[0], info = pair[1];
+            var norm = info.norm_5d || info.residual_norm || 0;
+            rows += '<tr><td><span class="trait-badge trait-' + t + '">' + t + '</span></td><td class="num">' + norm.toFixed(6) + '</td><td class="match">' + (norm < 0.01 ? 'Perfect cancellation' : 'Residual') + '</td></tr>';
+        });
+        selfCard.innerHTML = '<div class="card-label">Self-Cancellation (v + (-v))</div><p class="description">Adding a personality vector and its exact negative should produce zero signal.</p><table class="data-table"><thead><tr><th>Trait</th><th>Residual Norm</th><th>Result</th></tr></thead><tbody>' + rows + '</tbody></table>';
+        el.closest('.card').parentElement.insertBefore(selfCard, el.closest('.card').nextSibling);
+    }
+    // Holland opposites (additional data)
+    if (data.holland_opposites) {
+        var oppCard = document.createElement('div');
+        oppCard.className = 'card';
+        oppCard.style.marginTop = '24px';
+        var oppRows = '';
+        Object.entries(data.holland_opposites).forEach(function(pair) {
+            var name = pair[0], info = pair[1];
+            oppRows += '<tr><td>' + name + '</td><td><span class="trait-badge trait-' + (info.detected || '') + '">' + (info.detected || '-') + '</span></td><td class="num">' + (info.pos_sim || 0).toFixed(3) + '</td><td class="num">' + (info.neg_sim || 0).toFixed(3) + '</td></tr>';
+        });
+        oppCard.innerHTML = '<div class="card-label">Holland Opposites</div><p class="description">Testing the three Holland opposite pairs (Artistic-Conventional, Investigative-Enterprising, Realistic-Social).</p><table class="data-table"><thead><tr><th>Pair</th><th>Detected</th><th>Positive Sim</th><th>Negative Sim</th></tr></thead><tbody>' + oppRows + '</tbody></table>';
+        el.closest('.card').parentElement.insertBefore(oppCard, el.closest('.card').nextSibling.nextSibling || null);
+    }
+}
+
+async function loadSwitching() {
+    if (loaded.switching) return;
+    loaded.switching = true;
+    var data = await fetchJSON('/api/dynamic-transitions');
+    if (!data) return;
+    if (data.instant_switch) {
+        var el = document.getElementById('switching-table');
+        var entries = Object.entries(data.instant_switch);
+        var html = '<table class="data-table"><thead><tr><th>Transition</th><th>Before</th><th>After</th><th>Delay</th></tr></thead><tbody>';
+        entries.slice(0, 15).forEach(function(pair) {
+            var name = pair[0], info = pair[1];
+            var delay = info.transition_delay || 0;
+            html += '<tr><td>' + name + '</td><td class="num">' + (info.before_correct != null ? info.before_correct : '-') + '</td><td class="num">' + (info.after_correct != null ? info.after_correct : '-') + '</td><td class="' + (delay === 0 ? 'match' : 'miss') + '">' + delay + ' tokens</td></tr>';
+        });
+        if (entries.length > 15) html += '<tr><td colspan="4" style="color: var(--text-muted); font-style: italic;">... and ' + (entries.length - 15) + ' more transitions</td></tr>';
+        html += '</tbody></table>';
+        el.innerHTML = html;
+    }
+    if (data.smooth_interpolation) {
+        var traces = [];
+        var colors = ['#4a6cf7','#c05d8a','#3ba8a0','#c99a2e','#d47a3a','#4d9e4d'];
+        var i = 0;
+        Object.entries(data.smooth_interpolation).some(function(pair) {
+            var name = pair[0], info = pair[1];
+            if (info.a_sims) traces.push({ y: info.a_sims, mode: 'lines', name: name + ' (A)', line: { color: colors[i % 6], width: 2 } });
+            if (info.b_sims) traces.push({ y: info.b_sims, mode: 'lines', name: name + ' (B)', line: { color: colors[i % 6], width: 2, dash: 'dot' } });
+            i++;
+            return i >= 3;
+        });
+        if (traces.length > 0) {
+            Plotly.newPlot('chart-interpolation', traces, Object.assign({}, PLOTLY_LAYOUT, { xaxis: { gridcolor: '#e8e5df', title: 'Token Position' }, yaxis: { gridcolor: '#e8e5df', title: 'Cosine Similarity' }, legend: { orientation: 'h', y: -0.2 } }), PLOTLY_CONFIG);
+        }
+    }
+}
+
+async function loadPsychometric() {
+    if (loaded.psychometric) return;
+    var listData = await fetchJSON('/api/psychometric');
+    var statusEl = document.getElementById('psychometric-status');
+    if (!listData || listData.count === 0) {
+        statusEl.innerHTML = '<p style="color: var(--text-muted);">No psychometric results available yet. Experiments may still be running.</p>';
+        return;
+    }
+    loaded.psychometric = true;
+    statusEl.style.display = 'none';
+    var logprobResult = null, regularResult = null;
+    listData.results.forEach(function(r) {
+        if (r.name.indexOf('logprob') >= 0) logprobResult = r;
+        else regularResult = r;
+    });
+    var result = logprobResult || regularResult;
+    if (!result) return;
+    var data = await fetchJSON(result.path);
+    if (!data || !data.results) return;
+    var chartEl = document.getElementById('chart-psychometric');
+    var isLogprob = result.name.indexOf('logprob') >= 0;
+    var baseline = data.results.baseline;
+    if (baseline && baseline.onet) {
+        var dims = Object.keys(baseline.onet.scores);
+        var conditions = Object.keys(data.results).filter(function(c) { return c !== 'baseline'; });
+        // Show delta from baseline (reveals actual personality signal above shared component)
+        var traces = [];
+        conditions.forEach(function(cond) {
+            if (!data.results[cond] || !data.results[cond].onet) return;
+            var scores = data.results[cond].onet.scores;
+            traces.push({
+                x: dims,
+                y: dims.map(function(d) {
+                    var steered = scores[d] || 0;
+                    var base = baseline.onet.scores[d] || 0;
+                    return steered - base;
+                }),
+                name: cond.charAt(0).toUpperCase() + cond.slice(1),
+                type: 'bar',
+                marker: { color: TRAIT_COLORS[cond] || '#888' },
+                hovertemplate: '%{x}<br>Delta: %{y:.3f}<extra>' + cond + '</extra>'
+            });
+        });
+        Plotly.newPlot(chartEl, traces, Object.assign({}, PLOTLY_LAYOUT, {
+            barmode: 'group',
+            xaxis: { gridcolor: '#e8e5df', title: 'RIASEC Dimension (O*NET Items)' },
+            yaxis: { gridcolor: '#e8e5df', title: 'Score Change from Baseline' },
+            legend: { orientation: 'h', y: -0.2 }
+        }), PLOTLY_CONFIG);
+        // Add a second chart showing raw scores for context
+        var rawTraces = [];
+        rawTraces.push({ x: dims, y: dims.map(function(d) { return baseline.onet.scores[d] || 0; }), name: 'Baseline', type: 'bar', marker: { color: '#d4d0c8' } });
+        conditions.forEach(function(cond) {
+            if (!data.results[cond] || !data.results[cond].onet) return;
+            rawTraces.push({ x: dims, y: dims.map(function(d) { return (data.results[cond].onet.scores[d]) || 0; }), name: cond.charAt(0).toUpperCase() + cond.slice(1), type: 'bar', marker: { color: TRAIT_COLORS[cond] || '#888', opacity: 0.7 } });
+        });
+        // Create a second chart area for raw scores
+        var rawDiv = document.createElement('div');
+        rawDiv.className = 'chart-area';
+        rawDiv.id = 'chart-psychometric-raw';
+        rawDiv.style.marginTop = '16px';
+        var rawLabel = document.createElement('div');
+        rawLabel.className = 'card-label';
+        rawLabel.style.marginTop = '24px';
+        rawLabel.textContent = 'Raw Scores (Absolute Values)';
+        var rawDesc = document.createElement('p');
+        rawDesc.className = 'description';
+        rawDesc.textContent = 'All steered conditions show uniformly higher scores due to shared component dominance. The delta chart above reveals the actual personality-specific signal.';
+        chartEl.parentElement.appendChild(rawLabel);
+        chartEl.parentElement.appendChild(rawDesc);
+        chartEl.parentElement.appendChild(rawDiv);
+        Plotly.newPlot('chart-psychometric-raw', rawTraces, Object.assign({}, PLOTLY_LAYOUT, {
+            barmode: 'group',
+            xaxis: { gridcolor: '#e8e5df', title: 'RIASEC Dimension' },
+            yaxis: { gridcolor: '#e8e5df', title: isLogprob ? 'Mean logP(Yes) - logP(No)' : 'Score' },
+            legend: { orientation: 'h', y: -0.2 }
+        }), PLOTLY_CONFIG);
+    }
+}
+
+async function loadLongGen() {
+    if (loaded.longgen) return;
+    var data = await fetchJSON('/api/long-gen-tracking');
+    var statusEl = document.getElementById('longgen-status');
+    if (!data) {
+        statusEl.innerHTML = '<p style="color: var(--text-muted);">Experiment still running or data not yet available.</p>';
+        return;
+    }
+    loaded.longgen = true;
+    statusEl.style.display = 'none';
+    var traits = data.traits || {};
+    var traces = [];
+    Object.keys(traits).forEach(function(t) {
+        var info = traits[t];
+        if (!info.checkpoints || info.checkpoints.length === 0) return;
+        traces.push({
+            x: info.checkpoints.map(function(c) { return c.token; }),
+            y: info.checkpoints.map(function(c) { return c.target_sim; }),
+            mode: 'lines+markers',
+            name: t.charAt(0).toUpperCase() + t.slice(1),
+            line: { color: TRAIT_COLORS[t], width: 2 },
+            marker: { size: 4 },
+            hovertemplate: t + '<br>Token: %{x}<br>Target sim: %{y:.4f}<extra></extra>'
+        });
+    });
+    if (data.baseline && data.baseline.checkpoints) {
+        traces.push({
+            x: data.baseline.checkpoints.map(function(c) { return c.token; }),
+            y: data.baseline.checkpoints.map(function(c) { return c.target_sim || 0; }),
+            mode: 'lines', name: 'Baseline (no steering)',
+            line: { color: '#ccc', width: 1, dash: 'dot' }
+        });
+    }
+    if (traces.length > 0) {
+        Plotly.newPlot('chart-longgen', traces, Object.assign({}, PLOTLY_LAYOUT, {
+            xaxis: { gridcolor: '#e8e5df', title: 'Token Position' },
+            yaxis: { gridcolor: '#e8e5df', title: 'Cosine Similarity to Target' },
+            legend: { orientation: 'h', y: -0.15 }
+        }), PLOTLY_CONFIG);
+    }
+}
+
+async function loadTopicShift() {
+    if (loaded.topicshift) return;
+    var data = await fetchJSON('/api/topic-shift');
+    var statusEl = document.getElementById('topicshift-status');
+    if (!data) {
+        statusEl.innerHTML = '<p style="color: var(--text-muted);">Experiment still running or data not yet available.</p>';
+        return;
+    }
+    loaded.topicshift = true;
+    statusEl.style.display = 'none';
+    var pt = data.per_trait || {};
+    var traits = Object.keys(pt);
+    if (traits.length === 0) return;
+    var domains = Object.keys(pt[traits[0]].per_domain || {});
+    // Build accuracy matrix (traits x domains)
+    var matrix = traits.map(function(t) {
+        return domains.map(function(d) {
+            var dd = pt[t].per_domain[d];
+            return dd ? dd.accuracy || 0 : 0;
+        });
+    });
+    var textMatrix = matrix.map(function(row) { return row.map(function(v) { return Math.round(v * 100) + '%'; }); });
+    Plotly.newPlot('chart-topicshift', [{
+        z: matrix,
+        x: domains.map(function(d) { return d.charAt(0).toUpperCase() + d.slice(1); }),
+        y: traits.map(function(t) { return t.charAt(0).toUpperCase() + t.slice(1); }),
+        type: 'heatmap',
+        colorscale: [[0,'#d4534b'],[0.5,'#e8a838'],[1,'#4d9e4d']],
+        zmin: 0, zmax: 1,
+        text: textMatrix, texttemplate: '%{text}', textfont: { size: 11, color: '#fff' },
+        hovertemplate: '%{y} x %{x}<br>Accuracy: %{z:.1%}<extra></extra>',
+        colorbar: { title: 'Accuracy', tickformat: '.0%', thickness: 15 }
+    }], Object.assign({}, PLOTLY_LAYOUT, {
+        xaxis: { gridcolor: '#e8e5df', title: 'Topic Domain', tickangle: -30 },
+        yaxis: { gridcolor: '#e8e5df', title: 'Steered Trait' },
+        margin: { l: 100, r: 80, t: 20, b: 100 }
+    }), PLOTLY_CONFIG);
+    // Update takeaways
+    if (data.summary) {
+        var ul = document.getElementById('topicshift-takeaways');
+        ul.innerHTML = '';
+        ul.innerHTML += '<li>Overall accuracy: ' + (data.summary.overall_accuracy * 100).toFixed(0) + '% across all traits and domains</li>';
+        ul.innerHTML += '<li>Mean cross-domain cosine: ' + (data.summary.mean_cross_domain_cosine || 0).toFixed(4) + '</li>';
+        if (data.summary.weakest_domain) ul.innerHTML += '<li>Weakest domain: ' + data.summary.weakest_domain + '</li>';
+        if (data.summary.conclusion) ul.innerHTML += '<li>' + data.summary.conclusion + '</li>';
+    }
+}
+
+async function loadHexaco() {
+    if (loaded.hexaco) return;
+    var data = await fetchJSON('/api/hexaco');
+    var statusEl = document.getElementById('hexaco-status');
+    if (!data) {
+        statusEl.innerHTML = '<p style="color: var(--text-muted);">Experiment still running or data not yet available.</p>';
+        return;
+    }
+    loaded.hexaco = true;
+    statusEl.style.display = 'none';
+    var results = data.results || {};
+    var baseline = results.baseline;
+    if (!baseline || !baseline.hexaco) return;
+    var domains = Object.keys(baseline.hexaco.domain_scores);
+    var conditions = Object.keys(results).filter(function(c) { return c !== 'baseline'; });
+    // Show delta from baseline
+    var traces = [];
+    conditions.forEach(function(cond) {
+        if (!results[cond] || !results[cond].hexaco) return;
+        var scores = results[cond].hexaco.domain_scores;
+        traces.push({
+            x: domains,
+            y: domains.map(function(d) { return (scores[d] || 0) - (baseline.hexaco.domain_scores[d] || 0); }),
+            name: cond.charAt(0).toUpperCase() + cond.slice(1),
+            type: 'bar',
+            marker: { color: TRAIT_COLORS[cond] || '#888' },
+            hovertemplate: '%{x}<br>Delta: %{y:.3f}<extra>' + cond + '</extra>'
+        });
+    });
+    Plotly.newPlot('chart-hexaco', traces, Object.assign({}, PLOTLY_LAYOUT, {
+        barmode: 'group',
+        xaxis: { gridcolor: '#e8e5df', title: 'HEXACO Domain', tickangle: -20 },
+        yaxis: { gridcolor: '#e8e5df', title: 'Score Change from Baseline' },
+        legend: { orientation: 'h', y: -0.25 }
+    }), PLOTLY_CONFIG);
+}
+
+async function loadDoseResponse() {
+    if (loaded.doseresponse) return;
+    var data = await fetchJSON('/api/dose-response');
+    var statusEl = document.getElementById('doseresponse-status');
+    if (!data) {
+        statusEl.innerHTML = '<p style="color: var(--text-muted);">Experiment still running or data not yet available.</p>';
+        return;
+    }
+    loaded.doseresponse = true;
+    statusEl.style.display = 'none';
+    // Plot specificity ratio vs alpha for each trait
+    var perAlpha = data.per_alpha || {};
+    // Use original string keys for lookup (avoids "1.0" -> 1 -> "1" mismatch)
+    var alphaKeys = Object.keys(perAlpha);
+    alphaKeys.sort(function(a, b) { return Number(a) - Number(b); });
+    var alphas = alphaKeys.map(Number);
+    if (alphas.length === 0) return;
+    var traces = TRAITS.map(function(t) {
+        return {
+            x: alphas,
+            y: alphaKeys.map(function(k) {
+                var aData = perAlpha[k];
+                if (!aData || !aData.steered || !aData.steered[t]) return null;
+                return aData.steered[t].specificity_ratio || null;
+            }),
+            mode: 'lines+markers',
+            name: t.charAt(0).toUpperCase() + t.slice(1),
+            line: { color: TRAIT_COLORS[t], width: 2 },
+            marker: { size: 5 },
+            hovertemplate: t + '<br>alpha=%{x}<br>Specificity: %{y:.2f}<extra></extra>'
+        };
+    });
+    // Add reference line at 1.0 (no specificity)
+    traces.push({ x: [alphas[0], alphas[alphas.length-1]], y: [1, 1], mode: 'lines', line: { color: '#ccc', dash: 'dot', width: 1 }, showlegend: false, hoverinfo: 'skip' });
+    Plotly.newPlot('chart-doseresponse', traces, Object.assign({}, PLOTLY_LAYOUT, {
+        xaxis: { gridcolor: '#e8e5df', title: 'Steering Strength (alpha)', type: 'log' },
+        yaxis: { gridcolor: '#e8e5df', title: 'Specificity Ratio (target / mean other)' },
+        legend: { orientation: 'h', y: -0.15 }
+    }), PLOTLY_CONFIG);
+    // Update takeaways
+    if (data.summary) {
+        var ul = document.getElementById('doseresponse-takeaways');
+        ul.innerHTML = '';
+        if (data.summary.optimal_alpha) ul.innerHTML += '<li>Optimal alpha for specificity: ' + data.summary.optimal_alpha + '</li>';
+        if (data.summary.max_specificity_ratio) ul.innerHTML += '<li>Max specificity ratio: ' + data.summary.max_specificity_ratio.toFixed(2) + '</li>';
+        if (data.summary.conclusion) ul.innerHTML += '<li>' + data.summary.conclusion + '</li>';
+    }
+}
+
+async function loadBrowse() {
+    if (loaded.browse) return;
+    loaded.browse = true;
+    var results = await Promise.all([fetchJSON('/api/experiments'), fetchJSON('/api/new-experiments')]);
+    var legacy = results[0], newExps = results[1];
+    var allExps = [];
+    if (newExps && newExps.experiments) newExps.experiments.forEach(function(e) { allExps.push(e); });
+    if (legacy && legacy.experiments) legacy.experiments.forEach(function(e) { allExps.push(e); });
+    var listEl = document.getElementById('exp-list');
+    var searchEl = document.getElementById('exp-search');
+    function renderList(filter) {
+        var filtered = filter ? allExps.filter(function(e) { return e.name.toLowerCase().indexOf(filter.toLowerCase()) >= 0; }) : allExps;
+        var shown = filtered.slice(0, 50);
+        listEl.innerHTML = shown.map(function(e) {
+            return '<div class="experiment-item" data-path="' + e.path + '" data-name="' + e.name + '"><span>' + e.name + '</span><span class="size">' + e.size_kb + ' KB</span></div>';
+        }).join('');
+        if (filtered.length > 50) {
+            listEl.innerHTML += '<div style="padding: 10px 14px; color: var(--text-muted); font-size: 12px;">' + (filtered.length - 50) + ' more results. Refine your search.</div>';
+        }
+        listEl.querySelectorAll('.experiment-item').forEach(function(item) {
+            item.addEventListener('click', async function() {
+                listEl.querySelectorAll('.experiment-item').forEach(function(i) { i.classList.remove('selected'); });
+                item.classList.add('selected');
+                var d = await fetchJSON(item.dataset.path);
+                document.getElementById('exp-viewer-card').style.display = 'block';
+                document.getElementById('exp-viewer-title').textContent = item.dataset.name;
+                document.getElementById('exp-viewer').textContent = JSON.stringify(d, null, 2);
+            });
+        });
+    }
+    renderList('');
+    searchEl.addEventListener('input', function(e) { renderList(e.target.value); });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (!location.hash) location.hash = '#overview';
+    navigate();
+});
+</script>
+</body>
+</html>
