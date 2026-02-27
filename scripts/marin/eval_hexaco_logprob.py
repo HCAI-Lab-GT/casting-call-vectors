@@ -254,10 +254,7 @@ def compute_summary(results: dict, alpha: float):
 # Main
 # ------------------------------------------------------------------
 
-def main():
-    device = "cuda:1"
-    model_id = "marin-community/marin-8b-instruct"
-    alpha = 3.0
+def main(device: str, model_id: str, alpha: float):
 
     root = _repo_root()
     riasec_dir = root / "persona_data" / "model_inits"
@@ -389,4 +386,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--device", default="cuda:1")
+    ap.add_argument("--model", default="marin-community/marin-8b-instruct")
+    ap.add_argument("--alpha", type=float, default=3.0)
+    args = ap.parse_args()
+    main(device=args.device, model_id=args.model, alpha=args.alpha)
