@@ -118,7 +118,7 @@ class RoleDataset(AbstractDataset):
             return dataset
 
         # Load up loggers
-        dataset.logger = setup_logging(name="persona-dataset")
+        dataset.logger = setup_logging(name="role-dataset")
         dataset.logger.info("Dataset loaded from: %s", filepath)
 
         return dataset
@@ -372,7 +372,8 @@ if __name__ == "__main__":
                     dirpath=args.dirpath,
                     except_on_missing=True
                 )
-            except Exception:
+            except Exception as e:
+                logger.error(f"Failed to load dataset for role {role} from json: {e}")
                 dataset: RoleDataset = RoleDataset(
                     role=role,
                     num_questions=args.num_questions,
