@@ -53,7 +53,8 @@ class RoleDataset(AbstractDataset):
         self.role: str = role
         self.positive_prompts: List[str] = []
         
-        with open("./src/pvx/utils/role_utils/role_list.json", "r", encoding="utf-8") as f:
+        _role_list_path = Path(__file__).parent.parent.parent / "utils" / "role_utils" / "role_list.json"
+        with open(_role_list_path, "r", encoding="utf-8") as f:
             role_dict = json.load(f)
         
         if role in role_dict:

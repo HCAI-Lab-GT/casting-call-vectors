@@ -140,11 +140,12 @@ class AbstractPersonaModel(ABC):
         self.default_alpha = default_alpha
 
         # Load model and tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(target_model_id)
+        self.tokenizer = AutoTokenizer.from_pretrained(target_model_id, trust_remote_code=True)
         self.model = AutoModelForCausalLM.from_pretrained(
             target_model_id,
             dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
             device_map="auto" if torch.cuda.is_available() else None,
+            trust_remote_code=True,
         )
 
         # Set device

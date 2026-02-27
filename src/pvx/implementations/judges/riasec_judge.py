@@ -90,7 +90,7 @@ class RIASECJudge(AbstractJudge):
                 answers[item['text']] = raw_ans
                 logger.debug(f"Item {item['item_id']:2d} ({item['dimension'][:3]}): {like} ({raw_ans})")
                 pbar.update(1)
-        scores = riasec_judge.compute_scores(responses=responses)
+        scores = self.compute_scores(responses=responses)
         return responses, answers, scores
     
     def __call__(
