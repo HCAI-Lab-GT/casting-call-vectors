@@ -7,7 +7,7 @@ import yaml
 
 from pvx import setup_logging
 from pvx.implementations.roles.role_persona_model import RolePersonaModel
-from pvx.implementations.judges.riasec_judge import RIASECJudge
+from pvx.implementations.judges.hexaco_judge import HexacoJudge
 
 
 logger = setup_logging(name="batch-riasec-eval")
@@ -36,7 +36,7 @@ parser.add_argument("-r", "--roles_run",
 )
 parser.add_argument("-y", "--config_path",
     type=str,
-    default="./configs/scoring/interest_profiler.json",
+    default="./configs/scoring/hexaco_100.json",
     help="Path to interest profiler config"
 )
 args = parser.parse_args()
@@ -47,10 +47,10 @@ with open(yaml_path) as f:
 
 logger.info("Loading model: %s", args.model_name)
 pvx = RolePersonaModel.base_model(target_model_id=args.model_name, layer=16)
-riasec_judge = RIASECJudge(riasec_judge_path=args.config_path)
+hexaco_judge = HexacoJudge(hexaco_path=args.config_path)
 
 safe_model = args.model_name.replace("/", "_")
-Path(f"logs/riasec_results/{args.model_type}").mkdir(parents=True, exist_ok=True)
+Path(f"logs/hexaco_results/{args.model_type}").mkdir(parents=True, exist_ok=True)
 
 for role in config[args.roles_run]:
     json_path = Path(f"./persona_data/model_inits/{role}_persona_initialization/{args.model_name}.json")
@@ -67,12 +67,12 @@ for role in config[args.roles_run]:
     pvx._persona_base_key = None
 
     logger.info("Running: %s | alpha=%s", role, args.alpha)
-    responses, answers, scores = riasec_judge(pvx, args.alpha, 10, 0.1)
+    responses, answers, scores = hexaco_judge(pvx, args.alpha, 10, 0.1)
 
-    outfile = f"logs/riasec_results/{args.model_type}/{role.replace(' ', '_')}_alpha{args.alpha}_{safe_model}_riasec.txt"
+    outfile = f"logs/hexaco_results/{args.model_type}/{role.replace(' ', '_')}_alpha{args.alpha}_{safe_model}_hexaco.txt"
     with open(outfile, "w") as f:
         f.write(f"===CONCEPT===\n{role}\n")
-        f.write(f"===RIASEC Counts===\n{json.dumps(scores, indent=2)}\n")
-        f.write(f"===RESULTS===\n{json.dumps(answers, indent=2)}\n")
+        f.write(f"===Hexaco Counts===\n{json.dumps(scores, indent=2)}\n")
+        f.write(f"===Hexaco Answers===\n{json.dumps(answers, indent=2)}\n")
 
     logger.info("Scores for '%s': %s", role, scores)

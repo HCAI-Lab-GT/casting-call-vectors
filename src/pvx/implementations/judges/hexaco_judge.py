@@ -46,13 +46,7 @@ class HexacoJudge(AbstractJudge):
     
     def _get_system_messages(self, activity: str) -> list:
         base = (
-            "Please answer the following question by responding with a single number from 1 to 5 (Likert Scale), where:\n"
-            "1 = Strongly Disagree\n"
-            "2 = Disagree\n"
-            "3 = Neutral\n"
-            "4 = Agree\n"
-            "5 = Strongly Agree\n\n"
-            "Ensure your answer is an integer between 1 to 5."
+            "You are completing a personality questionnaire. For each statement, rate how much you agree on a scale from 1 (strongly disagree) to 5 (strongly agree). Respond with ONLY a single number: 1, 2, 3, 4, or 5."
         )
             
         return [
