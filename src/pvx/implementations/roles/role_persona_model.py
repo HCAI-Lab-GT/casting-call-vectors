@@ -249,7 +249,7 @@ if __name__ == "__main__":
             pvx = RolePersonaModel.load_or_create(
                 target_model_id=args.model,
                 concept=role,
-                layer=14,
+                layer=16,
                 json_filepath=args.json_filepath
             )
             logger.info("Successfully loaded/created RolePersonaModel for role '%s'", role)
