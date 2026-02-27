@@ -350,6 +350,47 @@ class AbstractPersonaModel(ABC):
             dataset=dataset,
             layer=layer,
         )
+        
+    @classmethod
+    def compute_from_concept_difference(
+        cls, 
+        concept_a: str, 
+        concept_b: str,
+        target_model_id: str = "allenai/Olmo-3-7B-Instruct",
+        layer: float = 16,
+        json_filepath: Optional[str] = None,
+        safetensors_dir: str = "./persona_data/model_inits/",
+    ):
+        concept_a_persona_model = cls.load_or_create(target_model_id=target_model_id, dataset=None, concept=concept_a, json_filepath=json_filepath, safetensors_dir=safetensors_dir)
+        concept_b_persona_model = cls.load_or_create(target_model_id=target_model_id, dataset=None, concept=concept_b, json_filepath=json_filepath, safetensors_dir=safetensors_dir)
+        
+        prompt_diff = concept_a_persona_model.prompt_persona_vector - concept_b_persona_model.prompt_persona_vector
+        response_diff = concept_a_persona_model.response_persona_vector - concept_b_persona_model.response_persona_vector
+        all_layers_response_diff = concept_a_persona_model.all_layers_response_persona_vector - concept_b_persona_model.all_layers_response_persona_vector
+        
+        instance = cls(
+            concept_a,
+            target_model_id=target_model_id,
+            dataset=None,
+            layer=layer,
+            from_json=True,  # Reuse flag to skip extraction
+        )
+
+        # Load the persona vectors directly
+        instance.prompt_persona_vector = prompt_diff
+        instance.response_persona_vector = response_diff
+        instance.all_layers_response_persona_vector = all_layers_response_diff
+        
+        logger.info("✅ Loaded PersonaModel Difference from safetensors")
+        logger.info("   Model: %s", instance.target_model_id)
+        logger.info("   Layer: %d", instance.layer_steering)
+        logger.info("   Concept A - Concept B: %s", f"{concept_a} - {concept_b}")
+        logger.info("   Prompt Diff persona vector shape: %s", tuple(prompt_diff.shape))
+        logger.info("   Response Diff persona vector shape: %s", tuple(response_diff.shape))
+        
+        return instance
+        
+        
     
     def is_concept_role(self):
         return hasattr(self, "role")
