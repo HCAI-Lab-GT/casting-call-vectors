@@ -189,13 +189,13 @@ class ResponseGeneration:
         """
         system_parts = [m["content"] for m in messages if m["role"] == "system"]
         user_parts = [m["content"] for m in messages if m["role"] == "user"]
-        system_block = "\\n".join(system_parts)
-        user_block = "\\n\\n".join(user_parts)
+        system_block = "\n".join(system_parts)
+        user_block = "\n\n".join(user_parts)
         prompt = ""
         if system_block:
-            prompt += f"{system_block}\\n\\n"
+            prompt += f"{system_block}\n\n"
         prompt += user_block
-        prompt += "\\n\\nAssistant:"
+        prompt += "\n\nAssistant:"
         return prompt
 
     def __call__(
