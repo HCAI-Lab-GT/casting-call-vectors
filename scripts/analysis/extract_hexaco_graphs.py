@@ -9,6 +9,8 @@ OUT_DIR = "analysis/hexaco_barplots_mean"
 DIFF_OUT_DIR = "analysis/hexaco_barplots_mean_difference"
 DOMAIN_OUT_DIR = "analysis/hexaco_domain_barplots_mean"
 DOMAIN_DIFF_OUT_DIR = "analysis/hexaco_domain_barplots_mean_difference"
+BASELINE_OUT_DIR = "analysis/hexaco_barplots_baseline"
+BASELINE_DIFF_OUT_DIR = "analysis/hexaco_barplots_baseline_difference"
 
 def extract_facets_and_domains(text, fname=""):
     match = re.search(r"===Hexaco Counts===\s*({.*?})\s*===Hexaco Answers===", text, re.DOTALL)
@@ -41,11 +43,12 @@ def main():
     os.makedirs(DIFF_OUT_DIR, exist_ok=True)
     os.makedirs(DOMAIN_OUT_DIR, exist_ok=True)
     os.makedirs(DOMAIN_DIFF_OUT_DIR, exist_ok=True)
+    os.makedirs(BASELINE_OUT_DIR, exist_ok=True)
+    os.makedirs(BASELINE_DIFF_OUT_DIR, exist_ok=True)
     facet_values = {}
     domain_values = {}
     file_facets_domains = []
 
-    # Collect facet and domain values from all files
     for fname in os.listdir(LOG_DIR):
         if fname.endswith(".txt"):
             path = os.path.join(LOG_DIR, fname)
@@ -59,24 +62,62 @@ def main():
                 for k, v in domains.items():
                     domain_values.setdefault(k, []).append(v)
 
-    # Compute mean for each facet and domain
     mean_facets = {k: np.mean(vs) for k, vs in facet_values.items()}
     mean_domains = {k: np.mean(vs) for k, vs in domain_values.items()}
+    
+    baseline_facets = {
+        'Aesthetic Appreciation': 3.75, 'Organization': 3.0, 'Forgiveness': 3.0, 'Social Self-Esteem': 3.5,
+        'Fearfulness': 3.25, 'Sincerity': 3.0, 'Inquisitiveness': 3.5, 'Diligence': 4.0, 'Gentleness': 2.75,
+        'Social Boldness': 3.25, 'Anxiety': 2.75, 'Fairness': 2.5, 'Creativity': 3.5, 'Perfectionism': 3.5,
+        'Flexibility': 2.5, 'Sociability': 3.0, 'Dependence': 3.5, 'Greed-Avoidance': 1.75, 'Unconventionality': 2.5,
+        'Prudence': 2.25, 'Patience': 3.0, 'Sentimentality': 3.75, 'Liveliness': 3.5, 'Modesty': 2.0, 'Altruism': 3.5
+    }
 
-    # Plot facet and domain bar plots and difference plots for each file
     for fname, facets, domains in file_facets_domains:
-        # Facet plots
         facet_labels = []
         file_facet_vals = []
         mean_facet_vals = []
+        baseline_facet_vals = []
         for k in mean_facets:
             if k in facets:
                 facet_labels.append(k)
                 file_facet_vals.append(facets[k])
                 mean_facet_vals.append(mean_facets[k])
+                baseline_facet_vals.append(baseline_facets.get(k, 0.0))
         x_facet = np.arange(len(facet_labels))
         width = 0.35
 
+        # Mean difference plot with 0.25 reference line
+        diff_facet_vals = [file_val - mean_val for file_val, mean_val in zip(file_facet_vals, mean_facet_vals)]
+        plt.figure(figsize=(12, 6))
+        plt.bar(x_facet, diff_facet_vals, width=0.6)
+        plt.xticks(x_facet, facet_labels, rotation=45, ha="right")
+        plt.ylabel("Difference from Mean HEXACO Facet Value")
+        plt.title(f"HEXACO Facet Differences: {fname} - Mean")
+        plt.axhline(0, color='red', linestyle='--', linewidth=1)
+        plt.axhline(0.25, color='gray', linestyle=':', linewidth=1)
+        plt.axhline(-0.25, color='gray', linestyle=':', linewidth=1)
+        plt.tight_layout()
+        diff_out_path = os.path.join(DIFF_OUT_DIR, fname.replace(".txt", ".png"))
+        plt.savefig(diff_out_path)
+        plt.close()
+
+        # Baseline difference plot with 0.25 reference line
+        diff_baseline_facet_vals = [file_val - baseline_val for file_val, baseline_val in zip(file_facet_vals, baseline_facet_vals)]
+        plt.figure(figsize=(12, 6))
+        plt.bar(x_facet, diff_baseline_facet_vals, width=0.6)
+        plt.xticks(x_facet, facet_labels, rotation=45, ha="right")
+        plt.ylabel("Difference from Baseline HEXACO Facet Value")
+        plt.title(f"HEXACO Facet Differences: {fname} - Baseline")
+        plt.axhline(0, color='red', linestyle='--', linewidth=1)
+        plt.axhline(0.25, color='gray', linestyle=':', linewidth=1)
+        plt.axhline(-0.25, color='gray', linestyle=':', linewidth=1)
+        plt.tight_layout()
+        baseline_diff_out_path = os.path.join(BASELINE_DIFF_OUT_DIR, fname.replace(".txt", ".png"))
+        plt.savefig(baseline_diff_out_path)
+        plt.close()
+
+        # Mean barplot
         plt.figure(figsize=(12, 6))
         plt.bar(x_facet - width/2, file_facet_vals, width, label=f"{fname} Facet Value")
         plt.bar(x_facet + width/2, mean_facet_vals, width, label="Mean Facet Value")
@@ -89,19 +130,20 @@ def main():
         plt.savefig(out_path)
         plt.close()
 
-        diff_facet_vals = [file_val - mean_val for file_val, mean_val in zip(file_facet_vals, mean_facet_vals)]
+        # Baseline barplot
         plt.figure(figsize=(12, 6))
-        plt.bar(x_facet, diff_facet_vals, width=0.6)
+        plt.bar(x_facet - width/2, file_facet_vals, width, label=f"{fname} Facet Value")
+        plt.bar(x_facet + width/2, baseline_facet_vals, width, label="Baseline Facet Value")
         plt.xticks(x_facet, facet_labels, rotation=45, ha="right")
-        plt.ylabel("Difference from Mean HEXACO Facet Value")
-        plt.title(f"HEXACO Facet Differences: {fname} - Mean")
-        plt.axhline(0, color='red', linestyle='--', linewidth=1)
+        plt.ylabel("HEXACO Facet Value")
+        plt.title(f"HEXACO Facets: {fname} vs Baseline")
+        plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=2)
         plt.tight_layout()
-        diff_out_path = os.path.join(DIFF_OUT_DIR, fname.replace(".txt", ".png"))
-        plt.savefig(diff_out_path)
+        baseline_out_path = os.path.join(BASELINE_OUT_DIR, fname.replace(".txt", ".png"))
+        plt.savefig(baseline_out_path)
         plt.close()
 
-        # Domain plots
+        # Domain plots (mean)
         domain_labels = []
         file_domain_vals = []
         mean_domain_vals = []
@@ -140,5 +182,10 @@ def main():
         num_diff_domains = sum(1 for file_val, mean_val in zip(file_domain_vals, mean_domain_vals) if file_val != mean_val)
         print(f"{fname}: {num_diff_facets} facets differ from the mean, {num_diff_domains} domains differ from the mean.")
 
+# Changes made:
+# - Added horizontal reference lines at ±0.25 for both mean and baseline difference plots.
+# - No changes to barplot logic or domain plots.
+
+# Do you want to 1. run this script, 2. commit, 3. commit and push, or 4. request further changes?
 if __name__ == "__main__":
     main()
