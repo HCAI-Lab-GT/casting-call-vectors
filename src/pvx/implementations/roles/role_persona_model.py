@@ -240,6 +240,18 @@ if __name__ == "__main__":
         default=None,
         help="Filepath to model init file (not role dataset)",
     )
+    ap.add_argument(
+        "--cot",
+        action="store_true",
+        help="Whether to use chain-of-thought prompting (default: False)",
+    )
+    ap.add_argument(
+        "-t",
+        "--trait",
+        type=str,
+        default=None,
+        help="Trait to use for persona generation",
+    )
     args = ap.parse_args()
 
     for role in args.roles:
@@ -249,32 +261,69 @@ if __name__ == "__main__":
             pvx = RolePersonaModel.load_or_create(
                 target_model_id=args.model,
                 concept=role,
-                layer=16,
+                layer=14,
                 json_filepath=args.json_filepath
             )
             logger.info("Successfully loaded/created RolePersonaModel for role '%s'", role)
         except Exception as e:
             logger.error("Failed to load or create RolePersonaModel for role '%s': %s", role, e)
             continue
+        
+        
+        if args.question:
+            logger.info("=== Question ===")
+            logger.info(args.question)
+            logger.info("")
+            
+            response = pvx.generate(
+                prompt=args.question,
+                alpha=args.alpha,
+                max_new_tokens=args.max_new_tokens,
+                temperature=args.temperature,
+            )
+            logger.info("Response: %s", response)
+        
+        else:
+                    
+            trait_path = Path(f"./configs/scoring/interest_profiler.json")
+            
+            with trait_path.open() as f:
+                trait_data = json.load(f)
+                
+            testing_traits = [trait for trait in trait_data if trait["dimension"] == args.trait] if args.trait else trait_data
 
-        response = pvx.generate(
-            prompt=args.question,
-            alpha=0,
-            max_new_tokens=args.max_new_tokens,
-            temperature=args.temperature,
-        )
-        steer_response = pvx.generate(
-            prompt=args.question,
-            alpha=args.alpha,
-            max_new_tokens=args.max_new_tokens,
-            temperature=args.temperature,
-        )
-
-        logger.info("=== Question ===")
-        logger.info(args.question)
-        logger.info("")
-        logger.info("=== Non-Steered Answer ===")
-        logger.info(response)
-        logger.info("")
-        logger.info("=== %s Steered Answer ===", role.upper())
-        logger.info(steer_response)
+            base = (
+                "You are answering the O*NET Interest Profiler. "
+                "For this work activity, would you LIKE to do it as part of a job? "
+            )
+            
+            answer_format = ""
+            if not args.cot:
+                answer_format = "Answer ONLY with 'Yes' or 'No' — no explanation."
+            else:
+                answer_format = "Show your reasoning and steps. End with only 'Yes' or 'No'."
+            
+            base += answer_format
+            
+            score = 0
+            
+            for trait in testing_traits:
+                convo = [
+                    {"role": "system", "content": base},
+                    {"role": "user", "content": f"Activity: {trait['text']}"},
+                ]
+                
+                logger.info("=== Testing trait: %s ===", trait["text"])
+                convo[1]["content"] = f"Activity: {trait['text']}"
+                response = pvx.generate(
+                    messages=convo,
+                    alpha=args.alpha,
+                    max_new_tokens=args.max_new_tokens,
+                    temperature=args.temperature,
+                )
+                logger.info("Response: %s", response)
+                
+                if "Yes" in response[-200:]:
+                    score += 1
+                    
+            logger.info("=== Final %s Score for role %s: %d / %d ===", args.trait, role, score, len(testing_traits))
