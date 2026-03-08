@@ -20,8 +20,6 @@ BACKENDS = ("openai", "vllm", "hf_local")
 logger = setup_logging(name="abstract-dataset")
 
 class AbstractDataset(ResponseGeneration):
-    
-
     def __init__(
         self,
         concept: str,

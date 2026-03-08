@@ -37,6 +37,8 @@ class AbstractPersonaModel(ABC):
     def __init__(
         self,
         concept: str = None,
+        dataset: Optional[AbstractDataset] = None,
+        dataset_dirpath: str = None,
         target_model_id: str = "qwen2.5:7b-instruct",
         layer: float = 14,
         default_alpha: float = 3.0,
@@ -58,8 +60,10 @@ class AbstractPersonaModel(ABC):
 
         self._init_base(target_model_id, layer, default_alpha)
         
-        self.concept = concept
-
+        # avoids linter error by ensuring self.dataset and self.concept are always set, even if not used when loading from JSON
+        self.concept = concept if (not hasattr(self, 'concept') or concept) else self.concept
+        self.dataset = dataset if (not hasattr(self, 'dataset') or dataset) else self.dataset
+        
         # skip extraction if not loading from JSON
         if from_json:
             return
@@ -308,6 +312,14 @@ class AbstractPersonaModel(ABC):
         return instance
 
     @classmethod
+    def get_path(cls, target_model_id: str, concept: str, safetensors_dir: str, use_json=False, kwargs=None, obj=None):
+        safe_model_id = target_model_id.replace("/", "__")
+        filepath = f"{concept}_persona_initialization/{safe_model_id}.{'safetensors' if not use_json else 'json'}"
+        safetensors_path = Path(safetensors_dir) / filepath
+        
+        return safetensors_path, filepath
+
+    @classmethod
     def load_or_create(
         cls,
         target_model_id: str = "allenai/Olmo-3-7B-Instruct",
@@ -316,9 +328,10 @@ class AbstractPersonaModel(ABC):
         layer: float = 14,
         json_filepath: Optional[str] = None,
         safetensors_dir: str = "./persona_data/model_inits/",
+        **args
     ) -> "AbstractPersonaModel":
-        safe_model_id = target_model_id.replace("/", "__")
-        safetensors_path = Path(safetensors_dir) / f"{concept}_persona_initialization/{safe_model_id}.safetensors"
+        logger.info("Attempting to load PersonaModel for concept '%s' and model '%s'", concept, target_model_id)
+        safetensors_path, _ = cls.get_path(target_model_id, concept, safetensors_dir, use_json=False, kwargs=locals())
         
         logger.info(f"Safetensors Path: {safetensors_path}")
 
@@ -332,7 +345,7 @@ class AbstractPersonaModel(ABC):
         # Fall back to legacy JSON
         json_filepath = (
             json_filepath
-            or f"./persona_data/model_inits/{concept}_persona_initialization/{target_model_id}.json"
+            or cls.get_path(target_model_id, concept, safetensors_dir, use_json=True)[0]
         )
 
         try:
@@ -351,47 +364,6 @@ class AbstractPersonaModel(ABC):
             dataset=dataset,
             layer=layer,
         )
-        
-    @classmethod
-    def compute_from_concept_difference(
-        cls, 
-        concept_a: str, 
-        concept_b: str,
-        target_model_id: str = "allenai/Olmo-3-7B-Instruct",
-        layer: float = 16,
-        json_filepath: Optional[str] = None,
-        safetensors_dir: str = "./persona_data/model_inits/",
-    ):
-        concept_a_persona_model = cls.load_or_create(target_model_id=target_model_id, dataset=None, concept=concept_a, json_filepath=json_filepath, safetensors_dir=safetensors_dir)
-        concept_b_persona_model = cls.load_or_create(target_model_id=target_model_id, dataset=None, concept=concept_b, json_filepath=json_filepath, safetensors_dir=safetensors_dir)
-        
-        prompt_diff = concept_a_persona_model.prompt_persona_vector - concept_b_persona_model.prompt_persona_vector
-        response_diff = concept_a_persona_model.response_persona_vector - concept_b_persona_model.response_persona_vector
-        all_layers_response_diff = concept_a_persona_model.all_layers_response_persona_vector - concept_b_persona_model.all_layers_response_persona_vector
-        
-        instance = cls(
-            concept_a,
-            target_model_id=target_model_id,
-            dataset=None,
-            layer=layer,
-            from_json=True,  # Reuse flag to skip extraction
-        )
-
-        # Load the persona vectors directly
-        instance.prompt_persona_vector = prompt_diff
-        instance.response_persona_vector = response_diff
-        instance.all_layers_response_persona_vector = all_layers_response_diff
-        
-        logger.info("✅ Loaded PersonaModel Difference from safetensors")
-        logger.info("   Model: %s", instance.target_model_id)
-        logger.info("   Layer: %d", instance.layer_steering)
-        logger.info("   Concept A - Concept B: %s", f"{concept_a} - {concept_b}")
-        logger.info("   Prompt Diff persona vector shape: %s", tuple(prompt_diff.shape))
-        logger.info("   Response Diff persona vector shape: %s", tuple(response_diff.shape))
-        
-        return instance
-        
-        
     
     def is_concept_role(self):
         return hasattr(self, "role")
@@ -442,7 +414,7 @@ class AbstractPersonaModel(ABC):
         logger.info("✅ Initialization saved to: %s", filepath)
         return filepath
 
-    def save_to_safetensors(self, filepath: str = "./persona_data/model_inits/") -> str:
+    def save_to_safetensors(self, filepath: str = "./persona_data/model_inits/", **args) -> str:
         """
         Save the persona vectors to safetensors format (much smaller than JSON).
 
@@ -456,10 +428,8 @@ class AbstractPersonaModel(ABC):
             str: Path to the saved safetensors file
         """
         # Sanitize model ID for filename (replace / with __)
-        safe_model_id = self.target_model_id.replace("/", "__")
         concept = self.dataset.concept if self.dataset else "unknown"
-        filename = f"{self.dataset.concept}_persona_initialization/{safe_model_id}.safetensors"
-        full_path = Path(filepath) / filename
+        full_path, filename = self.get_path(self.target_model_id, concept, filepath, use_json=False, obj=self)
 
         # Prepare tensors dict
         tensors = {

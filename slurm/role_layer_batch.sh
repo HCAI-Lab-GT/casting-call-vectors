@@ -1,40 +1,36 @@
 #!/bin/bash
 source .env
 
-NAME="role_batch" # name of the script (mostly for logging purposes)
+NAME="role_layer_batch" # name of the script (mostly for logging purposes)
 
 ###
-# src/pvx/implementations/roles/roles_persona_model.py
+# src/pvx/implementations/roles_layers/role_layers_persona_model.py
 #
 # This script is used to generate new role vectors.
-# It calls src/pvx/implementations/roles/roles_persona_model.py with specified run.
+# It calls src/pvx/implementations/roles_layers/role_layers_persona_model.py with specified run.
 #
 # Usage:
-# ./role_batch.sh <role>
+# ./role_layer_batch.sh <role>
 #
 # Author: iiisong
 # Date: 2026-01-21
 ###
 
 # ===CLI ARGS==================
-# export ROLE="$1" # role
-# export LOCAL_MODEL="${2:-Qwen/Qwen2.5-7B-Instruct}" # local_model, default if not provided
-
 # defaults
 MODEL="allenai/Olmo-3-7B-Instruct"
 
 ROLES=()
+LAYERS=()
 
-# parse args: roles first, optional --model anywhere
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -m|--model) MODEL="$2"; shift 2 ;;
-    --) shift; while [[ $# -gt 0 ]]; do ROLES+=("$1"); shift; done ;;
-    *) ROLES+=("$1"); shift ;;
+    -m|--model)     MODEL="$2"; shift 2;;
+    -r|--roles)     shift; while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do ROLES+=("$1"); shift; done;;
+    -l|--layers)    shift; while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do LAYERS+=("$1"); shift; done;;
+    *)              echo "Unknown argument: $1" >&2; exit 1;;
   esac
 done
-
-export MODEL
 # ===========================
 
 ### SLURM SETTINGS ###
@@ -52,7 +48,6 @@ TIME=08:00:00
 ACCOUNT="$PACE_ACCOUNT" # set from .env
 QOS=embers
 LOG_DIR="logs/slurm/$NAME"
-
 
 ### CLI ARGS VALIDATION ###
 
@@ -81,7 +76,9 @@ sbatch  --gres "$GPU_CONFIG" --ntasks-per-node 1 --cpus-per-task "$NUM_WORKERS" 
         --account "$ACCOUNT" --qos "$QOS" --time "$TIME" \
         --output "$LOG_DIR/$NAME-%j.out" --error "$LOG_DIR/$NAME-%j.err" \
         "slurm/$NAME.sbatch" \
-        "${ROLES[@]}"
+        --model "$MODEL" \
+        --roles "${ROLES[@]}" \
+        --layers "${LAYERS[@]}"
 
 ### POST JOB ###
 # None

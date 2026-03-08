@@ -3,7 +3,7 @@ import contextvars
 import json
 from pathlib import Path
 import random
-from typing import Optional
+from typing import Optional, override
 
 from pvx.implementations.roles.role_dataset import RoleDataset
 from datetime import datetime
@@ -47,7 +47,6 @@ class RolePersonaModel(AbstractPersonaModel):
         
         super().__init__(concept=role,*args, **kwargs)
         
-    
     
     @torch.inference_mode()
     def extract_persona_vector(
@@ -138,16 +137,16 @@ class RolePersonaModel(AbstractPersonaModel):
 
                     if pos_score != 3:
                         logger.info("===FAILED CASE POSITIVE===")
-                        logger.info("Question: " + question + ", System Prompt: " + pos + ", Score: " + str(pos_score) + " Pos Response: " + pos_response)
+                        logger.info("\nQuestion: \n" + question + "\n\nSystem Prompt: \n" + pos + "\nScore: " + str(pos_score) + "\n\nPos Response: \n" + pos_response)
                         continue
                     if base_score == 0:
                         logger.info("===FAILED CASE BASE===")
-                        logger.info("Question: " + question + ", Score: " + str(base_score) + " Base Response: " + base_response)
+                        logger.info("\nQuestion: \n" + question + "\n\nScore: " + str(base_score) + "\nBase Response: \n" + base_response)
                         continue
 
                     logger.info("===PASSED CASE===")
-                    logger.info("Question: " + question + ", System Prompt: " + pos + ", Score: " + str(pos_score) + ", Pos Response: " + pos_response)
-                    logger.info("Question: " + question + ", Score: " + str(base_score) + ", Base Response: " + base_response)
+                    logger.info("\nQuestion: \n" + question + "\n\nSystem Prompt: \n" + pos + "\nScore: " + str(pos_score) + "\n\nPos Response: \n" + pos_response)
+                    logger.info("\n\nScore: " + str(base_score) + "\nBase Response: \n" + base_response)
                     passed_pairs.add((pos, question))
                     pbar.update(1)
                     made_progress = True
@@ -225,6 +224,9 @@ if __name__ == "__main__":
     ap.add_argument(
         "-a", "--alpha", type=float, default=1.0, help="Alpha value for persona steering"
     )
+    ap.add_argument(
+        "-l", "--layer", type=int, default=14, help="Layer to extract activations from (default: 14)"
+    )
     ap.add_argument("--temperature", type=float, default=0.1, help="Temperature for sampling")
     ap.add_argument(
         "-q",
@@ -261,7 +263,7 @@ if __name__ == "__main__":
             pvx = RolePersonaModel.load_or_create(
                 target_model_id=args.model,
                 concept=role,
-                layer=14,
+                layer=args.layer,
                 json_filepath=args.json_filepath
             )
             logger.info("Successfully loaded/created RolePersonaModel for role '%s'", role)
