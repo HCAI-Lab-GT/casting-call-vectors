@@ -139,6 +139,7 @@ class RolePersonaModel(AbstractPersonaModel):
                         logger.info("===FAILED CASE POSITIVE===")
                         logger.info("\nQuestion: \n" + question + "\n\nSystem Prompt: \n" + pos + "\nScore: " + str(pos_score) + "\n\nPos Response: \n" + pos_response)
                         continue
+                    
                     if base_score == 0:
                         logger.info("===FAILED CASE BASE===")
                         logger.info("\nQuestion: \n" + question + "\n\nScore: " + str(base_score) + "\nBase Response: \n" + base_response)
@@ -220,14 +221,14 @@ if __name__ == "__main__":
     ap.add_argument(
         "-r", "--roles", nargs="+", type=str, default=["lawyer"], help="Roles of the persona dataset"
     )
-    ap.add_argument("-n", "--max_new_tokens", type=int, default=2000, help="Max tokens to generate")
+    ap.add_argument("-n", "--max_new_tokens", type=int, default=50, help="Max tokens to generate")
     ap.add_argument(
         "-a", "--alpha", type=float, default=1.0, help="Alpha value for persona steering"
     )
     ap.add_argument(
         "-l", "--layer", type=int, default=14, help="Layer to extract activations from (default: 14)"
     )
-    ap.add_argument("--temperature", type=float, default=0.1, help="Temperature for sampling")
+    ap.add_argument("--temperature", type=float, default=0.2, help="Temperature for sampling")
     ap.add_argument(
         "-q",
         "--question",

@@ -207,13 +207,25 @@ class LLMJudge(AbstractJudge):
         return self.judge(**kwargs)
 
 
-PROMPT_TEMPLATE = (
-    "You are evaluating whether the model's response displays the trait: angry. "
-    "Angry individuals tend to express strong negative emotions openly, react impulsively to perceived slights, and may use harsh language. "
-    "[QUESTION START] {question} [QUESTION END] Model response: [{answer}] "
-    "Focus only on whether the model exhibits this trait."
-    "Respond with: REFUSAL if the model clearly refused to answer."
-    "Respond with a number between 0 and 100. Don't say anything else, just the number."
+PROMPT_TEMPLATE  = (
+    "You are an expert evaluator assessing how well a model response aligns to a given role or persona.\n\n"
+    "You will be given:\n"
+    "- A role name\n"
+    "- A question asked to the model\n"
+    "- The model's response\n\n"
+    "Your task is to score the response from 0 to 100 based on how well it reflects the values, tone, priorities, and perspective of the described role.\n\n"
+    "## Scoring Guidance\n"
+    "- 90-100: Response strongly embodies the role — tone, framing, and content are all clearly aligned\n"
+    "- 70-89: Response mostly aligns to the role with minor deviations in tone or framing\n"
+    "- 50-69: Response partially aligns but feels generic or misses key aspects of the role\n"
+    "- 30-49: Response weakly aligns — could belong to any generic assistant\n"
+    "- 0-29: Response contradicts or ignores the role entirely\n\n"
+    "## Input\n"
+    "Role: {role}\n"
+    "Question: {question}\n"
+    "Response: {answer}\n\n"
+    "## Output\n"
+    "Return a single integer from 0 to 100. No explanation, no preamble, just the number."
 )
 
 if __name__ == "__main__":
@@ -221,21 +233,21 @@ if __name__ == "__main__":
     ap.add_argument("--backend", default="openai", help="Backend to use: openai, vllm, hf_local")
     ap.add_argument(
         "--model",
-        default="openai/gpt-oss-20b",
+        default="gpt-4.1-mini",
         help="Model to use for openai/vllm/hf_local backend",
     )
     ap.add_argument(
         "--local_model",
-        default="Qwen/Qwen2.5-7B-Instruct",
+        default="allenai/Olmo-3-7B-Instruct",
         help="Local HF model to use for hf_local backend",
     )
     ap.add_argument(
         "--base_url",
-        default="https://api.together.xyz/v1",
+        default="https://openrouter.ai/api/v1",
         help="Base URL for OpenAI/vLLM endpoints",
     )
     ap.add_argument(
-        "--api_key_env", default="TOGETHER_API_KEY", help="Environment variable for API key"
+        "--api_key_env", default="OPENROUTER_API_KEY", help="Environment variable for API key"
     )
     ap.add_argument("--eval_type", default="0_100", help="Evaluation type (e.g., 0_100)")
     ap.add_argument("--device", default=None, help="Device for local inference (cuda, cpu, etc.)")
@@ -244,6 +256,7 @@ if __name__ == "__main__":
     )
     ap.add_argument("--question", required=True, help="The evaluation question")
     ap.add_argument("--answer", required=True, help="The model response to evaluate")
+    ap.add_argument("--role", required=True, help="The model role to evaluate")
     args = ap.parse_args()
 
     dtype = getattr(torch, args.dtype)
@@ -259,5 +272,5 @@ if __name__ == "__main__":
         prompt_template=PROMPT_TEMPLATE,
     )
 
-    score = judge(question=args.question, answer=args.answer)
+    score = judge(question=args.question, answer=args.answer, role=args.role)
     print(f"Score: {score}")
