@@ -4,13 +4,13 @@ import ast
 import numpy as np
 import matplotlib.pyplot as plt
 
-LOG_DIR = "logs/hexaco_results/olmo-7b_response"
-OUT_DIR = "analysis/hexaco_barplots_mean"
-DIFF_OUT_DIR = "analysis/hexaco_barplots_mean_difference"
-DOMAIN_OUT_DIR = "analysis/hexaco_domain_barplots_mean"
-DOMAIN_DIFF_OUT_DIR = "analysis/hexaco_domain_barplots_mean_difference"
-BASELINE_OUT_DIR = "analysis/hexaco_barplots_baseline"
-BASELINE_DIFF_OUT_DIR = "analysis/hexaco_barplots_baseline_difference"
+LOG_DIR = "logs/hexaco_results/olmo-7b_response_cd"
+OUT_DIR = "analysis/hexaco_barplots_mean_cd"
+DIFF_OUT_DIR = "analysis/hexaco_barplots_mean_difference_cd"
+DOMAIN_OUT_DIR = "analysis/hexaco_domain_barplots_mean_cd"
+DOMAIN_DIFF_OUT_DIR = "analysis/hexaco_domain_barplots_mean_difference_cd"
+BASELINE_OUT_DIR = "analysis/hexaco_barplots_baseline_cd"
+BASELINE_DIFF_OUT_DIR = "analysis/hexaco_barplots_baseline_difference_cd"
 
 def extract_facets_and_domains(text, fname=""):
     match = re.search(r"===Hexaco Counts===\s*({.*?})\s*===Hexaco Answers===", text, re.DOTALL)

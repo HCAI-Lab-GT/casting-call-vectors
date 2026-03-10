@@ -57,6 +57,15 @@ class AbstractPersonaModel(ABC):
         """
 
         self._init_base(target_model_id, layer, default_alpha)
+        if self.tokenizer.chat_template is None:
+            self.tokenizer.chat_template = (
+                "{% for message in messages %}"
+                "<|im_start|>{{ message['role'] }}\n"
+                "{{ message['content'] }}"
+                "<|im_end|>\n"
+                "{% endfor %}"
+                f"<|im_start|>\n"
+            )
         
         self.concept = concept
 
@@ -141,6 +150,7 @@ class AbstractPersonaModel(ABC):
 
         # Load model and tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(target_model_id, trust_remote_code=True)
+        
         self.model = AutoModelForCausalLM.from_pretrained(
             target_model_id,
             dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
@@ -367,7 +377,7 @@ class AbstractPersonaModel(ABC):
         
         prompt_diff = concept_a_persona_model.prompt_persona_vector - concept_b_persona_model.prompt_persona_vector
         response_diff = concept_a_persona_model.response_persona_vector - concept_b_persona_model.response_persona_vector
-        all_layers_response_diff = concept_a_persona_model.all_layers_response_persona_vector - concept_b_persona_model.all_layers_response_persona_vector
+        all_layers_response_diff = torch.zeros(4096)
         
         instance = cls(
             concept_a,
@@ -592,13 +602,10 @@ class AbstractPersonaModel(ABC):
 
         return instance
 
-    # def extract_persona_vector_async(self,
-    #                            temperature: float = 0.9,
-    #                            max_new_tokens: int = 200) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
     @abstractmethod
     def extract_persona_vector(
-        self, temperature: float = 0.9, max_new_tokens: int = 200
+        self, temperature: float = 0.2, max_new_tokens: int = 200
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         pass
 
@@ -609,7 +616,7 @@ class AbstractPersonaModel(ABC):
         messages: list[dict[str, str]] | None = None,
         alpha: float | None = 3,
         max_new_tokens: int = 2000,
-        temperature: float = 0.9,
+        temperature: float = 0.2,
         top_p=0.99,
     ) -> str:
         """
@@ -701,7 +708,7 @@ class AbstractPersonaModel(ABC):
         self,
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor | None,
-        temperature: float = 0.9,
+        temperature: float = 0.2,
         max_new_tokens: int = 20000,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, str]:
         """
@@ -936,7 +943,7 @@ class AbstractPersonaModel(ABC):
         raise RuntimeError("Unsupported model layout: cannot locate decoder blocks.")
 
     def _top_p_sample(
-        self, logits: torch.Tensor, top_p: float = 0.9, temperature: float = 1.0
+        self, logits: torch.Tensor, top_p: float = 0.9, temperature: float = 0.2
     ) -> int:
         """
         Perform nucleus (top-p) sampling from logits.

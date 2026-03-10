@@ -39,6 +39,29 @@ parser.add_argument("-y", "--config_path",
     default="./configs/scoring/hexaco_100.json",
     help="Path to interest profiler config"
 )
+parser.add_argument("-l", "--layer",
+    type=int,
+    default=16,
+    help="Layer for steering"
+)
+parser.add_argument(
+    "-d",
+    "--concept-difference",
+    action="store_true",
+    help="Enable concept difference mode.",
+)
+parser.add_argument(
+     "--json-filepath",
+    type=str,
+    default=None,
+    help="Optional legacy JSON init path.",
+)
+parser.add_argument(
+    "--safetensors-dir",
+    type=str,
+    default="./persona_data/model_inits/",
+    help="Directory for persona safetensors files.",
+)
 args = parser.parse_args()
 
 yaml_path = Path("configs/psychometric_runs.yaml")
@@ -53,6 +76,15 @@ safe_model = args.model_name.replace("/", "_")
 Path(f"logs/hexaco_results/{args.model_type}").mkdir(parents=True, exist_ok=True)
 
 for role in config[args.roles_run]:
+    if args.concept_difference:
+        pvx = RolePersonaModel.compute_from_concept_difference(
+                concept_a=role,
+                concept_b="Mean",
+                target_model_id=args.model_name,
+                layer=args.layer,
+                json_filepath=args.json_filepath,
+                safetensors_dir=args.safetensors_dir,
+            )
     json_path = Path(f"./persona_data/model_inits/{role}_persona_initialization/{args.model_name}.json")
     if not json_path.exists():
         logger.warning("No saved vectors for role '%s', skipping", role)
@@ -61,15 +93,19 @@ for role in config[args.roles_run]:
     with open(json_path) as f:
         data = json.load(f)
 
-    pvx.prompt_persona_vector = torch.tensor(data["prompt_persona_vector"])
-    pvx.response_persona_vector = torch.tensor(data["response_persona_vector"])
-    pvx._persona_base = None
-    pvx._persona_base_key = None
+    if not args.concept_difference:
+        pvx.prompt_persona_vector = torch.tensor(data["prompt_persona_vector"])
+        pvx.response_persona_vector = torch.tensor(data["response_persona_vector"])
+        pvx._persona_base = None
+        pvx._persona_base_key = None
 
     logger.info("Running: %s | alpha=%s", role, args.alpha)
     responses, answers, scores = hexaco_judge(pvx, args.alpha, 10, 0.1)
 
-    outfile = f"logs/hexaco_results/{args.model_type}/{role.replace(' ', '_')}_alpha{args.alpha}_{safe_model}_hexaco.txt"
+    if args.concept_difference:
+        outfile = f"logs/hexaco_results/{args.model_type}_cd/{role.replace(' ', '_')}_alpha{args.alpha}_{safe_model}_hexaco.txt"
+    else:  
+        outfile = f"logs/hexaco_results/{args.model_type}/{role.replace(' ', '_')}_alpha{args.alpha}_{safe_model}_hexaco.txt"
     with open(outfile, "w") as f:
         f.write(f"===CONCEPT===\n{role}\n")
         f.write(f"===Hexaco Counts===\n{json.dumps(scores, indent=2)}\n")
