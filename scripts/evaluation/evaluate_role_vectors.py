@@ -32,6 +32,7 @@ PROMPT_TEMPLATE  = (
     "## Output\n"
     "Return a single integer from 0 to 100. No explanation, no preamble, just the number."
 )
+    
 
 def score_responses_file_with_llm_judge(
     responses_json_path: str,
