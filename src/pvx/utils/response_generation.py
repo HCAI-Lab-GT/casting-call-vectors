@@ -43,10 +43,10 @@ class ResponseGeneration:
     def __init__(
         self,
         backend: str = "openai",
-        model: str = "openai/gpt-oss-20b",
+        model: str = "openai/gpt-4.1-mini",
         local_model: Optional[str] = "Qwen/Qwen2.5-7B-Instruct",
-        base_url: Optional[str] = "https://api.together.xyz/v1",
-        api_key_env: str = "TOGETHER_API_KEY",
+        base_url: Optional[str] = "https://openrouter.ai/api/v1",
+        api_key_env: str = "OPENROUTER_API_KEY",
         device: Optional[str] = None,
         dtype: torch.dtype = torch.float16,
     ):
@@ -220,7 +220,7 @@ if __name__ == "__main__":
     ap.add_argument("--backend", default="openai", help="Backend to use: openai, vllm, hf_local")
     ap.add_argument(
         "--model",
-        default="openai/gpt-oss-120b",
+        default="openai/gpt-4.1-mini",
         help="Model to use for openai/vllm/hf_local backend",
     )
     ap.add_argument(
@@ -244,11 +244,11 @@ if __name__ == "__main__":
     )
     ap.add_argument(
         "--base_url",
-        default="https://api.together.xyz/v1",
+        default="https://openrouter.ai/api/v1",
         help="Base URL for OpenAI/vLLM endpoints",
     )
     ap.add_argument(
-        "--api_key_env", default="TOGETHER_API_KEY", help="Environment variable for API key"
+        "--api_key_env", default="OPENROUTER_API_KEY", help="Environment variable for API key"
     )
     ap.add_argument("--device", default=None, help="Device for local inference (cuda, cpu, etc.)")
     ap.add_argument(

@@ -33,7 +33,7 @@ class GoldPromptExperiments():
         self.json_filepath = json_filepath
         self.safetensors_dir = safetensors_dir
         self.target_model_id = target_model_id
-        self.save_path = Path(save_dir, f'{target_model_id.split("/")[0]}_results.csv')
+        self.save_path = Path(save_dir, f'{target_model_id.split("/")[1]}_results.csv')
 
         self.persona_model = persona_model or RoleLayersPersonaModel
         self.persona_models = defaultdict(dict) # dict of dicts to hold persona models for each role, layer, and dataset count config
@@ -56,15 +56,20 @@ class GoldPromptExperiments():
         
         # load persona models for each config
         for role, layer, sample_count in persona_configs:
-            model = self.persona_model.load_or_create(
-                    target_model_id=self.target_model_id,
-                    concept=role,
-                    layer=layer,
-                    target_pairs=sample_count,
-                    json_filepath=self.json_filepath,
-                    safetensors_dir=self.safetensors_dir,
-                )
-            self.persona_models[role][(layer, sample_count)] = model
+            try:
+                model = self.persona_model.load_or_create(
+                        target_model_id=self.target_model_id,
+                        concept=role,
+                        layer=layer,
+                        target_pairs=sample_count,
+                        json_filepath=self.json_filepath,
+                        safetensors_dir=self.safetensors_dir,
+                    )
+                self.persona_models[role][(layer, sample_count)] = model
+                
+            except Exception as e:
+                logger.error(e)
+                continue
     
     def evaluate_model(self, questions: list = None, 
                        roles=None, layers=None, sample_counts=None, 
@@ -113,19 +118,30 @@ class GoldPromptExperiments():
                 # TODO: generate questions using some method, maybe a prompt to the judge model or a separate question generation model
                 raise NotImplementedError()
             
-            pd_results = pd.DataFrame(columns=["role", "layer", "dataset_count", 
+            pd_results = pd.DataFrame(columns=["role", "layer", "sample_count", 
                                                "alpha", "temperature", 
-                                               "question", "baseline", "steered", 
-                                               "baseline_score", "steered_score", 
+                                               "question", "nonsteered", "baseline", "steered", 
+                                               "nonsteered_score", "baseline_score", "steered_score", 
                                                "comparative_score"])
             
             for question in questions:
+                # Get prompted role answer for nonsteered
+                nonsteered_messages = self.generate_response.convert_str_to_message(messages=question)
+                nonsteered_response = self.generate_response(messages=nonsteered_messages,
+                                                             max_new_tokens=max_new_tokens,
+                                                             temperature=baseline_temperature)[1]
+                logger.info("Nonsteered response for role '%s' on temperature %s:", role, baseline_temperature)
+                logger.info(nonsteered_response)
                 
-                # Get prompted role answer for baseline
-                messages = self.generate_response.convert_str_to_message(messages=question)
-                baseline_response = self.generate_response(messages=messages,
+                # calculate judge score for nonsteered response
+                nonsteered_score = self.role_judge(role=role, question=question, answer=nonsteered_response)
+                logger.info("Nonsteered judge score for role '%s' on temperature %s: %s", role, baseline_temperature, nonsteered_score)
+
+                # Get prompted role answer for prompted baseline
+                baseline_messages = self.generate_response.convert_str_to_message(messages=f"You are behaving like a {role}. {question}")
+                baseline_response = self.generate_response(messages=baseline_messages,
                                                            max_new_tokens=max_new_tokens,
-                                                           temperature=baseline_temperature)
+                                                           temperature=baseline_temperature)[1]
                 logger.info("Baseline response for role '%s' on temperature %s:", role, baseline_temperature)
                 logger.info(baseline_response)
                 
@@ -149,13 +165,12 @@ class GoldPromptExperiments():
                             (pd_results["temperature"] == temperature) &
                             (pd_results["question"] == question)).any():
                             
-                            # logger.info(f"S   kipping already evaluated config: role={model.concept}, layer={model.layer_steering}, sample_count={model.target_pairs}, alpha={alpha}, temperature={temperature}, question={question}")
-                            
-                            logger.info("Skipping already evaluated config: role= %s, layer=%s, sample_counts=%s, alpha=%s, temperature=%s", 
-                                        role, baseline_temperature, model.target_pairs, alpha, temperature)
+                            logger.info(
+                                "Skipping already evaluated config: role= %s, layer=%s, sample_count=%s, alpha=%s, temperature=%s",
+                                role, baseline_temperature, model.target_pairs, alpha, temperature)
                             continue
                         
-                    layers, sample_counts = instant_params
+                    layers, sample_count = instant_params
                     
                     # generate prompted role answer for steered response
                     steered_response = model.generate(
@@ -164,13 +179,13 @@ class GoldPromptExperiments():
                         max_new_tokens=max_new_tokens,
                         temperature=temperature,
                     )
-                    logger.info("Steered response for role '%s' on layer %s, sample_counts %s, alpha %s, temperature %s:", 
+                    logger.info("Steered response for role '%s' on layer %s, sample_count %s, alpha %s, temperature %s:", 
                                 role, baseline_temperature, model.target_pairs, alpha, temperature)
                     logger.info(steered_response)
                     
                     # calculate judge score for steered response
                     steered_score = self.role_judge(role=role, question=question, answer=steered_response)
-                    logger.info("Steered judge score for role '%s' on layer %s, sample_counts %s, alpha %s, temperature %s: %s", 
+                    logger.info("Steered judge score for role '%s' on layer %s, sample_count %s, alpha %s, temperature %s: %s", 
                                 role, baseline_temperature, model.target_pairs, alpha, temperature, steered_score)
                     
                     # calculate comparative score
@@ -180,21 +195,23 @@ class GoldPromptExperiments():
                     new_result = {
                         "role": model.concept,
                         "layer": model.layer_steering,
-                        "sample_counts": model.target_pairs,
+                        "sample_count": model.target_pairs,
                         "alpha": alpha,
                         "temperature": temperature,
                         "question": question,
+                        "nonsteered": nonsteered_response,
                         "baseline": baseline_response,
                         "steered": steered_response,
+                        "nonsteered_score": nonsteered_score,
                         "baseline_score": baseline_score,
                         "steered_score": steered_score,
                         "comparative_score": comparative_score
                     }
-                    pd_results = pd_results.concat([pd_results, pd.DataFrame([new_result])], ignore_index=True)
+                    pd_results = pd.concat([pd_results, pd.DataFrame([new_result])], ignore_index=True)
                     
                     # save results after each config if save_each is true
                     if save_each:
-                        pd_results.sort_values(by=["role", "layer", "dataset_count", "alpha", "temperature"], inplace=True)
+                        pd_results.sort_values(by=["role", "layer", "sample_count", "alpha", "temperature"], inplace=True)
                         pd_results.to_csv(self.save_path, index=False)
                         logger.info("Saved progress")
                         
@@ -204,7 +221,7 @@ class GoldPromptExperiments():
         logger.info("=== Final Results ===")                
         
         # final save of results
-        pd_results.sort_values(by=["role", "layer", "dataset_count", "alpha", "temperature"], inplace=True)
+        pd_results.sort_values(by=["role", "layer", "sample_count", "alpha", "temperature"], inplace=True)
         pd_results.to_csv(self.save_path, index=False)
         
         logger.info("Results saved to %s", self.save_path)
@@ -268,5 +285,3 @@ if __name__ == "__main__":
         alphas=args.alphas, temperatures=args.temperatures, max_new_tokens=args.max_new_tokens,
         save_each=True
     )
-    
-    

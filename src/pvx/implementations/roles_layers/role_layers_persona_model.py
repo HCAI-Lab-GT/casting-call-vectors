@@ -14,7 +14,8 @@ class RoleLayersPersonaModel(RolePersonaModel):
     @override
     @classmethod
     def get_path(cls, 
-                 target_model_id: str, concept: str, safetensors_dir: str, use_json: bool=False, 
+                 target_model_id: str, concept: str, 
+                 safetensors_dir: str= "./persona_data/model_layer_inits/", use_json: bool=False, 
                  kwargs: Optional[dict]=None, obj: Optional[RolePersonaModel]=None):
         safe_model_id = target_model_id.replace("/", "__")
         
@@ -34,10 +35,9 @@ class RoleLayersPersonaModel(RolePersonaModel):
         return safetensors_path, filepath
     
     @override
-    def save_to_safetensors(self, filepath: str = "./persona_data/model_layer_inits/", **args) -> str:
+    def save_to_safetensors(self, filepath: str = None, **args) -> str:
+        filepath = filepath or self.safetensors_dir
         super().save_to_safetensors(filepath=filepath, **args)
-    
-    
     
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Generate Persona Dataset")

@@ -73,10 +73,13 @@ class AbstractPersonaModel(ABC):
         self.concept = concept if (not hasattr(self, 'concept') or concept) else self.concept
         self.dataset = dataset if (not hasattr(self, 'dataset') or dataset) else self.dataset
         
+        # same for savetensors and json_filepath
+        self.safetensors_dir = self.safetensors_dir if hasattr(self, 'safetensors_dir') else None
+        self.json_filepath = self.json_filepath if hasattr(self, 'json_filepath') else None
+        
         # skip extraction if not loading from JSON
         if from_json:
             return
-
 
         self.judge_threshold = judge_threshold
         
@@ -349,7 +352,10 @@ class AbstractPersonaModel(ABC):
         # Try safetensors first (preferred format)
         if safetensors_path.exists():
             try:
-                return cls.from_safetensors(str(safetensors_path), concept=concept)
+                instance = cls.from_safetensors(str(safetensors_path), concept=concept)
+                instance.safetensors_dir = safetensors_dir
+                instance.target_pairs = target_pairs
+                return instance
             except Exception as e:
                 logger.warning("⚠️ Failed to load from safetensors: %s", e)
 
@@ -362,7 +368,10 @@ class AbstractPersonaModel(ABC):
         try:
             if Path(json_filepath).exists():
                 logger.info("Loading from legacy JSON (consider migrating to safetensors)")
-                return cls.from_json(json_filepath, concept=concept)
+                instance = cls.from_json(json_filepath, concept=concept)
+                instance.json_filepath = json_filepath
+                instance.target_pairs = target_pairs
+                return instance
 
         except Exception as e:
             logger.warning(
