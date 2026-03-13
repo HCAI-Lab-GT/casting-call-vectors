@@ -120,7 +120,7 @@ class PromptTemplates:
   You are tasked with designing a dataset to evaluate model behavior related to persona roles. Your goal is to create instructions and questions for a specific role. Follow these steps carefully:
   The role you will be working with is:
   <role>
-  {ROLE}
+  {role}
   </role>
   <role_description>
   {role_instruction}
@@ -134,10 +134,10 @@ class PromptTemplates:
   </example_instruction>
   Create 5 instructions for the given role. Ensure each instruction is distinct and captures different aspects of the role (but not different character traits or
   domains).
-  Step 2: Design 40 questions that could potentially elicit behavior related to the role when combined with the positive instructions. These questions should
+  Step 2: Design {N} questions that could potentially elicit behavior related to the role when combined with the positive instructions. These questions should
   be diverse and cover various scenarios. Do not explicitly ask the model to exhibit the role in the question itself—focus on subtly testing whether the model
   tends to exhibit the trait in its responses.
-  Generate 40 diverse questions that could potentially trigger responses exhibiting the given role.
+  Generate {N} diverse questions that could potentially trigger responses exhibiting the given role.
   {question_instruction}
   {{
   "instruction": [
@@ -151,7 +151,7 @@ class PromptTemplates:
   "question 1",
   "question 2",
   ...
-  "question 40"
+  "question {N}"
   ]
   }}
   </output_format>

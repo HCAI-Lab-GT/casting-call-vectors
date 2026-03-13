@@ -196,7 +196,7 @@ class RoleDataset(AbstractDataset):
         # load generation prompt
         system_prompt: str = "You are an expert AI evaluator and dataset designer."
         user_prompt: str = PromptTemplates.PROMPTS["generate_role"].format(
-            ROLE=self.role,
+            role=self.role,
             N=self.num_questions,
             role_instruction=role_description,
             question_instruction=question_instruction,

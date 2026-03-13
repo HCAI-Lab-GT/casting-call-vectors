@@ -228,6 +228,29 @@ PROMPT_TEMPLATE  = (
     "Return a single integer from 0 to 100. No explanation, no preamble, just the number."
 )
 
+COMPARATOR_PROMPT_TEMPLATE  = (
+    "You are an expert evaluator assessing how well a model response aligns to a given role or persona compared to a baseline response.\n\n"
+    "You will be given:\n"
+    "- A role name\n"
+    "- A question asked to the model\n"
+    "- The model's response\n"
+    "- A baseline response\n\n"
+    "Your task is to score the response from 0 to 100 based on how well it reflects the values, tone, priorities, and perspective of the described role compared to the baseline.\n\n"
+    "## Scoring Guidance\n"
+    "- 90-100: Response strongly embodies the role — tone, framing, and content are all clearly aligned\n"
+    "- 70-89: Response mostly aligns to the role with minor deviations in tone or framing\n"
+    "- 50-69: Response partially aligns but feels generic or misses key aspects of the role\n"
+    "- 30-49: Response weakly aligns — could belong to any generic assistant\n"
+    "- 0-29: Response contradicts or ignores the role entirely\n\n"
+    "## Input\n"
+    "Role: {role}\n"
+    "Question: {question}\n"
+    "Response: {answer}\n\n"
+    "Baseline Response: {baseline}\n\n"
+    "## Output\n"
+    "Return a single integer from 0 to 100. No explanation, no preamble, just the number."
+)
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Evaluate a model response using LLMJudge")
     ap.add_argument("--backend", default="openai", help="Backend to use: openai, vllm, hf_local")

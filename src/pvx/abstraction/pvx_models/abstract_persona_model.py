@@ -335,10 +335,11 @@ class AbstractPersonaModel(ABC):
         target_model_id: str = "allenai/Olmo-3-7B-Instruct",
         dataset: Optional[AbstractDataset] = None,
         concept: Optional[str] = None,  # alternate to dataset for loading (trait or role)
-        layer: float = 14,
+        layer: int = 14,
+        target_pairs: int = 40,
         json_filepath: Optional[str] = None,
         safetensors_dir: str = "./persona_data/model_inits/",
-        **args
+        **kwargs
     ) -> "AbstractPersonaModel":
         logger.info("Attempting to load PersonaModel for concept '%s' and model '%s'", concept, target_model_id)
         safetensors_path, _ = cls.get_path(target_model_id, concept, safetensors_dir, use_json=False, kwargs=locals())
@@ -373,6 +374,7 @@ class AbstractPersonaModel(ABC):
             target_model_id=target_model_id,
             dataset=dataset,
             layer=layer,
+            target_pairs=target_pairs
         )
     
     def is_concept_role(self):

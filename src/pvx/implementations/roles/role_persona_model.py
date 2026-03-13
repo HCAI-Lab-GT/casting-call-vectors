@@ -211,8 +211,6 @@ class RolePersonaModel(AbstractPersonaModel):
 
         return prompt_persona_vector, response_persona_vector, all_layers_response_persona_vector
 
-
-
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Generate Persona Dataset")
     ap.add_argument(
