@@ -34,10 +34,15 @@ class RoleLayersPersonaModel(RolePersonaModel):
         
         return safetensors_path, filepath
     
-    @override
-    def save_to_safetensors(self, filepath: str = None, **args) -> str:
-        filepath = filepath or self.safetensors_dir
-        super().save_to_safetensors(filepath=filepath, **args)
+    # @override
+    # def save_to_safetensors(self, filepath: str = None, **args) -> str:
+    #     filepath = filepath or self.safetensors_dir
+    #     super().save_to_safetensors(filepath=filepath, **args)
+        
+    # @override
+    # def save_to_json(self, filepath: str = None, **args) -> str:
+    #     filepath = filepath or self.safetensors_dir
+    #     super().save_to_json(filepath=filepath, **args)
     
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Generate Persona Dataset")

@@ -47,6 +47,8 @@ class AbstractPersonaModel(ABC):
         judge_threshold: float = 50.0,
         target_pairs: int = 20,
         from_json: bool = False,
+        safetensors_dir = None,
+        json_filepath = None
     ):
         """
         Initialize the PersonaModel with a target model and dataset for persona extraction.
@@ -74,8 +76,8 @@ class AbstractPersonaModel(ABC):
         self.dataset = dataset if (not hasattr(self, 'dataset') or dataset) else self.dataset
         
         # same for savetensors and json_filepath
-        self.safetensors_dir = self.safetensors_dir if hasattr(self, 'safetensors_dir') else None
-        self.json_filepath = self.json_filepath if hasattr(self, 'json_filepath') else None
+        self.safetensors_dir = self.safetensors_dir if hasattr(self, 'safetensors_dir') else safetensors_dir
+        self.json_filepath = self.json_filepath if hasattr(self, 'json_filepath') else json_filepath
         
         # skip extraction if not loading from JSON
         if from_json:
@@ -383,13 +385,15 @@ class AbstractPersonaModel(ABC):
             target_model_id=target_model_id,
             dataset=dataset,
             layer=layer,
-            target_pairs=target_pairs
+            target_pairs=target_pairs,
+            safetensors_dir=safetensors_dir,
+            json_filepath=json_filepath
         )
     
     def is_concept_role(self):
         return hasattr(self, "role")
 
-    def save_to_json(self, filepath: str = "./persona_data/model_inits/") -> str:
+    def save_to_json(self, filepath: str = "./persona_data/model_inits/", **args) -> str:
         """
         Save the persona vectors and initialization config to JSON
 
@@ -399,8 +403,8 @@ class AbstractPersonaModel(ABC):
         Returns:
             str: Path to the saved JSON file
         """
-
-        filepath += f"{self.dataset.concept}_persona_initialization/{self.target_model_id}.json"
+        concept = self.dataset.concept if self.dataset else "unknown"
+        full_path, filename = self.get_path(self.target_model_id, concept, filepath, use_json=True, obj=self)
         
         dataset_metadata_key = "num_pos_prompts" if self.is_concept_role() else "num_pos_neg_pairs"
 

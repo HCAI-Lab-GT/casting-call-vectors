@@ -138,7 +138,8 @@ class GoldPromptExperiments():
                 logger.info("Nonsteered judge score for role '%s' on temperature %s: %s", role, baseline_temperature, nonsteered_score)
 
                 # Get prompted role answer for prompted baseline
-                baseline_messages = self.generate_response.convert_str_to_message(messages=f"You are behaving like a {role}. {question}")
+                baseline_prompt = f"You are a {role}. {question}"
+                baseline_messages = self.generate_response.convert_str_to_message(messages=baseline_prompt)
                 baseline_response = self.generate_response(messages=baseline_messages,
                                                            max_new_tokens=max_new_tokens,
                                                            temperature=baseline_temperature)[1]
