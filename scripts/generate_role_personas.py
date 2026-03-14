@@ -96,6 +96,7 @@ PSYCH_PROFILE_REQUIRED_KEYS = {
 MIN_TASKS_COUNT = 5
 MIN_ROLE_CONTEXTS_COUNT = 5
 MIN_PERSONA_PROMPTS = 5
+MIN_QUESTIONS_COUNT = 50
 
 
 def setup_file_logging(log_file: Path) -> None:
@@ -235,6 +236,7 @@ def persona_is_incomplete(persona: dict) -> list[str]:
     Checks:
     - positive_prompts missing or too few
     - evaluation_prompt missing
+    - questions missing or fewer than MIN_QUESTIONS_COUNT
     """
     issues: list[str] = []
     prompts = persona.get("positive_prompts", [])
@@ -242,6 +244,9 @@ def persona_is_incomplete(persona: dict) -> list[str]:
         issues.append(f"prompts({len(prompts)}<{MIN_PERSONA_PROMPTS})")
     if not persona.get("evaluation_prompt"):
         issues.append("no_eval_prompt")
+    questions = persona.get("questions", [])
+    if len(questions) < MIN_QUESTIONS_COUNT:
+        issues.append(f"questions({len(questions)}<{MIN_QUESTIONS_COUNT})")
     return issues
 
 
@@ -489,12 +494,18 @@ async def _persona_worker(
     stats: dict,
     pbar: tqdm,
 ):
-    """Process a single persona: generate system prompts + eval via async LLM."""
+    """Process a single persona: generate system prompts + eval via async LLM.
+
+    If an existing persona file has valid prompts but insufficient questions,
+    only the questions are topped up rather than regenerating the full persona.
+    """
     logger = logging.getLogger(__name__)
     slug = role_name
     async with semaphore:
         pbar.set_postfix_str(role_name, refresh=True)
         try:
+            persona_path = generator.output_dir / f"{slug}.json"
+
             if fallback_only:
                 persona = {
                     "positive_prompts": [
@@ -506,6 +517,31 @@ async def _persona_worker(
                     },
                 }
                 generator.save_persona(slug, persona)
+            elif persona_path.exists():
+                with open(persona_path, "r") as f:
+                    existing = json.load(f)
+
+                issues = persona_is_incomplete(existing)
+                questions_only = (
+                    len(issues) == 1
+                    and issues[0].startswith("questions(")
+                )
+
+                if questions_only:
+                    repaired_questions = await generator.arepair_questions(
+                        profile, existing
+                    )
+                    existing["questions"] = repaired_questions
+                    generator.save_persona(slug, existing)
+                    logger.info(
+                        "Repaired questions for '%s': now %d",
+                        role_name,
+                        len(repaired_questions),
+                    )
+                else:
+                    await generator.agenerate_and_save(
+                        profile, include_questions, slug
+                    )
             else:
                 await generator.agenerate_and_save(profile, include_questions, slug)
 

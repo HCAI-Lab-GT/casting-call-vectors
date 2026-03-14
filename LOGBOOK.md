@@ -518,3 +518,30 @@ Context: User requested removal of AI attribution from commit messages.
 Action: Used git filter-branch to remove Co-Authored-By lines from all 14 commits.
 
 Result: Clean commit history. No AI attribution in messages.
+
+[2026-03-14 00:00] Persona Instruction Validation Audit
+
+Context: User requested validation of all 257 persona instruction JSON files in persona_data/vocational_personas/instructions/ for voice inconsistencies, role-prompt mismatches, and incomplete entries.
+
+Action: Wrote and ran three validation scripts from /tmp/claude-execution-allowed/persona-vectors/ checking: JSON parse errors, missing fields, placeholder questions, a/an grammar, first-person voice mixing in system prompts, role-concept cross-contamination, and question count distribution.
+
+Result: Found issues across five categories:
+1. 6 files with only placeholder questions (incomplete generation)
+2. 23 files with partial question sets (17-36 vs standard 50)
+3. 15 genuine a/an grammar errors in questions
+4. 68 first-person voice intrusions across 17 files (prompts mixing "You are" with "I" mid-paragraph)
+5. 0 role-concept cross-contamination, 0 parse errors, 0 eval prompt mismatches
+
+[2026-03-14 00:15] Applied Fixes for Grammar and Voice Issues
+
+Context: User requested fixing grammar issues and voice inconsistencies, plus adding 50-question verification to generation pipeline.
+
+Action:
+- Fixed 16 genuine a/an grammar errors across instruction files (reverted 2 false positives for "euphemism")
+- Fixed 70 first-person voice intrusions across 14 files (I->You conversion in prompt bodies)
+- Added MIN_QUESTIONS_COUNT=50 to generate_role_personas.py
+- Added questions count check to persona_is_incomplete()
+- Added arepair_questions() method to VocationalPersonaGenerator for topping up questions without regenerating prompts
+- Modified _persona_worker to use question repair path when only questions are insufficient
+
+Result: Post-fix validation shows 0 voice inconsistencies, 0 genuine grammar errors remaining (4 false positives from label/context usage). 29 files still need question generation (6 placeholder-only + 23 partial) which will be handled by the next generation run.

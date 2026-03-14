@@ -847,6 +847,88 @@ class VocationalPersonaGenerator:
         return {}
 
     # ------------------------------------------------------------------
+    # Question repair
+    # ------------------------------------------------------------------
+
+    async def arepair_questions(
+        self,
+        profile: dict,
+        existing_persona: dict,
+        target: int = TARGET_QUESTION_COUNT,
+        max_retries: int = 5,
+    ) -> list[str]:
+        """Top up questions in an existing persona to reach the target count.
+
+        Reuses existing questions as context to avoid duplicates, then
+        generates additional questions until the target is met.
+
+        Args:
+            profile: Role profile with psychological_profile for generation context
+            existing_persona: Loaded persona dict with existing questions
+            target: Target question count (default 50)
+            max_retries: Max consecutive empty phases before giving up
+
+        Returns:
+            Combined list of existing + new questions
+        """
+        title = profile["title"]
+        existing_questions = existing_persona.get("questions", [])
+
+        if len(existing_questions) >= target:
+            return existing_questions[:target]
+
+        logger.info(
+            "Repairing questions for '%s': %d/%d, generating %d more",
+            title,
+            len(existing_questions),
+            target,
+            target - len(existing_questions),
+        )
+
+        all_questions = list(existing_questions)
+        consecutive_failures = 0
+
+        while len(all_questions) < target and consecutive_failures < max_retries:
+            remaining = target - len(all_questions)
+            batch_size = min(PHASE_BATCH_SIZE, remaining)
+
+            prompt = self._build_questions_prompt(profile, batch_size, all_questions)
+            new_questions = await self._acall_question_generation(prompt, title)
+
+            if not new_questions:
+                consecutive_failures += 1
+                logger.warning(
+                    "Question repair phase returned 0 for '%s' (attempt %d/%d)",
+                    title,
+                    consecutive_failures,
+                    max_retries,
+                )
+                continue
+
+            existing_set = set(all_questions)
+            unique_new = [q for q in new_questions if q not in existing_set]
+            all_questions.extend(unique_new)
+            consecutive_failures = 0
+
+            logger.debug(
+                "Repair phase produced %d unique questions for '%s' (%d/%d total)",
+                len(unique_new),
+                title,
+                len(all_questions),
+                target,
+            )
+
+        if len(all_questions) < target:
+            logger.warning(
+                "Question repair only reached %d/%d for '%s'",
+                len(all_questions),
+                target,
+                title,
+            )
+
+        return all_questions[:target]
+
+    # ------------------------------------------------------------------
     # Persistence
     # ------------------------------------------------------------------
 
