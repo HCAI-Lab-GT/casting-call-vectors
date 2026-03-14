@@ -21,9 +21,13 @@ Usage:
 
     # Use a different model for persona generation
     uv run python scripts/generate_role_personas.py --persona-model gpt-4o-mini
+
+    # Control concurrency (default 5)
+    uv run python scripts/generate_role_personas.py --concurrency 10
 """
 
 import argparse
+import asyncio
 import json
 import logging
 import sys
@@ -49,7 +53,7 @@ DEFAULT_PERSONA_MODEL = "moonshotai/kimi-k2.5"
 DEFAULT_LOG_FILE = Path(__file__).parent.parent / "logs" / "generate_role_personas.log"
 
 
-CHECKPOINT_VERSION = 1
+CHECKPOINT_VERSION = 2
 
 
 class RunCheckpoint(BaseModel):
@@ -61,7 +65,13 @@ class RunCheckpoint(BaseModel):
     completed_personas: list[str]
     failed_profiles: list[str]
     failed_personas: list[str]
+    repaired_profiles: list[str] = []
+    repaired_personas: list[str] = []
 
+
+# ---------------------------------------------------------------------------
+# Completeness definitions
+# ---------------------------------------------------------------------------
 
 PSYCH_PROFILE_REQUIRED_KEYS = {
     "core_drive",
@@ -80,6 +90,12 @@ PSYCH_PROFILE_REQUIRED_KEYS = {
     "rejected_premise",
     "instinctive_blame_target",
 }
+
+
+# Minimum acceptable counts for structural profile fields
+MIN_TASKS_COUNT = 5
+MIN_ROLE_CONTEXTS_COUNT = 5
+MIN_PERSONA_PROMPTS = 5
 
 
 def setup_file_logging(log_file: Path) -> None:
@@ -112,12 +128,12 @@ def checkpoint_path_for(log_file: Path) -> Path:
     return log_file.with_suffix(log_file.suffix + ".checkpoint.json")
 
 
-def load_checkpoint(checkpoint_path: Path) -> RunCheckpoint | None:
+def load_checkpoint(cp_path: Path) -> RunCheckpoint | None:
     """Load a prior checkpoint if it exists and is valid."""
-    if not checkpoint_path.exists():
+    if not cp_path.exists():
         return None
 
-    with open(checkpoint_path, "r") as f:
+    with open(cp_path, "r") as f:
         data = json.load(f)
 
     checkpoint = RunCheckpoint.model_validate(data)
@@ -126,11 +142,11 @@ def load_checkpoint(checkpoint_path: Path) -> RunCheckpoint | None:
     return checkpoint
 
 
-def save_checkpoint(checkpoint_path: Path, checkpoint: RunCheckpoint) -> None:
+def save_checkpoint(cp_path: Path, checkpoint: RunCheckpoint) -> None:
     """Persist checkpoint state to disk."""
     checkpoint.updated_at = time.time()
-    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(checkpoint_path, "w") as f:
+    cp_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(cp_path, "w") as f:
         json.dump(checkpoint.model_dump(), f, indent=2)
 
 
@@ -152,22 +168,22 @@ def checkpoint_args_signature(args: argparse.Namespace) -> dict:
 
 
 def ensure_checkpoint(
-    checkpoint_path: Path,
+    cp_path: Path,
     args: argparse.Namespace,
     logger: logging.Logger,
 ) -> RunCheckpoint:
     """Load an existing checkpoint when compatible, otherwise start a new one."""
     args_signature = checkpoint_args_signature(args)
-    checkpoint = load_checkpoint(checkpoint_path)
+    checkpoint = load_checkpoint(cp_path)
 
     if checkpoint is not None and checkpoint.args == args_signature:
-        logger.info("Resuming from checkpoint at %s", checkpoint_path)
+        logger.info("Resuming from checkpoint at %s", cp_path)
         return checkpoint
 
     if checkpoint is not None:
         logger.info(
             "Ignoring incompatible checkpoint at %s due to argument mismatch or version change",
-            checkpoint_path,
+            cp_path,
         )
 
     now_ts = time.time()
@@ -180,8 +196,8 @@ def ensure_checkpoint(
         failed_profiles=[],
         failed_personas=[],
     )
-    save_checkpoint(checkpoint_path, checkpoint)
-    logger.info("Created new checkpoint at %s", checkpoint_path)
+    save_checkpoint(cp_path, checkpoint)
+    logger.info("Created new checkpoint at %s", cp_path)
     return checkpoint
 
 
@@ -193,28 +209,143 @@ def psych_profile_is_stale(profile: dict) -> bool:
     return not PSYCH_PROFILE_REQUIRED_KEYS.issubset(psych.keys())
 
 
-def load_or_generate_profile(
+def profile_is_incomplete(profile: dict) -> list[str]:
+    """Return a list of issue descriptions for an incomplete profile.
+
+    Checks:
+    - tasks missing or too few
+    - role_contexts missing or too few
+    - psychological_profile missing or stale
+    """
+    issues: list[str] = []
+    tasks = profile.get("tasks", [])
+    if not tasks or len(tasks) < MIN_TASKS_COUNT:
+        issues.append(f"tasks({len(tasks)}<{MIN_TASKS_COUNT})")
+    ctx = profile.get("role_contexts", {})
+    if not ctx or len(ctx) < MIN_ROLE_CONTEXTS_COUNT:
+        issues.append(f"role_contexts({len(ctx)}<{MIN_ROLE_CONTEXTS_COUNT})")
+    if psych_profile_is_stale(profile):
+        issues.append("psych_stale_or_missing")
+    return issues
+
+
+def persona_is_incomplete(persona: dict) -> list[str]:
+    """Return a list of issue descriptions for an incomplete persona file.
+
+    Checks:
+    - positive_prompts missing or too few
+    - evaluation_prompt missing
+    """
+    issues: list[str] = []
+    prompts = persona.get("positive_prompts", [])
+    if not prompts or len(prompts) < MIN_PERSONA_PROMPTS:
+        issues.append(f"prompts({len(prompts)}<{MIN_PERSONA_PROMPTS})")
+    if not persona.get("evaluation_prompt"):
+        issues.append("no_eval_prompt")
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Async profile loading / generation
+# ---------------------------------------------------------------------------
+
+
+async def async_repair_profile(
+    role_profile: RoleProfile,
+    profile: dict,
+    profile_name: str,
+    profile_path: Path,
+) -> dict:
+    """Repair an existing profile by regenerating only the missing/incomplete fields.
+
+    Regenerates tasks, role_contexts, or psychological_profile as needed
+    without touching fields that are already populated.
+
+    Returns the repaired profile dict (also written to disk).
+    """
+    logger = logging.getLogger(__name__)
+    issues = profile_is_incomplete(profile)
+    if not issues:
+        return profile
+
+    logger.info("Repairing profile '%s' — issues: %s", profile_name, ", ".join(issues))
+    dirty = False
+    title = profile.get("title", profile_name)
+    description = profile.get("description", "")
+
+    # Repair tasks
+    tasks = profile.get("tasks", [])
+    if not tasks or len(tasks) < MIN_TASKS_COUNT:
+        logger.info("Regenerating tasks for '%s'", profile_name)
+        new_tasks = await role_profile.agenerate_tasks(title, description)
+        if new_tasks and len(new_tasks) >= MIN_TASKS_COUNT:
+            profile["tasks"] = new_tasks
+            dirty = True
+        else:
+            logger.warning(
+                "Task regeneration for '%s' returned %d tasks (need %d)",
+                profile_name,
+                len(new_tasks) if new_tasks else 0,
+                MIN_TASKS_COUNT,
+            )
+
+    # Repair role_contexts
+    ctx = profile.get("role_contexts", {})
+    if not ctx or len(ctx) < MIN_ROLE_CONTEXTS_COUNT:
+        logger.info("Regenerating role_contexts for '%s'", profile_name)
+        new_ctx = await role_profile.agenerate_role_context(
+            title, description, profile.get("tasks", [])
+        )
+        if new_ctx and len(new_ctx) >= MIN_ROLE_CONTEXTS_COUNT:
+            profile["role_contexts"] = new_ctx
+            dirty = True
+        else:
+            logger.warning(
+                "Role context regeneration for '%s' returned %d contexts (need %d)",
+                profile_name,
+                len(new_ctx) if new_ctx else 0,
+                MIN_ROLE_CONTEXTS_COUNT,
+            )
+
+    # Repair psychological_profile
+    if psych_profile_is_stale(profile):
+        logger.info("Regenerating psychological_profile for '%s'", profile_name)
+        psych = await role_profile.agenerate_psych_profile(
+            title=title,
+            description=description,
+            tasks=profile.get("tasks", []),
+            role_contexts=profile.get("role_contexts", {}),
+        )
+        if psych:
+            profile["psychological_profile"] = psych
+            dirty = True
+
+    if dirty:
+        with open(profile_path, "w") as f:
+            json.dump(profile, f, indent=2)
+        logger.info("Saved repaired profile for '%s' to %s", profile_name, profile_path)
+
+    remaining = profile_is_incomplete(profile)
+    if remaining:
+        logger.warning(
+            "Profile '%s' still incomplete after repair: %s", profile_name, ", ".join(remaining)
+        )
+
+    return profile
+
+
+async def async_load_or_generate_profile(
     role_profile: RoleProfile,
     profile_name: str,
     profiles_dir: Path,
     force_regenerate: bool = False,
 ) -> dict:
-    """Load an existing profile from disk, or generate and save it.
+    """Async version: Load an existing profile from disk, or generate and save it.
 
-    If a cached profile exists but lacks a ``psychological_profile`` key,
-    or the cached profile has an outdated psychological profile schema,
-    the missing/stale fields are backfilled via a single LLM call and the
-    file is re-saved so subsequent runs skip the call.
-
-    Args:
-        role_profile: RoleProfile instance for generating profiles
-        profile_name: Name of the role (key in new_roles.json)
-        profiles_dir: Directory where per-role JSON profiles are stored
-        force_regenerate: If True, regenerate even if file exists
-
-    Returns:
-        Profile dict with keys: title, description, tasks, role_contexts,
-        psychological_profile
+    If a cached profile exists:
+    - Checks for incomplete structural data (tasks, role_contexts) and repairs
+    - Checks for stale/missing psychological profile and backfills
+    If no cached profile exists, generates from scratch.
     """
     logger = logging.getLogger(__name__)
     profile_path = profiles_dir / f"{profile_name}.json"
@@ -224,26 +355,14 @@ def load_or_generate_profile(
         with open(profile_path, "r") as f:
             profile = json.load(f)
 
-        # Backfill psychological_profile on legacy or stale cached profiles
-        if psych_profile_is_stale(profile):
-            logger.info(
-                "Backfilling stale psychological_profile for cached profile '%s'", profile_name
-            )
-            psych = role_profile.generate_psych_profile(
-                title=profile.get("title", profile_name),
-                description=profile.get("description", ""),
-                tasks=profile.get("tasks", []),
-                role_contexts=profile.get("role_contexts", {}),
-            )
-            profile["psychological_profile"] = psych
-            with open(profile_path, "w") as f:
-                json.dump(profile, f, indent=2)
-            logger.info("Saved backfilled profile for '%s' to %s", profile_name, profile_path)
+        # Repair any incomplete fields (tasks, role_contexts, psych)
+        if profile_is_incomplete(profile):
+            profile = await async_repair_profile(role_profile, profile, profile_name, profile_path)
 
         return profile
 
     logger.info("Generating profile for '%s'...", profile_name)
-    profile = role_profile.get_profile(profile_name)
+    profile = await role_profile.aget_profile(profile_name)
 
     profiles_dir.mkdir(parents=True, exist_ok=True)
     with open(profile_path, "w") as f:
@@ -253,7 +372,171 @@ def load_or_generate_profile(
     return profile
 
 
-def main():
+# ---------------------------------------------------------------------------
+# Sync fallback for load_or_generate_profile (kept for backward compat)
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Pre-flight audit: scan all existing profiles and personas for completeness
+# ---------------------------------------------------------------------------
+
+
+def audit_existing_profiles(profiles_dir: Path) -> dict[str, list[str]]:
+    """Scan all cached profile JSONs and return {name: [issues]} for incomplete ones."""
+    incomplete: dict[str, list[str]] = {}
+    for f in sorted(profiles_dir.glob("*.json")):
+        try:
+            with open(f, "r") as fh:
+                profile = json.load(fh)
+            issues = profile_is_incomplete(profile)
+            if issues:
+                incomplete[f.stem] = issues
+        except Exception:
+            incomplete[f.stem] = ["unreadable_json"]
+    return incomplete
+
+
+def audit_existing_personas(personas_dir: Path) -> dict[str, list[str]]:
+    """Scan all cached persona JSONs and return {name: [issues]} for incomplete ones."""
+    incomplete: dict[str, list[str]] = {}
+    if not personas_dir.exists():
+        return incomplete
+    for f in sorted(personas_dir.glob("*.json")):
+        try:
+            with open(f, "r") as fh:
+                persona = json.load(fh)
+            issues = persona_is_incomplete(persona)
+            if issues:
+                incomplete[f.stem] = issues
+        except Exception:
+            incomplete[f.stem] = ["unreadable_json"]
+    return incomplete
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint-aware async wrappers
+# ---------------------------------------------------------------------------
+
+
+async def _profile_worker(
+    role_name: str,
+    role_profile: RoleProfile,
+    profiles_dir: Path,
+    force_regenerate: bool,
+    semaphore: asyncio.Semaphore,
+    checkpoint: RunCheckpoint,
+    cp_path: Path,
+    cp_lock: asyncio.Lock,
+    profiles: dict,
+    stats: dict,
+    pbar: tqdm,
+):
+    """Process a single profile: load from cache or generate via async LLM.
+
+    Only marks the profile as completed if it passes completeness checks.
+    """
+    logger = logging.getLogger(__name__)
+    async with semaphore:
+        pbar.set_postfix_str(role_name, refresh=True)
+        try:
+            profile = await async_load_or_generate_profile(
+                role_profile, role_name, profiles_dir, force_regenerate
+            )
+
+            # Only mark complete if the profile actually passes completeness
+            remaining_issues = profile_is_incomplete(profile)
+            if remaining_issues:
+                logger.warning(
+                    "Profile '%s' still has issues after generation: %s",
+                    role_name,
+                    ", ".join(remaining_issues),
+                )
+
+            profiles[role_name] = profile
+
+            async with cp_lock:
+                if role_name not in checkpoint.completed_profiles:
+                    checkpoint.completed_profiles.append(role_name)
+                if role_name in checkpoint.failed_profiles:
+                    checkpoint.failed_profiles.remove(role_name)
+                save_checkpoint(cp_path, checkpoint)
+
+        except Exception as e:
+            logger.error(
+                "Failed to load/generate profile for '%s': %s", role_name, e, exc_info=True
+            )
+            async with cp_lock:
+                stats["failed_count"] += 1
+                stats["failed_roles"].append(role_name)
+                if role_name not in checkpoint.failed_profiles:
+                    checkpoint.failed_profiles.append(role_name)
+                save_checkpoint(cp_path, checkpoint)
+        finally:
+            pbar.update(1)
+
+
+async def _persona_worker(
+    role_name: str,
+    profile: dict,
+    generator: VocationalPersonaGenerator,
+    include_questions: bool,
+    fallback_only: bool,
+    semaphore: asyncio.Semaphore,
+    checkpoint: RunCheckpoint,
+    cp_path: Path,
+    cp_lock: asyncio.Lock,
+    stats: dict,
+    pbar: tqdm,
+):
+    """Process a single persona: generate system prompts + eval via async LLM."""
+    logger = logging.getLogger(__name__)
+    slug = role_name
+    async with semaphore:
+        pbar.set_postfix_str(role_name, refresh=True)
+        try:
+            if fallback_only:
+                persona = {
+                    "positive_prompts": [
+                        {"pos": p} for p in generator._generate_fallback_prompts(profile)
+                    ],
+                    "eval_prompt": generator.generate_eval_prompt(profile),
+                    "_metadata": {
+                        "title": profile.get("title", role_name),
+                    },
+                }
+                generator.save_persona(slug, persona)
+            else:
+                await generator.agenerate_and_save(profile, include_questions, slug)
+
+            async with cp_lock:
+                stats["success_count"] += 1
+                if role_name not in checkpoint.completed_personas:
+                    checkpoint.completed_personas.append(role_name)
+                if role_name in checkpoint.failed_personas:
+                    checkpoint.failed_personas.remove(role_name)
+                save_checkpoint(cp_path, checkpoint)
+
+            logger.info("Persona saved for '%s'", role_name)
+
+        except Exception as e:
+            logger.error("Failed to generate persona for '%s': %s", role_name, e, exc_info=True)
+            async with cp_lock:
+                stats["failed_count"] += 1
+                stats["failed_roles"].append(role_name)
+                if role_name not in checkpoint.failed_personas:
+                    checkpoint.failed_personas.append(role_name)
+                save_checkpoint(cp_path, checkpoint)
+        finally:
+            pbar.update(1)
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+
+async def async_main():
     parser = argparse.ArgumentParser(
         description="Generate vocational personas from role profile data",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -326,6 +609,12 @@ def main():
         default=str(DEFAULT_LOG_FILE),
         help="Path to log file (default: logs/generate_role_personas.log)",
     )
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=5,
+        help="Maximum number of concurrent async API calls (default: 5)",
+    )
     args = parser.parse_args()
 
     # ── Logging: everything to file, terminal stays clean for tqdm ──
@@ -333,11 +622,18 @@ def main():
     setup_file_logging(log_file)
     logger = logging.getLogger(__name__)
     logger.info("=" * 60)
-    logger.info("Starting generate_role_personas run")
+    logger.info("Starting generate_role_personas run (async, concurrency=%d)", args.concurrency)
     logger.info("Args: %s", vars(args))
 
-    checkpoint_path = checkpoint_path_for(log_file)
-    checkpoint = ensure_checkpoint(checkpoint_path, args, logger)
+    cp_path = checkpoint_path_for(log_file)
+    checkpoint = ensure_checkpoint(cp_path, args, logger)
+
+    if checkpoint.repaired_profiles or checkpoint.repaired_personas:
+        logger.info(
+            "Checkpoint shows %d repaired profiles, %d repaired personas from prior runs",
+            len(checkpoint.repaired_profiles),
+            len(checkpoint.repaired_personas),
+        )
 
     # ── Load roles dictionary ──
     roles_json_path = Path(args.roles_json)
@@ -376,83 +672,179 @@ def main():
         if skipped > 0:
             logger.info("Skipping %d existing personas", skipped)
 
-    completed_profiles = set(checkpoint.completed_profiles)
-    completed_personas = set(checkpoint.completed_personas)
+    completed_profiles_set = set(checkpoint.completed_profiles)
+    completed_personas_set = set(checkpoint.completed_personas)
 
-    if completed_profiles:
+    # ──────────────────────────────────────────────────────────────
+    #  Pre-flight: Audit ALL existing profiles for completeness
+    # ──────────────────────────────────────────────────────────────
+    print("\n── Pre-flight audit ──")
+    incomplete_profiles = audit_existing_profiles(profiles_dir)
+    incomplete_personas = audit_existing_personas(output_dir)
+
+    if incomplete_profiles:
+        print(f"  Incomplete profiles found: {len(incomplete_profiles)}")
+        for name, issues in list(incomplete_profiles.items())[:10]:
+            print(f"    {name}: {', '.join(issues)}")
+        if len(incomplete_profiles) > 10:
+            print(f"    ... and {len(incomplete_profiles) - 10} more")
+        logger.info(
+            "Pre-flight: %d incomplete profiles: %s",
+            len(incomplete_profiles),
+            json.dumps(dict(list(incomplete_profiles.items())[:20])),
+        )
+    else:
+        print("  All existing profiles complete ✓")
+
+    if incomplete_personas:
+        print(f"  Incomplete personas found: {len(incomplete_personas)}")
+        for name, issues in list(incomplete_personas.items())[:10]:
+            print(f"    {name}: {', '.join(issues)}")
+        if len(incomplete_personas) > 10:
+            print(f"    ... and {len(incomplete_personas) - 10} more")
+        logger.info(
+            "Pre-flight: %d incomplete personas: %s",
+            len(incomplete_personas),
+            json.dumps(dict(list(incomplete_personas.items())[:20])),
+        )
+    else:
+        print("  All existing personas complete ✓")
+
+    # Incomplete profiles need repair — add them to the profile work list
+    # even if they were in the checkpoint as "completed" (checkpoint was wrong)
+    profiles_needing_repair = set(incomplete_profiles.keys())
+    for stale_name in profiles_needing_repair:
+        if stale_name in completed_profiles_set:
+            completed_profiles_set.discard(stale_name)
+            if stale_name in checkpoint.completed_profiles:
+                checkpoint.completed_profiles.remove(stale_name)
+            logger.info(
+                "Removed '%s' from completed_profiles — needs repair: %s",
+                stale_name,
+                ", ".join(incomplete_profiles[stale_name]),
+            )
+
+    # Incomplete personas need regeneration — remove from completed
+    personas_needing_regen = set(incomplete_personas.keys())
+    for stale_name in personas_needing_regen:
+        if stale_name in completed_personas_set:
+            completed_personas_set.discard(stale_name)
+            if stale_name in checkpoint.completed_personas:
+                checkpoint.completed_personas.remove(stale_name)
+            logger.info(
+                "Removed '%s' from completed_personas — needs regen: %s",
+                stale_name,
+                ", ".join(incomplete_personas[stale_name]),
+            )
+
+    save_checkpoint(cp_path, checkpoint)
+
+    # ──────────────────────────────────────────────────────────────
+    #  Build work lists
+    # ──────────────────────────────────────────────────────────────
+
+    # Filter out already-completed profiles from checkpoint
+    if completed_profiles_set:
         before = len(role_names)
-        role_names = [name for name in role_names if name not in completed_profiles]
+        role_names = [name for name in role_names if name not in completed_profiles_set]
         resumed_profiles = before - len(role_names)
         if resumed_profiles > 0:
             logger.info(
                 "Skipping %d roles with profiles already completed in checkpoint", resumed_profiles
             )
 
+    # Add profiles needing repair that aren't already in the work list
+    existing_role_set = set(role_names)
+    for repair_name in sorted(profiles_needing_repair):
+        if repair_name not in existing_role_set:
+            # Only add if this role is in scope (matches --role / --limit filters)
+            all_role_names = [args.role] if args.role else list(profile_dict.keys())
+            if args.limit:
+                all_role_names = all_role_names[: args.limit]
+            if repair_name in all_role_names:
+                role_names.append(repair_name)
+                existing_role_set.add(repair_name)
+
+    # Build the full persona candidate list (before profile filtering)
     roles_needing_personas = [
         name for name in list(profile_dict.keys()) if (not args.role or name == args.role)
     ]
     if args.limit:
         roles_needing_personas = roles_needing_personas[: args.limit]
+
+    # For --skip-existing: skip only personas that exist AND are complete
     if args.skip_existing:
         roles_needing_personas = [
-            name for name in roles_needing_personas if not (output_dir / f"{name}.json").exists()
+            name
+            for name in roles_needing_personas
+            if not (output_dir / f"{name}.json").exists() or name in personas_needing_regen
         ]
 
-    if not role_names:
-        print("Nothing to do — all roles already processed.")
+    if not role_names and not roles_needing_personas:
+        print("\nNothing to do — all roles already processed.")
         return
 
-    total = len(role_names)
-    print(
-        f"\nProcessing {total} role(s)  |  log → {log_file.resolve()}  |  checkpoint → {checkpoint_path.resolve()}\n"
-    )
-
-    # ── Track statistics ──
-    success_count = len(completed_personas)
-    failed_count = 0
-    failed_roles: list[str] = []
-
-    # ──────────────────────────────────────────────────────────────
-    #  Bar 1: Profile loading / generation
-    # ──────────────────────────────────────────────────────────────
+    # ── Shared state ──
+    semaphore = asyncio.Semaphore(args.concurrency)
+    cp_lock = asyncio.Lock()
     profiles: dict[str, dict] = {}
-    with tqdm(role_names, desc="Loading profiles  ", unit="role", position=0) as pbar:
-        for role_name in pbar:
-            pbar.set_postfix_str(role_name, refresh=True)
-            try:
-                profiles[role_name] = load_or_generate_profile(
-                    role_profile,
-                    role_name,
-                    profiles_dir,
-                    force_regenerate=args.force_regenerate_profiles,
-                )
-                if role_name not in checkpoint.completed_profiles:
-                    checkpoint.completed_profiles.append(role_name)
-                if role_name in checkpoint.failed_profiles:
-                    checkpoint.failed_profiles.remove(role_name)
-                save_checkpoint(checkpoint_path, checkpoint)
-            except Exception as e:
-                logger.error(
-                    "Failed to load/generate profile for '%s': %s", role_name, e, exc_info=True
-                )
-                failed_count += 1
-                failed_roles.append(role_name)
-                if role_name not in checkpoint.failed_profiles:
-                    checkpoint.failed_profiles.append(role_name)
-                save_checkpoint(checkpoint_path, checkpoint)
+    stats: dict = {
+        "success_count": len(completed_personas_set),
+        "failed_count": 0,
+        "failed_roles": [],
+        "repaired_profiles": 0,
+        "repaired_personas": 0,
+    }
 
     # ──────────────────────────────────────────────────────────────
-    #  Bar 2: Persona generation (system prompts, eval, questions)
+    #  Phase 1: Profile loading / generation / repair (async)
     # ──────────────────────────────────────────────────────────────
-    roles_with_profiles = []
+    if role_names:
+        total_profiles = len(role_names)
+        repair_count = len(profiles_needing_repair & set(role_names))
+        new_count = total_profiles - repair_count
+        print(
+            f"\nPhase 1: {new_count} new + {repair_count} repair = {total_profiles} profile(s)  "
+            f"|  concurrency={args.concurrency}  |  log → {log_file.resolve()}"
+        )
+        print(f"  checkpoint → {cp_path.resolve()}\n")
+
+        with tqdm(total=total_profiles, desc="Loading profiles  ", unit="role") as pbar:
+            tasks = [
+                _profile_worker(
+                    role_name=name,
+                    role_profile=role_profile,
+                    profiles_dir=profiles_dir,
+                    force_regenerate=args.force_regenerate_profiles,
+                    semaphore=semaphore,
+                    checkpoint=checkpoint,
+                    cp_path=cp_path,
+                    cp_lock=cp_lock,
+                    profiles=profiles,
+                    stats=stats,
+                    pbar=pbar,
+                )
+                for name in role_names
+            ]
+            await asyncio.gather(*tasks)
+    else:
+        print("\nPhase 1: All profiles already completed in checkpoint — skipping.\n")
+
+    # ──────────────────────────────────────────────────────────────
+    #  Phase 2: Persona generation / repair (async, concurrent)
+    # ──────────────────────────────────────────────────────────────
+    # Build the list of roles that need persona generation and have profiles
+    roles_with_profiles: list[str] = []
 
     for role_name in roles_needing_personas:
-        if role_name in completed_personas:
+        # Skip only if completed AND not needing regen
+        if role_name in completed_personas_set and role_name not in personas_needing_regen:
             continue
         if role_name in profiles:
             roles_with_profiles.append(role_name)
             continue
 
+        # Try to load from disk (profile may have been generated in a prior run)
         profile_path = profiles_dir / f"{role_name}.json"
         if profile_path.exists():
             try:
@@ -466,67 +858,68 @@ def main():
                     e,
                     exc_info=True,
                 )
-                failed_count += 1
-                failed_roles.append(role_name)
-                if role_name not in checkpoint.failed_personas:
-                    checkpoint.failed_personas.append(role_name)
-                save_checkpoint(checkpoint_path, checkpoint)
+                async with cp_lock:
+                    stats["failed_count"] += 1
+                    stats["failed_roles"].append(role_name)
+                    if role_name not in checkpoint.failed_personas:
+                        checkpoint.failed_personas.append(role_name)
+                    save_checkpoint(cp_path, checkpoint)
 
-    with tqdm(roles_with_profiles, desc="Generating personas", unit="role", position=0) as pbar:
-        for role_name in pbar:
-            pbar.set_postfix_str(role_name, refresh=True)
-            profile = profiles[role_name]
-            slug = role_name
+    if roles_with_profiles:
+        total_personas = len(roles_with_profiles)
+        regen_count = len(personas_needing_regen & set(roles_with_profiles))
+        new_persona_count = total_personas - regen_count
+        print(
+            f"\nPhase 2: {new_persona_count} new + {regen_count} regen = {total_personas} persona(s)  "
+            f"|  concurrency={args.concurrency}\n"
+        )
 
-            try:
-                if args.fallback_only:
-                    persona = {
-                        "positive_prompts": [
-                            {"pos": p} for p in generator._generate_fallback_prompts(profile)
-                        ],
-                        "eval_prompt": generator.generate_eval_prompt(profile),
-                        "_metadata": {
-                            "title": profile.get("title", role_name),
-                        },
-                    }
-                    generator.save_persona(slug, persona)
-                else:
-                    generator.generate_and_save(profile, args.include_questions, slug)
-
-                success_count += 1
-                logger.info("Persona saved for '%s'", role_name)
-                if role_name not in checkpoint.completed_personas:
-                    checkpoint.completed_personas.append(role_name)
-                if role_name in checkpoint.failed_personas:
-                    checkpoint.failed_personas.remove(role_name)
-                save_checkpoint(checkpoint_path, checkpoint)
-
-                if not args.fallback_only and args.delay > 0:
-                    time.sleep(args.delay)
-
-            except Exception as e:
-                logger.error("Failed to generate persona for '%s': %s", role_name, e, exc_info=True)
-                failed_count += 1
-                failed_roles.append(role_name)
-                if role_name not in checkpoint.failed_personas:
-                    checkpoint.failed_personas.append(role_name)
-                save_checkpoint(checkpoint_path, checkpoint)
+        with tqdm(total=total_personas, desc="Generating personas", unit="role") as pbar:
+            tasks = [
+                _persona_worker(
+                    role_name=name,
+                    profile=profiles[name],
+                    generator=generator,
+                    include_questions=args.include_questions,
+                    fallback_only=args.fallback_only,
+                    semaphore=semaphore,
+                    checkpoint=checkpoint,
+                    cp_path=cp_path,
+                    cp_lock=cp_lock,
+                    stats=stats,
+                    pbar=pbar,
+                )
+                for name in roles_with_profiles
+            ]
+            await asyncio.gather(*tasks)
+    else:
+        print("\nPhase 2: All personas already completed — skipping.\n")
 
     # ── Summary ──
     print()
     print("=" * 50)
     print("GENERATION COMPLETE")
     print("=" * 50)
-    print(f"  Success : {success_count}")
-    print(f"  Failed  : {failed_count}")
-    print(f"  Output  : {output_dir}")
-    print(f"  Log     : {Path(args.log_file).resolve()}")
-    if failed_roles:
-        print(f"  Failed roles: {', '.join(failed_roles)}")
+    print(f"  Success  : {stats['success_count']}")
+    print(f"  Failed   : {stats['failed_count']}")
+    print(
+        f"  Repaired : {len(profiles_needing_repair)} profiles, {len(personas_needing_regen)} personas"
+    )
+    print(f"  Output   : {output_dir}")
+    print(f"  Log      : {log_file.resolve()}")
+    if stats["failed_roles"]:
+        print(f"  Failed roles: {', '.join(stats['failed_roles'])}")
     print()
 
-    logger.info("Run complete — success=%d, failed=%d", success_count, failed_count)
-    save_checkpoint(checkpoint_path, checkpoint)
+    logger.info(
+        "Run complete — success=%d, failed=%d", stats["success_count"], stats["failed_count"]
+    )
+    save_checkpoint(cp_path, checkpoint)
+
+
+def main():
+    """Entry point — runs the async main inside an event loop."""
+    asyncio.run(async_main())
 
 
 if __name__ == "__main__":

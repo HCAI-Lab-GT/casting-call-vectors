@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import AsyncOpenAI, OpenAI
 from pydantic import BaseModel, Field
 from tqdm.auto import tqdm
 
@@ -257,6 +257,7 @@ class RoleProfile:
         self.profile_dict = profile_dict
         self.model = model
         self._client: Optional[OpenAI] = None
+        self._async_client: Optional[AsyncOpenAI] = None
 
     @property
     def client(self) -> OpenAI:
@@ -275,6 +276,21 @@ class RoleProfile:
 
         return self._client
 
+    @property
+    def async_client(self) -> AsyncOpenAI:
+        """Lazy initialization of async OpenAI client."""
+        if self._async_client is None:
+            if not os.getenv("OPENAI_API_KEY"):
+                raise ValueError("OPENAI_API_KEY not found in environment variables.")
+            if os.getenv("OPENAI_BASE_URL"):
+                logger.debug("Using custom OpenAI base URL: %s", os.getenv("OPENAI_BASE_URL"))
+                self._async_client = AsyncOpenAI(
+                    base_url=os.getenv("OPENAI_BASE_URL"), api_key=os.getenv("OPENAI_API_KEY")
+                )
+            else:
+                self._async_client = AsyncOpenAI()
+        return self._async_client
+
     # ------------------------------------------------------------------
     # Individual generation methods
     # ------------------------------------------------------------------
@@ -285,6 +301,21 @@ class RoleProfile:
         prompt = DESC_PROMPT.format(title=profile_name, current_description=curr_description)
         try:
             response = self.client.chat.completions.create(
+                model=self.model, messages=[{"role": "user", "content": prompt}]
+            )
+            content = response.choices[0].message.content
+            return content.strip() if content else None
+        except Exception as e:
+            logger.error(f"Error generating better description for {profile_name}: {e}")
+            return None
+
+    async def agenerate_better_description(
+        self, profile_name: str, curr_description: str
+    ) -> Optional[str]:
+        """Async counterpart of generate_better_description."""
+        prompt = DESC_PROMPT.format(title=profile_name, current_description=curr_description)
+        try:
+            response = await self.async_client.chat.completions.create(
                 model=self.model, messages=[{"role": "user", "content": prompt}]
             )
             content = response.choices[0].message.content
@@ -307,6 +338,21 @@ class RoleProfile:
             logger.error(f"Error generating tasks for {profile_name}: {e}")
             return None
 
+    async def agenerate_tasks(self, profile_name: str, description: str) -> Optional[list[str]]:
+        """Async counterpart of generate_tasks."""
+        prompt = TASKS_PROMPT.format(title=profile_name, description=description)
+        try:
+            response = await self.async_client.chat.completions.parse(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format=ListOfString,
+            )
+            parsed = response.choices[0].message.parsed
+            return parsed.items if parsed else None
+        except Exception as e:
+            logger.error(f"Error generating tasks for {profile_name}: {e}")
+            return None
+
     def generate_role_context(
         self, profile_name: str, description: str, tasks: list[str]
     ) -> Optional[dict]:
@@ -315,6 +361,25 @@ class RoleProfile:
         )
         try:
             response = self.client.chat.completions.parse(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format=DictModel,
+            )
+            parsed = response.choices[0].message.parsed
+            return parsed.items if parsed else None
+        except Exception as e:
+            logger.error(f"Error generating role context for {profile_name}: {e}")
+            return None
+
+    async def agenerate_role_context(
+        self, profile_name: str, description: str, tasks: list[str]
+    ) -> Optional[dict]:
+        """Async counterpart of generate_role_context."""
+        prompt = ROLE_CONTEXT_PROMPT.format(
+            title=profile_name, description=description, tasks="\n".join(f"- {t}" for t in tasks)
+        )
+        try:
+            response = await self.async_client.chat.completions.parse(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 response_format=DictModel,
@@ -377,6 +442,58 @@ class RoleProfile:
     # Profile assembly
     # ------------------------------------------------------------------
 
+    async def agenerate_psych_profile(
+        self, title: str, description: str, tasks: list[str], role_contexts: dict
+    ) -> dict:
+        """Async counterpart of generate_psych_profile.
+
+        This runs for EVERY role — O*NET-backed and LLM-generated alike —
+        ensuring uniform depth across the full roster. The output drives
+        decision-level differentiation in downstream persona generation.
+
+        Args:
+            title: Role title
+            description: Role description
+            tasks: List of representative tasks
+            role_contexts: Dict of context dimension -> frequency/intensity
+
+        Returns:
+            Dict with the 15 psychological profile fields, or empty dict on failure
+        """
+        tasks_str = "\n".join(f"- {t}" for t in tasks) if tasks else "Not specified"
+        role_contexts_str = (
+            "\n".join(f"- {k}: {v}" for k, v in role_contexts.items())
+            if role_contexts
+            else "Not specified"
+        )
+
+        prompt = PSYCH_PROFILE_PROMPT.format(
+            title=title,
+            description=description,
+            tasks=tasks_str,
+            role_contexts=role_contexts_str,
+        )
+
+        try:
+            response = await self.async_client.chat.completions.parse(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                response_format=PsychProfile,
+            )
+            parsed = response.choices[0].message.parsed
+            if parsed is not None:
+                return parsed.model_dump()
+        except Exception as e:
+            logger.error(f"Error generating psychological profile for {title}: {e}")
+
+        logger.warning("Failed to generate psychological profile for '%s'", title)
+        return {}
+
+    # ------------------------------------------------------------------
+    # Profile assembly
+    # ------------------------------------------------------------------
+
     def generate_data(self, profile_name: str, profile_description: str) -> tuple:
         """Generate description, tasks, and role context for a non-O*NET role."""
         logger.debug(f"Generating data for profile: {profile_name}")
@@ -414,9 +531,48 @@ class RoleProfile:
             "role_contexts": onet_profile["work_contexts"],
         }
 
+    async def agenerate_data(self, profile_name: str, profile_description: str) -> tuple:
+        """Async counterpart of generate_data. Generate description, tasks, and role context for a non-O*NET role."""
+        logger.debug(f"Generating data for profile: {profile_name}")
+
+        description = await self.agenerate_better_description(profile_name, profile_description)
+        if description is None:
+            logger.warning("Description generation failed for '%s', using original", profile_name)
+            description = profile_description
+        logger.debug(f"Generated description for {profile_name}: {description}")
+
+        tasks = await self.agenerate_tasks(profile_name, description)
+        if tasks is None:
+            logger.warning("Task generation failed for '%s', using empty list", profile_name)
+            tasks = []
+        logger.debug(f"Generated tasks for {profile_name}: {tasks}")
+
+        role_con = await self.agenerate_role_context(profile_name, description, tasks)
+        if role_con is None:
+            logger.warning(
+                "Role context generation failed for '%s', using empty dict", profile_name
+            )
+            role_con = {}
+        logger.debug(f"Generated role context for {profile_name}: {role_con}")
+
+        return description, tasks, role_con
+
     def load_other_profile(self, profile_name):
         """Generate full profile for a non-O*NET role via LLM."""
         desc, tasks, role_con = self.generate_data(
+            profile_name, self.profile_dict[profile_name]["desc"]
+        )
+
+        return {
+            "title": profile_name,
+            "description": desc,
+            "tasks": tasks,
+            "role_contexts": role_con,
+        }
+
+    async def aload_other_profile(self, profile_name):
+        """Async counterpart of load_other_profile. Generate full profile for a non-O*NET role via LLM."""
+        desc, tasks, role_con = await self.agenerate_data(
             profile_name, self.profile_dict[profile_name]["desc"]
         )
 
@@ -446,6 +602,34 @@ class RoleProfile:
 
         # Generate psychological profile for ALL roles uniformly
         psych = self.generate_psych_profile(
+            title=profile["title"],
+            description=profile["description"],
+            tasks=profile.get("tasks", []),
+            role_contexts=profile.get("role_contexts", {}),
+        )
+        profile["psychological_profile"] = psych
+
+        return profile
+
+    async def aget_profile(self, profile_name: str) -> dict:
+        """Async counterpart of get_profile. Build a complete profile for any role.
+
+        Regardless of data source (O*NET or LLM), the output always contains:
+        - title, description, tasks, role_contexts  (structural)
+        - psychological_profile                      (decision-level)
+
+        The psychological profile is generated uniformly for every role so
+        that downstream persona generation has the same depth of
+        decision-driving data everywhere, including stronger non-negotiables,
+        resentments, premise rejections, and instinctive blame patterns.
+        """
+        if self.profile_dict[profile_name]["onet_code"] == "None":
+            profile = await self.aload_other_profile(profile_name)
+        else:
+            profile = self.load_onet_profile(profile_name)
+
+        # Generate psychological profile for ALL roles uniformly
+        psych = await self.agenerate_psych_profile(
             title=profile["title"],
             description=profile["description"],
             tasks=profile.get("tasks", []),

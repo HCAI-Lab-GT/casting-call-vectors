@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import AsyncOpenAI, OpenAI
 from pydantic import BaseModel, Field
 
 # Load environment variables from .env file
@@ -279,6 +279,7 @@ class VocationalPersonaGenerator:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self._client: Optional[OpenAI] = None
+        self._async_client: Optional[AsyncOpenAI] = None
 
     @property
     def client(self) -> OpenAI:
@@ -296,6 +297,21 @@ class VocationalPersonaGenerator:
                 self._client = OpenAI()
 
         return self._client
+
+    @property
+    def async_client(self) -> AsyncOpenAI:
+        """Lazy initialization of async OpenAI client."""
+        if self._async_client is None:
+            if not os.getenv("OPENAI_API_KEY"):
+                raise ValueError("OPENAI_API_KEY not found in environment variables.")
+            if os.getenv("OPENAI_BASE_URL"):
+                logger.debug("Using custom OpenAI base URL: %s", os.getenv("OPENAI_BASE_URL"))
+                self._async_client = AsyncOpenAI(
+                    base_url=os.getenv("OPENAI_BASE_URL"), api_key=os.getenv("OPENAI_API_KEY")
+                )
+            else:
+                self._async_client = AsyncOpenAI()
+        return self._async_client
 
     # ------------------------------------------------------------------
     # System prompt generation
@@ -340,6 +356,67 @@ class VocationalPersonaGenerator:
                 f"Generating system prompts for {profile['title']} using model {self.model}"
             )
             response = self.client.chat.completions.parse(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.8,
+                response_format=PersonaPrompts,
+            )
+
+            parsed = response.choices[0].message.parsed
+            if parsed is None:
+                logger.warning("Parsed response is None for %s", profile["title"])
+                return None
+            prompts = parsed.Prompts
+            addendum = "\n\n Do not introduce yourself, your limits, or your method vs others. Start answering immediately. Stay immersed in this person's biases, frustrations, and priorities and never use generic assistant helpfulness, balanced advise, or unbiased problem-solving. You must speak like a real worker. Avoid lofty, poetic, mystical, or philosophical metaphors and focus on this job's terminology, practical facts, and tools. Answer in first person as this person would in a conversation."
+            if isinstance(prompts, list) and len(prompts) == 5:
+                return [x.strip() + addendum for x in prompts]
+        except json.JSONDecodeError:
+            logger.warning("Failed to parse LLM response for %s, using fallback", profile["title"])
+        except Exception as e:
+            logger.warning("API call failed for %s: %s, using fallback", profile["title"], e)
+
+        return None
+
+    async def agenerate_system_prompts(
+        self, profile: dict, max_tasks: int = 5
+    ) -> Optional[list[str]]:
+        """Async counterpart of generate_system_prompts.
+
+        Generate 5 system prompt variants for a role using the async client.
+
+        Args:
+            profile: Role profile from RoleProfile.get_profile()
+            max_tasks: Maximum number of tasks to include in the prompt
+
+        Returns:
+            List of 5 system prompt strings, or None on failure
+        """
+        # Format tasks
+        tasks = profile.get("tasks", [])
+        tasks_str = "\n".join(f"- {t}" for t in tasks) if tasks else "Not specified"
+
+        role_context = profile.get("role_contexts", {})
+        role_context_str = (
+            "\n".join(f"- {k}: {v}" for k, v in role_context.items())
+            if role_context
+            else "Not specified"
+        )
+
+        psych_profile_str = _format_psych_profile(profile)
+
+        prompt = SYSTEM_PROMPT_GENERATION_TEMPLATE.format(
+            title=profile["title"],
+            description=profile["description"],
+            tasks=tasks_str,
+            role_context=role_context_str,
+            psych_profile=psych_profile_str,
+        )
+
+        try:
+            logger.debug(
+                f"Generating system prompts for {profile['title']} using model {self.model}"
+            )
+            response = await self.async_client.chat.completions.parse(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.8,
@@ -425,6 +502,28 @@ class VocationalPersonaGenerator:
             logger.warning("API call failed for questions for %s: %s", title, e)
         return []
 
+    async def _acall_question_generation(self, prompt: str, title: str) -> list[str]:
+        """Async counterpart of _call_question_generation.
+
+        Make a single async LLM call to generate questions. Returns a list (possibly empty).
+        """
+        try:
+            response = await self.async_client.chat.completions.parse(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=8192,
+                response_format=OccQFormat,
+            )
+            parsed = response.choices[0].message.parsed
+            if parsed is not None and isinstance(parsed.Questions, list):
+                return parsed.Questions
+        except json.JSONDecodeError:
+            logger.warning("Failed to parse LLM response for questions for %s", title)
+        except Exception as e:
+            logger.warning("API call failed for questions for %s: %s", title, e)
+        return []
+
     def generate_occupation_questions(
         self,
         profile: dict,
@@ -474,6 +573,100 @@ class VocationalPersonaGenerator:
 
             prompt = self._build_questions_prompt(profile, batch_size, all_questions)
             new_questions = self._call_question_generation(prompt, title)
+
+            if not new_questions:
+                consecutive_failures += 1
+                logger.warning(
+                    "Phase %d returned 0 questions for '%s' (attempt %d/%d)",
+                    phase_num,
+                    title,
+                    consecutive_failures,
+                    max_retries,
+                )
+                continue
+
+            # Deduplicate against existing questions (exact match)
+            existing_set = set(all_questions)
+            unique_new = [q for q in new_questions if q not in existing_set]
+
+            all_questions.extend(unique_new)
+            consecutive_failures = 0  # reset on success
+
+            logger.debug(
+                "Phase %d produced %d unique questions for '%s' (%d/%d total)",
+                phase_num,
+                len(unique_new),
+                title,
+                len(all_questions),
+                target,
+            )
+
+        if len(all_questions) < target:
+            logger.warning(
+                "Only generated %d/%d questions for '%s' after exhausting retries",
+                len(all_questions),
+                target,
+                title,
+            )
+
+        # Truncate to exact target in case a batch overshot
+        all_questions = all_questions[:target]
+
+        if not all_questions:
+            logger.warning("No questions generated for '%s', using fallback", title)
+            return [
+                f"What are the key responsibilities of a {title}?",
+            ]
+
+        return all_questions
+
+    async def agenerate_occupation_questions(
+        self,
+        profile: dict,
+        target: int = TARGET_QUESTION_COUNT,
+        max_retries: int = 5,
+    ) -> list[str]:
+        """Async counterpart of generate_occupation_questions.
+
+        Generate role-specific questions for evaluation via multi-phase generation
+        using the async client. Phases are sequential since each depends on
+        previously generated questions.
+
+        Args:
+            profile: Role profile from RoleProfile.get_profile()
+            target: Total number of questions to generate (default 50)
+            max_retries: Max consecutive empty/failed phases before giving up
+
+        Returns:
+            List of question strings
+        """
+        title = profile["title"]
+        all_questions: list[str] = []
+        consecutive_failures = 0
+
+        logger.debug(
+            "Generating %d evaluation questions for '%s' using model %s",
+            target,
+            title,
+            self.model,
+        )
+
+        while len(all_questions) < target and consecutive_failures < max_retries:
+            remaining = target - len(all_questions)
+            batch_size = min(PHASE_BATCH_SIZE, remaining)
+            phase_num = (len(all_questions) // PHASE_BATCH_SIZE) + 1
+
+            logger.debug(
+                "Phase %d for '%s': requesting %d questions (%d/%d so far)",
+                phase_num,
+                title,
+                batch_size,
+                len(all_questions),
+                target,
+            )
+
+            prompt = self._build_questions_prompt(profile, batch_size, all_questions)
+            new_questions = await self._acall_question_generation(prompt, title)
 
             if not new_questions:
                 consecutive_failures += 1
@@ -605,6 +798,54 @@ class VocationalPersonaGenerator:
 
         return {}
 
+    async def agenerate_persona(
+        self,
+        profile: dict,
+        include_questions: bool = False,
+    ) -> dict:
+        """Async counterpart of generate_persona.
+
+        Generate complete persona definition for a role using the async client.
+
+        Args:
+            profile: Role profile from RoleProfile.get_profile()
+            include_questions: Whether to generate role-specific questions
+
+        Returns:
+            Dict in assistant-axis format with instruction and eval_prompt
+        """
+        prompts = await self.agenerate_system_prompts(profile)
+        eval_prompt = self.generate_eval_prompt(profile)
+
+        if prompts:
+            persona = {
+                "concept": profile["title"],
+                "model": self.model,
+                "backend": "openai",
+                "base_url": "https://api.together.xyz/v1",
+                "positive_prompts": [{"pos": p} for p in prompts],
+                "evaluation_prompt": eval_prompt,
+            }
+
+            logger.debug(f"Generated persona for {profile['title']} with {len(prompts)} prompts")
+            if include_questions:
+                questions = await self.agenerate_occupation_questions(profile)
+                persona["questions"] = questions
+                logger.debug(
+                    f"Included {len(questions)} role-specific questions for {profile['title']}"
+                )
+
+            persona["_metadata"] = {
+                "title": profile["title"],
+                "description": profile.get("description", ""),
+                "tasks": profile.get("tasks", []),
+                "role_contexts": profile.get("role_contexts", {}),
+                "psychological_profile": profile.get("psychological_profile", {}),
+            }
+            return persona
+
+        return {}
+
     # ------------------------------------------------------------------
     # Persistence
     # ------------------------------------------------------------------
@@ -661,6 +902,33 @@ class VocationalPersonaGenerator:
             slug = self.to_slug(profile["title"])
 
         persona = self.generate_persona(profile, include_questions=include_questions)
+        if persona:
+            return self.save_persona(slug, persona)
+
+        return ""
+
+    async def agenerate_and_save(
+        self,
+        profile: dict,
+        include_questions: bool = False,
+        slug: Optional[str] = None,
+    ):
+        """Async counterpart of generate_and_save.
+
+        Generate and save persona for a role using the async client.
+
+        Args:
+            profile: Role profile from RoleProfile.get_profile()
+            include_questions: Whether to generate evaluation questions
+            slug: Optional filename slug (auto-generated from title if not provided)
+
+        Returns:
+            Path to saved file, or empty string on failure
+        """
+        if slug is None:
+            slug = self.to_slug(profile["title"])
+
+        persona = await self.agenerate_persona(profile, include_questions=include_questions)
         if persona:
             return self.save_persona(slug, persona)
 
