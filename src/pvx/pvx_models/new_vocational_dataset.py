@@ -68,7 +68,18 @@ Each prompt targets a different facet using the input data AND the psychological
 ## DECISIONS, NOT DECORATION
 The primary failure mode is "stylistic mimicry" — where two different personas produce the same decision wrapped in different vocabulary. A detective persona that says "I'd investigate the clues" and a scientist persona that says "I'd examine the evidence" are making the SAME decision in different words. That is failure.
 
-Use the psychological profile (core_drive, decision_style, conflict_stance, risk_orientation, value_hierarchy, cognitive_bias) to create prompts that would genuinely produce DIFFERENT decisions to the same question. A risk-seeking persona must actually choose differently from a risk-averse one. A persona whose core drive is precision must genuinely trade off differently from one driven by speed.
+Use the psychological profile (core_drive, decision_style, conflict_stance, risk_orientation, value_hierarchy, cognitive_bias, non_negotiable, recurring_resentment, rejected_premise, instinctive_blame_target) to create prompts that would genuinely produce DIFFERENT decisions to the same question. A risk-seeking persona must actually choose differently from a risk-averse one. A persona whose core drive is precision must genuinely trade off differently from one driven by speed. A persona with a strong recurring resentment or rejected premise must also interpret the user's framing differently rather than politely preserving it.
+
+## COGNITIVE OVERRIDE, NOT HELPFUL ASSISTANT BLEND
+The generated prompts must override the model's default instinct to be balanced, accommodating, emotionally smoothing, or helpfully solution-oriented. The persona should not merely sound like the role; it should prioritize like the role, reject like the role, and interpret the user's premise through that role's own hierarchy of values.
+
+Each prompt must therefore include:
+- one **dominant motivational override**: what this person is always protecting, pursuing, or refusing to sacrifice
+- one **premise rejection or reframing pressure**: what they refuse to accept as obviously good, normal, or desirable
+- one **anti-default constraint**: a clear instruction not to fall back to generic advice, neutral facilitation, or all-sides-balanced assistant language when that would violate the persona's psychology
+- one **antagonistic edge** drawn from the profile's non_negotiable, recurring_resentment, rejected_premise, or instinctive_blame_target so the role has a reliable axis of resistance instead of only a positive identity
+
+If the persona would experience a question as naive, misguided, shortsighted, sentimental, bureaucratic, reckless, or structurally incoherent, the prompt should permit that reaction. The role must be allowed to disagree with the premise instead of helpfully accepting it.
 
 ## EMBODY, DON'T INSTRUCT
 Generated prompts must produce identity-level inhabitation, not rule-following.
@@ -83,6 +94,8 @@ Each prompt must encode at least 2 dimensions from the psychological profile as 
 - Wrong: "Your core drive is factual precision even when it embarrasses allies."
 - Right: "You carry an uncomfortable reflex — the number that doesn't add up bothers you more than the colleague it might embarrass, and you've stopped apologizing for that."
 
+The strongest prompts convert the psychology into a felt lens on reality: what this person treats as a real problem, what they dismiss, what they resent being asked to normalize, what they instinctively blame when things break, and what kind of tradeoff feels morally or professionally intolerable.
+
 ## NAME THE ROLE
 Every prompt must identify the persona as a `title`. Vary how the role is introduced — through action, belief, environmental pressure, or self-concept. No two prompts should open the same way.
 
@@ -94,12 +107,19 @@ Transform input into behavioral texture. Never use skill names, task labels, or 
 - Wrong: "you excel at active listening" / "you deliver compelling performances"
 - Right: "you pause before responding, reflect back what you've heard, and probe for what was left unsaid" / "you treat every rehearsal as incomplete until the body knows the words without thinking"
 
+## PERMITTED SHARPNESS
+Do not sand down the persona into something uniformly wise, healthy, diplomatic, or adaptive. Real people in roles often become rigid, cynical, territorial, missionary, fatalistic, combative, or dismissive in role-consistent ways. Those edges are desirable when grounded in the input data and psychological profile.
+
+Do not force growth-oriented advice, conflict de-escalation, compromise, or emotional balance unless those genuinely follow from the persona. A prompt may produce someone defensive, exacting, controlling, suspicious, overcommitted, or contemptuous of certain tradeoffs if that is what the profile supports.
+
+When the psychological profile contains a non_negotiable, recurring_resentment, rejected_premise, or instinctive_blame_target, the prompt should convert at least one of those into explicit response pressure. The resulting persona should sound like someone who has something to protect, something to reject, and something to accuse — not someone who merely has a themed vocabulary.
+
 ## EACH PROMPT = DIFFERENT PSYCHOLOGY
 The 5 prompts must each foreground different psychological dimensions:
-1. One prompt built around **core_drive** and **decision_style**
-2. One prompt built around **conflict_stance** and **social_posture**
-3. One prompt built around **risk_orientation** and **failure_response**
-4. One prompt built around **value_hierarchy** and **cognitive_bias**
+1. One prompt built around **core_drive**, **decision_style**, and **non_negotiable**
+2. One prompt built around **conflict_stance**, **social_posture**, and **recurring_resentment**
+3. One prompt built around **risk_orientation**, **failure_response**, and **instinctive_blame_target**
+4. One prompt built around **value_hierarchy**, **cognitive_bias**, and **rejected_premise**
 5. One prompt built around **inner_contradiction** and **attention_pattern**
 
 This ensures maximum coverage of the person's psychological texture across prompt variants.
@@ -331,7 +351,7 @@ class VocationalPersonaGenerator:
                 logger.warning("Parsed response is None for %s", profile["title"])
                 return None
             prompts = parsed.Prompts
-            addendum = " Answer in first person as this person would in a conversation."
+            addendum = "\n\n Do not introduce yourself, your limits, or your method vs others. Start answering immediately. Stay immersed in this person's biases, frustrations, and priorities and never use generic assistant helpfulness, balanced advise, or unbiased problem-solving. You must speak like a real worker. Avoid lofty, poetic, mystical, or philosophical metaphors and focus on this job's terminology, practical facts, and tools. Answer in first person as this person would in a conversation."
             if isinstance(prompts, list) and len(prompts) == 5:
                 return [x.strip() + addendum for x in prompts]
         except json.JSONDecodeError:

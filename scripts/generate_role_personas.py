@@ -30,6 +30,8 @@ import sys
 import time
 from pathlib import Path
 
+from pydantic import BaseModel
+
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
@@ -45,6 +47,39 @@ DEFAULT_OUTPUT_DIR = "persona_data/vocational_personas/instructions"
 DEFAULT_PROFILE_MODEL = "moonshotai/kimi-k2.5"
 DEFAULT_PERSONA_MODEL = "moonshotai/kimi-k2.5"
 DEFAULT_LOG_FILE = Path(__file__).parent.parent / "logs" / "generate_role_personas.log"
+
+
+CHECKPOINT_VERSION = 1
+
+
+class RunCheckpoint(BaseModel):
+    version: int = CHECKPOINT_VERSION
+    started_at: float
+    updated_at: float
+    args: dict
+    completed_profiles: list[str]
+    completed_personas: list[str]
+    failed_profiles: list[str]
+    failed_personas: list[str]
+
+
+PSYCH_PROFILE_REQUIRED_KEYS = {
+    "core_drive",
+    "decision_style",
+    "attention_pattern",
+    "conflict_stance",
+    "risk_orientation",
+    "social_posture",
+    "relationship_to_authority",
+    "failure_response",
+    "value_hierarchy",
+    "cognitive_bias",
+    "inner_contradiction",
+    "non_negotiable",
+    "recurring_resentment",
+    "rejected_premise",
+    "instinctive_blame_target",
+}
 
 
 def setup_file_logging(log_file: Path) -> None:
@@ -72,6 +107,92 @@ def setup_file_logging(log_file: Path) -> None:
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
+def checkpoint_path_for(log_file: Path) -> Path:
+    """Store checkpoint alongside the run log."""
+    return log_file.with_suffix(log_file.suffix + ".checkpoint.json")
+
+
+def load_checkpoint(checkpoint_path: Path) -> RunCheckpoint | None:
+    """Load a prior checkpoint if it exists and is valid."""
+    if not checkpoint_path.exists():
+        return None
+
+    with open(checkpoint_path, "r") as f:
+        data = json.load(f)
+
+    checkpoint = RunCheckpoint.model_validate(data)
+    if checkpoint.version != CHECKPOINT_VERSION:
+        return None
+    return checkpoint
+
+
+def save_checkpoint(checkpoint_path: Path, checkpoint: RunCheckpoint) -> None:
+    """Persist checkpoint state to disk."""
+    checkpoint.updated_at = time.time()
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(checkpoint_path, "w") as f:
+        json.dump(checkpoint.model_dump(), f, indent=2)
+
+
+def checkpoint_args_signature(args: argparse.Namespace) -> dict:
+    """Return the subset of args that define resumable run identity."""
+    return {
+        "roles_json": str(Path(args.roles_json)),
+        "profiles_dir": str(Path(args.profiles_dir)),
+        "output_dir": str(Path(args.output_dir)),
+        "role": args.role,
+        "limit": args.limit,
+        "skip_existing": args.skip_existing,
+        "profile_model": args.profile_model,
+        "persona_model": args.persona_model,
+        "include_questions": args.include_questions,
+        "force_regenerate_profiles": args.force_regenerate_profiles,
+        "fallback_only": args.fallback_only,
+    }
+
+
+def ensure_checkpoint(
+    checkpoint_path: Path,
+    args: argparse.Namespace,
+    logger: logging.Logger,
+) -> RunCheckpoint:
+    """Load an existing checkpoint when compatible, otherwise start a new one."""
+    args_signature = checkpoint_args_signature(args)
+    checkpoint = load_checkpoint(checkpoint_path)
+
+    if checkpoint is not None and checkpoint.args == args_signature:
+        logger.info("Resuming from checkpoint at %s", checkpoint_path)
+        return checkpoint
+
+    if checkpoint is not None:
+        logger.info(
+            "Ignoring incompatible checkpoint at %s due to argument mismatch or version change",
+            checkpoint_path,
+        )
+
+    now_ts = time.time()
+    checkpoint = RunCheckpoint(
+        started_at=now_ts,
+        updated_at=now_ts,
+        args=args_signature,
+        completed_profiles=[],
+        completed_personas=[],
+        failed_profiles=[],
+        failed_personas=[],
+    )
+    save_checkpoint(checkpoint_path, checkpoint)
+    logger.info("Created new checkpoint at %s", checkpoint_path)
+    return checkpoint
+
+
+def psych_profile_is_stale(profile: dict) -> bool:
+    """Return True when a cached psychological profile is missing new required keys."""
+    psych = profile.get("psychological_profile")
+    if not isinstance(psych, dict) or not psych:
+        return True
+    return not PSYCH_PROFILE_REQUIRED_KEYS.issubset(psych.keys())
+
+
 def load_or_generate_profile(
     role_profile: RoleProfile,
     profile_name: str,
@@ -80,10 +201,10 @@ def load_or_generate_profile(
 ) -> dict:
     """Load an existing profile from disk, or generate and save it.
 
-    If a cached profile exists but lacks a ``psychological_profile`` key
-    (i.e. it was generated before the psych-profile layer was added), the
-    missing profile is backfilled via a single LLM call and the file is
-    re-saved so subsequent runs skip the call.
+    If a cached profile exists but lacks a ``psychological_profile`` key,
+    or the cached profile has an outdated psychological profile schema,
+    the missing/stale fields are backfilled via a single LLM call and the
+    file is re-saved so subsequent runs skip the call.
 
     Args:
         role_profile: RoleProfile instance for generating profiles
@@ -103,9 +224,11 @@ def load_or_generate_profile(
         with open(profile_path, "r") as f:
             profile = json.load(f)
 
-        # Backfill psychological_profile on legacy cached profiles
-        if not profile.get("psychological_profile"):
-            logger.info("Backfilling psychological_profile for cached profile '%s'", profile_name)
+        # Backfill psychological_profile on legacy or stale cached profiles
+        if psych_profile_is_stale(profile):
+            logger.info(
+                "Backfilling stale psychological_profile for cached profile '%s'", profile_name
+            )
             psych = role_profile.generate_psych_profile(
                 title=profile.get("title", profile_name),
                 description=profile.get("description", ""),
@@ -206,11 +329,15 @@ def main():
     args = parser.parse_args()
 
     # ── Logging: everything to file, terminal stays clean for tqdm ──
-    setup_file_logging(Path(args.log_file))
+    log_file = Path(args.log_file)
+    setup_file_logging(log_file)
     logger = logging.getLogger(__name__)
     logger.info("=" * 60)
     logger.info("Starting generate_role_personas run")
     logger.info("Args: %s", vars(args))
+
+    checkpoint_path = checkpoint_path_for(log_file)
+    checkpoint = ensure_checkpoint(checkpoint_path, args, logger)
 
     # ── Load roles dictionary ──
     roles_json_path = Path(args.roles_json)
@@ -249,15 +376,39 @@ def main():
         if skipped > 0:
             logger.info("Skipping %d existing personas", skipped)
 
+    completed_profiles = set(checkpoint.completed_profiles)
+    completed_personas = set(checkpoint.completed_personas)
+
+    if completed_profiles:
+        before = len(role_names)
+        role_names = [name for name in role_names if name not in completed_profiles]
+        resumed_profiles = before - len(role_names)
+        if resumed_profiles > 0:
+            logger.info(
+                "Skipping %d roles with profiles already completed in checkpoint", resumed_profiles
+            )
+
+    roles_needing_personas = [
+        name for name in list(profile_dict.keys()) if (not args.role or name == args.role)
+    ]
+    if args.limit:
+        roles_needing_personas = roles_needing_personas[: args.limit]
+    if args.skip_existing:
+        roles_needing_personas = [
+            name for name in roles_needing_personas if not (output_dir / f"{name}.json").exists()
+        ]
+
     if not role_names:
         print("Nothing to do — all roles already processed.")
         return
 
     total = len(role_names)
-    print(f"\nProcessing {total} role(s)  |  log → {Path(args.log_file).resolve()}\n")
+    print(
+        f"\nProcessing {total} role(s)  |  log → {log_file.resolve()}  |  checkpoint → {checkpoint_path.resolve()}\n"
+    )
 
     # ── Track statistics ──
-    success_count = 0
+    success_count = len(completed_personas)
     failed_count = 0
     failed_roles: list[str] = []
 
@@ -275,17 +426,51 @@ def main():
                     profiles_dir,
                     force_regenerate=args.force_regenerate_profiles,
                 )
+                if role_name not in checkpoint.completed_profiles:
+                    checkpoint.completed_profiles.append(role_name)
+                if role_name in checkpoint.failed_profiles:
+                    checkpoint.failed_profiles.remove(role_name)
+                save_checkpoint(checkpoint_path, checkpoint)
             except Exception as e:
                 logger.error(
                     "Failed to load/generate profile for '%s': %s", role_name, e, exc_info=True
                 )
                 failed_count += 1
                 failed_roles.append(role_name)
+                if role_name not in checkpoint.failed_profiles:
+                    checkpoint.failed_profiles.append(role_name)
+                save_checkpoint(checkpoint_path, checkpoint)
 
     # ──────────────────────────────────────────────────────────────
     #  Bar 2: Persona generation (system prompts, eval, questions)
     # ──────────────────────────────────────────────────────────────
-    roles_with_profiles = [r for r in role_names if r in profiles]
+    roles_with_profiles = []
+
+    for role_name in roles_needing_personas:
+        if role_name in completed_personas:
+            continue
+        if role_name in profiles:
+            roles_with_profiles.append(role_name)
+            continue
+
+        profile_path = profiles_dir / f"{role_name}.json"
+        if profile_path.exists():
+            try:
+                with open(profile_path, "r") as f:
+                    profiles[role_name] = json.load(f)
+                roles_with_profiles.append(role_name)
+            except Exception as e:
+                logger.error(
+                    "Failed to load cached profile for persona generation '%s': %s",
+                    role_name,
+                    e,
+                    exc_info=True,
+                )
+                failed_count += 1
+                failed_roles.append(role_name)
+                if role_name not in checkpoint.failed_personas:
+                    checkpoint.failed_personas.append(role_name)
+                save_checkpoint(checkpoint_path, checkpoint)
 
     with tqdm(roles_with_profiles, desc="Generating personas", unit="role", position=0) as pbar:
         for role_name in pbar:
@@ -310,6 +495,11 @@ def main():
 
                 success_count += 1
                 logger.info("Persona saved for '%s'", role_name)
+                if role_name not in checkpoint.completed_personas:
+                    checkpoint.completed_personas.append(role_name)
+                if role_name in checkpoint.failed_personas:
+                    checkpoint.failed_personas.remove(role_name)
+                save_checkpoint(checkpoint_path, checkpoint)
 
                 if not args.fallback_only and args.delay > 0:
                     time.sleep(args.delay)
@@ -318,6 +508,9 @@ def main():
                 logger.error("Failed to generate persona for '%s': %s", role_name, e, exc_info=True)
                 failed_count += 1
                 failed_roles.append(role_name)
+                if role_name not in checkpoint.failed_personas:
+                    checkpoint.failed_personas.append(role_name)
+                save_checkpoint(checkpoint_path, checkpoint)
 
     # ── Summary ──
     print()
@@ -333,6 +526,7 @@ def main():
     print()
 
     logger.info("Run complete — success=%d, failed=%d", success_count, failed_count)
+    save_checkpoint(checkpoint_path, checkpoint)
 
 
 if __name__ == "__main__":

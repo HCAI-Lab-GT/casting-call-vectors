@@ -135,6 +135,8 @@ PSYCH_PROFILE_PROMPT = """You are a personality psychologist and behavioral prof
 
 The profile will be used to generate AI personas that must make genuinely different choices from each other. Two roles that share similar tasks (e.g., editor and proofreader) must still produce different psychological profiles if the people who embody those roles think differently.
 
+The profile will also be used to generate stronger cognitive override prompts. That means you must capture not only what this person values, but what they resent, what they refuse to normalize, what they instinctively blame, and what premise they push back on instead of helpfully accommodating.
+
 **Role Input:**
 - **Title:** {title}
 - **Description:** {description}
@@ -167,12 +169,22 @@ Generate a psychological profile with the following components. Every component 
 
 11. **inner_contradiction** (1 sentence): The one internal tension this person lives with — two parts of their identity that genuinely pull against each other.
 
+12. **non_negotiable** (1 sentence): The one principle, condition, or way of operating this person refuses to sacrifice even when pressured. What feels like betrayal if they give it up?
+
+13. **recurring_resentment** (1 sentence): What kind of person, behavior, demand, or systemic pattern reliably irritates or angers them because it clashes with how they believe the world should work?
+
+14. **rejected_premise** (1 sentence): What widely accepted social or professional virtue does this person quietly reject, distrust, or consider overrated? This should be something they push back on rather than helpfully affirm.
+
+15. **instinctive_blame_target** (1 sentence): When things go wrong, where does this person's mind go first? Who or what do they instinctively see as the real source of the problem before reflection softens it?
+
 **Rules:**
 - Never use the role title in the profile content. Describe the *person*, not the label.
 - Never praise or idealize. These are real people with real biases and blind spots.
 - Each field must be specific enough that it could NOT apply to most other roles.
 - Avoid psychological jargon. Use plain behavioral language anyone could understand.
-- Output must be a valid JSON object with exactly the 11 keys listed above.
+- Prefer tensions, aversions, refusals, and asymmetries over rounded, balanced, well-adjusted summaries.
+- The new fields should be concrete enough to support persona prompts that can reject a user's premise instead of smoothing it over.
+- Output must be a valid JSON object with exactly the 15 keys listed above.
 - value_hierarchy should be a JSON array of strings.
 - All other fields should be strings.
 """
@@ -196,6 +208,10 @@ class PsychProfile(BaseModel):
 
     Every field captures a dimension of *how this person thinks and decides*,
     not what tasks they perform or what language they use.
+
+    The schema includes both motivational structure and antagonistic pressure
+    points so downstream persona prompts can produce stronger cognitive
+    overrides rather than defaulting to assistant-like helpfulness.
     """
 
     core_drive: str = Field(..., description="Single deepest motivation / need")
@@ -216,6 +232,18 @@ class PsychProfile(BaseModel):
     cognitive_bias: str = Field(..., description="Systematic blind spot they would deny having")
     inner_contradiction: str = Field(
         ..., description="Internal tension between two parts of their identity"
+    )
+    non_negotiable: str = Field(
+        ..., description="What they refuse to sacrifice even under pressure"
+    )
+    recurring_resentment: str = Field(
+        ..., description="What reliably irritates or angers them in others or in systems"
+    )
+    rejected_premise: str = Field(
+        ..., description="A valued norm or virtue they distrust or reject"
+    )
+    instinctive_blame_target: str = Field(
+        ..., description="Who or what they first see as the cause when things go wrong"
     )
 
 
@@ -313,7 +341,7 @@ class RoleProfile:
             role_contexts: Dict of context dimension -> frequency/intensity
 
         Returns:
-            Dict with the 11 psychological profile fields, or empty dict on failure
+            Dict with the 15 psychological profile fields, or empty dict on failure
         """
         tasks_str = "\n".join(f"- {t}" for t in tasks) if tasks else "Not specified"
         role_contexts_str = (
@@ -408,7 +436,8 @@ class RoleProfile:
 
         The psychological profile is generated uniformly for every role so
         that downstream persona generation has the same depth of
-        decision-driving data everywhere.
+        decision-driving data everywhere, including stronger non-negotiables,
+        resentments, premise rejections, and instinctive blame patterns.
         """
         if self.profile_dict[profile_name]["onet_code"] == "None":
             profile = self.load_other_profile(profile_name)
