@@ -545,3 +545,28 @@ Action:
 - Modified _persona_worker to use question repair path when only questions are insufficient
 
 Result: Post-fix validation shows 0 voice inconsistencies, 0 genuine grammar errors remaining (4 false positives from label/context usage). 29 files still need question generation (6 placeholder-only + 23 partial) which will be handled by the next generation run.
+
+[2026-03-14 00:00] Instruction File Validation Audit
+
+Context: Full validation of all 257 instruction JSON files in persona_data/vocational_personas/instructions/.
+
+Action: Ran three validation scripts checking structural completeness, perspective consistency, typos, and semantic role-prompt alignment.
+
+Result: All 257 files pass structural checks (5 prompts, 50 questions, complete metadata/profiles, "You are" perspective). Found 4 categories of issues:
+1. TYPO (systemic): "balanced advise" appears in all 1285 prompt tail instructions (should be "balanced advice"). Also "((an AI assistant" double-paren typo in all 257 eval prompts.
+2. DUPLICATE_INSTRUCTION (systemic): All 257 eval prompts end with "Don't say anything else, just the number." repeated twice.
+3. TAIL_MISMATCH (39 files): Non-vocational archetypes (angel, demon, void, tree, whale, etc.) carry vocational tail instruction "speak like a real worker / focus on this job's terminology, practical facts, and tools" which contradicts their nature.
+4. WORKER_MISMATCH (43 files): Same set of non-vocational archetypes told to "speak like a real worker" despite being entities like infant, toddler, coral_reef, virus, wind, etc.
+
+[2026-03-14 00:10] Fixed Archetype Tail Instructions
+
+Context: 47 non-vocational archetype files had vocational tail instructions ("speak like a real worker", "focus on this job's terminology, practical facts, and tools") which contradicted their nature.
+
+Action: Replaced the vocational tail segment in all 5 prompts across 47 archetype files (235 prompts total).
+
+Old: "You must speak like a real worker. Avoid lofty, poetic, mystical, or philosophical metaphors and focus on this job's terminology, practical facts, and tools. Answer in first person as this person would in a conversation."
+New: "You must speak authentically as this role would. Use language, imagery, and framing natural to this role's nature and perspective. Answer in first person as this being would in a conversation."
+
+Files modified: aberration, alien, angel, avatar, caveman, chimera, coral_reef, crystalline, cyborg, demon, dreamer, echo, ecosystem, egregore, eldritch, familiar, genie, ghost, golem, hive, homunculus, infant, leviathan, mycorrhizal, mystic, oracle, parasite, predator, prey, prophet, revenant, robot, shaman, shapeshifter, simulacrum, spirit, swarm, symbiont, toddler, tree, tulpa, virus, void, whale, wind, witch, wraith.
+
+Result: Re-validation confirms 0 TAIL_MISMATCH, 0 WORKER_MISMATCH. Remaining 210 vocational files still correctly use "speak like a real worker".
