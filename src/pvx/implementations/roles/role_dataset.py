@@ -92,7 +92,10 @@ class RoleDataset(AbstractDataset):
             json.JSONDecodeError: If the file contains invalid JSON
             KeyError: If required keys are missing from the JSON data
         """
+        
         filepath = os.path.join(dirpath, f"{role}_dataset.json")
+        if not os.path.exists(filepath):
+            filepath = os.path.join(dirpath, f"{role}.json")
 
         if not os.path.exists(filepath):
             if except_on_missing:

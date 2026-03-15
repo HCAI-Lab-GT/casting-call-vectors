@@ -62,7 +62,7 @@ if __name__ == "__main__":
     ap.add_argument(
         "-N", "--sample_counts", nargs="+", type=int,default=[40], help="List of question counts to extract activations from (default: 40)"
     )
-    ap.add_argument("--temperature", type=float, default=0.1, help="Temperature for sampling")
+    ap.add_argument("--temperature", type=float, default=0.2, help="Temperature for sampling")
     ap.add_argument(
         "-q",
         "--question",
@@ -141,7 +141,7 @@ if __name__ == "__main__":
                     logger.info("=== Steered Response ===")
                     logger.info(response)
                     
-                    score = role_judge(question=args.question, response=response, role=role)
+                    score = role_judge(question=args.question, answer=response, role=role)
                     logger.info("=== Judge Score for role %s: %d / 100 ===", role, score)
                 
                 else:

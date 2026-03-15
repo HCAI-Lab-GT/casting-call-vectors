@@ -50,7 +50,7 @@ class RolePersonaModel(AbstractPersonaModel):
     
     @torch.inference_mode()
     def extract_persona_vector(
-        self, temperature: float = 0.9, max_new_tokens: int = 200
+        self, temperature: float = 0.9, max_new_tokens: int = 2048
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Extract persona vectors from the dataset. Main function.

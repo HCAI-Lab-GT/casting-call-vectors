@@ -92,14 +92,19 @@ class AbstractDataset(ResponseGeneration):
             KeyError: If required keys are missing from the JSON data
         """
         filepath = os.path.join(dirpath, f"{concept}_dataset.json")
+        filepath_backup = os.path.join(dirpath, f"{concept}.json")
+        
+        logger.info(f"First filepath: {filepath}")
+        logger.info(f"Backup filepath: {filepath_backup}")
 
-        if not os.path.exists(filepath):
+        if not os.path.exists(filepath) and not os.path.exists(filepath_backup):
             logger.info("Concept dataset not found. Initializing new concept dataset...")
             dataset = cls(concept)
             return dataset, False
-
+        
+        filepath_concept = filepath if os.path.exists(filepath) else filepath_backup
         # Load JSON data
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath_concept, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         # Backward compatibility with older files that stored "client"
@@ -124,7 +129,7 @@ class AbstractDataset(ResponseGeneration):
         
         # Load up loggers
         dataset.logger = setup_logging(name="abstract-dataset")
-        dataset.logger.info("Abstract Dataset loaded from: %s", filepath)
+        dataset.logger.info("Abstract Dataset loaded from: %s", filepath_concept)
 
         return dataset, True
     

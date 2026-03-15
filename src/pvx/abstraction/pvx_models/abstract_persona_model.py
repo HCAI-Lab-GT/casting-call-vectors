@@ -98,8 +98,8 @@ class AbstractPersonaModel(ABC):
         _, _, _ = self.extract_persona_vector()
 
         # Save initialization (with extracted persona vector) to JSON
-        self.save_to_json()
-        self.save_to_safetensors()
+        self.save_to_json(filepath=json_filepath)
+        self.save_to_safetensors(filepath=safetensors_dir)
 
     @classmethod
     def base_model(
@@ -430,10 +430,10 @@ class AbstractPersonaModel(ABC):
         }
 
         # Ensure directory exists
-        Path(filepath).parent.mkdir(parents=True, exist_ok=True)
+        Path(full_path).parent.mkdir(parents=True, exist_ok=True)
 
         # Save to JSON file
-        with open(filepath, "w") as f:
+        with open(full_path, "w") as f:
             json.dump(initialization_data, f, indent=2)
 
         logger.info("✅ Initialization saved to: %s", filepath)
