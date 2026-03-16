@@ -32,12 +32,12 @@ class PersonaModel(AbstractPersonaModel):
                  *args, 
                  **kwargs):
         
-        self.dataset = (self.dataset if hasattr(self, dataset) else None) or \
+        self.dataset = (self.dataset if hasattr(self, "dataset") else None) or \
                        (dataset if dataset else None) or \
                        PersonaDataset.from_json(trait, dirpath=dataset_dirpath)
         self.trait = self.dataset.trait
         
-        super().__init__(concept=trait,*args, **kwargs)
+        super().__init__(concept=trait, *args, **kwargs)
         
         
     @torch.inference_mode()

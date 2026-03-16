@@ -22,18 +22,10 @@ class TraitCoveragePersonaModel(PersonaModel):
                  dataset_dirpath: str = './persona_data/trait_coverage_datasets/',
                  *args,
                  **kwargs):
-        # kwargs.setdefault("judge_cls", RoleJudge)
         self.trait = trait
-        
-        # from_json = kwargs.get("from_json", False)
-        # if from_json:
-        #     super().__init__(concept=role,*args, **kwargs)
-        #     return
-        
-        #TODO
         self.dataset = dataset if dataset else TraitCoverageDataset.from_json(trait, dirpath=dataset_dirpath)
         
-        super().__init__(concept=trait, *args, **kwargs)
+        super().__init__(trait=trait, *args, **kwargs)
 
     @override
     @classmethod
@@ -111,4 +103,5 @@ if __name__ == "__main__":
             logger.info("Successfully loaded/created TraitCoveragePersonaModel for trait '%s'", trait)
         except Exception as e:
             logger.error("Failed to load or create TraitCoveragePersonaModel for trait '%s': %s", trait, e)
+            raise
             continue
