@@ -103,5 +103,4 @@ if __name__ == "__main__":
             logger.info("Successfully loaded/created TraitCoveragePersonaModel for trait '%s'", trait)
         except Exception as e:
             logger.error("Failed to load or create TraitCoveragePersonaModel for trait '%s': %s", trait, e)
-            raise
             continue
