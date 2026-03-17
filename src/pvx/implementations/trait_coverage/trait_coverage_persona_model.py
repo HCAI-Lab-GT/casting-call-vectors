@@ -29,17 +29,26 @@ class TraitCoveragePersonaModel(PersonaModel):
 
     @override
     @classmethod
-    def get_path(cls, 
-                 target_model_id: str, concept: str, 
-                 safetensors_dir: str= "./persona_data/trait_coverage_inits/", use_json: bool=False, 
-                 kwargs: Optional[dict]=None, obj: Optional[AbstractPersonaModel]=None):
-        return super().get_path(target_model_id=target_model_id,
-                                concept=concept, 
-                                safetensors_dir=safetensors_dir,
-                                use_json=use_json,
-                                kwargs=kwargs,
-                                obj=obj
-                                )
+    def get_path(cls,
+                 target_model_id: str, concept: str,
+                 safetensors_dir: str = "./persona_data/trait_coverage_inits/", use_json: bool = False,
+                 kwargs: Optional[dict] = None, obj: Optional[AbstractPersonaModel] = None):
+        safe_model_id = target_model_id.replace("/", "__")
+
+        layer = \
+            (kwargs.get("layer") if kwargs else None) or \
+            (obj.layer_steering if obj else None) or \
+            "unknown_layer"
+
+        sample_counts = \
+            (kwargs.get("target_pairs") if kwargs else None) or \
+            (obj.target_pairs if obj else None) or \
+            "unknown_count"
+
+        filepath = f"{concept}_persona_initialization/{safe_model_id}_layer{layer}_count{sample_counts}.{'safetensors' if not use_json else 'json'}"
+        safetensors_path = Path(safetensors_dir) / filepath
+
+        return safetensors_path, filepath
         
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Generate Persona Dataset")
@@ -54,7 +63,7 @@ if __name__ == "__main__":
         "-a", "--alpha", type=float, default=1.0, help="Alpha value for persona steering"
     )
     ap.add_argument(
-        "-l", "--layers", nargs="+", type=int,default=[14], help="List of layers to extract activations from (default: 14)"
+        "-l", "--layers", nargs="+", type=int,default=[16], help="List of layers to extract activations from (default: 16)"
     )
     ap.add_argument(
         "-N", "--sample_counts", nargs="+", type=int,default=[40], help="List of question counts to extract activations from (default: 40)"
@@ -91,16 +100,30 @@ if __name__ == "__main__":
         "cautious",
     ]
 
-    for trait in args.traits:
+    for trait in trait_list:
         logger.info("=== Processing trait: %s ===", trait)
 
-        try:
-            pvx = TraitCoveragePersonaModel.load_or_create(
-                target_model_id=args.model,
-                concept=trait,
-                safetensors_dir=args.safetensor_dir,
-            )
-            logger.info("Successfully loaded/created TraitCoveragePersonaModel for trait '%s'", trait)
-        except Exception as e:
-            logger.error("Failed to load or create TraitCoveragePersonaModel for trait '%s': %s", trait, e)
-            continue
+        for layer in args.layers:
+            logger.info("Extracting activations from layer %d", layer)
+
+            for sample_count in args.sample_counts:
+                try:
+                    pvx = TraitCoveragePersonaModel.load_or_create(
+                        target_model_id=args.model,
+                        concept=trait,
+                        layer=layer,
+                        target_pairs=sample_count,
+                        safetensors_dir=args.safetensor_dir,
+                    )
+                    logger.info(
+                        "Successfully loaded/created TraitCoveragePersonaModel on layer %d "
+                        "with %d pairs for trait '%s'",
+                        layer, sample_count, trait,
+                    )
+                except Exception as e:
+                    logger.error(
+                        "Failed to load or create TraitCoveragePersonaModel on layer %d "
+                        "with %d pairs for trait '%s': %s",
+                        layer, sample_count, trait, e,
+                    )
+                    continue

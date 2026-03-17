@@ -18,14 +18,18 @@ JSON_FILE="configs/trait_coverage_list.json"
 MODEL="allenai/Olmo-3-7B-Instruct"
 N=20
 INITS_DIR="persona_data/trait_coverage_inits"
+LAYERS=(16)
+SAMPLE_COUNTS=(40)
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -f|--file)    JSON_FILE="$2"; shift 2;;
-    -m|--model)   MODEL="$2"; shift 2;;
-    -n|--bins)    N="$2"; shift 2;;
-    -d|--inits-dir) INITS_DIR="$2"; shift 2;;
-    *)            echo "Unknown argument: $1" >&2; exit 1;;
+    -f|--file)         JSON_FILE="$2"; shift 2;;
+    -m|--model)        MODEL="$2"; shift 2;;
+    -n|--bins)         N="$2"; shift 2;;
+    -d|--inits-dir)    INITS_DIR="$2"; shift 2;;
+    -l|--layers)       shift; LAYERS=(); while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do LAYERS+=("$1"); shift; done;;
+    -N|--sample-counts) shift; SAMPLE_COUNTS=(); while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do SAMPLE_COUNTS+=("$1"); shift; done;;
+    *)                 echo "Unknown argument: $1" >&2; exit 1;;
   esac
 done
 # ===========================
@@ -44,11 +48,20 @@ if [[ ${#ALL_TRAITS[@]} -eq 0 ]]; then
     exit 1
 fi
 
-# Filter out traits that already have a safetensors file for the given model
+# Filter out traits where all (layer, count) combinations already have a safetensors file
 SAFE_MODEL="${MODEL//\//__}"
 TRAITS=()
 for trait in "${ALL_TRAITS[@]}"; do
-    if [ ! -f "$INITS_DIR/${trait}_persona_initialization/${SAFE_MODEL}.safetensors" ]; then
+    all_done=true
+    for layer in "${LAYERS[@]}"; do
+        for count in "${SAMPLE_COUNTS[@]}"; do
+            if [ ! -f "$INITS_DIR/${trait}_persona_initialization/${SAFE_MODEL}_layer${layer}_count${count}.safetensors" ]; then
+                all_done=false
+                break 2
+            fi
+        done
+    done
+    if [ "$all_done" = false ]; then
         TRAITS+=("$trait")
     fi
 done
@@ -76,6 +89,7 @@ for ((i=0; i<N; i++)); do
     fi
 
     echo "Bin $((i+1))/$N: ${BIN_TRAITS[*]}"
-    bash slurm/trait_coverage_batch.sh --model "$MODEL" --traits "${BIN_TRAITS[@]}"
+    bash slurm/trait_coverage_batch.sh --model "$MODEL" --traits "${BIN_TRAITS[@]}" \
+        --layers "${LAYERS[@]}" --sample-counts "${SAMPLE_COUNTS[@]}"
 
 done
