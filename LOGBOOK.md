@@ -1,3 +1,26 @@
+[2026-03-15 00:00] Simplified dry-run batch output
+
+Context: User requested that dry-run mode print only the role list for each batch instead of full commands.
+
+Action: Updated scripts/evaluation/run_gold_standard_prompt_batches.py to log batch role lists only when --dry-run is enabled and removed the command-string logging path.
+
+Result: Dry-run output is now shorter and focused on the batch composition.
+
+[2026-03-17 01:00] Added multi-dimensional gold comparator judge
+
+Context: User requested a judge system prompt comparing steered responses against the gold-label baseline across five role-alignment dimensions: emotional register, vocabulary choice, social dynamic, motivation, and worldview alignment — each scored on a 1–5 Likert scale.
+
+Action: (1) Added import json and _aggregate_gold_comparator_score() method to LLMJudge in src/pvx/implementations/judges/llm_as_judge.py; (2) Added GOLD_COMPARATOR_PROMPT_TEMPLATE constant with style (emotional_register, vocab_choice, social_dynamic) and content (motivation, worldview_alignment) Likert scoring dimensions and JSON output format; (3) Updated src/pvx/experiments/gold_prompt_experiments.py to import and use GOLD_COMPARATOR_PROMPT_TEMPLATE, assign _aggregate_gold_comparator_score as the comparator judge_func, replaced single comparative_score column with five flattened cmp_* columns in the results DataFrame.
+
+Result: Comparative evaluation now produces per-dimension Likert alignment scores instead of a single integer.
+
+[2026-03-17 00:00] Wired gold-label baseline messages into experiments
+
+Context: User requested baseline generation in GoldPromptExperiments to use the role-specific gold standard prompt history from persona_data/gold_labels_prompts_dataset.
+
+Action: Updated src/pvx/experiments/gold_prompt_experiments.py to load and cache baseline messages from {role}_gold_label.json, support both gold_label_prompt and legacy gold_label_prompts schemas, trim trailing unmatched user turns, append the current evaluation question as a new user turn, and generate baseline responses from that message history. Added --gold_prompts_dir CLI arg and passed it to the experiment constructor.
+
+Result: Baseline responses are now generated from the role’s gold prompt conversation context plus the current question, instead of the previous simple "You are a {role}. {question}" baseline.
 [2025-12-06 22:04] Logbook created
 
 Context: Preparing to review TODOs and summarize completed items per user request while following repository instructions.
@@ -118,6 +141,14 @@ Action: Added configs/models.yaml with model presets (Qwen variants, API 4o-mini
 
 Result: Users can parameterize eval commands via YAML without hardcoding model IDs or limits; documentation reflects new workflow.
 
+[2026-03-15 00:00] Added gold-label prompt generator scaffold
+
+Context: Need a script that generates role description, catchphrase guidance, few-shot demonstrations, and dialogue prompts, then writes role-specific gold-label prompt JSON files.
+
+Action: Implemented scripts/evaluation/create_gold_standard_prompts.py using the shared ResponseGeneration wrapper, added prompt templates for each generation step, grounded generation from existing role dataset files when available, and configured JSON output under persona_data/gold_labels_prompts_dataset.
+
+Result: Repository now contains a dedicated gold-label prompt generation script that can emit structured chat messages and rendered prompt text for each requested role.
+
 [2025-12-07 01:40] Added CLI runner for eval presets
 
 Context: Need an easy entry point to launch evals from YAML presets with overrides.
@@ -237,3 +268,51 @@ Context: Verify new default WandB + CoT flag and env loading.
 Action: Ran PYTHONPATH=src .venv/bin/python scripts/run_eval.py --run bbeh-mini-qwen1.5b --limit 1. WandB auth via .env (entity glennmatlin).
 
 Result: Run succeeded; .eval stored under logs/bbeh_smoke; WandB run visible in persona-vectors project.
+
+[2026-03-15 00:00] Removed grounding from gold prompt generator
+
+Context: User requested removing the grounding step from scripts/evaluation/create_gold_standard_prompts.py.
+
+Action: Deleted the load_role_grounding helper, removed grounding placeholders from description/catchphrase prompts, removed --role_dir CLI argument and related variables, and dropped source_role_dataset from the output payload.
+
+Result: Gold-label prompt generation now uses only role input and generated text, with no grounding lookup or grounding metadata in outputs.
+
+[2026-03-15 00:00] Aligned catchphrase prompt to role wording
+
+Context: User requested that the catchphrase prompt be adopted for roles instead of character-centric phrasing.
+
+Action: Updated CATCHPHRASES_PROMPT in scripts/evaluation/create_gold_standard_prompts.py to refer to "this role" and adjusted the inline example wording to a role-based example.
+
+Result: Catchphrase generation instructions are now internally consistent with role-oriented generation.
+
+[2026-03-15 00:00] Refactored to one final gold prompt
+
+Context: User requested a single final prompt containing 5 dialogue prompts, with few-shot prompts equal to dialogue prompts.
+
+Action: Changed script flow to generate dialogue prompts first, then generate one assistant answer per dialogue prompt, and build one final prompt object containing all user/assistant pairs; removed separate --num_few_shot argument and replaced plural gold_label_prompts output with singular gold_label_prompt.
+
+Result: Output now has one final prompt per role and uses the same prompt set for both dialogue prompts and few-shot demonstrations.
+
+[2026-03-15 00:00] Added batched gold prompt runner
+
+Context: User requested a script that walks through the role list and calls the gold-label prompt generator automatically.
+
+Action: Added scripts/evaluation/run_gold_standard_prompt_batches.py to discover roles from persona_data/role_datasets, optionally skip existing outputs, split roles into configurable batch sizes, and invoke scripts/evaluation/create_gold_standard_prompts.py for each batch.
+
+Result: Repository now has a single command entry point for running gold-label generation across many roles in ordered batches.
+
+[2026-03-15 00:00] Added dry-run mode to batch runner
+
+Context: User requested a way to preview batched gold-label generation without running the commands.
+
+Action: Added --dry-run to scripts/evaluation/run_gold_standard_prompt_batches.py and logged each batch command with shlex-joined output instead of executing subprocesses when enabled.
+
+Result: Batch plans can now be inspected safely before launching generation.
+
+[2026-03-15 00:00] Excluded _dataset files from batch discovery
+
+Context: User requested that automatic role discovery ignore role dataset JSON files whose names contain _dataset.
+
+Action: Updated discover_roles in scripts/evaluation/run_gold_standard_prompt_batches.py to skip any JSON file with _dataset in its stem and only use plain role JSON files.
+
+Result: Automatic batching now draws from the lowercase/plain role files only, avoiding occupation-style *_dataset inputs.
