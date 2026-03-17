@@ -19,6 +19,7 @@ Environment Variables:
 """
 
 import argparse
+import json
 import math
 import os
 import re
@@ -181,6 +182,25 @@ class LLMJudge(AbstractJudge):
                 return int(match.group())
             return 0
 
+    def _aggregate_gold_comparator_score(self, messages: dict) -> dict:
+        """Parse a multi-dimensional Likert JSON response from the gold comparator prompt."""
+        _, response = self._inference_with_client(messages=messages)
+        cleaned = re.sub(r"```(?:json)?\s*|\s*```", "", response.strip())
+        try:
+            return json.loads(cleaned)
+        except (json.JSONDecodeError, AttributeError):
+            match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+            if match:
+                try:
+                    return json.loads(match.group())
+                except json.JSONDecodeError:
+                    pass
+        logger.warning("Gold comparator score parsing failed; returning neutral scores.")
+        return {
+            "style":   {"emotional_register": 3, "vocab_choice": 3, "social_dynamic": 3},
+            "content": {"motivation": 3, "worldview_alignment": 3},
+        }
+
     def judge(self, **kwargs):
         """
         Evaluate a model response using the configured prompt template and aggregation method.
@@ -210,7 +230,7 @@ class LLMJudge(AbstractJudge):
 PROMPT_TEMPLATE  = (
     "You are an expert evaluator assessing how well a model response aligns to a given role or persona.\n\n"
     "You will be given:\n"
-    "- A role name\n"
+    "- A role name and description\n"
     "- A question asked to the model\n"
     "- The model's response\n\n"
     "Your task is to score the response from 0 to 100 based on how well it reflects the values, tone, priorities, and perspective of the described role.\n\n"
@@ -222,6 +242,7 @@ PROMPT_TEMPLATE  = (
     "- 0-29: Response contradicts or ignores the role entirely\n\n"
     "## Input\n"
     "Role: {role}\n"
+    "Role Description: {role_description}\n"
     "Question: {question}\n"
     "Response: {answer}\n\n"
     "## Output\n"
@@ -249,6 +270,44 @@ COMPARATOR_PROMPT_TEMPLATE  = (
     "Baseline Response: {baseline}\n\n"
     "## Output\n"
     "Return a single integer from 0 to 100. No explanation, no preamble, just the number."
+)
+
+GOLD_COMPARATOR_PROMPT_TEMPLATE = (
+    "You are an expert evaluator assessing how closely a steered model response matches a gold-standard baseline response for a given role.\n\n"
+    "You will be given:\n"
+    "- A role name\n"
+    "- A question asked to the model\n"
+    "- A baseline response (gold label) that exemplifies how the role should speak and reason\n"
+    "- A steered response to evaluate against that baseline\n\n"
+    "Score each of the five dimensions below on a 5-point Likert scale:\n\n"
+    "  1 = Strongly diverges from baseline\n"
+    "  2 = Mostly diverges\n"
+    "  3 = Partially matches\n"
+    "  4 = Mostly matches\n"
+    "  5 = Strongly matches baseline\n\n"
+    "## Scoring Dimensions\n\n"
+    "### Style\n"
+    "- emotional_register: Does the steered response carry the same emotional tone as the baseline "
+    "(e.g., warm/cold, passionate/detached, anxious/confident)?\n"
+    "- vocab_choice: Does the steered response use the same vocabulary, register, jargon, and "
+    "linguistic style as the baseline?\n"
+    "- social_dynamic: Does the steered response adopt the same relational stance as the baseline "
+    "(e.g., authoritative, deferential, collaborative, confrontational)?\n\n"
+    "### Content\n"
+    "- motivation: Does the steered response reflect the same underlying goals, drives, and values "
+    "expressed in the baseline?\n"
+    "- worldview_alignment: Does the steered response reflect the same worldview, beliefs, and "
+    "role-consistent perspective as the baseline?\n\n"
+    "## Input\n"
+    "Role: {role}\n"
+    "Role Description: {role_description}\n"
+    "Question: {question}\n"
+    "Baseline (Gold Label):\n{baseline}\n\n"
+    "Steered Response:\n{answer}\n\n"
+    "## Output\n"
+    "Return only a JSON object with this exact structure. No explanation, no preamble:\n"
+    '{{"style": {{"emotional_register": <1-5>, "vocab_choice": <1-5>, "social_dynamic": <1-5>}}, '
+    '"content": {{"motivation": <1-5>, "worldview_alignment": <1-5>}}}}'
 )
 
 if __name__ == "__main__":
