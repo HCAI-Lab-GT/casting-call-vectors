@@ -17,12 +17,14 @@ source .env
 JSON_FILE="configs/trait_coverage_list.json"
 MODEL="allenai/Olmo-3-7B-Instruct"
 N=20
+INITS_DIR="persona_data/trait_coverage_inits"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -f|--file)    JSON_FILE="$2"; shift 2;;
     -m|--model)   MODEL="$2"; shift 2;;
     -n|--bins)    N="$2"; shift 2;;
+    -d|--inits-dir) INITS_DIR="$2"; shift 2;;
     *)            echo "Unknown argument: $1" >&2; exit 1;;
   esac
 done
@@ -35,15 +37,32 @@ if [ ! -f "$JSON_FILE" ]; then
 fi
 
 # Extract keys from JSON
-TRAITS=($(python3 -c "import json,sys; data=json.load(open('$JSON_FILE')); print('\n'.join(data.keys()))"))
+ALL_TRAITS=($(python3 -c "import json,sys; data=json.load(open('$JSON_FILE')); print('\n'.join(data.keys()))"))
 
-TOTAL=${#TRAITS[@]}
-if [[ $TOTAL -eq 0 ]]; then
+if [[ ${#ALL_TRAITS[@]} -eq 0 ]]; then
     echo "Error: No traits found in $JSON_FILE"
     exit 1
 fi
 
-echo "Found $TOTAL traits, dividing into $N bins..."
+# Filter out traits that already have a safetensors file for the given model
+SAFE_MODEL="${MODEL//\//__}"
+TRAITS=()
+for trait in "${ALL_TRAITS[@]}"; do
+    if [ ! -f "$INITS_DIR/${trait}_persona_initialization/${SAFE_MODEL}.safetensors" ]; then
+        TRAITS+=("$trait")
+    fi
+done
+
+SKIPPED=$(( ${#ALL_TRAITS[@]} - ${#TRAITS[@]} ))
+echo "Skipping $SKIPPED already-completed traits."
+
+TOTAL=${#TRAITS[@]}
+if [[ $TOTAL -eq 0 ]]; then
+    echo "All traits already completed. Nothing to do."
+    exit 0
+fi
+
+echo "Found $TOTAL remaining traits, dividing into $N bins..."
 
 ### SUBMIT BINS ###
 for ((i=0; i<N; i++)); do
