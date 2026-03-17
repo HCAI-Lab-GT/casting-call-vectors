@@ -33,14 +33,12 @@ done
 
 ### SLURM SETTINGS ###
 # runtime settings
-GPU_CONFIG=gpu:h200:2
-# GPU_CONFIG=gpu:a100:1
-NUM_NODES=32
+GPU_CONFIG=gpu:1
+NUM_NODES=16
 NUM_WORKERS=8
 # MEM_PER_NODE=256G
 MEM_PER_NODE=512G
-TIME=08:00:00
-# TIME=00:01:00
+TIME=02:00:00
 
 # job settings (typically do not change)
 ACCOUNT="$PACE_ACCOUNT" # set from .env
@@ -71,7 +69,7 @@ fi
 
 ### JOB CALL (add '-C amd' for amd) ###
 sbatch  --gres "$GPU_CONFIG" --ntasks-per-node 1 --cpus-per-task "$NUM_WORKERS" --mem "$MEM_PER_NODE" \
-        --account "$ACCOUNT" --qos "$QOS" --time "$TIME" \
+        --account "$ACCOUNT" --time "$TIME" \
         --output "$LOG_DIR/$NAME-%j.out" --error "$LOG_DIR/$NAME-%j.err" \
         "slurm/$NAME.sbatch" \
         --model "$MODEL" \

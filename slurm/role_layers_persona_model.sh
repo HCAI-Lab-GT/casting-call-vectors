@@ -5,8 +5,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --time=08:00:00
-#SBATCH --output=logs/slurm/role_layers_second_batch_%j.out
-#SBATCH --error=logs/slurm/role_layers_second_batch_%j.err
+#SBATCH --output=logs/slurm/role_layers_fourth_batch_%j.out
+#SBATCH --error=logs/slurm/role_layers_fourth_batch_%j.err
 
 set -euo pipefail
 
