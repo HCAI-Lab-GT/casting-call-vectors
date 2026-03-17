@@ -377,8 +377,10 @@ class AbstractPersonaModel(ABC):
 
         except Exception as e:
             logger.warning(
-                "⚠️ Failed to load from JSON: %s. Creating a new PersonaModel instance.", e
+                "⚠️ Failed to load from JSON: %s.", e
             )
+        
+        logger.info("Creating a new PersonaModel instance.")
 
         return cls(
             concept,
