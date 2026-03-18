@@ -310,6 +310,37 @@ GOLD_COMPARATOR_PROMPT_TEMPLATE = (
     '"content": {{"motivation": <1-5>, "worldview_alignment": <1-5>}}}}'
 )
 
+PAIRWISE_PROMPT_TEMPLATE = (
+    "You are an expert evaluator assessing how well language model responses embody a given role.\n\n"
+    "You will be given:\n"
+    "  - A role name and description\n"
+    "  - A gold-standard reference response showing ideal role embodiment\n"
+    "  - Two candidate responses (Response A and Response B)\n"
+    "  - The question both models were asked\n\n"
+    "## Evaluation Steps\n"
+    "Step 1 — Reasoning: Write 2-3 sentences comparing how well each response embodies the role "
+    "relative to the gold standard. Focus on: tone, vocabulary, perspective, and role-consistent reasoning.\n"
+    "Step 2 — Score: Rate each response independently from 0 to 100 on role embodiment.\n"
+    "Step 3 — Winner: Declare which response better embodies the role (A, B, or TIE).\n\n"
+    "## Scoring Guidance\n"
+    "  90-100: Strongly embodies the role — tone, framing, and content all clearly aligned\n"
+    "  70-89:  Mostly aligned with minor deviations\n"
+    "  50-69:  Partially aligned, feels somewhat generic\n"
+    "  30-49:  Weakly aligned — could belong to any generic assistant\n"
+    "  0-29:   Contradicts or ignores the role entirely\n\n"
+    "## Input\n"
+    "Role: {role}\n"
+    "Role Description: {role_description}\n"
+    "Question: {question}\n\n"
+    "Gold Standard Reference:\n{gold_label}\n\n"
+    "Response A:\n{response_a}\n\n"
+    "Response B:\n{response_b}\n\n"
+    "## Output\n"
+    "Return ONLY a JSON object with this exact structure. No preamble, no trailing text:\n"
+    '{{"reasoning": "<2-3 sentence analysis>", "score_a": <0-100>, "score_b": <0-100>, "winner": "<A|B|TIE>"}}'
+)
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Evaluate a model response using LLMJudge")
     ap.add_argument("--backend", default="openai", help="Backend to use: openai, vllm, hf_local")
