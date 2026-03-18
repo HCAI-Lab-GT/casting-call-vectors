@@ -316,3 +316,11 @@ Context: User requested that automatic role discovery ignore role dataset JSON f
 Action: Updated discover_roles in scripts/evaluation/run_gold_standard_prompt_batches.py to skip any JSON file with _dataset in its stem and only use plain role JSON files.
 
 Result: Automatic batching now draws from the lowercase/plain role files only, avoiding occupation-style *_dataset inputs.
+
+[2026-03-17 01:00] Switched experiment questions to validation_questions.jsonl
+
+Context: User requested that experiment question lists come from the validation questions file instead of relying on a single hardcoded CLI question.
+
+Action: Updated src/pvx/experiments/gold_prompt_experiments.py to add validation_questions_file config (default ./configs/validation_questions.jsonl), implemented _load_validation_questions() JSONL parser, replaced NotImplementedError path to load questions from file when questions is not provided, added --questions_file CLI argument, and changed --question to be an optional single-question override.
+
+Result: Running the experiment without --question now evaluates over the questions loaded from configs/validation_questions.jsonl.
