@@ -28,7 +28,7 @@ import os
 from collections import namedtuple
 from itertools import product
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, override
 
 import torch
 from dotenv import load_dotenv
@@ -186,6 +186,7 @@ class PersonaDataset(AbstractDataset):
 
         return dataset
 
+    @override
     def save_dataset_to_json(self, dirpath: str | None = None) -> str:
         """
         Save the persona vector dataset to a JSON file.

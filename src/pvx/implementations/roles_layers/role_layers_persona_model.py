@@ -57,7 +57,7 @@ if __name__ == "__main__":
         "-a", "--alpha", type=float, default=1.0, help="Alpha value for persona steering"
     )
     ap.add_argument(
-        "-l", "--layers", nargs="+", type=int,default=[14], help="List of layers to extract activations from (default: 14)"
+        "-l", "--layers", nargs="+", type=int,default=[16], help="List of layers to extract activations from (default: 16)"
     )
     ap.add_argument(
         "-N", "--sample_counts", nargs="+", type=int,default=[40], help="List of question counts to extract activations from (default: 40)"

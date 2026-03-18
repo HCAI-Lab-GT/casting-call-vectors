@@ -191,13 +191,13 @@ class PromptTemplates:
 
   Respond with a number between 0 and 3. Don’t say anything else, just the number.
   """
-
+  
   @staticmethod
   def evaluation_trait(trait, trait_description):
     return PromptTemplates.EVALUATION_PROMPT_TEMPLATE_TRAIT.format(
       trait=trait, trait_description=trait_description
     )
-    
+
   @staticmethod
   def evaluation_role(role, role_description):
     return PromptTemplates.EVALUATION_PROMPT_TEMPLATE_ROLE.format(
