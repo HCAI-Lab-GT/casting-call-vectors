@@ -10,6 +10,7 @@ terminal shows only a tqdm progress bar.
 Usage:
     uv run judge-gold-standard/generate.py --persona persona_data/.../architect.json
     uv run judge-gold-standard/generate.py --all --max-questions 4 --concurrency 5
+    uv run judge-gold-standard/generate.py --list regen.txt --concurrency 5
 """
 
 import asyncio
@@ -17,10 +18,10 @@ import logging
 import os
 from pathlib import Path
 
-from cli import parse_args
+from cli import parse_args, parse_list_file
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
-from runner import run_all, run_single
+from runner import run_all, run_list, run_single
 
 load_dotenv()
 
@@ -58,6 +59,16 @@ def main():
 
     if args.all:
         count = asyncio.run(run_all(args, client, GOLD_STANDARD_DIR))
+    elif args.list_file:
+        if not args.list_file.exists():
+            print(f"List file not found: {args.list_file}")
+            raise SystemExit(1)
+        paths = parse_list_file(args.list_file, args.instructions_dir)
+        if not paths:
+            print("No valid persona files found in list.")
+            raise SystemExit(1)
+        print(f"Parsed {len(paths)} personas from {args.list_file}")
+        count = asyncio.run(run_list(paths, args, client, GOLD_STANDARD_DIR))
     else:
         if not args.persona.exists():
             print(f"Persona file not found: {args.persona}")

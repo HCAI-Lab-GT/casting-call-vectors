@@ -81,9 +81,8 @@ async def _run_one(sem, client, path, args, output_dir, pbar, errors):
             pbar.set_postfix(fail=len(errors), refresh=True)
 
 
-async def run_all(args, client: AsyncOpenAI, output_dir: Path) -> int:
-    """Generate for every persona with semaphore-bounded parallelism."""
-    paths = list_available_personas(args.instructions_dir)
+async def _run_batch(paths, args, client, output_dir) -> int:
+    """Shared parallel runner for a list of persona paths."""
     total = len(paths)
     sem = asyncio.Semaphore(args.concurrency)
     errors: list[str] = []
@@ -98,6 +97,17 @@ async def run_all(args, client: AsyncOpenAI, output_dir: Path) -> int:
     return total - len(errors)
 
 
+async def run_all(args, client: AsyncOpenAI, output_dir: Path) -> int:
+    """Generate for every persona with semaphore-bounded parallelism."""
+    paths = list_available_personas(args.instructions_dir)
+    return await _run_batch(paths, args, client, output_dir)
+
+
+async def run_list(paths: list[Path], args, client: AsyncOpenAI, output_dir: Path) -> int:
+    """Generate for an explicit list of persona paths in parallel."""
+    return await _run_batch(paths, args, client, output_dir)
+
+
 async def run_single(args, client: AsyncOpenAI, output_dir: Path) -> int:
     """Generate for a single persona JSON path."""
     result = await generate_for_persona(
@@ -110,4 +120,3 @@ async def run_single(args, client: AsyncOpenAI, output_dir: Path) -> int:
     )
     save_single(result, output_dir)
     return 1
-
