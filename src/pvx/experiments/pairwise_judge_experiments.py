@@ -97,9 +97,9 @@ class PairwiseJudgeExperiments:
         self,
         input_csv: str | None = None,
         gold_prompts_dir: str = "./persona_data/gold_labels_prompts_dataset",
-        judge_model_id: str = "Qwen/Qwen2.5-7B-Instruct",
-        base_url: str = "http://localhost:8000/v1",
-        api_key_env: str = "VLLM_API_KEY",
+        judge_model_id: str = "openai/gpt-4.1-mini",
+        base_url: str = "https://openrouter.ai/api/v1",
+        api_key_env: str = "OPENROUTER_API_KEY",
         save_path: str = "./experiment_data/pairwise_judge_experiments/pairwise_results.csv",
         col_a: str = "steered",
         col_b: str = "assistant_axis",
@@ -481,18 +481,18 @@ if __name__ == "__main__":
     )
     ap.add_argument(
         "--judge_model",
-        default="Qwen/Qwen2.5-7B-Instruct",
-        help="Judge model ID (default: Qwen/Qwen2.5-7B-Instruct)",
+        default="openai/gpt-4.1-mini",
+        help="Judge model ID (default: openai/gpt-4.1-mini)",
     )
     ap.add_argument(
         "--base_url",
-        default="http://localhost:8000/v1",
-        help="Base URL for the judge inference server (default: local vLLM at :8000)",
+        default="https://openrouter.ai/api/v1",
+        help="Base URL for the judge inference server (default: OpenRouter)",
     )
     ap.add_argument(
         "--api_key_env",
-        default="VLLM_API_KEY",
-        help="Environment variable holding the API key (default: VLLM_API_KEY)",
+        default="OPENROUTER_API_KEY",
+        help="Environment variable holding the API key (default: OPENROUTER_API_KEY)",
     )
     ap.add_argument(
         "-o", "--save_path",
