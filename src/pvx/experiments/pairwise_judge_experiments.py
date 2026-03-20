@@ -393,12 +393,15 @@ class PairwiseJudgeExperiments:
             else pd.DataFrame(completed_rows) if completed_rows
             else existing_df
         )
-        final_df.sort_values(
-            by=["role", "layer", "sample_count", "alpha", "temperature"],
-            inplace=True,
-        )
-        final_df.to_csv(self.save_path, index=False)
-        logger.info("Pairwise evaluation complete. Results saved to %s", self.save_path)
+        if not final_df.empty:
+            final_df.sort_values(
+                by=["role", "layer", "sample_count", "alpha", "temperature"],
+                inplace=True,
+            )
+            final_df.to_csv(self.save_path, index=False)
+            logger.info("Pairwise evaluation complete. Results saved to %s", self.save_path)
+        else:
+            logger.info("No rows to evaluate for %s — skipping save.", self.input_csv)
         return final_df
 
     def evaluate_pairwise_dir(
