@@ -95,14 +95,16 @@ class PairwiseJudgeExperiments:
 
     def __init__(
         self,
-        input_csv: str,
+        input_csv: str | None = None,
         gold_prompts_dir: str = "./persona_data/gold_labels_prompts_dataset",
         judge_model_id: str = "Qwen/Qwen2.5-7B-Instruct",
         base_url: str = "http://localhost:8000/v1",
         api_key_env: str = "VLLM_API_KEY",
         save_path: str = "./experiment_data/pairwise_judge_experiments/pairwise_results.csv",
+        col_a: str = "steered",
+        col_b: str = "assistant_axis",
     ):
-        self.input_csv = Path(input_csv)
+        self.input_csv = Path(input_csv) if input_csv else None
         self.gold_prompts_dir = Path(gold_prompts_dir)
         self.save_path = Path(save_path)
         self.save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -110,6 +112,9 @@ class PairwiseJudgeExperiments:
         # Caches to avoid re-reading JSON files per row (populated before threading starts)
         self._gold_role_descriptions: dict[str, str] = {}
         self._gold_label_responses: dict[str, str] = {}
+
+        self.col_a = col_a
+        self.col_b = col_b
 
         self.judge = LLMJudge(
             model=judge_model_id,
@@ -326,8 +331,8 @@ class PairwiseJudgeExperiments:
 
             role      = str(row["role"])
             question  = str(row["question"])
-            steered   = str(row["steered"])
-            baseline  = str(row["baseline"])
+            steered   = str(row[self.col_a])
+            baseline  = str(row[self.col_b])
 
             role_description = self._gold_role_descriptions.get(role, "")
             gold_label       = self._gold_label_responses.get(role, "")
@@ -337,8 +342,8 @@ class PairwiseJudgeExperiments:
                 idx, role, row["layer"], row["sample_count"], row["alpha"],
             )
             logger.info(
-                "Response lengths | steered=%d words  baseline=%d words",
-                len(steered.split()), len(baseline.split()),
+                "Response lengths | %s=%d words  %s=%d words",
+                self.col_a, len(steered.split()), self.col_b, len(baseline.split()),
             )
 
             pw_scores = self._evaluate_row(
@@ -396,6 +401,56 @@ class PairwiseJudgeExperiments:
         logger.info("Pairwise evaluation complete. Results saved to %s", self.save_path)
         return final_df
 
+    def evaluate_pairwise_dir(
+        self,
+        input_dir: str,
+        output_dir: str,
+        glob_pattern: str = "Comparison_GoldStandard_*.csv",
+        save_each: bool = True,
+        workers: int = 1,
+    ) -> None:
+        """
+        Run pairwise evaluation over every per-role CSV in input_dir.
+
+        Reads each matching CSV, runs evaluate_pairwise, and writes per-role
+        output files to output_dir. The original CSVs are never modified.
+
+        Args:
+            input_dir:    Directory containing per-role input CSVs.
+            output_dir:   Directory to write per-role pairwise output CSVs.
+            glob_pattern: Glob to select input files (default: Comparison_GoldStandard_*.csv).
+            save_each:    If True, saves progress after each completed row.
+            workers:      Number of concurrent judge threads.
+        """
+        input_dir_path  = Path(input_dir)
+        output_dir_path = Path(output_dir)
+        output_dir_path.mkdir(parents=True, exist_ok=True)
+
+        csv_files = sorted(input_dir_path.glob(glob_pattern))
+        if not csv_files:
+            raise FileNotFoundError(
+                f"No files matching '{glob_pattern}' found in {input_dir_path}"
+            )
+
+        logger.info("Found %d input CSVs in %s", len(csv_files), input_dir_path)
+
+        for csv_file in csv_files:
+            role = csv_file.stem.replace("Comparison_GoldStandard_", "")
+            out_path = output_dir_path / f"pairwise_{role}.csv"
+
+            logger.info("=== Processing role: %s ===", role)
+
+            self.input_csv = csv_file
+            self.save_path = out_path
+
+            try:
+                self.evaluate_pairwise(save_each=save_each, workers=workers)
+            except Exception as e:
+                logger.error("Failed to evaluate role '%s': %s", role, e)
+                continue
+
+        logger.info("All roles processed. Results written to %s", output_dir_path)
+
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(
@@ -403,8 +458,18 @@ if __name__ == "__main__":
     )
     ap.add_argument(
         "-i", "--input_csv",
-        required=True,
-        help="Path to gold_prompt_experiments output CSV",
+        default=None,
+        help="Path to a single gold_prompt_experiments output CSV (mutually exclusive with --input_dir)",
+    )
+    ap.add_argument(
+        "--input_dir",
+        default=None,
+        help="Directory of per-role CSVs (Comparison_GoldStandard_*.csv). Processes each in turn.",
+    )
+    ap.add_argument(
+        "--output_dir",
+        default="./experiment_data/pairwise_judge_experiments/",
+        help="Output directory when using --input_dir (default: ./experiment_data/pairwise_judge_experiments/)",
     )
     ap.add_argument(
         "--gold_prompts_dir",
@@ -451,7 +516,20 @@ if __name__ == "__main__":
         type=int, default=20,
         help="Number of concurrent judge threads (default: 20, set to 1 for sequential)",
     )
+    ap.add_argument(
+        "--col_a",
+        default="steered",
+        help="CSV column to use as response A / our method (default: steered)",
+    )
+    ap.add_argument(
+        "--col_b",
+        default="assistant_axis",
+        help="CSV column to use as response B / comparator (default: assistant_axis)",
+    )
     args = ap.parse_args()
+
+    if not args.input_csv and not args.input_dir:
+        ap.error("One of --input_csv or --input_dir is required.")
 
     experiment = PairwiseJudgeExperiments(
         input_csv=args.input_csv,
@@ -460,11 +538,22 @@ if __name__ == "__main__":
         base_url=args.base_url,
         api_key_env=args.api_key_env,
         save_path=args.save_path,
+        col_a=args.col_a,
+        col_b=args.col_b,
     )
-    experiment.evaluate_pairwise(
-        roles=args.roles,
-        layers=args.layers,
-        sample_counts=args.sample_counts,
-        save_each=True,
-        workers=args.workers,
-    )
+
+    if args.input_dir:
+        experiment.evaluate_pairwise_dir(
+            input_dir=args.input_dir,
+            output_dir=args.output_dir,
+            save_each=True,
+            workers=args.workers,
+        )
+    else:
+        experiment.evaluate_pairwise(
+            roles=args.roles,
+            layers=args.layers,
+            sample_counts=args.sample_counts,
+            save_each=True,
+            workers=args.workers,
+        )
