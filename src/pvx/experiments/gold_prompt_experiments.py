@@ -517,13 +517,12 @@ if __name__ == "__main__":
         assistant_axis_alpha=args.assistant_axis_alpha,
         gold_prompts_dir=args.gold_prompts_dir,
         validation_questions_file=args.questions_file,
-        save_dir=args.save_dir,
-        judge_responses=args.judge_responses
+        save_dir=args.save_dir
     )
     
     experiment.evaluate_model(
         questions=[args.question] if args.question else None,
         roles=args.roles, layers=args.layers, sample_counts=args.sample_counts,
         alphas=args.alphas, temperatures=args.temperatures, max_new_tokens=args.max_new_tokens,
-        save_each=True
+        save_each=True, judge_responses=args.judge_responses
     )
