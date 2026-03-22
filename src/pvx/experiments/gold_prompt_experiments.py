@@ -219,7 +219,7 @@ class GoldPromptExperiments():
                        roles=None, layers=None, sample_counts=None, 
                        alphas=None, temperatures=None, max_new_tokens=2000,
                        baseline_temperature=.2,
-                       save_each=True) -> dict:
+                       save_each=True, judge_responses=False) -> dict:
         '''
         Evaluates model on variety of parameters on questions.
         Scores baseline and steered results as well as comparisons
@@ -296,15 +296,19 @@ class GoldPromptExperiments():
                 logger.info(assistant_axis_response)
                 
                 # calculate judge score for AssistantAxis response in assistant_axis slot
-                assistant_axis_score = self.role_judge(role=role, role_description=role_description, question=question, answer=assistant_axis_response)
-                logger.info(
-                    "AssistantAxis judge score for role '%s' on layer %s, alpha %s, temperature %s: %s",
-                    role,
-                    assistant_axis_layer,
-                    self.assistant_axis_alpha,
-                    baseline_temperature,
-                    assistant_axis_score,
-                )
+                if judge_responses:
+                    assistant_axis_score = self.role_judge(role=role, role_description=role_description, question=question, answer=assistant_axis_response)
+                    logger.info(
+                        "AssistantAxis judge score for role '%s' on layer %s, alpha %s, temperature %s: %s",
+                        role,
+                        assistant_axis_layer,
+                        self.assistant_axis_alpha,
+                        baseline_temperature,
+                        assistant_axis_score,
+                    )
+                else:
+                    assistant_axis_score = -1
+                    logger.info("AssistantAxis judge scoring skipped on GPU.")
 
                 # Get prompted role answer for prompted baseline
                 baseline_messages = deepcopy(baseline_seed_messages)
@@ -316,8 +320,13 @@ class GoldPromptExperiments():
                 logger.info(baseline_response)
                 
                 # calculate judge score for baseline response
-                baseline_score = self.role_judge(role=role, role_description=role_description, question=question, answer=baseline_response)
-                logger.info("Baseline judge score for role '%s' on temperature %s: %s", role, baseline_temperature, baseline_score)
+                if judge_responses:
+                    baseline_score = self.role_judge(role=role, role_description=role_description, question=question, answer=baseline_response)
+                    logger.info("Baseline judge score for role '%s' on temperature %s: %s", role, baseline_temperature, baseline_score)
+                else:
+                    baseline_score = -1
+                    logger.info("Baseline judge scoring skipped on GPU.")
+
 
                 # calculate judge score for each config
                 for (instant_params, model), (alpha, temperature) in product(self.persona_models[role].items(), run_configs):
@@ -353,14 +362,24 @@ class GoldPromptExperiments():
                                 role, model.layer_steering, model.target_pairs, alpha, temperature)
                     logger.info(steered_response)
                     
-                    # calculate judge score for steered response
-                    steered_score = self.role_judge(role=role, role_description=role_description, question=question, answer=steered_response)
-                    logger.info("Steered judge score for role '%s' on layer %s, sample_count %s, alpha %s, temperature %s: %s", 
-                                role, model.layer_steering, model.target_pairs, alpha, temperature, steered_score)
+                    if judge_responses:
+                        # calculate judge score for steered response
+                        steered_score = self.role_judge(role=role, role_description=role_description, question=question, answer=steered_response)
+                        logger.info("Steered judge score for role '%s' on layer %s, sample_count %s, alpha %s, temperature %s: %s", 
+                                    role, model.layer_steering, model.target_pairs, alpha, temperature, steered_score)
+                        
+                        # calculate comparative scores (multi-dimensional Likert alignment vs gold baseline)
+                        comparative_scores = self.comparator_judge(role=role, role_description=role_description, question=question, baseline=baseline_response, answer=steered_response)
+                        logger.info("Comparative scores for role '%s': %s", role, comparative_scores)
                     
-                    # calculate comparative scores (multi-dimensional Likert alignment vs gold baseline)
-                    comparative_scores = self.comparator_judge(role=role, role_description=role_description, question=question, baseline=baseline_response, answer=steered_response)
-                    logger.info("Comparative scores for role '%s': %s", role, comparative_scores)
+                    else:
+                        steered_score = -1
+                        logger.info("Steered judge scoring skipped on GPU.")
+                        
+                        comparative_scores = -1
+                        logger.info("Comparative judge scoring skipped on GPU.")
+
+                        
 
                     # log results to dataframe
                     new_result = {
@@ -417,10 +436,10 @@ if __name__ == "__main__":
         "-r", "--roles", nargs="+", type=str, default=["Lawyers"], help="Roles of the persona dataset"
     )
     ap.add_argument(
-        "-l", "--layers", nargs="+", type=int,default=[16], help="List of layers to extract activations from (default: 14)"
+        "-l", "--layers", nargs="+", type=int, default=[16], help="List of layers to extract activations from (default: 14)"
     )
     ap.add_argument(
-        "-s", "--sample_counts", nargs="+", type=int,default=[20, 40, 50], help="List of dataset counts to extract activations from (default: 14)"
+        "-s", "--sample_counts", nargs="+", type=int, default=[20, 40, 50], help="List of dataset counts to extract activations from (default: 14)"
     )
     ap.add_argument(
         "-a", "--alphas", nargs="+", type=float, default=[2.5], help="Alpha value for persona steering"
@@ -481,6 +500,12 @@ if __name__ == "__main__":
         default="./persona_data/gold_labels_prompts_dataset",
         help="Directory containing {role}_gold_label.json files",
     )
+    ap.add_argument(
+        "-j",
+        "--judge_responses",
+        action="store_true",
+        help="Judge after generated responses",
+    )
     args = ap.parse_args()
     
     experiment = GoldPromptExperiments(
@@ -492,7 +517,8 @@ if __name__ == "__main__":
         assistant_axis_alpha=args.assistant_axis_alpha,
         gold_prompts_dir=args.gold_prompts_dir,
         validation_questions_file=args.questions_file,
-        save_dir=args.save_dir
+        save_dir=args.save_dir,
+        judge_responses=args.judge_responses
     )
     
     experiment.evaluate_model(
