@@ -366,6 +366,8 @@ class AbstractPersonaModel(ABC):
             json_filepath
             or cls.get_path(target_model_id, concept, safetensors_dir, use_json=True)[0]
         )
+        
+        logger.info(f"JSON Path: {safetensors_path}")
 
         try:
             if Path(json_filepath).exists():

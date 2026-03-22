@@ -160,6 +160,7 @@ class ResponseGeneration:
                 model=self.model,
                 messages=messages,
                 temperature=temperature,
+                max_tokens=max_new_tokens,
             )
             return (None, chat_response.choices[0].message.content)
 

@@ -10,6 +10,7 @@ from pvx import setup_logging
 from pvx.utils.response_generation import ResponseGeneration
 
 from pvx.abstraction.pvx_models.abstract_persona_model import AbstractPersonaModel
+from pvx.implementations.roles_layers.assistant_axis_persona_model import AssistantAxisPersonaModel
 from pvx.implementations.roles_layers.role_layers_persona_model import RoleLayersPersonaModel
 from pvx.implementations.judges.llm_as_judge import LLMJudge, PROMPT_TEMPLATE, GOLD_COMPARATOR_PROMPT_TEMPLATE
 
@@ -21,8 +22,12 @@ class GoldPromptExperiments():
                  target_model_id: str = "allenai/Olmo-3-7B-Instruct",
                  judge_model_id: str = "gpt-4.1-mini",
                  json_filepath: str = "./persona_data/persona_models.json",
-                 safetensors_dir: str = "./persona_data/model_experiments_inits/",
+                 safetensors_dir: str = "./persona_data/model_layer_inits/",
+                 assistant_axis_pt_dir: str = "./assistant_axis_vectors",
+                 assistant_axis_layer: int | None = None,
+                 assistant_axis_alpha: float = 2.5,
                  gold_prompts_dir: str = "./persona_data/gold_labels_prompts_dataset",
+                 validation_questions_file: str = "./configs/validation_questions.jsonl",
                  save_dir: str = "./experiment_data/gold_prompt_experiments/"):
         '''
         Initialize the GoldPromptExperiments class.
@@ -35,9 +40,33 @@ class GoldPromptExperiments():
         '''
         self.json_filepath = json_filepath
         self.safetensors_dir = safetensors_dir
+        self.assistant_axis_pt_dir = assistant_axis_pt_dir
+        self.assistant_axis_layer = assistant_axis_layer
+        self.assistant_axis_alpha = assistant_axis_alpha
         self.gold_prompts_dir = Path(gold_prompts_dir)
+        self.validation_questions_file = Path(validation_questions_file)
         self.target_model_id = target_model_id
-        self.save_path = Path(save_dir, f'{target_model_id.split("/")[1]}_results.csv')
+        self.save_dir = Path(save_dir)
+        self.save_dir.mkdir(parents=True, exist_ok=True)
+        self.result_columns = [
+            "role",
+            "layer",
+            "sample_count",
+            "alpha",
+            "temperature",
+            "question",
+            "assistant_axis",
+            "baseline",
+            "steered",
+            "assistant_axis_score",
+            "baseline_score",
+            "steered_score",
+            "cmp_emotional_register",
+            "cmp_vocab_choice",
+            "cmp_social_dynamic",
+            "cmp_motivation",
+            "cmp_worldview_alignment",
+        ]
         self._gold_baseline_messages: dict[str, list[dict[str, str]]] = {}
         self._gold_role_descriptions: dict[str, str] = {}
 
@@ -49,6 +78,63 @@ class GoldPromptExperiments():
         self.comparator_judge.judge_func = self.comparator_judge._aggregate_gold_comparator_score
         
         self.generate_response = ResponseGeneration()
+
+    def _get_role_save_path(self, role: str) -> Path:
+        safe_role = role.replace("/", "_")
+        return self.save_dir / f"Comparison_GoldStandard_{safe_role}.csv"
+
+    def _load_validation_questions(self) -> list[str]:
+        if not self.validation_questions_file.exists():
+            raise FileNotFoundError(
+                f"Validation questions file not found: {self.validation_questions_file}"
+            )
+
+        questions: list[str] = []
+        with open(self.validation_questions_file, "r", encoding="utf-8") as f:
+            for line_number, raw_line in enumerate(f, start=1):
+                line = raw_line.strip()
+                if not line:
+                    continue
+
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(
+                        f"Invalid JSON on line {line_number} in {self.validation_questions_file}: {exc}"
+                    ) from exc
+
+                question = str(record.get("question", "")).strip()
+                if question:
+                    questions.append(question)
+
+        if not questions:
+            raise ValueError(
+                f"No valid questions were found in {self.validation_questions_file}"
+            )
+
+        logger.info("Loaded %s validation questions from %s", len(questions), self.validation_questions_file)
+        return questions
+
+    def _empty_results_df(self) -> pd.DataFrame:
+        return pd.DataFrame(columns=self.result_columns)
+
+    def _load_existing_results(self, save_path: Path) -> pd.DataFrame:
+        if not save_path.exists():
+            return self._empty_results_df()
+
+        try:
+            if save_path.stat().st_size == 0:
+                logger.warning("Results file exists but is empty; reinitializing: %s", save_path)
+                return self._empty_results_df()
+
+            loaded_df = pd.read_csv(save_path)
+            if loaded_df.empty:
+                return self._empty_results_df()
+
+            return loaded_df
+        except pd.errors.EmptyDataError:
+            logger.warning("Results file contains no parseable CSV rows; reinitializing: %s", save_path)
+            return self._empty_results_df()
 
     def _load_gold_baseline_messages(self, role: str) -> list[dict[str, str]]:
         if role in self._gold_baseline_messages:
@@ -132,7 +218,7 @@ class GoldPromptExperiments():
     def evaluate_model(self, questions: list = None, 
                        roles=None, layers=None, sample_counts=None, 
                        alphas=None, temperatures=None, max_new_tokens=2000,
-                       baseline_temperature=.3,
+                       baseline_temperature=.2,
                        save_each=True) -> dict:
         '''
         Evaluates model on variety of parameters on questions.
@@ -146,9 +232,8 @@ class GoldPromptExperiments():
             temperatures (list[int]): A list of temperatures counts to use for creating the persona models.
             max_new_tokens (int): max generated tokens both baseline and steered
             save_each (bool): whether to save csv in progress (default=True)
-            
-        Raises:
-            NotImplementedError when empty question
+            questions (list, optional): Explicit list of questions. If empty or None, questions are
+                loaded from self.validation_questions_file.
         '''
         
         logger.info("Starting Gold Prompt Experiments with model %s", self.target_model_id)
@@ -157,7 +242,7 @@ class GoldPromptExperiments():
         roles = roles or ["Lawyer"]
         layers = layers or [16]
         sample_counts = sample_counts or [40]
-        temperatures = temperatures or [0.1]
+        temperatures = temperatures or [0.2]
 
         # load models for all config into self.persona_models
         self.load_models(roles=roles, layers=layers, sample_counts=sample_counts)
@@ -165,38 +250,61 @@ class GoldPromptExperiments():
         # evaluation params
         alphas = alphas or [2.0]
         temperatures = temperatures or [0.1]
+        role_questions = questions or self._load_validation_questions()
         
         run_configs = list(product(alphas, temperatures))
+        all_results: list[pd.DataFrame] = []
                 
         for role in roles:
             logger.info("=== Processing role: %s ===", role)
             baseline_seed_messages = self._load_gold_baseline_messages(role)
             role_description = self._gold_role_descriptions.get(role, "")
+            role_save_path = self._get_role_save_path(role)
+            role_save_path.parent.mkdir(parents=True, exist_ok=True)
+
+            if not role_save_path.exists():
+                self._empty_results_df().to_csv(role_save_path, index=False)
+                logger.info("Created role results file: %s", role_save_path)
+
+            assistant_axis_layer = self.assistant_axis_layer if self.assistant_axis_layer is not None else layers[0]
+            assistant_axis_model = AssistantAxisPersonaModel.load_or_create(
+                target_model_id=self.target_model_id,
+                concept=role,
+                layer=assistant_axis_layer,
+                target_pairs=sample_counts[0],
+                json_filepath=self.json_filepath,
+                safetensors_dir=self.assistant_axis_pt_dir,
+            )
             
-            # generate questions if questions is none
-            if not questions:
-                # TODO: generate questions using some method, maybe a prompt to the judge model or a separate question generation model
-                raise NotImplementedError()
+            pd_results = self._load_existing_results(role_save_path) if save_each else self._empty_results_df()
             
-            pd_results = pd.DataFrame(columns=["role", "layer", "sample_count",
-                                               "alpha", "temperature",
-                                               "question", "nonsteered", "baseline", "steered",
-                                               "nonsteered_score", "baseline_score", "steered_score",
-                                               "cmp_emotional_register", "cmp_vocab_choice", "cmp_social_dynamic",
-                                               "cmp_motivation", "cmp_worldview_alignment"])
-            
-            for question in questions:
-                # Get prompted role answer for nonsteered
-                nonsteered_messages = self.generate_response.convert_str_to_message(messages=question)
-                nonsteered_response = self.generate_response(messages=nonsteered_messages,
-                                                             max_new_tokens=max_new_tokens,
-                                                             temperature=baseline_temperature)[1]
-                logger.info("Nonsteered response for role '%s' on temperature %s:", role, baseline_temperature)
-                logger.info(nonsteered_response)
+            for question in role_questions:
+                # Use Assistant Axis generation in place of plain assistant_axis baseline.
+                assistant_axis_response = assistant_axis_model.generate(
+                    prompt=question,
+                    alpha=self.assistant_axis_alpha,
+                    max_new_tokens=max_new_tokens,
+                    temperature=baseline_temperature,
+                )
+                logger.info(
+                    "AssistantAxis response (assistant_axis slot) for role '%s' on layer %s, alpha %s, temperature %s:",
+                    role,
+                    assistant_axis_layer,
+                    self.assistant_axis_alpha,
+                    baseline_temperature,
+                )
+                logger.info(assistant_axis_response)
                 
-                # calculate judge score for nonsteered response
-                nonsteered_score = self.role_judge(role=role, role_description=role_description, question=question, answer=nonsteered_response)
-                logger.info("Nonsteered judge score for role '%s' on temperature %s: %s", role, baseline_temperature, nonsteered_score)
+                # calculate judge score for AssistantAxis response in assistant_axis slot
+                assistant_axis_score = self.role_judge(role=role, role_description=role_description, question=question, answer=assistant_axis_response)
+                logger.info(
+                    "AssistantAxis judge score for role '%s' on layer %s, alpha %s, temperature %s: %s",
+                    role,
+                    assistant_axis_layer,
+                    self.assistant_axis_alpha,
+                    baseline_temperature,
+                    assistant_axis_score,
+                )
 
                 # Get prompted role answer for prompted baseline
                 baseline_messages = deepcopy(baseline_seed_messages)
@@ -204,7 +312,7 @@ class GoldPromptExperiments():
                 baseline_response = self.generate_response(messages=baseline_messages,
                                                            max_new_tokens=max_new_tokens,
                                                            temperature=baseline_temperature)[1]
-                logger.info("Baseline response for role '%s' on temperature %s:", role, baseline_temperature)
+                logger.info("Gold Standard response for role '%s' on temperature %s:", role, baseline_temperature)
                 logger.info(baseline_response)
                 
                 # calculate judge score for baseline response
@@ -215,10 +323,10 @@ class GoldPromptExperiments():
                 for (instant_params, model), (alpha, temperature) in product(self.persona_models[role].items(), run_configs):
                     model: AbstractPersonaModel
                     
-                    if self.save_path.exists():
+                    if role_save_path.exists():
                         # if save_each is true, load existing results to check if this config has already been evaluated
                         if save_each:
-                            pd_results = pd.read_csv(self.save_path)
+                            pd_results = self._load_existing_results(role_save_path)
 
                         if ((pd_results["role"] == model.concept) &
                             (pd_results["layer"] == model.layer_steering) &
@@ -242,13 +350,13 @@ class GoldPromptExperiments():
                         temperature=temperature,
                     )
                     logger.info("Steered response for role '%s' on layer %s, sample_count %s, alpha %s, temperature %s:", 
-                                role, baseline_temperature, model.target_pairs, alpha, temperature)
+                                role, model.layer_steering, model.target_pairs, alpha, temperature)
                     logger.info(steered_response)
                     
                     # calculate judge score for steered response
                     steered_score = self.role_judge(role=role, role_description=role_description, question=question, answer=steered_response)
                     logger.info("Steered judge score for role '%s' on layer %s, sample_count %s, alpha %s, temperature %s: %s", 
-                                role, baseline_temperature, model.target_pairs, alpha, temperature, steered_score)
+                                role, model.layer_steering, model.target_pairs, alpha, temperature, steered_score)
                     
                     # calculate comparative scores (multi-dimensional Likert alignment vs gold baseline)
                     comparative_scores = self.comparator_judge(role=role, role_description=role_description, question=question, baseline=baseline_response, answer=steered_response)
@@ -262,10 +370,10 @@ class GoldPromptExperiments():
                         "alpha": alpha,
                         "temperature": temperature,
                         "question": question,
-                        "nonsteered": nonsteered_response,
+                        "assistant_axis": assistant_axis_response,
                         "baseline": baseline_response,
                         "steered": steered_response,
-                        "nonsteered_score": nonsteered_score,
+                        "assistant_axis_score": assistant_axis_score,
                         "baseline_score": baseline_score,
                         "steered_score": steered_score,
                         "cmp_emotional_register": comparative_scores["style"]["emotional_register"],
@@ -274,26 +382,31 @@ class GoldPromptExperiments():
                         "cmp_motivation":          comparative_scores["content"]["motivation"],
                         "cmp_worldview_alignment": comparative_scores["content"]["worldview_alignment"],
                     }
-                    pd_results = pd.concat([pd_results, pd.DataFrame([new_result])], ignore_index=True)
+                    new_result_df = pd.DataFrame([new_result])
+                    if pd_results.empty:
+                        pd_results = new_result_df
+                    else:
+                        pd_results = pd.concat([pd_results, new_result_df], ignore_index=True)
                     
                     # save results after each config if save_each is true
                     if save_each:
                         pd_results.sort_values(by=["role", "layer", "sample_count", "alpha", "temperature"], inplace=True)
-                        pd_results.to_csv(self.save_path, index=False)
-                        logger.info("Saved progress")
+                        pd_results.to_csv(role_save_path, index=False)
+                        logger.info("Saved progress to %s", role_save_path)
                         
+            pd_results.sort_values(by=["role", "layer", "sample_count", "alpha", "temperature"], inplace=True)
+            pd_results.to_csv(role_save_path, index=False)
+            logger.info("Results saved to %s", role_save_path)
+            all_results.append(pd_results.copy())
             logger.info("=== Concluded processing role: %s ===", role)
             
                         
-        logger.info("=== Final Results ===")                
-        
-        # final save of results
-        pd_results.sort_values(by=["role", "layer", "sample_count", "alpha", "temperature"], inplace=True)
-        pd_results.to_csv(self.save_path, index=False)
-        
-        logger.info("Results saved to %s", self.save_path)
-        
-        return pd_results
+        logger.info("=== Final Results ===")
+
+        if not all_results:
+            return self._empty_results_df()
+
+        return pd.concat(all_results, ignore_index=True)
     
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
@@ -304,38 +417,62 @@ if __name__ == "__main__":
         "-r", "--roles", nargs="+", type=str, default=["Lawyers"], help="Roles of the persona dataset"
     )
     ap.add_argument(
-        "-l", "--layers", nargs="+", type=int,default=[14], help="List of layers to extract activations from (default: 14)"
+        "-l", "--layers", nargs="+", type=int,default=[16], help="List of layers to extract activations from (default: 14)"
     )
     ap.add_argument(
-        "-s", "--sample_counts", nargs="+", type=int,default=[20, 40, 60], help="List of dataset counts to extract activations from (default: 14)"
+        "-s", "--sample_counts", nargs="+", type=int,default=[20, 40, 50], help="List of dataset counts to extract activations from (default: 14)"
     )
     ap.add_argument(
-        "-a", "--alphas", nargs="+", type=float, default=[1.0, 2.0], help="Alpha value for persona steering"
+        "-a", "--alphas", nargs="+", type=float, default=[2.5], help="Alpha value for persona steering"
     )
     ap.add_argument(
-        "--temperatures", nargs="+", type=float, default=[0.3, 0.8], help="Temperature for sampling"
+        "--temperatures", nargs="+", type=float, default=[0.2], help="Temperature for sampling"
     )
     ap.add_argument("-n", "--max_new_tokens", type=int, default=2000, help="Max tokens to generate")
     ap.add_argument(
         "-q",
         "--question",
         type=str,
-        default="Is it ever acceptable to break the rules?",
-        help="Question to generate response for",
+        default=None,
+        help="Optional single question override; if omitted, questions are loaded from --questions_file",
+    )
+    ap.add_argument(
+        "--questions_file",
+        type=str,
+        default="./configs/validation_questions.jsonl",
+        help="JSONL file containing validation questions with a 'question' field",
     )
     ap.add_argument(
         "-f",
         "--safetensors_dir",
         type=str,
-        default="./persona_data/model_experiments_inits/",
+        default="./persona_data/model_layer_inits/",
         help="Directory containing model layer initialization safetensors files",
+    )
+    ap.add_argument(
+        "--pt_dir",
+        type=str,
+        default="../assistant-axis-pvx/outputs/olmo-3-7b-instruct/vectors/",
+        help="Directory containing Assistant Axis .pt files, one per role",
+    )
+    ap.add_argument(
+        "--assistant_axis_layer",
+        type=int,
+        default=16,
+        help="Layer to use for Assistant Axis assistant_axis replacement (defaults to first value in --layers)",
+    )
+    ap.add_argument(
+        "--assistant_axis_alpha",
+        type=float,
+        default=2.5,
+        help="Alpha to use for Assistant Axis assistant_axis replacement",
     )
     ap.add_argument(
         "-d",
         "--save_dir",
         type=str,
         default="./experiment_data/gold_prompt_experiments/",
-        help="Directory to save results to",
+        help="Directory to save results to, or an explicit CSV output path",
     )
     ap.add_argument(
         "--gold_prompts_dir",
@@ -349,12 +486,16 @@ if __name__ == "__main__":
         persona_model=RoleLayersPersonaModel,
         target_model_id=args.model, 
         safetensors_dir=args.safetensors_dir,
+        assistant_axis_pt_dir=args.pt_dir,
+        assistant_axis_layer=args.assistant_axis_layer,
+        assistant_axis_alpha=args.assistant_axis_alpha,
         gold_prompts_dir=args.gold_prompts_dir,
+        validation_questions_file=args.questions_file,
         save_dir=args.save_dir
     )
     
     experiment.evaluate_model(
-        questions=[args.question], 
+        questions=[args.question] if args.question else None,
         roles=args.roles, layers=args.layers, sample_counts=args.sample_counts,
         alphas=args.alphas, temperatures=args.temperatures, max_new_tokens=args.max_new_tokens,
         save_each=True

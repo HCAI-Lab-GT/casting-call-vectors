@@ -141,7 +141,7 @@ if __name__ == "__main__":
                     logger.info("=== Steered Response ===")
                     logger.info(response)
                     
-                    score = role_judge(question=args.question, answer=response, role=role)
+                    score = role_judge(question=args.question, answer=response, role=role, role_description=role)
                     logger.info("=== Judge Score for role %s: %d / 100 ===", role, score)
                 
                 else:
