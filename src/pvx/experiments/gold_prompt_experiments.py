@@ -452,7 +452,7 @@ if __name__ == "__main__":
     ap.add_argument(
         "--pt_dir",
         type=str,
-        default="persona_data/assistant-axis/outputs/olmo-3-7b-instruct/vectors/",
+        default="persona_data/assistant-axis/olmo-3-7b-instruct/vectors/",
         # default="../assistant-axis-pvx/outputs/olmo-3-7b-instruct/vectors/",
         help="Directory containing Assistant Axis .pt files, one per role",
     )
