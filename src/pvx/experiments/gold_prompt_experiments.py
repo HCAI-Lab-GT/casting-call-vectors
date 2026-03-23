@@ -381,7 +381,18 @@ class GoldPromptExperiments():
                         steered_score = -1
                         logger.info("Steered judge scoring skipped on GPU.")
                         
-                        comparative_scores = -1
+                        comparative_scores = defaultdict(lambda: defaultdict(lambda: -1))
+                        # comparative_scores = {
+                        #     "style": {
+                        #         "emotional_register": -1,
+                        #         "vocab_choice": -1,
+                        #         "social_dynamic": -1
+                        #     },
+                        #     "content": {
+                        #         "motivation": -1
+                        #         "worldview_alignment": -1
+                        #     }
+                        # }
                         logger.info("Comparative judge scoring skipped on GPU.")
 
                         
