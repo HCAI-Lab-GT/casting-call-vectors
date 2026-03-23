@@ -24,6 +24,7 @@ MAX_NEW_TOKENS=2000
 QUESTIONS_FILE="./configs/validation_questions.jsonl"
 GOLD_PROMPTS_DIR="./persona_data/gold_labels_prompts_dataset"
 EXPECTED_ROWS=228
+NO_CHAIN=false  # if true, skip gold experiment chaining after GPU extraction
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -41,6 +42,7 @@ while [[ $# -gt 0 ]]; do
     -q|--questions-file)   QUESTIONS_FILE="$2"; shift 2;;
     -g|--gold-prompts-dir) GOLD_PROMPTS_DIR="$2"; shift 2;;
     --expected-rows)       EXPECTED_ROWS="$2"; shift 2;;
+    --no-chain)            NO_CHAIN=true; shift;;
     *)                     echo "Unknown argument: $1" >&2; exit 1;;
   esac
 done
@@ -159,26 +161,30 @@ for count in "${MISSING_COUNTS[@]}"; do
     fi
 
     ### CHAIN: Submit gold experiment if this (role, layer, count) pairing is not yet complete ###
-    CSV_FILE="${GOLD_SAVE_DIR}/Comparison_GoldStandard_${ROLE}.csv"
-
-    if check_csv_complete "$CSV_FILE" "$EXPECTED_ROWS" "$LAYER" "$count" "$ALPHAS_PY" "$TEMPERATURES_PY"; then
-        echo "Gold experiment for $ROLE (layer=$LAYER, count=$count) already complete. Skipping."
+    if [[ "$NO_CHAIN" == "true" ]]; then
+        echo "Skipping gold experiment chain for $ROLE (layer=$LAYER, count=$count) [--no-chain]"
     else
-        echo "Submitting gold experiment for $ROLE (layer=$LAYER, count=$count)..."
-        source .env  # reload for PACE_ACCOUNT on compute node
+        CSV_FILE="${GOLD_SAVE_DIR}/Comparison_GoldStandard_${ROLE}.csv"
 
-        bash slurm/gold_experiment.sh \
-            --model "$MODEL" \
-            --roles "$ROLE" \
-            --layers "$LAYER" \
-            --sample-counts "$count" \
-            --alphas "${ALPHAS[@]}" \
-            --temperatures "${TEMPERATURES[@]}" \
-            --max-new-tokens "$MAX_NEW_TOKENS" \
-            --questions-file "$QUESTIONS_FILE" \
-            --save-dir "$GOLD_SAVE_DIR" \
-            --safetensors-dir "$SAFETENSORS_DIR" \
-            --gold-prompts-dir "$GOLD_PROMPTS_DIR"
+        if check_csv_complete "$CSV_FILE" "$EXPECTED_ROWS" "$LAYER" "$count" "$ALPHAS_PY" "$TEMPERATURES_PY"; then
+            echo "Gold experiment for $ROLE (layer=$LAYER, count=$count) already complete. Skipping."
+        else
+            echo "Submitting gold experiment for $ROLE (layer=$LAYER, count=$count)..."
+            source .env  # reload for PACE_ACCOUNT on compute node
+
+            bash slurm/gold_experiment.sh \
+                --model "$MODEL" \
+                --roles "$ROLE" \
+                --layers "$LAYER" \
+                --sample-counts "$count" \
+                --alphas "${ALPHAS[@]}" \
+                --temperatures "${TEMPERATURES[@]}" \
+                --max-new-tokens "$MAX_NEW_TOKENS" \
+                --questions-file "$QUESTIONS_FILE" \
+                --save-dir "$GOLD_SAVE_DIR" \
+                --safetensors-dir "$SAFETENSORS_DIR" \
+                --gold-prompts-dir "$GOLD_PROMPTS_DIR"
+        fi
     fi
 done
 

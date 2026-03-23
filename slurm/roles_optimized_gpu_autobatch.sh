@@ -4,23 +4,24 @@ source .env
 ###
 # Reads incomplete role inits from a JSON file (e.g. configs/role_init_incomplete.json),
 # re-verifies which entries are still incomplete by checking for the expected safetensors
-# files, and submits a CPU job for each remaining role.
+# files AND the required Q/A responses, and submits a GPU job for each remaining role.
 #
-# Each CPU job chains automatically:
-#   CPU (Q/A generation) → GPU (init extraction per count) → gold_experiment.sh (if needed)
+# Unlike roles_optimized_autobatch.sh, this script submits GPU jobs directly without
+# a preceding CPU phase. Roles missing Q/A responses are skipped (run CPU phase first).
+#
+# Each GPU job optionally chains to gold_experiment.sh on success. Pass --no-chain
+# to disable this (e.g. during testing when the full pipeline is not needed).
 #
 # Usage:
-#   bash slurm/roles_optimized_autobatch.sh [-f <json_file>] [options...]
+#   bash slurm/roles_optimized_gpu_autobatch.sh [-f <json_file>] [options...]
 #
 # Options:
 #   -f, --file              Path to incomplete inits JSON (default: configs/role_init_incomplete.json)
 #   -m, --model             Model ID override (default: reads per-entry from JSON)
 #   --safetensors-dir       Dir to check/write safetensors (default: ./persona_data/model_layer_inits/)
-#   --qa-responses-dir      Dir for generated Q/A JSON (default: ./persona_data/model_qa_responses)
+#   --qa-responses-dir      Dir for Q/A responses JSON (default: ./persona_data/model_qa_responses)
 #   --dataset-dir           Role dataset directory (default: ./persona_data/role_datasets/)
-#   --backend               API backend for CPU phase (default: openai)
-#   --base-url              API base URL (default: https://openrouter.ai/api/v1)
-#   --api-key-env           Env var name for API key (default: OPENROUTER_API_KEY)
+#   --no-chain              Disable gold experiment chaining after GPU extraction (e.g. for testing)
 #   --gold-save-dir         Gold experiment results dir (default: ./experiment_data/gold_prompt_experiments/)
 #   -a, --alphas            Alphas for gold experiment (default: 1 1.5 2 2.5)
 #   -t, --temperatures      Temperatures for gold experiment (default: 0.2)
@@ -29,8 +30,7 @@ source .env
 #   -g, --gold-prompts-dir  Gold prompts dataset dir
 #   --expected-rows         Expected CSV rows per combination for completion check (default: 228)
 #   -b, --num-bins          Number of SLURM jobs to group roles into (default: 0 = one job per role).
-#                           Each bin processes its roles sequentially to avoid overwhelming the API
-#                           endpoint with concurrent requests.
+#                           Each bin processes its roles sequentially.
 #
 # Author: iiisong
 # Date: 2026-03-23
@@ -43,10 +43,8 @@ MODEL=""   # empty = use model_id from each JSON entry
 SAFETENSORS_DIR="./persona_data/model_layer_inits/"
 QA_RESPONSES_DIR="./persona_data/model_qa_responses"
 DATASET_DIR="./persona_data/role_datasets/"
-BACKEND="openai"
-BASE_URL="https://openrouter.ai/api/v1"
-API_KEY_ENV="OPENROUTER_API_KEY"
-# Gold experiment defaults (forwarded through the chain)
+NO_CHAIN=false
+# Gold experiment defaults (forwarded to GPU batch)
 GOLD_SAVE_DIR="./experiment_data/gold_prompt_experiments/"
 ALPHAS=(1 1.5 2 2.5)
 TEMPERATURES=(0.2)
@@ -55,7 +53,6 @@ QUESTIONS_FILE="./configs/validation_questions.jsonl"
 GOLD_PROMPTS_DIR="./persona_data/gold_labels_prompts_dataset"
 EXPECTED_ROWS=228
 NUM_BINS=0  # 0 = one job per role (default); N > 0 = group into N bins
-NO_CHAIN=false  # if true, skip gold experiment chaining (propagated through CPU → GPU)
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -64,9 +61,7 @@ while [[ $# -gt 0 ]]; do
     --safetensors-dir)     SAFETENSORS_DIR="$2"; shift 2;;
     --qa-responses-dir)    QA_RESPONSES_DIR="$2"; shift 2;;
     --dataset-dir)         DATASET_DIR="$2"; shift 2;;
-    --backend)             BACKEND="$2"; shift 2;;
-    --base-url)            BASE_URL="$2"; shift 2;;
-    --api-key-env)         API_KEY_ENV="$2"; shift 2;;
+    --no-chain)            NO_CHAIN=true; shift;;
     --gold-save-dir)       GOLD_SAVE_DIR="$2"; shift 2;;
     -a|--alphas)           shift; ALPHAS=(); while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do ALPHAS+=("$1"); shift; done;;
     -t|--temperatures)     shift; TEMPERATURES=(); while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do TEMPERATURES+=("$1"); shift; done;;
@@ -75,7 +70,6 @@ while [[ $# -gt 0 ]]; do
     -g|--gold-prompts-dir) GOLD_PROMPTS_DIR="$2"; shift 2;;
     --expected-rows)       EXPECTED_ROWS="$2"; shift 2;;
     -b|--num-bins)         NUM_BINS="$2"; shift 2;;
-    --no-chain)            NO_CHAIN=true; shift;;
     *)                     echo "Unknown argument: $1" >&2; exit 1;;
   esac
 done
@@ -102,6 +96,7 @@ echo "Found $TOTAL entries in $JSON_FILE. Verifying which are still incomplete..
 
 submitted=0
 skipped=0
+skipped_no_qa=0
 
 # Collect all still-incomplete entries before submission
 declare -a PENDING_ROLES
@@ -118,6 +113,14 @@ for ((i=0; i<TOTAL; i++)); do
     # Allow --model to override the per-entry model_id
     effective_model="${MODEL:-$model_id}"
     SAFE_MODEL="${effective_model//\//__}"
+
+    # Check if Q/A responses exist for this role (required for GPU extraction)
+    QA_PATH="${QA_RESPONSES_DIR}/${SAFE_MODEL}/${role}.json"
+    if [ ! -f "$QA_PATH" ]; then
+        echo "  Skipping $role: Q/A responses not found at $QA_PATH (run CPU phase first)"
+        ((skipped_no_qa++))
+        continue
+    fi
 
     # Re-verify: check which counts are still actually missing on disk
     still_missing=()
@@ -143,14 +146,11 @@ done
 TOTAL_PENDING=${#PENDING_ROLES[@]}
 
 # ===SUBMIT JOBS==================
-# Common args forwarded to every cpu_batch call
+# Common args forwarded to every gpu_batch call
 COMMON_ARGS=(
     --safetensors-dir "$SAFETENSORS_DIR"
     --qa-responses-dir "$QA_RESPONSES_DIR"
     --dataset-dir "$DATASET_DIR"
-    --backend "$BACKEND"
-    --base-url "$BASE_URL"
-    --api-key-env "$API_KEY_ENV"
     --gold-save-dir "$GOLD_SAVE_DIR"
     --alphas "${ALPHAS[@]}"
     --temperatures "${TEMPERATURES[@]}"
@@ -169,8 +169,8 @@ if [[ "$NUM_BINS" -le 0 || "$TOTAL_PENDING" -eq 0 ]]; then
         layer="${PENDING_LAYERS[$j]}"
         read -ra still_missing <<< "${PENDING_MISSING[$j]}"
 
-        echo "  Submitting CPU job for role=$role model=$effective_model layer=$layer missing_counts=(${still_missing[*]})"
-        bash slurm/roles_optimized_cpu_batch.sh \
+        echo "  Submitting GPU job for role=$role model=$effective_model layer=$layer missing_counts=(${still_missing[*]})"
+        bash slurm/roles_optimized_gpu_batch.sh \
             --role "$role" \
             --model "$effective_model" \
             --layer "$layer" \
@@ -180,8 +180,7 @@ if [[ "$NUM_BINS" -le 0 || "$TOTAL_PENDING" -eq 0 ]]; then
         ((submitted++))
     done
 else
-    # Bin mode: group roles into NUM_BINS jobs so each job processes its roles
-    # sequentially, limiting concurrent API endpoint pressure.
+    # Bin mode: group roles into NUM_BINS jobs so each job processes its roles sequentially
     bin_size=$(( (TOTAL_PENDING + NUM_BINS - 1) / NUM_BINS ))
     echo "Bin mode: $TOTAL_PENDING pending roles → $NUM_BINS bins (~$bin_size roles/bin)"
 
@@ -191,36 +190,25 @@ else
         end=$((start + bin_size))
         [[ $end -gt $TOTAL_PENDING ]] && end=$TOTAL_PENDING
 
-        # Write per-bin JSON config: [{role, layer, missing_counts}, ...]
-        BIN_CONFIG_FILE=$(mktemp /tmp/roles_bin_config_XXXXXX.json)
-        bin_json="["
+        # Submit one GPU job per role in this bin (GPU jobs are independent)
         for ((j=start; j<end; j++)); do
-            counts_json=$(echo "${PENDING_MISSING[$j]}" | tr ' ' '\n' | jq -s 'map(tonumber)')
-            entry=$(jq -n \
-                --arg role "${PENDING_ROLES[$j]}" \
-                --argjson layer "${PENDING_LAYERS[$j]}" \
-                --argjson counts "$counts_json" \
-                '{role: $role, layer: $layer, missing_counts: $counts}')
-            [[ $j -gt $start ]] && bin_json+=","
-            bin_json+="$entry"
+            role="${PENDING_ROLES[$j]}"
+            effective_model="${PENDING_MODELS[$j]}"
+            layer="${PENDING_LAYERS[$j]}"
+            read -ra still_missing <<< "${PENDING_MISSING[$j]}"
+
+            echo "  [Bin $((bin+1))/$NUM_BINS] Submitting GPU job for role=$role model=$effective_model layer=$layer missing_counts=(${still_missing[*]})"
+            bash slurm/roles_optimized_gpu_batch.sh \
+                --role "$role" \
+                --model "$effective_model" \
+                --layer "$layer" \
+                --missing-counts "${still_missing[@]}" \
+                "${COMMON_ARGS[@]}"
+
+            ((submitted++))
         done
-        bin_json+="]"
-        echo "$bin_json" > "$BIN_CONFIG_FILE"
-
-        # All entries in a bin share the same model (use first entry's model)
-        bin_model="${PENDING_MODELS[$start]}"
-
-        bin_roles_str=$(jq -r '.[].role' "$BIN_CONFIG_FILE" | tr '\n' ' ')
-        echo "  Submitting bin $((bin+1))/$NUM_BINS: roles=($bin_roles_str) model=$bin_model config=$BIN_CONFIG_FILE"
-
-        bash slurm/roles_optimized_cpu_batch.sh \
-            --model "$bin_model" \
-            --bin-config "$BIN_CONFIG_FILE" \
-            "${COMMON_ARGS[@]}"
-
-        ((submitted++))
     done
 fi
 
 echo ""
-echo "Done. Submitted: $submitted CPU jobs, Skipped: $skipped (already complete)."
+echo "Done. Submitted: $submitted GPU jobs, Skipped: $skipped (already complete), Skipped (no Q/A): $skipped_no_qa."

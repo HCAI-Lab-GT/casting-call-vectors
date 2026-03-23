@@ -38,6 +38,7 @@ MAX_NEW_TOKENS=2000
 QUESTIONS_FILE="./configs/validation_questions.jsonl"
 GOLD_PROMPTS_DIR="./persona_data/gold_labels_prompts_dataset"
 EXPECTED_ROWS=228
+NO_CHAIN=false  # if true, skip gold experiment chaining after GPU extraction
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -55,6 +56,7 @@ while [[ $# -gt 0 ]]; do
     -q|--questions-file)   QUESTIONS_FILE="$2"; shift 2;;
     -g|--gold-prompts-dir) GOLD_PROMPTS_DIR="$2"; shift 2;;
     --expected-rows)       EXPECTED_ROWS="$2"; shift 2;;
+    --no-chain)            NO_CHAIN=true; shift;;
     *)                     echo "Unknown argument: $1" >&2; exit 1;;
   esac
 done
@@ -113,7 +115,8 @@ sbatch  --gres "$GPU_CONFIG" --ntasks-per-node 1 --cpus-per-task "$NUM_WORKERS" 
         --max-new-tokens "$MAX_NEW_TOKENS" \
         --questions-file "$QUESTIONS_FILE" \
         --gold-prompts-dir "$GOLD_PROMPTS_DIR" \
-        --expected-rows "$EXPECTED_ROWS"
+        --expected-rows "$EXPECTED_ROWS" \
+        $( [[ "$NO_CHAIN" == "true" ]] && echo "--no-chain" )
 
 ### POST JOB ###
 # None (chaining handled inside the sbatch on success)

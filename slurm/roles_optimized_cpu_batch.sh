@@ -24,6 +24,7 @@ ROLE=""
 MODEL="allenai/Olmo-3-7B-Instruct"
 LAYER=16
 MISSING_COUNTS=()
+BIN_CONFIG=""  # JSON file with [{role, layer, missing_counts}, ...]; overrides ROLE/LAYER/MISSING_COUNTS
 SAFETENSORS_DIR="./persona_data/model_layer_inits/"
 QA_RESPONSES_DIR="./persona_data/model_qa_responses"
 DATASET_DIR="./persona_data/role_datasets/"
@@ -38,6 +39,7 @@ MAX_NEW_TOKENS=2000
 QUESTIONS_FILE="./configs/validation_questions.jsonl"
 GOLD_PROMPTS_DIR="./persona_data/gold_labels_prompts_dataset"
 EXPECTED_ROWS=228
+NO_CHAIN=false  # if true, skip gold experiment chaining (propagated through to GPU phase)
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -58,6 +60,8 @@ while [[ $# -gt 0 ]]; do
     -q|--questions-file)   QUESTIONS_FILE="$2"; shift 2;;
     -g|--gold-prompts-dir) GOLD_PROMPTS_DIR="$2"; shift 2;;
     --expected-rows)       EXPECTED_ROWS="$2"; shift 2;;
+    --bin-config)          BIN_CONFIG="$2"; shift 2;;
+    --no-chain)            NO_CHAIN=true; shift;;
     *)                     echo "Unknown argument: $1" >&2; exit 1;;
   esac
 done
@@ -80,12 +84,17 @@ if [ -z "$ACCOUNT" ]; then
     echo "Error: Account is required for PACE access"
     exit 1
 fi
-if [ -z "$ROLE" ]; then
-    echo "Error: --role is required"
-    exit 1
-fi
-if [[ ${#MISSING_COUNTS[@]} -eq 0 ]]; then
-    echo "Error: --missing-counts requires at least one value"
+if [ -z "$BIN_CONFIG" ]; then
+    if [ -z "$ROLE" ]; then
+        echo "Error: --role is required (or use --bin-config for multi-role bin mode)"
+        exit 1
+    fi
+    if [[ ${#MISSING_COUNTS[@]} -eq 0 ]]; then
+        echo "Error: --missing-counts requires at least one value"
+        exit 1
+    fi
+elif [ ! -f "$BIN_CONFIG" ]; then
+    echo "Error: --bin-config file not found: $BIN_CONFIG"
     exit 1
 fi
 
@@ -94,35 +103,61 @@ if [ ! -d "$LOG_DIR" ]; then
     mkdir -p "$LOG_DIR"
 fi
 
-# target_pairs = max of missing counts (generate enough Q/A for the largest needed extraction)
-TARGET_PAIRS=$(printf '%s\n' "${MISSING_COUNTS[@]}" | sort -n | tail -1)
-
 ### PRE-JOB ###
 # None
 
 ### JOB CALL (CPU-only, no --gres) ###
-sbatch  --ntasks-per-node 1 --cpus-per-task "$NUM_WORKERS" --mem "$MEM_PER_NODE" \
-        --account "$ACCOUNT" --qos "$QOS" --time "$TIME" \
-        --output "$LOG_DIR/$NAME-%j.out" --error "$LOG_DIR/$NAME-%j.err" \
-        "slurm/$NAME.sbatch" \
-        --role "$ROLE" \
-        --model "$MODEL" \
-        --layer "$LAYER" \
-        --missing-counts "${MISSING_COUNTS[@]}" \
-        --target-pairs "$TARGET_PAIRS" \
-        --safetensors-dir "$SAFETENSORS_DIR" \
-        --qa-responses-dir "$QA_RESPONSES_DIR" \
-        --dataset-dir "$DATASET_DIR" \
-        --backend "$BACKEND" \
-        --base-url "$BASE_URL" \
-        --api-key-env "$API_KEY_ENV" \
-        --gold-save-dir "$GOLD_SAVE_DIR" \
-        --alphas "${ALPHAS[@]}" \
-        --temperatures "${TEMPERATURES[@]}" \
-        --max-new-tokens "$MAX_NEW_TOKENS" \
-        --questions-file "$QUESTIONS_FILE" \
-        --gold-prompts-dir "$GOLD_PROMPTS_DIR" \
-        --expected-rows "$EXPECTED_ROWS"
+if [ -n "$BIN_CONFIG" ]; then
+    # Bin mode: pass config file; TARGET_PAIRS computed inside the sbatch
+    sbatch  --ntasks-per-node 1 --cpus-per-task "$NUM_WORKERS" --mem "$MEM_PER_NODE" \
+            --account "$ACCOUNT" --qos "$QOS" --time "$TIME" \
+            --output "$LOG_DIR/$NAME-%j.out" --error "$LOG_DIR/$NAME-%j.err" \
+            "slurm/$NAME.sbatch" \
+            --model "$MODEL" \
+            --bin-config "$BIN_CONFIG" \
+            --safetensors-dir "$SAFETENSORS_DIR" \
+            --qa-responses-dir "$QA_RESPONSES_DIR" \
+            --dataset-dir "$DATASET_DIR" \
+            --backend "$BACKEND" \
+            --base-url "$BASE_URL" \
+            --api-key-env "$API_KEY_ENV" \
+            --gold-save-dir "$GOLD_SAVE_DIR" \
+            --alphas "${ALPHAS[@]}" \
+            --temperatures "${TEMPERATURES[@]}" \
+            --max-new-tokens "$MAX_NEW_TOKENS" \
+            --questions-file "$QUESTIONS_FILE" \
+            --gold-prompts-dir "$GOLD_PROMPTS_DIR" \
+            --expected-rows "$EXPECTED_ROWS" \
+            $( [[ "$NO_CHAIN" == "true" ]] && echo "--no-chain" )
+else
+    # Single-role mode (default)
+    # target_pairs = max of missing counts (generate enough Q/A for the largest needed extraction)
+    TARGET_PAIRS=$(printf '%s\n' "${MISSING_COUNTS[@]}" | sort -n | tail -1)
+
+    sbatch  --ntasks-per-node 1 --cpus-per-task "$NUM_WORKERS" --mem "$MEM_PER_NODE" \
+            --account "$ACCOUNT" --qos "$QOS" --time "$TIME" \
+            --output "$LOG_DIR/$NAME-%j.out" --error "$LOG_DIR/$NAME-%j.err" \
+            "slurm/$NAME.sbatch" \
+            --role "$ROLE" \
+            --model "$MODEL" \
+            --layer "$LAYER" \
+            --missing-counts "${MISSING_COUNTS[@]}" \
+            --target-pairs "$TARGET_PAIRS" \
+            --safetensors-dir "$SAFETENSORS_DIR" \
+            --qa-responses-dir "$QA_RESPONSES_DIR" \
+            --dataset-dir "$DATASET_DIR" \
+            --backend "$BACKEND" \
+            --base-url "$BASE_URL" \
+            --api-key-env "$API_KEY_ENV" \
+            --gold-save-dir "$GOLD_SAVE_DIR" \
+            --alphas "${ALPHAS[@]}" \
+            --temperatures "${TEMPERATURES[@]}" \
+            --max-new-tokens "$MAX_NEW_TOKENS" \
+            --questions-file "$QUESTIONS_FILE" \
+            --gold-prompts-dir "$GOLD_PROMPTS_DIR" \
+            --expected-rows "$EXPECTED_ROWS" \
+            $( [[ "$NO_CHAIN" == "true" ]] && echo "--no-chain" )
+fi
 
 ### POST JOB ###
 # None (chaining handled inside the sbatch on success)
