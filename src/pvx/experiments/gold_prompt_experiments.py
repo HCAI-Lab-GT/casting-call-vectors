@@ -261,6 +261,8 @@ class GoldPromptExperiments():
         all_results: list[pd.DataFrame] = []
                 
         for role in roles:
+            entry_configs = list(product(self.persona_models[role].items(), run_configs))
+            
             logger.info("=== Processing role: %s ===", role)
             baseline_seed_messages = self._load_gold_baseline_messages(role)
             role_description = self._gold_role_descriptions.get(role, "")
@@ -284,57 +286,87 @@ class GoldPromptExperiments():
             pd_results = self._load_existing_results(role_save_path) if save_each else self._empty_results_df()
             
             for question in role_questions:
-                # Use Assistant Axis generation in place of plain assistant_axis baseline.
-                assistant_axis_response = assistant_axis_model.generate(
-                    prompt=question,
-                    alpha=self.assistant_axis_alpha,
-                    max_new_tokens=max_new_tokens,
-                    temperature=baseline_temperature,
-                )
-                logger.info(
-                    "AssistantAxis response (assistant_axis slot) for role '%s' on layer %s, alpha %s, temperature %s:",
-                    role,
-                    assistant_axis_layer,
-                    self.assistant_axis_alpha,
-                    baseline_temperature,
-                )
-                logger.info(assistant_axis_response)
+                # Skip generating assistant axis and basleine if all entries already asked
+                pregen = pd_results[pd_results["question"] == question]
+                if len(pregen) >= len(entry_configs):
+                    logger.info("Skipped question as all entries already generated.")
+                    continue
                 
-                # calculate judge score for AssistantAxis response in assistant_axis slot
-                if judge_responses:
-                    assistant_axis_score = self.role_judge(role=role, role_description=role_description, question=question, answer=assistant_axis_response)
+                # If question previously asked before, load in AssistanceAxis and Baseline response to avoid asking
+                if len(pregen) >= 1:
+                    prev_entry = pregen.iloc[0]
+                    assistant_axis_response = pregen["assistant_axis"]
+                    assistant_axis_score = pregen["assistant_axis_score"]
+                    
                     logger.info(
-                        "AssistantAxis judge score for role '%s' on layer %s, alpha %s, temperature %s: %s",
+                        "Loaded former AssistantAxis response (assistant_axis slot) for role '%s' on layer %s, alpha %s, temperature %s:",
                         role,
                         assistant_axis_layer,
                         self.assistant_axis_alpha,
                         baseline_temperature,
-                        assistant_axis_score,
                     )
-                else:
-                    assistant_axis_score = -1
-                    logger.info("AssistantAxis judge scoring skipped on GPU.")
-
-                # Get prompted role answer for prompted baseline
-                baseline_messages = deepcopy(baseline_seed_messages)
-                baseline_messages.append({"role": "user", "content": question})
-                baseline_response = self.generate_response(messages=baseline_messages,
-                                                           max_new_tokens=max_new_tokens,
-                                                           temperature=baseline_temperature)[1]
-                logger.info("Gold Standard response for role '%s' on temperature %s:", role, baseline_temperature)
-                logger.info(baseline_response)
+                    logger.info(assistant_axis_response)
                 
-                # calculate judge score for baseline response
-                if judge_responses:
-                    baseline_score = self.role_judge(role=role, role_description=role_description, question=question, answer=baseline_response)
-                    logger.info("Baseline judge score for role '%s' on temperature %s: %s", role, baseline_temperature, baseline_score)
+                    
+                    baseline_response = pregen["baseline"]
+                    baseline_score = pregen["baseline_score"]
+                    
+                    logger.info("Loaded former Gold Standard response for role '%s' on temperature %s:", role, baseline_temperature)
+                    logger.info(baseline_response)
+                
+                # Otherwise, retrieve assistance_axis and gold standard
                 else:
-                    baseline_score = -1
-                    logger.info("Baseline judge scoring skipped on GPU.")
+                    # Use Assistant Axis generation in place of plain assistant_axis baseline.
+                    assistant_axis_response = assistant_axis_model.generate(
+                        prompt=question,
+                        alpha=self.assistant_axis_alpha,
+                        max_new_tokens=max_new_tokens,
+                        temperature=baseline_temperature,
+                    )
+                    logger.info(
+                        "AssistantAxis response (assistant_axis slot) for role '%s' on layer %s, alpha %s, temperature %s:",
+                        role,
+                        assistant_axis_layer,
+                        self.assistant_axis_alpha,
+                        baseline_temperature,
+                    )
+                    logger.info(assistant_axis_response)
+                
+                    # calculate judge score for AssistantAxis response in assistant_axis slot
+                    if judge_responses:
+                        assistant_axis_score = self.role_judge(role=role, role_description=role_description, question=question, answer=assistant_axis_response)
+                        logger.info(
+                            "AssistantAxis judge score for role '%s' on layer %s, alpha %s, temperature %s: %s",
+                            role,
+                            assistant_axis_layer,
+                            self.assistant_axis_alpha,
+                            baseline_temperature,
+                            assistant_axis_score,
+                        )
+                    else:
+                        assistant_axis_score = -1
+                        logger.info("AssistantAxis judge scoring skipped on GPU.")
+
+                    # Get prompted role answer for prompted baseline
+                    baseline_messages = deepcopy(baseline_seed_messages)
+                    baseline_messages.append({"role": "user", "content": question})
+                    baseline_response = self.generate_response(messages=baseline_messages,
+                                                            max_new_tokens=max_new_tokens,
+                                                            temperature=baseline_temperature)[1]
+                    logger.info("Gold Standard response for role '%s' on temperature %s:", role, baseline_temperature)
+                    logger.info(baseline_response)
+                    
+                    # calculate judge score for baseline response
+                    if judge_responses:
+                        baseline_score = self.role_judge(role=role, role_description=role_description, question=question, answer=baseline_response)
+                        logger.info("Baseline judge score for role '%s' on temperature %s: %s", role, baseline_temperature, baseline_score)
+                    else:
+                        baseline_score = -1
+                        logger.info("Baseline judge scoring skipped on GPU.")
 
 
                 # calculate judge score for each config
-                for (instant_params, model), (alpha, temperature) in product(self.persona_models[role].items(), run_configs):
+                for (instant_params, model), (alpha, temperature) in entry_configs:
                     model: AbstractPersonaModel
                     
                     if role_save_path.exists():
@@ -382,17 +414,6 @@ class GoldPromptExperiments():
                         logger.info("Steered judge scoring skipped on GPU.")
                         
                         comparative_scores = defaultdict(lambda: defaultdict(lambda: -1))
-                        # comparative_scores = {
-                        #     "style": {
-                        #         "emotional_register": -1,
-                        #         "vocab_choice": -1,
-                        #         "social_dynamic": -1
-                        #     },
-                        #     "content": {
-                        #         "motivation": -1
-                        #         "worldview_alignment": -1
-                        #     }
-                        # }
                         logger.info("Comparative judge scoring skipped on GPU.")
 
                         
