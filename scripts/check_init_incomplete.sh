@@ -19,7 +19,7 @@
 set -euo pipefail
 
 # ---------- defaults ----------
-ROLES_LIST=""
+ROLES_LIST="configs/role_list.json"
 MODEL_ID=""
 LAYER=""
 TARGET_PAIRS=()
@@ -91,7 +91,7 @@ while IFS= read -r role; do
             --arg model_id "$MODEL_ID" \
             --argjson layer "$LAYER" \
             --argjson missing "$missing_counts" \
-            '{role: $role, model_id: $model_id, layer: $layer, missing_counts: $missing}')
+            '{role: $role, model_id: $model_id, layer: $layer, counts: $missing}')
         incomplete_json=$(jq -n --argjson arr "$incomplete_json" --argjson e "$entry" '$arr + [$e]')
     fi
 done < <(jq -r 'keys[]' "$ROLES_LIST")
