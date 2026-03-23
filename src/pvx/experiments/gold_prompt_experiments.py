@@ -207,10 +207,15 @@ class GoldPromptExperiments():
                         layer=layer,
                         target_pairs=sample_count,
                         json_filepath=self.json_filepath,
+                        only_load=True,
                         safetensors_dir=self.safetensors_dir,
                     )
                 self.persona_models[role][(layer, sample_count)] = model
                 
+            except FileNotFoundError as e:
+                logger.error(e)
+                raise
+            
             except Exception as e:
                 logger.error(e)
                 continue

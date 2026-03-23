@@ -343,6 +343,7 @@ class AbstractPersonaModel(ABC):
         layer: int = 14,
         target_pairs: int = 40,
         json_filepath: Optional[str] = None,
+        only_load: bool = False,
         safetensors_dir: str = "./persona_data/model_inits/",
         **kwargs
     ) -> "AbstractPersonaModel":
@@ -381,6 +382,9 @@ class AbstractPersonaModel(ABC):
             logger.warning(
                 "⚠️ Failed to load from JSON: %s.", e
             )
+        
+        if only_load:
+            raise FileNotFoundError("No instance found and load only selected.")
         
         logger.info("Creating a new PersonaModel instance.")
 
