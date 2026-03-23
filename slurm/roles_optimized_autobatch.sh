@@ -1,5 +1,6 @@
 #!/bin/bash
 source .env
+apt-get update && apt-get install -y jq
 
 ###
 # Reads incomplete role inits from a JSON file (e.g. configs/role_init_incomplete.json),
@@ -56,6 +57,7 @@ GOLD_PROMPTS_DIR="./persona_data/gold_labels_prompts_dataset"
 EXPECTED_ROWS=228
 NUM_BINS=0  # 0 = one job per role (default); N > 0 = group into N bins
 NO_CHAIN=false  # if true, skip gold experiment chaining (propagated through CPU → GPU)
+DRY_RUN=false # if true, skips actual .sh call
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -76,6 +78,7 @@ while [[ $# -gt 0 ]]; do
     --expected-rows)       EXPECTED_ROWS="$2"; shift 2;;
     -b|--num-bins)         NUM_BINS="$2"; shift 2;;
     --no-chain)            NO_CHAIN=true; shift;;
+    --dry-run)             DRY_RUN=true; shift;;
     *)                     echo "Unknown argument: $1" >&2; exit 1;;
   esac
 done
@@ -161,7 +164,7 @@ COMMON_ARGS=(
 )
 [[ "$NO_CHAIN" == "true" ]] && COMMON_ARGS+=(--no-chain)
 
-if [[ "$NUM_BINS" -le 0 || "$TOTAL_PENDING" -eq 0 ]]; then
+if [[ "$NUM_BINS" -le 0 || "$TOTAL_PENDING" -eq 0 || "$DRY_RUN" == "true" ]]; then
     # Default: one job per role
     for ((j=0; j<TOTAL_PENDING; j++)); do
         role="${PENDING_ROLES[$j]}"
@@ -169,15 +172,19 @@ if [[ "$NUM_BINS" -le 0 || "$TOTAL_PENDING" -eq 0 ]]; then
         layer="${PENDING_LAYERS[$j]}"
         read -ra still_missing <<< "${PENDING_MISSING[$j]}"
 
-        echo "  Submitting CPU job for role=$role model=$effective_model layer=$layer missing_counts=(${still_missing[*]})"
-        bash slurm/roles_optimized_cpu_batch.sh \
-            --role "$role" \
-            --model "$effective_model" \
-            --layer "$layer" \
-            --missing-counts "${still_missing[@]}" \
-            "${COMMON_ARGS[@]}"
+        if [[ "$DRY_RUN" == "true" ]]; then
+            echo "  Dry run so did not submit CPU job for role=$role model=$effective_model layer=$layer missing_counts=(${still_missing[*]})"
+        else
+            echo "  Submitting CPU job for role=$role model=$effective_model layer=$layer missing_counts=(${still_missing[*]})"
+            bash slurm/roles_optimized_cpu_batch.sh \
+                --role "$role" \
+                --model "$effective_model" \
+                --layer "$layer" \
+                --missing-counts "${still_missing[@]}" \
+                "${COMMON_ARGS[@]}"
 
-        ((submitted++))
+            ((submitted++))
+        fi
     done
 else
     # Bin mode: group roles into NUM_BINS jobs so each job processes its roles
