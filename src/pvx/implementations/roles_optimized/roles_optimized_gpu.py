@@ -121,6 +121,9 @@ class RoleActivationExtractor(AbstractPersonaModel):
 
         return qa_data
 
+    def extract_persona_vector(self, **kwargs):
+        raise NotImplementedError("Use extract_and_save_incremental() instead.")
+
     def _checkpoint_path(self, output_dir: str, count: int) -> Path:
         """Return the safetensors path for a given sample count."""
         safe_model = self.target_model_id.replace("/", "__")
