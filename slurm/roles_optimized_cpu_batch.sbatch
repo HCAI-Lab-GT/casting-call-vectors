@@ -58,9 +58,19 @@ while [[ $# -gt 0 ]]; do
 done
 # ===========================
 
+echo "$(date '+%Y-%m-%d %H:%M:%S,%3N') | INFO | .sbatch | Processed CLI"
+
 module load uv
+
+if [ ! -d ".venv" ]; then
+    uv sync
+fi
+
+echo "$(date '+%Y-%m-%d %H:%M:%S,%3N') | INFO | .sbatch | Loaded uv"
+
 source .venv/bin/activate
-uv sync
+
+echo "$(date '+%Y-%m-%d %H:%M:%S,%3N') | INFO | .sbatch | Loaded .venv environment"
 
 if [ -n "$BIN_CONFIG" ]; then
     ### BIN MODE: process multiple roles sequentially ###
@@ -83,8 +93,10 @@ print(max(max(e['missing_counts']) for e in entries))
     # Build roles list for Python
     mapfile -t BIN_ROLES < <(python3 -c "import json; [print(e['role']) for e in json.load(open('$BIN_CONFIG'))]")
 
+    echo "$(date '+%Y-%m-%d %H:%M:%S,%3N') | INFO | .sbatch | Calling srun..."
+
     ### CPU PHASE: process all bin roles sequentially ###
-    srun uv run python src/pvx/implementations/roles_optimized/roles_optimized_cpu.py \
+    srun uv run --no-sync python src/pvx/implementations/roles_optimized/roles_optimized_cpu.py \
         --roles "${BIN_ROLES[@]}" \
         --answer_model "$MODEL" \
         --target_pairs "$TARGET_PAIRS" \
@@ -151,10 +163,21 @@ else
     echo "BACKEND: $BACKEND"
     echo "QA_RESPONSES_DIR: $QA_RESPONSES_DIR"
     echo "DATASET_DIR: $DATASET_DIR"
+    echo "NO_CHAIN: ${NO_CHAIN:-false}"
     echo "==========================="
 
+    echo "$(date '+%Y-%m-%d %H:%M:%S,%3N') | INFO | .sbatch | Calling sruns..."
+    srun hostname  # if this is also slow, it's srun itself
+    echo "$(date '+%Y-%m-%d %H:%M:%S,%3N') | INFO | .sbatch | hostname test completed."
+
+    srun python -c "print('ping')"  # if only this is slow, it's python startup
+    echo "$(date '+%Y-%m-%d %H:%M:%S,%3N') | INFO | .sbatch | trivial python test completed."
+
+    srun uv run --no-sync python -c "print('pong')"
+    echo "$(date '+%Y-%m-%d %H:%M:%S,%3N') | INFO | .sbatch | trivial uv python test completed."
+
     ### CPU PHASE: Generate and judge Q/A responses ###
-    srun uv run python src/pvx/implementations/roles_optimized/roles_optimized_cpu.py \
+    srun uv run --no-sync python src/pvx/implementations/roles_optimized/roles_optimized_cpu.py \
         --roles "$ROLE" \
         --answer_model "$MODEL" \
         --target_pairs "$TARGET_PAIRS" \

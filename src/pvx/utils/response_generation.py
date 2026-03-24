@@ -19,24 +19,26 @@ Environment Variables:
     - TOGETHER_API_KEY or OPENAI_API_KEY: Required for OpenAI/vLLM endpoints
     - VLLM_API_URL (optional): Base URL for vLLM OpenAI-compatible server
 """
+from __future__ import annotations
 
 import argparse
 import os
 import warnings
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
 
-import torch
-from dotenv import load_dotenv
+if TYPE_CHECKING:
+    import torch
+
 from openai import OpenAI
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from pvx import setup_logging
+logger = setup_logging(name="response_generation")
 
+from dotenv import load_dotenv
 load_dotenv()
 
 BACKENDS = ("openai", "vllm", "hf_local")
 
-logger = setup_logging(name="response_generation")
 
 
 class ResponseGeneration:
@@ -48,7 +50,7 @@ class ResponseGeneration:
         base_url: Optional[str] = "https://openrouter.ai/api/v1",
         api_key_env: str = "OPENROUTER_API_KEY",
         device: Optional[str] = None,
-        dtype: torch.dtype = torch.float16,
+        dtype: torch.dtype = None,
     ):
         self.backend = backend
         self.model = model
@@ -69,7 +71,7 @@ class ResponseGeneration:
         """
         if self.backend != "hf_local":
             return
-
+        
         # Device selection
         if self.device:
             device = self.device
@@ -92,7 +94,7 @@ class ResponseGeneration:
         # Load model with device map
         model = AutoModelForCausalLM.from_pretrained(
             self.local_model,
-            dtype=self.dtype if device != "cpu" else None,
+            dtype=(self.dtype or torch.float16) if device != "cpu" else None,
             device_map=device,
         )
 
@@ -119,6 +121,9 @@ class ResponseGeneration:
         """
         try:
             if self.backend == "hf_local":
+                import torch
+                from transformers import AutoModelForCausalLM, AutoTokenizer
+                
                 if self._hf_model is None or self._hf_tokenizer is None:
                     self._init_local_model()
                     logger.info(f"Initialized Local Model {self.local_model}")

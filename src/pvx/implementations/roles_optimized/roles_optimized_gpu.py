@@ -29,14 +29,13 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from transformers.utils import logging as transformers_logging
 
 from pvx import setup_logging
+logger = setup_logging(name="roles-optimized-gpu")
+
 from pvx.abstraction.pvx_models.abstract_persona_model import AbstractPersonaModel
 from pvx.implementations.roles.role_dataset import RoleDataset
 
 torch.set_float32_matmul_precision("high")
 transformers_logging.set_verbosity_error()
-
-logger = setup_logging(name="roles-optimized-gpu")
-
 
 class RoleActivationExtractor(AbstractPersonaModel):
     """
@@ -165,16 +164,8 @@ class RoleActivationExtractor(AbstractPersonaModel):
             base_token_cache[pair["question"]] = (enc, torch.ones_like(enc))
 
         # Initialize activation accumulators
-        (
-            sum_prompt_pos,
-            sum_resp_pos,
-            sum_all_layers_pos,
-        ) = self.initialize_activations()
-        (
-            sum_prompt_base,
-            sum_resp_base,
-            sum_all_layers_base,
-        ) = self.initialize_activations()
+        (sum_prompt_pos,    sum_resp_pos,   sum_all_layers_pos)  = self.initialize_activations()
+        (sum_prompt_base,   sum_resp_base,  sum_all_layers_base) = self.initialize_activations()
 
         # Randomly shuffle pairs
         shuffled_pairs = positive_pairs.copy()

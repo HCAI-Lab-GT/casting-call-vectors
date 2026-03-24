@@ -17,22 +17,25 @@ Environment Variables:
     - TOGETHER_API_KEY or OPENAI_API_KEY: Required for OpenAI/vLLM endpoints
     - VLLM_API_URL (optional): Base URL for vLLM OpenAI-compatible server
 """
+from __future__ import annotations
 
 import argparse
 import re
-from typing import Dict, Optional, Callable
+from typing import Dict, Optional, Callable, TYPE_CHECKING
 
-import torch
-from dotenv import load_dotenv
+if TYPE_CHECKING:
+    import torch
 
 from pvx import setup_logging
+logger = setup_logging(name="persona-role-llm-as-judge")
+
 from pvx.abstraction.judges.abstract_judge import AbstractJudge
 
+from dotenv import load_dotenv
 load_dotenv()
 
 BACKENDS = ("openai", "vllm", "hf_local")
 
-logger = setup_logging(name="persona-role-llm-as-judge")
 
 
 class RoleJudge(AbstractJudge):
@@ -64,7 +67,7 @@ class RoleJudge(AbstractJudge):
         api_key_env: str = "TOGETHER_API_KEY",
         eval_type: str = "0_100",
         device: Optional[str] = None,
-        dtype: torch.dtype = torch.float16,
+        dtype: torch.dtype = None,
     ):
         """
         Initialize an LLMJudge instance.
@@ -153,7 +156,8 @@ if __name__ == "__main__":
     ap.add_argument("--question", required=True, help="The evaluation question")
     ap.add_argument("--answer", required=True, help="The model response to evaluate")
     args = ap.parse_args()
-
+    
+    import torch
     dtype = getattr(torch, args.dtype)
 
     judge = RoleJudge(

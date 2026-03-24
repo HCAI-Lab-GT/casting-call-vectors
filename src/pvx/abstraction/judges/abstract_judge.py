@@ -1,27 +1,31 @@
 """
 The LLMJudge class for evaluating model responses using LLMs as automated judges.
 """
+from __future__ import annotations
 
 import argparse
 import math
 import os
 import re
-from typing import Dict, List, Optional
 from abc import ABC, abstractmethod
+from typing import Dict, List, Optional, TYPE_CHECKING
 
-import torch
-from dotenv import load_dotenv
+if TYPE_CHECKING:
+    import torch
+    
 from openai import AsyncOpenAI, RateLimitError, APIStatusError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from pvx import setup_logging
+logger = setup_logging(name="abstract-judge")
+
 from pvx.utils.response_generation import ResponseGeneration
 
+from dotenv import load_dotenv
 load_dotenv()
 
 BACKENDS = ("openai", "vllm", "hf_local")
 
-logger = setup_logging(name="abstract-judge")
 
 
 class AbstractJudge(ResponseGeneration, ABC):
@@ -52,7 +56,7 @@ class AbstractJudge(ResponseGeneration, ABC):
         api_key_env: str = "OPENROUTER_API_KEY",
         eval_type: str = "0_100",
         device: Optional[str] = None,
-        dtype: torch.dtype = torch.float16,
+        dtype: torch.dtype = None,
     ):
         """
         Initialize an LLMJudge instance.

@@ -1,23 +1,26 @@
+from __future__ import annotations
+
 import json
 import os
 from collections import namedtuple
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 
-from pvx.utils.prompts import PromptTemplates
-from torch import dtype, float16
-from dotenv import load_dotenv
+if TYPE_CHECKING:
+    import torch
 
 from pvx import Heartbeat, setup_logging
+logger = setup_logging(name="abstract-dataset")
+
+from pvx.utils.prompts import PromptTemplates
 from pvx.utils.response_generation import ResponseGeneration
 
+from dotenv import load_dotenv
 load_dotenv()
 
 BACKENDS = ("openai", "vllm", "hf_local")
 
 
-# Initialize logger once per process
-logger = setup_logging(name="abstract-dataset")
 
 class AbstractDataset(ResponseGeneration):
     def __init__(
@@ -30,7 +33,7 @@ class AbstractDataset(ResponseGeneration):
         api_key_env: str = "LITELLM_API_KEY",
         local_model: Optional[str] = "Qwen/Qwen2.5-1.5B-Instruct",
         device: Optional[str] = None,
-        dtype: dtype = float16,
+        dtype: torch.dtype = None,
         dirpath: str = "./persona_data/trait_datasets/",
     ):
         """

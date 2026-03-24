@@ -16,23 +16,25 @@ This separation optimizes GPU usage:
 - GPU jobs: Extract activations from pre-judged Q/A pairs
 - GPU is only used when needed (activation extraction phase)
 """
+from __future__ import annotations
 
 import argparse
 import json
 import os
 from pathlib import Path
-from typing import List, Optional, Dict, Tuple
+from typing import List, Optional, Dict, Tuple, TYPE_CHECKING
 
 from dotenv import load_dotenv
 
 from pvx import Heartbeat, setup_logging
+logger = setup_logging(name="roles-optimized-cpu")
+
 from pvx.implementations.roles.role_dataset import RoleDataset
 from pvx.implementations.judges.role_judge import RoleJudge
 from pvx.utils.response_generation import ResponseGeneration
 
 load_dotenv()
 
-logger = setup_logging(name="roles-optimized-cpu")
 
 
 class RoleQAGenerator(ResponseGeneration):
@@ -215,13 +217,17 @@ class RoleQAGenerator(ResponseGeneration):
 
                     # Check if pair is valid (pos_score == 3, base_score != 0)
                     if pos_score != 3:
-                        logger.debug(
+                        logger.info(
                             f"Rejected positive response (score {pos_score}, expected 3)"
                         )
+                        logger.info("QUESTION: %s", question)
+                        logger.info(pos_response)
                         continue
 
                     if base_score == 0:
-                        logger.debug(f"Rejected base response (score {base_score}, expected non-zero)")
+                        logger.info(f"Rejected base response (score {base_score}, expected non-zero)")
+                        logger.info("QUESTION: %s", question)
+                        logger.info(base_response)
                         continue
 
                     # Save valid pair

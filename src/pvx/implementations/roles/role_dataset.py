@@ -1,16 +1,23 @@
+from __future__ import annotations
+
 import argparse
 import json
 import os
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, TYPE_CHECKING
 
-import torch
-from torch import dtype, float16
+if TYPE_CHECKING:
+    import torch
+    
 from dotenv import load_dotenv
 
 from pvx import Heartbeat, setup_logging
-from pvx.utils.prompts import PromptTemplates
+
+# Initialize logger once per process
+logger = setup_logging(name="role-dataset")
+
 from pvx.abstraction.pvx_models.abstract_dataset import AbstractDataset
+from pvx.utils.prompts import PromptTemplates
 from pvx.utils.riasec_utils import RIASECHelpers
 
 load_dotenv()
@@ -18,8 +25,6 @@ load_dotenv()
 BACKENDS = ("openai", "vllm", "hf_local")
 
 
-# Initialize logger once per process
-logger = setup_logging(name="role-dataset")
 
 class RoleDataset(AbstractDataset):
 
@@ -34,7 +39,7 @@ class RoleDataset(AbstractDataset):
         api_key_env: str = "LITELLM_API_KEY",
         local_model: Optional[str] = "Qwen/Qwen2.5-1.5B-Instruct",
         device: Optional[str] = None,
-        dtype: dtype = float16,
+        dtype: torch.dtype = None,
         dirpath: str = "./persona_data/role_datasets/",
     ):
         
