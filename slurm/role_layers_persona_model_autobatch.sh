@@ -58,12 +58,6 @@ while [[ $# -gt 0 ]]; do
 done
 # ===========================
 
-### VALIDATION ###
-if ! command -v jq &>/dev/null; then
-    echo "Error: jq is required but not found in PATH."
-    exit 1
-fi
-
 if [[ ${#EXPLICIT_ROLES[@]} -gt 0 ]]; then
     ALL_ROLES=("${EXPLICIT_ROLES[@]}")
     echo "Using explicitly provided roles: ${ALL_ROLES[*]}"
