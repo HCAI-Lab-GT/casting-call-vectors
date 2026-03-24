@@ -11,6 +11,7 @@ cd "$SLURM_SUBMIT_DIR"
 # ===CLI ARGS==================
 ROLE=""
 MODEL="allenai/Olmo-3-7B-Instruct"
+ANSWER_MODEL=""  # model used for Q/A generation; defaults to MODEL if empty
 LAYER=16
 COUNTS=()
 SAFETENSORS_DIR="./persona_data/model_layer_inits/"
@@ -30,6 +31,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --role)                ROLE="$2"; shift 2;;
     -m|--model)            MODEL="$2"; shift 2;;
+    --answer-model)        ANSWER_MODEL="$2"; shift 2;;
     -l|--layer)            LAYER="$2"; shift 2;;
     --counts)              shift; while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do COUNTS+=("$1"); shift; done;;
     --safetensors-dir)     SAFETENSORS_DIR="$2"; shift 2;;
@@ -51,6 +53,7 @@ done
 echo "===CLI ARGS=================="
 echo "ROLE: $ROLE"
 echo "MODEL: $MODEL"
+echo "ANSWER_MODEL: ${ANSWER_MODEL:-$MODEL}"
 echo "LAYER: $LAYER"
 echo "COUNTS: ${COUNTS[*]}"
 echo "SAFETENSORS_DIR: $SAFETENSORS_DIR"
@@ -75,6 +78,8 @@ echo "$(date '+%Y-%m-%d %H:%M:%S,%3N') | INFO | .sbatch | Loaded .venv environme
 
 
 SAFE_MODEL="${MODEL//\//__}"
+EFFECTIVE_ANSWER_MODEL="${ANSWER_MODEL:-$MODEL}"
+SAFE_ANSWER_MODEL="${EFFECTIVE_ANSWER_MODEL//\//__}"
 
 # Helper: check if the gold experiment CSV has all required parameter combinations
 # for a specific (layer, sample_count) pairing complete.
@@ -141,10 +146,22 @@ for count in "${COUNTS[@]}"; do
 done
 
 if [[ ${#COUNTS_FOR_PYTHON[@]} -gt 0 ]]; then
+    QA_PATH="${QA_RESPONSES_DIR}/${SAFE_ANSWER_MODEL}/${ROLE}.json"
+    if [ ! -f "$QA_PATH" ]; then
+        echo "Error: Q/A responses not found at $QA_PATH. Run CPU phase first."
+        exit 1
+    fi
+    QA_COUNT=$(python3 -c "import json; d=json.load(open('$QA_PATH')); print(len(d.get('positive', [])))" 2>/dev/null || echo "0")
+    if [[ "$QA_COUNT" -eq 0 ]]; then
+        echo "Error: Q/A responses at $QA_PATH have 0 positive pairs. Re-run CPU phase for $ROLE."
+        exit 1
+    fi
+    echo "Q/A responses: $QA_COUNT positive pairs at $QA_PATH"
     echo "--- Extracting role=$ROLE layer=$LAYER counts=(${COUNTS_FOR_PYTHON[*]}) in one pass ---"
     echo "$(date '+%Y-%m-%d %H:%M:%S,%3N') | INFO | .sbatch | Calling srun..."
     srun uv run --no-sync python src/pvx/implementations/roles_optimized/roles_optimized_gpu.py \
         --activation_extraction_model "$MODEL" \
+        --answer_model "$EFFECTIVE_ANSWER_MODEL" \
         --roles "$ROLE" \
         --layer "$LAYER" \
         --counts "${COUNTS_FOR_PYTHON[@]}" \

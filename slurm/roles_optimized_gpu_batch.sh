@@ -25,6 +25,7 @@ NAME="roles_optimized_gpu_batch"
 # defaults
 ROLE=""
 MODEL="allenai/Olmo-3-7B-Instruct"
+ANSWER_MODEL=""  # model used for Q/A generation; defaults to MODEL if empty
 LAYER=16
 COUNTS=()
 SAFETENSORS_DIR="./persona_data/model_layer_inits/"
@@ -44,6 +45,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --role)                ROLE="$2"; shift 2;;
     -m|--model)            MODEL="$2"; shift 2;;
+    --answer-model)        ANSWER_MODEL="$2"; shift 2;;
     -l|--layer)            LAYER="$2"; shift 2;;
     --counts)              shift; while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do COUNTS+=("$1"); shift; done;;
     --safetensors-dir)     SAFETENSORS_DIR="$2"; shift 2;;
@@ -104,6 +106,7 @@ sbatch  --gres "$GPU_CONFIG" --ntasks-per-node 1 --cpus-per-task "$NUM_WORKERS" 
         "slurm/$NAME.sbatch" \
         --role "$ROLE" \
         --model "$MODEL" \
+        $( [[ -n "$ANSWER_MODEL" ]] && echo "--answer-model $ANSWER_MODEL" ) \
         --layer "$LAYER" \
         --counts "${COUNTS[@]}" \
         --safetensors-dir "$SAFETENSORS_DIR" \

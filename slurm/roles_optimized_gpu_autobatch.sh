@@ -39,7 +39,8 @@ source .env
 # ===CLI ARGS==================
 # defaults
 JSON_FILE="configs/role_init_incomplete.json"
-MODEL=""   # empty = use model_id from each JSON entry
+MODEL=""        # empty = use model_id from each JSON entry
+ANSWER_MODEL="" # model used for Q/A generation; defaults to MODEL if empty
 SAFETENSORS_DIR="./persona_data/model_layer_inits/"
 QA_RESPONSES_DIR="./persona_data/model_qa_responses"
 DATASET_DIR="./persona_data/role_datasets/"
@@ -58,6 +59,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     -f|--file)             JSON_FILE="$2"; shift 2;;
     -m|--model)            MODEL="$2"; shift 2;;
+    --answer-model)        ANSWER_MODEL="$2"; shift 2;;
     --safetensors-dir)     SAFETENSORS_DIR="$2"; shift 2;;
     --qa-responses-dir)    QA_RESPONSES_DIR="$2"; shift 2;;
     --dataset-dir)         DATASET_DIR="$2"; shift 2;;
@@ -101,6 +103,7 @@ skipped_no_qa=0
 # Collect all still-incomplete entries before submission
 declare -a PENDING_ROLES
 declare -a PENDING_MODELS
+declare -a PENDING_ANSWER_MODELS
 declare -a PENDING_LAYERS
 declare -a PENDING_MISSING  # each element is a space-joined string of missing counts
 
@@ -113,9 +116,11 @@ for ((i=0; i<TOTAL; i++)); do
     # Allow --model to override the per-entry model_id
     effective_model="${MODEL:-$model_id}"
     SAFE_MODEL="${effective_model//\//__}"
+    effective_answer_model="${ANSWER_MODEL:-$effective_model}"
+    SAFE_ANSWER_MODEL="${effective_answer_model//\//__}"
 
     # Check if Q/A responses exist for this role (required for GPU extraction)
-    QA_PATH="${QA_RESPONSES_DIR}/${SAFE_MODEL}/${role}.json"
+    QA_PATH="${QA_RESPONSES_DIR}/${SAFE_ANSWER_MODEL}/${role}.json"
     if [ ! -f "$QA_PATH" ]; then
         echo "  Skipping $role: Q/A responses not found at $QA_PATH (run CPU phase first)"
         ((skipped_no_qa++))
@@ -139,6 +144,7 @@ for ((i=0; i<TOTAL; i++)); do
 
     PENDING_ROLES+=("$role")
     PENDING_MODELS+=("$effective_model")
+    PENDING_ANSWER_MODELS+=("$effective_answer_model")
     PENDING_LAYERS+=("$layer")
     PENDING_MISSING+=("${still_missing[*]}")
 done
@@ -166,13 +172,15 @@ if [[ "$NUM_BINS" -le 0 || "$TOTAL_PENDING" -eq 0 ]]; then
     for ((j=0; j<TOTAL_PENDING; j++)); do
         role="${PENDING_ROLES[$j]}"
         effective_model="${PENDING_MODELS[$j]}"
+        effective_answer_model="${PENDING_ANSWER_MODELS[$j]}"
         layer="${PENDING_LAYERS[$j]}"
         read -ra still_missing <<< "${PENDING_MISSING[$j]}"
 
-        echo "  Submitting GPU job for role=$role model=$effective_model layer=$layer counts=(${still_missing[*]})"
+        echo "  Submitting GPU job for role=$role model=$effective_model answer_model=$effective_answer_model layer=$layer counts=(${still_missing[*]})"
         bash slurm/roles_optimized_gpu_batch.sh \
             --role "$role" \
             --model "$effective_model" \
+            --answer-model "$effective_answer_model" \
             --layer "$layer" \
             --counts "${still_missing[@]}" \
             "${COMMON_ARGS[@]}"
@@ -194,13 +202,15 @@ else
         for ((j=start; j<end; j++)); do
             role="${PENDING_ROLES[$j]}"
             effective_model="${PENDING_MODELS[$j]}"
+            effective_answer_model="${PENDING_ANSWER_MODELS[$j]}"
             layer="${PENDING_LAYERS[$j]}"
             read -ra still_missing <<< "${PENDING_MISSING[$j]}"
 
-            echo "  [Bin $((bin+1))/$NUM_BINS] Submitting GPU job for role=$role model=$effective_model layer=$layer counts=(${still_missing[*]})"
+            echo "  [Bin $((bin+1))/$NUM_BINS] Submitting GPU job for role=$role model=$effective_model answer_model=$effective_answer_model layer=$layer counts=(${still_missing[*]})"
             bash slurm/roles_optimized_gpu_batch.sh \
                 --role "$role" \
                 --model "$effective_model" \
+                --answer-model "$effective_answer_model" \
                 --layer "$layer" \
                 --counts "${still_missing[@]}" \
                 "${COMMON_ARGS[@]}"

@@ -133,6 +133,7 @@ print(max(max(e['counts']) for e in entries))
         bash slurm/roles_optimized_gpu_batch.sh \
             --role "$role" \
             --model "$MODEL" \
+            --answer-model "$MODEL" \
             --layer "$layer" \
             --counts "${counts_arr[@]}" \
             --safetensors-dir "$SAFETENSORS_DIR" \
@@ -206,6 +207,7 @@ else
     bash slurm/roles_optimized_gpu_batch.sh \
         --role "$ROLE" \
         --model "$MODEL" \
+        --answer-model "$MODEL" \
         --layer "$LAYER" \
         --counts "${COUNTS[@]}" \
         --safetensors-dir "$SAFETENSORS_DIR" \
