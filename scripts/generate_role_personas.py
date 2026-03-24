@@ -343,7 +343,7 @@ async def async_load_or_generate_profile(
     role_profile: RoleProfile,
     profile_name: str,
     profiles_dir: Path,
-    force_regenerate: bool = False,
+    force_regenerate: bool = True,
 ) -> dict:
     """Async version: Load an existing profile from disk, or generate and save it.
 
@@ -353,6 +353,7 @@ async def async_load_or_generate_profile(
     If no cached profile exists, generates from scratch.
     """
     logger = logging.getLogger(__name__)
+    print(profiles_dir)
     profile_path = profiles_dir / f"{profile_name}.json"
 
     if profile_path.exists() and not force_regenerate:
@@ -522,15 +523,10 @@ async def _persona_worker(
                     existing = json.load(f)
 
                 issues = persona_is_incomplete(existing)
-                questions_only = (
-                    len(issues) == 1
-                    and issues[0].startswith("questions(")
-                )
+                questions_only = len(issues) == 1 and issues[0].startswith("questions(")
 
                 if questions_only:
-                    repaired_questions = await generator.arepair_questions(
-                        profile, existing
-                    )
+                    repaired_questions = await generator.arepair_questions(profile, existing)
                     existing["questions"] = repaired_questions
                     generator.save_persona(slug, existing)
                     logger.info(
@@ -539,11 +535,19 @@ async def _persona_worker(
                         len(repaired_questions),
                     )
                 else:
-                    await generator.agenerate_and_save(
-                        profile, include_questions, slug
-                    )
+                    result = await generator.agenerate_and_save(profile, include_questions, slug)
+                    if not result:
+                        raise RuntimeError(
+                            f"agenerate_and_save returned empty for '{role_name}' — "
+                            "LLM likely failed to produce valid prompts"
+                        )
             else:
-                await generator.agenerate_and_save(profile, include_questions, slug)
+                result = await generator.agenerate_and_save(profile, include_questions, slug)
+                if not result:
+                    raise RuntimeError(
+                        f"agenerate_and_save returned empty for '{role_name}' — "
+                        "LLM likely failed to produce valid prompts"
+                    )
 
             async with cp_lock:
                 stats["success_count"] += 1
@@ -772,6 +776,26 @@ async def async_main():
                 stale_name,
                 ", ".join(incomplete_personas[stale_name]),
             )
+
+    # Detect phantom completions: checkpoint says "completed" but no file on disk
+    phantom_personas: list[str] = []
+    for name in list(completed_personas_set):
+        if not (output_dir / f"{name}.json").exists():
+            phantom_personas.append(name)
+            completed_personas_set.discard(name)
+            if name in checkpoint.completed_personas:
+                checkpoint.completed_personas.remove(name)
+            logger.info(
+                "Removed phantom completion '%s' from completed_personas — no file on disk",
+                name,
+            )
+    if phantom_personas:
+        print(f"  Phantom completions (no file): {len(phantom_personas)}")
+        for name in sorted(phantom_personas)[:10]:
+            print(f"    {name}")
+        if len(phantom_personas) > 10:
+            print(f"    ... and {len(phantom_personas) - 10} more")
+        personas_needing_regen.update(phantom_personas)
 
     save_checkpoint(cp_path, checkpoint)
 
