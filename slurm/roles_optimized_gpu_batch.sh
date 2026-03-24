@@ -15,7 +15,7 @@ NAME="roles_optimized_gpu_batch"
 #
 # Usage:
 #   bash slurm/roles_optimized_gpu_batch.sh --role <role> --model <model> \
-#       --layer <layer> --missing-counts <c1> [c2 ...] [options...]
+#       --layer <layer> --counts <c1> [c2 ...] [options...]
 #
 # Author: iiisong
 # Date: 2026-03-23
@@ -26,7 +26,7 @@ NAME="roles_optimized_gpu_batch"
 ROLE=""
 MODEL="allenai/Olmo-3-7B-Instruct"
 LAYER=16
-MISSING_COUNTS=()
+COUNTS=()
 SAFETENSORS_DIR="./persona_data/model_layer_inits/"
 QA_RESPONSES_DIR="./persona_data/model_qa_responses"
 DATASET_DIR="./persona_data/role_datasets/"
@@ -45,7 +45,7 @@ while [[ $# -gt 0 ]]; do
     --role)                ROLE="$2"; shift 2;;
     -m|--model)            MODEL="$2"; shift 2;;
     -l|--layer)            LAYER="$2"; shift 2;;
-    --missing-counts)      shift; while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do MISSING_COUNTS+=("$1"); shift; done;;
+    --counts)              shift; while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do COUNTS+=("$1"); shift; done;;
     --safetensors-dir)     SAFETENSORS_DIR="$2"; shift 2;;
     --qa-responses-dir)    QA_RESPONSES_DIR="$2"; shift 2;;
     --dataset-dir)         DATASET_DIR="$2"; shift 2;;
@@ -84,8 +84,8 @@ if [ -z "$ROLE" ]; then
     echo "Error: --role is required"
     exit 1
 fi
-if [[ ${#MISSING_COUNTS[@]} -eq 0 ]]; then
-    echo "Error: --missing-counts requires at least one value"
+if [[ ${#COUNTS[@]} -eq 0 ]]; then
+    echo "Error: --counts requires at least one value"
     exit 1
 fi
 
@@ -105,7 +105,7 @@ sbatch  --gres "$GPU_CONFIG" --ntasks-per-node 1 --cpus-per-task "$NUM_WORKERS" 
         --role "$ROLE" \
         --model "$MODEL" \
         --layer "$LAYER" \
-        --missing-counts "${MISSING_COUNTS[@]}" \
+        --counts "${COUNTS[@]}" \
         --safetensors-dir "$SAFETENSORS_DIR" \
         --qa-responses-dir "$QA_RESPONSES_DIR" \
         --dataset-dir "$DATASET_DIR" \

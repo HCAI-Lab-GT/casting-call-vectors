@@ -12,9 +12,9 @@ cd "$SLURM_SUBMIT_DIR"
 ROLE=""
 MODEL="allenai/Olmo-3-7B-Instruct"
 LAYER=16
-MISSING_COUNTS=()
+COUNTS=()
 TARGET_PAIRS=60
-BIN_CONFIG=""  # JSON file with [{role, layer, missing_counts}, ...] for multi-role bin mode
+BIN_CONFIG=""  # JSON file with [{role, layer, counts}, ...] for multi-role bin mode
 SAFETENSORS_DIR="./persona_data/model_layer_inits/"
 QA_RESPONSES_DIR="./persona_data/model_qa_responses"
 DATASET_DIR="./persona_data/role_datasets/"
@@ -36,7 +36,7 @@ while [[ $# -gt 0 ]]; do
     --role)                ROLE="$2"; shift 2;;
     -m|--model)            MODEL="$2"; shift 2;;
     -l|--layer)            LAYER="$2"; shift 2;;
-    --missing-counts)      shift; while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do MISSING_COUNTS+=("$1"); shift; done;;
+    --counts)              shift; while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do COUNTS+=("$1"); shift; done;;
     --target-pairs)        TARGET_PAIRS="$2"; shift 2;;
     --bin-config)          BIN_CONFIG="$2"; shift 2;;
     --safetensors-dir)     SAFETENSORS_DIR="$2"; shift 2;;
@@ -83,11 +83,11 @@ if [ -n "$BIN_CONFIG" ]; then
     echo "Roles in bin: $(python3 -c "import json; print(' '.join(e['role'] for e in json.load(open('$BIN_CONFIG'))))")"
     echo "==========================="
 
-    # Compute TARGET_PAIRS = max of all missing_counts across all bin entries
+    # Compute TARGET_PAIRS = max of all counts across all bin entries
     TARGET_PAIRS=$(python3 -c "
 import json
 entries = json.load(open('$BIN_CONFIG'))
-print(max(max(e['missing_counts']) for e in entries))
+print(max(max(e['counts']) for e in entries))
 ")
 
     # Build roles list for Python
@@ -126,14 +126,14 @@ print(max(max(e['missing_counts']) for e in entries))
         QA_COUNT=$(python3 -c "import json; d=json.load(open('$QA_PATH')); print(len(d.get('positive', [])))" 2>/dev/null || echo "0")
         echo "Q/A for $role: $QA_COUNT positive pairs at $QA_PATH"
 
-        read -ra missing_counts_arr <<< "$counts"
-        echo "Chaining to GPU extraction job for $role (layer=$layer, counts=${missing_counts_arr[*]})..."
+        read -ra counts_arr <<< "$counts"
+        echo "Chaining to GPU extraction job for $role (layer=$layer, counts=${counts_arr[*]})..."
 
         bash slurm/roles_optimized_gpu_batch.sh \
             --role "$role" \
             --model "$MODEL" \
             --layer "$layer" \
-            --missing-counts "${missing_counts_arr[@]}" \
+            --counts "${counts_arr[@]}" \
             --safetensors-dir "$SAFETENSORS_DIR" \
             --qa-responses-dir "$QA_RESPONSES_DIR" \
             --dataset-dir "$DATASET_DIR" \
@@ -149,7 +149,7 @@ print(max(max(e['missing_counts']) for e in entries))
 import json
 entries = json.load(open('$BIN_CONFIG'))
 for e in entries:
-    print('{}|{}|{}'.format(e['role'], e['layer'], ' '.join(map(str, e['missing_counts']))))
+    print('{}|{}|{}'.format(e['role'], e['layer'], ' '.join(map(str, e['counts']))))
 ")
 
 else
@@ -158,23 +158,12 @@ else
     echo "ROLE: $ROLE"
     echo "MODEL: $MODEL"
     echo "LAYER: $LAYER"
-    echo "MISSING_COUNTS: ${MISSING_COUNTS[*]}"
+    echo "COUNTS: ${COUNTS[*]}"
     echo "TARGET_PAIRS: $TARGET_PAIRS"
     echo "BACKEND: $BACKEND"
     echo "QA_RESPONSES_DIR: $QA_RESPONSES_DIR"
     echo "DATASET_DIR: $DATASET_DIR"
-    echo "NO_CHAIN: ${NO_CHAIN:-false}"
     echo "==========================="
-
-    echo "$(date '+%Y-%m-%d %H:%M:%S,%3N') | INFO | .sbatch | Calling sruns..."
-    srun hostname  # if this is also slow, it's srun itself
-    echo "$(date '+%Y-%m-%d %H:%M:%S,%3N') | INFO | .sbatch | hostname test completed."
-
-    srun python -c "print('ping')"  # if only this is slow, it's python startup
-    echo "$(date '+%Y-%m-%d %H:%M:%S,%3N') | INFO | .sbatch | trivial python test completed."
-
-    srun uv run --no-sync python -c "print('pong')"
-    echo "$(date '+%Y-%m-%d %H:%M:%S,%3N') | INFO | .sbatch | trivial uv python test completed."
 
     ### CPU PHASE: Generate and judge Q/A responses ###
     srun uv run --no-sync python src/pvx/implementations/roles_optimized/roles_optimized_cpu.py \
@@ -210,14 +199,14 @@ else
     fi
 
     ### CHAIN: Submit GPU extraction job ###
-    echo "Chaining to GPU extraction job for $ROLE (layer=$LAYER, counts=${MISSING_COUNTS[*]})..."
+    echo "Chaining to GPU extraction job for $ROLE (layer=$LAYER, counts=${COUNTS[*]})..."
     source .env  # reload for PACE_ACCOUNT in case compute node env doesn't have it
 
     bash slurm/roles_optimized_gpu_batch.sh \
         --role "$ROLE" \
         --model "$MODEL" \
         --layer "$LAYER" \
-        --missing-counts "${MISSING_COUNTS[@]}" \
+        --counts "${COUNTS[@]}" \
         --safetensors-dir "$SAFETENSORS_DIR" \
         --qa-responses-dir "$QA_RESPONSES_DIR" \
         --dataset-dir "$DATASET_DIR" \

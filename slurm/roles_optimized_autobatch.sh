@@ -116,7 +116,7 @@ for ((i=0; i<TOTAL; i++)); do
     role=$(jq -r ".[$i].role" "$JSON_FILE")
     model_id=$(jq -r ".[$i].model_id" "$JSON_FILE")
     layer=$(jq -r ".[$i].layer" "$JSON_FILE")
-    readarray -t missing_counts < <(jq -r ".[$i].missing_counts[]" "$JSON_FILE")
+    readarray -t counts < <(jq -r ".[$i].missing_counts[]" "$JSON_FILE")
 
     # Allow --model to override the per-entry model_id
     effective_model="${MODEL:-$model_id}"
@@ -124,7 +124,7 @@ for ((i=0; i<TOTAL; i++)); do
 
     # Re-verify: check which counts are still actually missing on disk
     still_missing=()
-    for count in "${missing_counts[@]}"; do
+    for count in "${counts[@]}"; do
         expected="${SAFETENSORS_DIR}/${role}_persona_initialization/${SAFE_MODEL}_layer${layer}_count${count}.safetensors"
         if [ ! -f "$expected" ]; then
             still_missing+=("$count")
@@ -132,7 +132,7 @@ for ((i=0; i<TOTAL; i++)); do
     done
 
     if [[ ${#still_missing[@]} -eq 0 ]]; then
-        echo "  Skipping $role: all counts (${missing_counts[*]}) already present on disk"
+        echo "  Skipping $role: all counts (${counts[*]}) already present on disk"
         ((skipped++))
         continue
     fi
@@ -173,14 +173,14 @@ if [[ "$NUM_BINS" -le 0 || "$TOTAL_PENDING" -eq 0 || "$DRY_RUN" == "true" ]]; th
         read -ra still_missing <<< "${PENDING_MISSING[$j]}"
 
         if [[ "$DRY_RUN" == "true" ]]; then
-            echo "  Dry run so did not submit CPU job for role=$role model=$effective_model layer=$layer missing_counts=(${still_missing[*]})"
+            echo "  Dry run so did not submit CPU job for role=$role model=$effective_model layer=$layer counts=(${still_missing[*]})"
         else
-            echo "  Submitting CPU job for role=$role model=$effective_model layer=$layer missing_counts=(${still_missing[*]})"
+            echo "  Submitting CPU job for role=$role model=$effective_model layer=$layer counts=(${still_missing[*]})"
             bash slurm/roles_optimized_cpu_batch.sh \
                 --role "$role" \
                 --model "$effective_model" \
                 --layer "$layer" \
-                --missing-counts "${still_missing[@]}" \
+                --counts "${still_missing[@]}" \
                 "${COMMON_ARGS[@]}"
 
             ((submitted++))
@@ -198,7 +198,7 @@ else
         end=$((start + bin_size))
         [[ $end -gt $TOTAL_PENDING ]] && end=$TOTAL_PENDING
 
-        # Write per-bin JSON config: [{role, layer, missing_counts}, ...]
+        # Write per-bin JSON config: [{role, layer, counts}, ...]
         BIN_CONFIG_FILE=$(mktemp /tmp/roles_bin_config_XXXXXX.json)
         bin_json="["
         for ((j=start; j<end; j++)); do
@@ -207,7 +207,7 @@ else
                 --arg role "${PENDING_ROLES[$j]}" \
                 --argjson layer "${PENDING_LAYERS[$j]}" \
                 --argjson counts "$counts_json" \
-                '{role: $role, layer: $layer, missing_counts: $counts}')
+                '{role: $role, layer: $layer, counts: $counts}')
             [[ $j -gt $start ]] && bin_json+=","
             bin_json+="$entry"
         done

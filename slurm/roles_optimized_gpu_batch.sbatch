@@ -12,7 +12,7 @@ cd "$SLURM_SUBMIT_DIR"
 ROLE=""
 MODEL="allenai/Olmo-3-7B-Instruct"
 LAYER=16
-MISSING_COUNTS=()
+COUNTS=()
 SAFETENSORS_DIR="./persona_data/model_layer_inits/"
 QA_RESPONSES_DIR="./persona_data/model_qa_responses"
 DATASET_DIR="./persona_data/role_datasets/"
@@ -31,7 +31,7 @@ while [[ $# -gt 0 ]]; do
     --role)                ROLE="$2"; shift 2;;
     -m|--model)            MODEL="$2"; shift 2;;
     -l|--layer)            LAYER="$2"; shift 2;;
-    --missing-counts)      shift; while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do MISSING_COUNTS+=("$1"); shift; done;;
+    --counts)              shift; while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do COUNTS+=("$1"); shift; done;;
     --safetensors-dir)     SAFETENSORS_DIR="$2"; shift 2;;
     --qa-responses-dir)    QA_RESPONSES_DIR="$2"; shift 2;;
     --dataset-dir)         DATASET_DIR="$2"; shift 2;;
@@ -52,7 +52,7 @@ echo "===CLI ARGS=================="
 echo "ROLE: $ROLE"
 echo "MODEL: $MODEL"
 echo "LAYER: $LAYER"
-echo "MISSING_COUNTS: ${MISSING_COUNTS[*]}"
+echo "COUNTS: ${COUNTS[*]}"
 echo "SAFETENSORS_DIR: $SAFETENSORS_DIR"
 echo "QA_RESPONSES_DIR: $QA_RESPONSES_DIR"
 echo "GOLD_SAVE_DIR: $GOLD_SAVE_DIR"
@@ -118,49 +118,48 @@ sys.exit(0)
 ALPHAS_PY=$(IFS=,; echo "${ALPHAS[*]}")
 TEMPERATURES_PY=$(IFS=,; echo "${TEMPERATURES[*]}")
 
-### GPU PHASE: Extract persona vectors for each missing count ###
-# NOTE: roles_optimized_gpu.py must accept --sample_count <N> to limit extraction
-# to N Q/A pairs (producing {safe_model}_layer{L}_count{N}.safetensors).
-# If not yet supported, add the --sample_count argument to roles_optimized_gpu.py.
+### GPU PHASE: Extract persona vectors for all counts in one pass ###
+# Collect which counts are still missing on disk
+COUNTS_FOR_PYTHON=()
+for count in "${COUNTS[@]}"; do
+    SAFETENSORS_PATH="${SAFETENSORS_DIR}/${ROLE}_persona_initialization/${SAFE_MODEL}_layer${LAYER}_count${count}.safetensors"
+    if [ -f "$SAFETENSORS_PATH" ]; then
+        echo "Safetensors already exists at $SAFETENSORS_PATH, skipping extraction for count=$count"
+    else
+        COUNTS_FOR_PYTHON+=("$count")
+    fi
+done
 
+if [[ ${#COUNTS_FOR_PYTHON[@]} -gt 0 ]]; then
+    echo "--- Extracting role=$ROLE layer=$LAYER counts=(${COUNTS_FOR_PYTHON[*]}) in one pass ---"
+    srun uv run --no-sync python src/pvx/implementations/roles_optimized/roles_optimized_gpu.py \
+        --activation_extraction_model "$MODEL" \
+        --roles "$ROLE" \
+        --layer "$LAYER" \
+        --counts "${COUNTS_FOR_PYTHON[@]}" \
+        --qa_responses_dir "$QA_RESPONSES_DIR" \
+        --dataset_dir "$DATASET_DIR" \
+        --output_dir "$SAFETENSORS_DIR"
+
+    GPU_RETURN_CODE=$?
+    if [ "$GPU_RETURN_CODE" -ne 0 ]; then
+        echo "Error: GPU extraction failed for $ROLE (exit code $GPU_RETURN_CODE)"
+        exit "$GPU_RETURN_CODE"
+    fi
+fi
+
+### CHAIN: Submit gold experiment per count if not yet complete ###
 any_success=false
-
-for count in "${MISSING_COUNTS[@]}"; do
+for count in "${COUNTS[@]}"; do
     SAFETENSORS_PATH="${SAFETENSORS_DIR}/${ROLE}_persona_initialization/${SAFE_MODEL}_layer${LAYER}_count${count}.safetensors"
 
-    echo "--- Extracting: role=$ROLE layer=$LAYER count=$count ---"
-
-    # Skip if safetensors already exists (e.g. job re-submitted)
-    if [ -f "$SAFETENSORS_PATH" ]; then
-        echo "Safetensors already exists at $SAFETENSORS_PATH, skipping extraction"
-        any_success=true
-    else
-        srun uv run python src/pvx/implementations/roles_optimized/roles_optimized_gpu.py \
-            --activation_extraction_model "$MODEL" \
-            --roles "$ROLE" \
-            --layer "$LAYER" \
-            --sample_count "$count" \
-            --qa_responses_dir "$QA_RESPONSES_DIR" \
-            --dataset_dir "$DATASET_DIR" \
-            --output_dir "$SAFETENSORS_DIR"
-
-        GPU_RETURN_CODE=$?
-        if [ "$GPU_RETURN_CODE" -ne 0 ]; then
-            echo "Error: GPU extraction failed for $ROLE count=$count (exit code $GPU_RETURN_CODE)"
-            continue
-        fi
-
-        # Verify file was created
-        if [ ! -f "$SAFETENSORS_PATH" ]; then
-            echo "Warning: Expected safetensors not found at $SAFETENSORS_PATH after extraction. Skipping gold experiment for this count."
-            continue
-        fi
-
-        echo "Safetensors saved: $SAFETENSORS_PATH"
-        any_success=true
+    if [ ! -f "$SAFETENSORS_PATH" ]; then
+        echo "Warning: Safetensors not found at $SAFETENSORS_PATH after extraction. Skipping gold experiment for count=$count."
+        continue
     fi
 
-    ### CHAIN: Submit gold experiment if this (role, layer, count) pairing is not yet complete ###
+    any_success=true
+
     if [[ "$NO_CHAIN" == "true" ]]; then
         echo "Skipping gold experiment chain for $ROLE (layer=$LAYER, count=$count) [--no-chain]"
     else
@@ -189,7 +188,7 @@ for count in "${MISSING_COUNTS[@]}"; do
 done
 
 if [ "$any_success" = false ]; then
-    echo "Error: All GPU extractions failed for $ROLE."
+    echo "Error: No safetensors produced for $ROLE."
     exit 1
 fi
 
