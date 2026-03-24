@@ -52,10 +52,14 @@ echo "==========================="
 
 # module load anaconda3
 module load uv
-source .venv/bin/activate
-uv sync
 
-srun uv run python src/pvx/experiments/gold_prompt_experiments.py \
+if [ ! -d ".venv" ]; then
+    uv sync
+fi
+
+source .venv/bin/activate
+
+srun uv run --no-sync python src/pvx/experiments/gold_prompt_experiments.py \
         --model "$MODEL" \
         --roles "${ROLES[@]}" \
         --alphas "${ALPHAS[@]}" \

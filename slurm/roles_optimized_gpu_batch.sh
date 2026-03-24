@@ -64,7 +64,7 @@ done
 
 ### SLURM SETTINGS ###
 # runtime settings
-GPU_CONFIG=gpu:h200:1
+GPU_CONFIG=gpu:1
 NUM_NODES=1
 NUM_WORKERS=8
 MEM_PER_NODE=512G

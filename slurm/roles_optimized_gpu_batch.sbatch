@@ -58,11 +58,21 @@ echo "QA_RESPONSES_DIR: $QA_RESPONSES_DIR"
 echo "GOLD_SAVE_DIR: $GOLD_SAVE_DIR"
 echo "ALPHAS: ${ALPHAS[*]}"
 echo "TEMPERATURES: ${TEMPERATURES[*]}"
+echo "NO_CHAIN: ${NO_CHAIN:-false}"
 echo "==========================="
 
+echo "$(date '+%Y-%m-%d %H:%M:%S,%3N') | INFO | .sbatch | Processed CLI"
+
 module load uv
+if [ ! -d ".venv" ]; then
+    uv sync
+fi
+
+echo "$(date '+%Y-%m-%d %H:%M:%S,%3N') | INFO | .sbatch | Loaded uv"
+
 source .venv/bin/activate
-uv sync
+echo "$(date '+%Y-%m-%d %H:%M:%S,%3N') | INFO | .sbatch | Loaded .venv environment"
+
 
 SAFE_MODEL="${MODEL//\//__}"
 
@@ -132,6 +142,7 @@ done
 
 if [[ ${#COUNTS_FOR_PYTHON[@]} -gt 0 ]]; then
     echo "--- Extracting role=$ROLE layer=$LAYER counts=(${COUNTS_FOR_PYTHON[*]}) in one pass ---"
+    echo "$(date '+%Y-%m-%d %H:%M:%S,%3N') | INFO | .sbatch | Calling srun..."
     srun uv run --no-sync python src/pvx/implementations/roles_optimized/roles_optimized_gpu.py \
         --activation_extraction_model "$MODEL" \
         --roles "$ROLE" \

@@ -133,6 +133,9 @@ class RoleQAGenerator(ResponseGeneration):
             Dictionary with "positive" and "base" Q/A pairs
         """
         logger.info(f"Generating and judging Q/A for role: {role}")
+        
+        self.judge.prompt_template = dataset.evaluation_prompt
+        logger.info(f"Prompt Template being used: {self.judge.prompt_template}")
 
         # Get question-prompt pairs from dataset
         prompt_pairs = dataset.extract_pos_question_pairs()
@@ -371,8 +374,8 @@ def main():
         "-n",
         "--target_pairs",
         type=int,
-        default=60,
-        help="Target number of valid pairs per role (default: 60)",
+        default=50,
+        help="Target number of valid pairs per role (default: 50)",
     )
     ap.add_argument(
         "-t",

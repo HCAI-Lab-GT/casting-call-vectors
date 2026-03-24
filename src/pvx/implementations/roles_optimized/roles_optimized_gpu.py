@@ -22,16 +22,16 @@ import json
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple
-import random
-
-import torch
-from safetensors.torch import save_file
 from tqdm import tqdm
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from transformers.utils import logging as transformers_logging
+import random
 
 from pvx import setup_logging
 logger = setup_logging(name="roles-optimized-gpu")
+
+import torch
+from safetensors.torch import save_file
+from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers.utils import logging as transformers_logging
 
 from pvx.abstraction.pvx_models.abstract_persona_model import AbstractPersonaModel
 from pvx.implementations.roles.role_dataset import RoleDataset

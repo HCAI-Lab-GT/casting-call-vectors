@@ -80,6 +80,7 @@ if [ -n "$BIN_CONFIG" ]; then
     echo "BACKEND: $BACKEND"
     echo "QA_RESPONSES_DIR: $QA_RESPONSES_DIR"
     echo "DATASET_DIR: $DATASET_DIR"
+    echo "NO_CHAIN: ${NO_CHAIN:-false}"
     echo "Roles in bin: $(python3 -c "import json; print(' '.join(e['role'] for e in json.load(open('$BIN_CONFIG'))))")"
     echo "==========================="
 
