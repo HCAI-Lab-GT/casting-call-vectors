@@ -8,12 +8,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from pvx import Heartbeat, setup_logging
+logger = setup_logging(name="abstract-persona-model")
+
 import torch
 from safetensors.torch import save_file
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.utils import logging as transformers_logging
 
-from pvx import Heartbeat, setup_logging
 from pvx.implementations.judges.llm_as_judge import LLMJudge
 from pvx.abstraction.pvx_models.abstract_dataset import AbstractDataset
 from pvx.utils.judge_utils import JudgeConfig
@@ -26,7 +28,6 @@ transformers_logging.set_verbosity_error()
 # request-local steering state (per concurrent generate call)
 _STEER_DELTA = contextvars.ContextVar("steer_delta", default=None)  # Tensor (1,H) or None
 
-logger = setup_logging(name="abstract-persona-model")
 
 
 class AbstractPersonaModel(ABC):
@@ -48,7 +49,8 @@ class AbstractPersonaModel(ABC):
         target_pairs: int = 20,
         from_json: bool = False,
         safetensors_dir = None,
-        json_filepath = None
+        json_filepath = None,
+        **kwargs
     ):
         """
         Initialize the PersonaModel with a target model and dataset for persona extraction.
@@ -93,9 +95,13 @@ class AbstractPersonaModel(ABC):
         self.judge = judge_cls(**judge_config.to_kwargs())
 
         self.target_pairs = target_pairs
+        
+        self.sample_counts = kwargs.pop("sample_counts", None)
 
         # Extract persona vectors
         _, _, _ = self.extract_persona_vector()
+        
+        
 
         # Save initialization (with extracted persona vector) to JSON
         self.save_to_json(filepath=json_filepath)
@@ -347,6 +353,7 @@ class AbstractPersonaModel(ABC):
         safetensors_dir: str = "./persona_data/model_inits/",
         **kwargs
     ) -> "AbstractPersonaModel":
+
         logger.info("Attempting to load PersonaModel for concept '%s' and model '%s'", concept, target_model_id)
         safetensors_path, _ = cls.get_path(target_model_id, concept, safetensors_dir, use_json=False, kwargs=locals())
         
@@ -387,16 +394,20 @@ class AbstractPersonaModel(ABC):
             raise FileNotFoundError("No instance found and load only selected.")
         
         logger.info("Creating a new PersonaModel instance.")
+        
+        sample_counts = kwargs.pop("sample_counts", None)
 
-        return cls(
+        pvx = cls(
             concept,
             target_model_id=target_model_id,
             dataset=dataset,
             layer=layer,
             target_pairs=target_pairs,
             safetensors_dir=safetensors_dir,
-            json_filepath=json_filepath
+            json_filepath=json_filepath,
+            sample_counts=sample_counts
         )
+        return pvx
     
     def is_concept_role(self):
         return hasattr(self, "role")
