@@ -13,16 +13,16 @@
 - Found that an addendum `Answer in first person as this person would in a conversation.` solved the inconsistency of responses, at least in Olmo-3.1-32B, now the task is to validate the responses. Main issue: `Honestly` epidemic. The respnoses almost all have or start with the phrase, this either is Olmo's way of responding to the prompt or something else is wrong. 
 - Compared vocational persona generation across three generator models (Gemini, Grok, DeepSeek) on 10 roles. Results:
 
-| Dimension | Gemini | Grok | DeepSeek | GPT-OSS-120B | 
-|---|---|---|---|---|
-| Prompt focus | Faceted, vivid | Task-enumeration dump | Single-thread, focused | Single-thread, focused |
-| Prompt length | Moderate | Long/dense | Short | Short |
-| Anti-AI framing | Varied, natural | Copy-pasted template | Varied, specific | Varied, specific  |
-| Prompt bug | None observed | None observed | Pronoun switching (You/I) | Pronoun switching (You/I) |
-| Question variety | High | Low (repetitive) | High | Medium |
-| Question depth | Good psychological dilemmas | Formulaic "removal" probes | Concrete scenarios, strong | Good psychological dilemmas |
-| Question overlap | Minimal | Significant duplication | Minimal | Minimal | 
-| Role grounding | Strong environmental immersion | Surface-level task listing | Strong behavioral identity | Varied Behavioral identity |
+| Dimension | Gemini | Grok | DeepSeek | GPT-OSS-120B | Kimi-K2.5 |
+|---|---|---|---|---|---|
+| Prompt focus | Faceted, vivid | Task-enumeration dump | Single-thread, focused | Single-thread, focused | Faceted | 
+| Prompt length | Moderate | Long/dense | Short | Short | Moderate |
+| Anti-AI framing | Varied, natural | Copy-pasted template | Varied, specific | Varied, specific  | Varied, natural | 
+| Prompt bug | None observed | None observed | Pronoun switching (You/I) | Pronoun switching (You/I) | No major issues | 
+| Question variety | High | Low (repetitive) | High | Medium | High | 
+| Question depth | Good psychological dilemmas | Formulaic "removal" probes | Concrete scenarios, strong | Good psychological dilemmas | Varied Psychological dilemmas |
+| Question overlap | Minimal | Significant duplication | Minimal | Minimal | Minimal | 
+| Role grounding | Strong environmental immersion | Surface-level task listing | Strong behavioral identity | Varied Behavioral identity | Strong behavioral identity  and immersion| 
 
 ---
 
