@@ -50,6 +50,8 @@ def main() -> None:
     temperature = 0.2
     sample_count = 50
 
+
+
     for role in args.roles:
         csv_path = input_dir / f"Comparison_GoldStandard_{role}.csv"
 
@@ -63,27 +65,32 @@ def main() -> None:
         layer = args.layer
         logger.info("%s: using layer=%s", csv_path.name, layer)
 
-        # Find existing questions
-        existing_questions = set(df["question"].dropna().astype(str).unique())
-        missing_questions = [q for q in all_questions if q not in existing_questions]
-
-        if not missing_questions:
-            logger.info("%s: no missing questions", csv_path.name)
-            continue
-
-        logger.info(
-            "%s: %s missing question(s) out of %s total",
-            csv_path.name,
-            len(missing_questions),
-            len(all_questions),
-        )
-
-        if args.dry_run:
-            logger.info("Dry run: would add %s rows for %s alphas", len(missing_questions), len(args.alphas))
-            continue
-
-        new_rows = []
+        all_new_rows = []
         for alpha_value in args.alphas:
+            # Find existing questions for this alpha
+            df_alpha = df[df["alpha"] == alpha_value]
+            existing_questions = set(df_alpha["question"].dropna().astype(str).unique())
+            missing_questions = [q for q in all_questions if q not in existing_questions]
+
+            logger.info(f"Alpha={alpha_value}: Existing Questions Count: {len(existing_questions)}")
+            logger.info(f"Alpha={alpha_value}: All Questions Count: {len(all_questions)}")
+
+            if not missing_questions:
+                logger.info("%s: no missing questions for alpha=%.4f", csv_path.name, alpha_value)
+                continue
+
+            logger.info(
+                "%s: %s missing question(s) out of %s total for alpha=%.4f",
+                csv_path.name,
+                len(missing_questions),
+                len(all_questions),
+                alpha_value,
+            )
+
+            if args.dry_run:
+                logger.info("Dry run: would add %s rows for alpha=%.4f", len(missing_questions), alpha_value)
+                continue
+
             for question in missing_questions:
                 logger.info("Adding row: role=%s alpha=%.4f question=%s", role, alpha_value, question[:80])
 
@@ -111,10 +118,10 @@ def main() -> None:
                     "assistant_axis_cmp_motivation": -1,
                     "assistant_axis_cmp_worldview_alignment": -1,
                 }
-                new_rows.append(new_row)
+                all_new_rows.append(new_row)
 
-        if new_rows:
-            df_new = pd.DataFrame(new_rows)
+        if all_new_rows and not args.dry_run:
+            df_new = pd.DataFrame(all_new_rows)
             # Ensure all columns from original CSV are present in new rows
             for col in df.columns:
                 if col not in df_new.columns:
@@ -124,8 +131,8 @@ def main() -> None:
 
             df_combined = pd.concat([df, df_new], ignore_index=True)
             df_combined.to_csv(csv_path, index=False)
-            logger.info("%s: appended %s new row(s)", csv_path.name, len(new_rows))
-            total_rows_added += len(new_rows)
+            logger.info("%s: appended %s new row(s) across all alphas", csv_path.name, len(all_new_rows))
+            total_rows_added += len(all_new_rows)
 
     if args.dry_run:
         logger.info("Dry run complete.")

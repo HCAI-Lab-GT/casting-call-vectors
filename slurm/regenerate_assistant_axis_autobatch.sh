@@ -31,17 +31,6 @@ ALPHAS=()
 NUM_BINS=0
 DRY_RUN=false
 
-# Roles to always ignore for this autobatch run
-IGNORE_ROLES=(
-  toddler
-  optimist
-  novelist
-  cynic
-  traditionalist
-  rebel
-  geographer
-  immigrant
-)
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -97,26 +86,9 @@ if [[ ${#ALL_ROLES[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# Build ignore set
-IGNORE_CSV=","$(IFS=,; echo "${IGNORE_ROLES[*]}")","
 
-# Filter ignored roles (no completeness checks)
-ROLES=()
-IGNORED_COUNT=0
-for role in "${ALL_ROLES[@]}"; do
-  if [[ "$IGNORE_CSV" == *",$role,"* ]]; then
-    ((IGNORED_COUNT+=1))
-    continue
-  fi
-  ROLES+=("$role")
-done
-
-if [[ ${#ROLES[@]} -eq 0 ]]; then
-  echo "All input roles were ignored. Nothing to submit."
-  exit 0
-fi
-
-echo "Ignored ${IGNORED_COUNT} role(s): ${IGNORE_ROLES[*]}"
+# No ignore logic: process all roles
+ROLES=("${ALL_ROLES[@]}")
 echo "Submitting ${#ROLES[@]} role(s) with no completeness checks."
 
 auto_submit() {
