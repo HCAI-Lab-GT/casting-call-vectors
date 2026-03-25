@@ -34,6 +34,7 @@ QUESTIONS_FILE="./configs/validation_questions.jsonl"
 SAFETENSORS_DIR="./persona_data/model_layer_inits/"
 GOLD_PROMPTS_DIR="./persona_data/gold_labels_prompts_dataset"
 EXPECTED_ROWS=228
+DRY_RUN=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -51,16 +52,10 @@ while [[ $# -gt 0 ]]; do
     --safetensors-dir)     SAFETENSORS_DIR="$2"; shift 2;;
     -g|--gold-prompts-dir) GOLD_PROMPTS_DIR="$2"; shift 2;;
     --expected-rows)       EXPECTED_ROWS="$2"; shift 2;;
+    --dry-run)             DRY_RUN=1; shift;;
     *)                     echo "Unknown argument: $1" >&2; exit 1;;
   esac
 done
-# ===========================
-
-### VALIDATION ###
-if [ ! -f "$JSON_FILE" ]; then
-    echo "Error: JSON file not found: $JSON_FILE"
-    exit 1
-fi
 
 # Extract keys from JSON
 ALL_ROLES=($(python3 -c "import json,sys; data=json.load(open('$JSON_FILE')); print('\n'.join(data.keys()))"))
@@ -76,14 +71,14 @@ check_csv_complete() {
     local csv_file="$1"
     local expected="$2"
     shift 2
-    
+
     # Remaining args are: layers... -- sample_counts... -- alphas... -- temperatures...
     local layers=()
     local sample_counts=()
     local alphas=()
     local temperatures=()
     local current_array="layers"
-    
+
     for arg in "$@"; do
         if [[ "$arg" == "--" ]]; then
             case "$current_array" in
@@ -100,17 +95,17 @@ check_csv_complete() {
             esac
         fi
     done
-    
+
     if [ ! -f "$csv_file" ]; then
         return 1
     fi
-    
+
     # Convert bash arrays to comma-separated strings for Python
     local layers_py=$(IFS=,; echo "${layers[*]}")
     local sample_counts_py=$(IFS=,; echo "${sample_counts[*]}")
     local alphas_py=$(IFS=,; echo "${alphas[*]}")
     local temperatures_py=$(IFS=,; echo "${temperatures[*]}")
-    
+
     # Use Python to check all combinations have expected rows
     python3 -c "
 import csv
@@ -147,21 +142,39 @@ for layer in layers:
 
 sys.exit(0)
 " 2>/dev/null
-    
+
     return $?
 }
 
 # Filter out roles where output CSV has all required combinations complete
-ROLES=()
+MISSING_ROLES=()
+INCOMPLETE_ROLES=()
 for role in "${ALL_ROLES[@]}"; do
     csv_file="$SAVE_DIR/Comparison_GoldStandard_${role}.csv"
-    if check_csv_complete "$csv_file" "$EXPECTED_ROWS" \
-        "${LAYERS[@]}" -- "${SAMPLE_COUNTS[@]}" -- "${ALPHAS[@]}" -- "${TEMPERATURES[@]}"; then
-        continue  # skip completed role
+    if [ ! -f "$csv_file" ]; then
+        MISSING_ROLES+=("$role")
+        continue
     fi
-    ROLES+=("$role")
+    if ! check_csv_complete "$csv_file" "$EXPECTED_ROWS" \
+        "${LAYERS[@]}" -- "${SAMPLE_COUNTS[@]}" -- "${ALPHAS[@]}" -- "${TEMPERATURES[@]}"; then
+        INCOMPLETE_ROLES+=("$role")
+    fi
 done
 
+if [[ $DRY_RUN -eq 1 ]]; then
+    echo "Missing roles (no CSV file):"
+    for role in "${MISSING_ROLES[@]}"; do
+        echo "  $role"
+    done
+    echo
+    echo "Incomplete roles (CSV exists but not all combinations complete):"
+    for role in "${INCOMPLETE_ROLES[@]}"; do
+        echo "  $role"
+    done
+    exit 0
+fi
+
+ROLES=("${MISSING_ROLES[@]}" "${INCOMPLETE_ROLES[@]}")
 echo "${ROLES[@]}"
 
 # SKIPPED=$(( ${#ALL_ROLES[@]} - ${#ROLES[@]} ))
@@ -188,7 +201,7 @@ echo "${ROLES[@]}"
 # ### SUBMIT BINS ###
 # for ((i=0; i<N; i++)); do
 #     BIN_ROLES=()
-    
+
 #     if [[ -n "$BIN_SIZE" ]]; then
 #         # Contiguous batching: each bin gets up to BIN_SIZE consecutive roles
 #         START=$((i * BIN_SIZE))
