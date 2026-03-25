@@ -5,8 +5,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --time=08:00:00
-#SBATCH --output=logs/slurm/regenerate_assistant_axis/regenerate_assistant_axis_%j.out
-#SBATCH --error=logs/slurm/regenerate_assistant_axis/regenerate_assistant_axis_%j.err
+#SBATCH --output=logs/slurm/regenerate_assistant_axis_migration/regenerate_assistant_axis_%j.out
+#SBATCH --error=logs/slurm/regenerate_assistant_axis_migration/regenerate_assistant_axis_%j.err
 
 set -euo pipefail
 
