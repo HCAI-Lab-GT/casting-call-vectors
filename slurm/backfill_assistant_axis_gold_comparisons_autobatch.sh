@@ -1,36 +1,32 @@
 #!/bin/bash
 
 ###
-# Reads roles from a JSON file (or explicit --roles), filters out ignored roles,
-# and submits regenerate_assistant_axis.sh sbatch jobs.
-#
-# No completeness checks are performed: all non-ignored roles are assumed pending.
+# Reads roles from a JSON file (or explicit --roles), and submits backfill_assistant_axis_gold_comparisons.sh sbatch jobs.
+# No ignore logic: all roles are processed.
 #
 # Usage:
-#   bash slurm/regenerate_assistant_axis_autobatch.sh [options...]
+#   bash slurm/backfill_assistant_axis_gold_comparisons_autobatch.sh [options...]
 #
 # Options:
 #   -f, --file         Path to roles JSON (default: configs/role_list.json)
 #   -r, --roles        Optional explicit list of roles (overrides --file)
-#   -m, --model        Model ID (default: allenai/Olmo-3-7B-Instruct)
-#   -a, --alphas       Optional alphas list passed through to regenerate job
 #   -b, --num-bins     Number of sbatch jobs to split roles into (default: 0 = one job per role)
+#   --overwrite        Passes --overwrite to backfill script
 #   --dry-run          Print planned submissions without calling sbatch
+#   [other options]    Passed through to sbatch script
 #
-# Author: iiisong
+# Author: Copilot
 # Date: 2026-03-25
 ###
 
 set -euo pipefail
 
-# Defaults
 JSON_FILE="configs/role_list.json"
 EXPLICIT_ROLES=()
-MODEL="allenai/Olmo-3-7B-Instruct"
-ALPHAS=(1.0 1.5 2.0 2.5)
 NUM_BINS=0
 DRY_RUN=false
-
+OVERWRITE=false
+EXTRA_ARGS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -45,26 +41,17 @@ while [[ $# -gt 0 ]]; do
         shift
       done
       ;;
-    -m|--model)
-      MODEL="$2"; shift 2
-      ;;
-    -a|--alphas)
-      shift
-      ALPHAS=()
-      while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
-        ALPHAS+=("$1")
-        shift
-      done
-      ;;
     -b|--num-bins)
       NUM_BINS="$2"; shift 2
+      ;;
+    --overwrite)
+      OVERWRITE=true; EXTRA_ARGS+=("--overwrite"); shift
       ;;
     --dry-run)
       DRY_RUN=true; shift
       ;;
     *)
-      echo "Unknown argument: $1" >&2
-      exit 1
+      EXTRA_ARGS+=("$1"); shift
       ;;
   esac
 done
@@ -86,19 +73,12 @@ if [[ ${#ALL_ROLES[@]} -eq 0 ]]; then
   exit 0
 fi
 
-
-# No ignore logic: process all roles
 ROLES=("${ALL_ROLES[@]}")
-echo "Submitting ${#ROLES[@]} role(s) with no completeness checks."
+echo "Submitting ${#ROLES[@]} role(s) with no ignore logic."
 
 auto_submit() {
   local -a job_roles=("$@")
-  local -a cmd=(sbatch slurm/regenerate_assistant_axis.sh --model "$MODEL" --roles "${job_roles[@]}")
-
-  if [[ ${#ALPHAS[@]} -gt 0 ]]; then
-    cmd+=(--alphas "${ALPHAS[@]}")
-  fi
-
+  local -a cmd=(sbatch slurm/backfill_assistant_axis_gold_comparisons.sh --roles "${job_roles[@]}" "${EXTRA_ARGS[@]}")
   if [[ "$DRY_RUN" == "true" ]]; then
     echo "  [DRY RUN] ${cmd[*]}"
   else
@@ -108,22 +88,18 @@ auto_submit() {
 }
 
 if [[ "$NUM_BINS" -le 0 ]]; then
-  # Default: one job per role
   for role in "${ROLES[@]}"; do
     auto_submit "$role"
   done
 else
-  # Group into NUM_BINS jobs
   total=${#ROLES[@]}
   bin_size=$(( (total + NUM_BINS - 1) / NUM_BINS ))
   echo "Bin mode: ${total} roles -> ${NUM_BINS} bins (~${bin_size} roles/bin)"
-
   for ((bin=0; bin<NUM_BINS; bin++)); do
     start=$((bin * bin_size))
     [[ $start -ge $total ]] && break
     end=$((start + bin_size))
     [[ $end -gt $total ]] && end=$total
-
     bin_roles=("${ROLES[@]:$start:$((end - start))}")
     auto_submit "${bin_roles[@]}"
   done
