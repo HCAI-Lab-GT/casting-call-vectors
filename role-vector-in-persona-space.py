@@ -144,8 +144,16 @@ from safetensors.numpy import load_file
 from matplotlib.colors import TwoSlopeNorm
 from scipy.spatial import cKDTree
 
-# --- Choose 3 traits as axes ---
-input_axes = ["critical", "evil", "serene"]
+# --- Choose sets of 3 traits as axes ---
+input_axes_list = [
+    ["critical", "evil", "serene"],
+    ["nurturing", "theatrical", "erudite"],
+    ["hostile", "playful", "analytical"],
+    ["diplomatic", "dramatic", "technical"],
+    ["cynical", "whimsical", "methodical"],
+    ["assertive", "poetic", "practical"],
+    ["empathetic", "enigmatic", "stoic"],
+]
 
 # --- Load role vectors from model_layer_inits ---
 role_dir = "model_layer_inits"
@@ -168,62 +176,70 @@ for folder in os.listdir(role_dir):
 
 print(f"\nLoaded {len(role_vectors)} role vectors for trait-axis projection")
 
-# --- Build trait axis directions (normalized) ---
-trait_axes = []
-for trait in input_axes:
-    if trait not in vectors:
-        print(f"Warning: trait '{trait}' not found in trait vectors, skipping")
-        continue
-    axis = vectors[trait].copy()
-    axis = axis / np.linalg.norm(axis)
-    trait_axes.append((trait, axis))
-
-assert len(trait_axes) == 3, f"Need exactly 3 valid trait axes, got {len(trait_axes)}"
-
-# --- Project each role vector onto the 3 trait axes ---
+# --- Build role name list and matrix (shared across all axis combos) ---
 role_names = sorted(role_vectors.keys())
 role_matrix = np.array([role_vectors[n] for n in role_names])
 
-projections = np.column_stack([role_matrix @ ax for _, ax in trait_axes])  # (N, 3)
+for input_axes in input_axes_list:
+    print(f"\n--- Plotting trait axes: {input_axes} ---")
 
-# --- 3D scatter plot ---
-fig = plt.figure(figsize=(14, 10))
-ax = fig.add_subplot(111, projection='3d')
+    # --- Build trait axis directions (normalized) ---
+    trait_axes = []
+    for trait in input_axes:
+        if trait not in vectors:
+            print(f"Warning: trait '{trait}' not found in trait vectors, skipping")
+            continue
+        axis = vectors[trait].copy()
+        axis = axis / np.linalg.norm(axis)
+        trait_axes.append((trait, axis))
 
-# Color by magnitude of projection (distance from origin)
-magnitudes = np.linalg.norm(projections, axis=1)
-sc = ax.scatter(projections[:, 0], projections[:, 1], projections[:, 2],
-                c=magnitudes, cmap='viridis',
-                s=60, edgecolors='k', linewidths=0.3, alpha=0.85)
+    if len(trait_axes) != 3:
+        print(f"Need exactly 3 valid trait axes, got {len(trait_axes)} — skipping this combo")
+        continue
 
-# Label points with offsets pushed away from neighbors
-tree = cKDTree(projections)
-k = min(6, len(role_names) - 1)
-dd, ii = tree.query(projections, k=k + 1)
-scale = np.ptp(projections, axis=0) * 0.025
-for i, name in enumerate(role_names):
-    neighbors = projections[ii[i, 1:]]
-    direction = projections[i] - neighbors.mean(axis=0)
-    norm_d = np.linalg.norm(direction)
-    if norm_d > 0:
-        direction = direction / norm_d
-    else:
-        direction = np.array([1, 0, 0])
-    offset = direction * scale
-    ax.text(projections[i, 0] + offset[0], projections[i, 1] + offset[1],
-            projections[i, 2] + offset[2], name,
-            fontsize=4.5, ha='center', va='center', alpha=0.85)
+    # --- Project each role vector onto the 3 trait axes ---
+    projections = np.column_stack([role_matrix @ ax for _, ax in trait_axes])  # (N, 3)
 
-ax.set_xlabel(f"← less {trait_axes[0][0]}  |  more {trait_axes[0][0]} →")
-ax.set_ylabel(f"← less {trait_axes[1][0]}  |  more {trait_axes[1][0]} →")
-ax.set_zlabel(f"← less {trait_axes[2][0]}  |  more {trait_axes[2][0]} →")
-ax.set_title(f"Role Vectors in Trait Space: {', '.join(input_axes)}")
+    # --- 3D scatter plot ---
+    fig = plt.figure(figsize=(14, 10))
+    ax = fig.add_subplot(111, projection='3d')
 
-cbar = fig.colorbar(sc, ax=ax, shrink=0.6, pad=0.1)
-cbar.set_label("Magnitude")
+    # Color by magnitude of projection (distance from origin)
+    magnitudes = np.linalg.norm(projections, axis=1)
+    sc = ax.scatter(projections[:, 0], projections[:, 1], projections[:, 2],
+                    c=magnitudes, cmap='viridis',
+                    s=60, edgecolors='k', linewidths=0.3, alpha=0.85)
 
-plt.tight_layout()
-plt.savefig(f"figures/trait-figures/roles_in_trait_space_{'_'.join(input_axes)}.png", dpi=150)
-plt.show()
+    # Label points with offsets pushed away from neighbors
+    tree = cKDTree(projections)
+    k = min(6, len(role_names) - 1)
+    dd, ii = tree.query(projections, k=k + 1)
+    scale = np.ptp(projections, axis=0) * 0.025
+    for i, name in enumerate(role_names):
+        neighbors = projections[ii[i, 1:]]
+        direction = projections[i] - neighbors.mean(axis=0)
+        norm_d = np.linalg.norm(direction)
+        if norm_d > 0:
+            direction = direction / norm_d
+        else:
+            direction = np.array([1, 0, 0])
+        offset = direction * scale
+        ax.text(projections[i, 0] + offset[0], projections[i, 1] + offset[1],
+                projections[i, 2] + offset[2], name,
+                fontsize=4.5, ha='center', va='center', alpha=0.85)
+
+    ax.set_xlabel(f"← less {trait_axes[0][0]}  |  more {trait_axes[0][0]} →")
+    ax.set_ylabel(f"← less {trait_axes[1][0]}  |  more {trait_axes[1][0]} →")
+    ax.set_zlabel(f"← less {trait_axes[2][0]}  |  more {trait_axes[2][0]} →")
+    ax.set_title(f"Role Vectors in Trait Space: {', '.join(input_axes)}")
+
+    cbar = fig.colorbar(sc, ax=ax, shrink=0.6, pad=0.1)
+    cbar.set_label("Magnitude")
+
+    plt.tight_layout()
+    plt.savefig(f"figures/trait-figures/roles_in_trait_space_{'_'.join(input_axes)}.png", dpi=150)
+    plt.show()
 
 print("\nDone.")
+
+

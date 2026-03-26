@@ -327,6 +327,46 @@ plt.savefig("figures/role-figures/tsne_layer_" + str(layer_number) + ".png", dpi
 plt.show()
 
 
+# tSNE 3D
+tsne3d = TSNE(n_components=3, perplexity=min(5, len(tsne_names) - 1), random_state=42)
+tsne3d_projected = tsne3d.fit_transform(all_vectors_centered)
+
+fig = plt.figure(figsize=(16, 11))
+ax = fig.add_subplot(111, projection='3d')
+
+sc = ax.scatter(tsne3d_projected[:, 0], tsne3d_projected[:, 1], tsne3d_projected[:, 2],
+                c=tsne_proj_normalized, cmap='coolwarm_r', norm=tsne_norm,
+                s=60, edgecolors='k', linewidths=0.3, zorder=5, alpha=0.85)
+
+_tree_t3 = cKDTree(tsne3d_projected)
+_k_t3 = min(6, len(tsne_names) - 1)
+_dd_t3, _ii_t3 = _tree_t3.query(tsne3d_projected, k=_k_t3 + 1)
+_scale_t3 = np.ptp(tsne3d_projected, axis=0) * 0.025
+for i, name in enumerate(tsne_names):
+    neighbors = tsne3d_projected[_ii_t3[i, 1:]]
+    direction = tsne3d_projected[i] - neighbors.mean(axis=0)
+    norm_d = np.linalg.norm(direction)
+    if norm_d > 0:
+        direction = direction / norm_d
+    else:
+        direction = np.array([1, 0, 0])
+    offset = direction * _scale_t3
+    ax.text(tsne3d_projected[i, 0] + offset[0], tsne3d_projected[i, 1] + offset[1],
+            tsne3d_projected[i, 2] + offset[2], name,
+            fontsize=4.5, ha='center', va='center', alpha=0.85)
+
+cbar = fig.colorbar(sc, ax=ax, shrink=0.6, pad=0.1)
+cbar.set_label("Projection onto Assistant Axis")
+
+ax.set_xlabel("t-SNE 1")
+ax.set_ylabel("t-SNE 2")
+ax.set_zlabel("t-SNE 3")
+ax.set_title(f"3D t-SNE of Role Vectors (Layer {layer_number})")
+plt.tight_layout()
+plt.savefig("figures/role-figures/tsne3d_layer_" + str(layer_number) + ".png", dpi=150)
+plt.show()
+
+
 # ============================================================
 # Rating-colored plots (mystical & assistant ratings)
 # ============================================================
@@ -441,3 +481,5 @@ fig.colorbar(im, ax=ax, label="Coefficient")
 plt.tight_layout()
 plt.savefig("figures/role-figures/nmf_roles_layer_" + str(layer_number) + ".png", dpi=150)
 plt.show()
+
+
