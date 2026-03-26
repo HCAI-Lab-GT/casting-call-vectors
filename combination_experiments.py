@@ -7,13 +7,13 @@ from safetensors.numpy import load_file
 import os
 
 # Load vectors
-vector_list = os.listdir("personality-vectors/persona_data/model_layer_inits")
+vector_list = os.listdir("model_layer_inits")
 layer_number = 16
 num_questions_used = 50
 
 os.makedirs("figures/role-figures", exist_ok=True)
 
-base_path = "personality-vectors/persona_data/model_layer_inits"
+base_path = "model_layer_inits"
 vectors = {}
 
 for vector in vector_list:
@@ -138,7 +138,7 @@ for a, b, c in arithmetic_tests:
 pca = PCA(n_components=3)
 pca_projected = pca.fit_transform(all_vectors)
 
-pair_a, pair_b = "warrior", "pacifist"¬
+pair_a, pair_b = "warrior", "pacifist"
 if pair_a in vectors and pair_b in vectors:
     interp_steps = 10
     interp_vecs = np.array([

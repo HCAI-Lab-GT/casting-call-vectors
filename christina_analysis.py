@@ -9,7 +9,7 @@ import os
 os.makedirs("figures/christina-figures", exist_ok=True)
 
 # Load vectors from christina-vectors
-vector_dir = "christina-vectors/vectors"
+vector_dir = "christina-vectors"
 layer_number = 16
 vectors = {}
 

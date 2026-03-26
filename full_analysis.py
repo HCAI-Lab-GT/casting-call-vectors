@@ -5,15 +5,21 @@ from sklearn.manifold import TSNE
 from matplotlib.colors import TwoSlopeNorm
 from safetensors.numpy import load_file
 import os
+import sys
+from adjustText import adjust_text
+from scipy.spatial import cKDTree
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from role_list import role_mystical_ratings, role_assistant_ratings
 
 os.makedirs("figures/role-figures", exist_ok=True)
 
 # Load vectors
-vector_list = os.listdir("personality-vectors/persona_data/model_layer_inits")
+vector_list = os.listdir("model_layer_inits")
 layer_number = 16
 num_questions_used = 50
 
-base_path = "personality-vectors/persona_data/model_layer_inits"
+base_path = "model_layer_inits"
 vectors = {}
 print("Number of files:", len(vector_list))
 
@@ -99,16 +105,30 @@ vmax = max(proj_normalized.max(), 1e-8)
 norm = TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
 
 # 3D scatter plot
-fig = plt.figure(figsize=(14, 10))
+fig = plt.figure(figsize=(16, 11))
 ax = fig.add_subplot(111, projection='3d')
 
 sc = ax.scatter(projected[:, 0], projected[:, 1], projected[:, 2],
                 c=proj_normalized, cmap='coolwarm_r', norm=norm,
-                s=80, edgecolors='k', linewidths=0.5, zorder=5)
+                s=60, edgecolors='k', linewidths=0.3, zorder=5, alpha=0.85)
 
+# Label all points with offsets pushed away from nearest neighbors
+_tree = cKDTree(projected)
+_k = min(6, len(all_names) - 1)
+_dd, _ii = _tree.query(projected, k=_k + 1)  # includes self
+_scale = np.ptp(projected, axis=0) * 0.025
 for i, name in enumerate(all_names):
-    ax.text(projected[i, 0], projected[i, 1], projected[i, 2], f"  {name}",
-            fontsize=7, ha='left', va='center')
+    neighbors = projected[_ii[i, 1:]]  # exclude self
+    direction = projected[i] - neighbors.mean(axis=0)
+    norm_d = np.linalg.norm(direction)
+    if norm_d > 0:
+        direction = direction / norm_d
+    else:
+        direction = np.array([1, 0, 0])
+    offset = direction * _scale
+    ax.text(projected[i, 0] + offset[0], projected[i, 1] + offset[1],
+            projected[i, 2] + offset[2], name,
+            fontsize=4.5, ha='center', va='center', alpha=0.85)
 
 # Assistant Axis line along dim 1 (the x-axis)
 t = np.linspace(-1, 1, 2) * max(np.abs(projected[:, 0])) * 1.2
@@ -146,16 +166,30 @@ pca_vmin = min(pca_proj_normalized.min(), -1e-8)
 pca_vmax = max(pca_proj_normalized.max(), 1e-8)
 pca_norm = TwoSlopeNorm(vmin=pca_vmin, vcenter=0, vmax=pca_vmax)
 
-fig = plt.figure(figsize=(14, 10))
+fig = plt.figure(figsize=(16, 11))
 ax = fig.add_subplot(111, projection='3d')
 
 sc = ax.scatter(pca_projected[:, 0], pca_projected[:, 1], pca_projected[:, 2],
                 c=pca_proj_normalized, cmap='coolwarm_r', norm=pca_norm,
-                s=80, edgecolors='k', linewidths=0.5, zorder=5)
+                s=60, edgecolors='k', linewidths=0.3, zorder=5, alpha=0.85)
 
+# Label all points with offsets pushed away from nearest neighbors
+_tree = cKDTree(pca_projected)
+_k = min(6, len(all_names) - 1)
+_dd, _ii = _tree.query(pca_projected, k=_k + 1)
+_scale = np.ptp(pca_projected, axis=0) * 0.025
 for i, name in enumerate(all_names):
-    ax.text(pca_projected[i, 0], pca_projected[i, 1], pca_projected[i, 2], f"  {name}",
-            fontsize=7, ha='left', va='center')
+    neighbors = pca_projected[_ii[i, 1:]]
+    direction = pca_projected[i] - neighbors.mean(axis=0)
+    norm_d = np.linalg.norm(direction)
+    if norm_d > 0:
+        direction = direction / norm_d
+    else:
+        direction = np.array([1, 0, 0])
+    offset = direction * _scale
+    ax.text(pca_projected[i, 0] + offset[0], pca_projected[i, 1] + offset[1],
+            pca_projected[i, 2] + offset[2], name,
+            fontsize=4.5, ha='center', va='center', alpha=0.85)
 
 t = np.linspace(-1, 1, 2) * max(np.abs(pca_projected[:, 0])) * 1.2
 ax.plot(t * pca_axis_proj[0], t * pca_axis_proj[1], t * pca_axis_proj[2],
@@ -172,6 +206,86 @@ cbar.set_label("Projection onto Assistant Axis")
 
 plt.tight_layout()
 plt.savefig("figures/role-figures/pca3d_layer_" + str(layer_number) + ".png", dpi=150)
+plt.show()
+
+
+# Standard PCA colored by mystical rating
+colors_mystical_pca = np.array([role_mystical_ratings.get(n, 0.0) for n in all_names])
+
+fig = plt.figure(figsize=(16, 11))
+ax = fig.add_subplot(111, projection='3d')
+
+sc = ax.scatter(pca_projected[:, 0], pca_projected[:, 1], pca_projected[:, 2],
+                c=colors_mystical_pca, cmap='viridis', vmin=0, vmax=10,
+                s=60, edgecolors='k', linewidths=0.3, zorder=5, alpha=0.85)
+
+_tree_mp = cKDTree(pca_projected)
+_k_mp = min(6, len(all_names) - 1)
+_dd_mp, _ii_mp = _tree_mp.query(pca_projected, k=_k_mp + 1)
+_scale_mp = np.ptp(pca_projected, axis=0) * 0.025
+for i, name in enumerate(all_names):
+    neighbors = pca_projected[_ii_mp[i, 1:]]
+    direction = pca_projected[i] - neighbors.mean(axis=0)
+    norm_d = np.linalg.norm(direction)
+    if norm_d > 0:
+        direction = direction / norm_d
+    else:
+        direction = np.array([1, 0, 0])
+    offset = direction * _scale_mp
+    ax.text(pca_projected[i, 0] + offset[0], pca_projected[i, 1] + offset[1],
+            pca_projected[i, 2] + offset[2], name,
+            fontsize=4.5, ha='center', va='center', alpha=0.85)
+
+ax.set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]*100:.1f}%)")
+ax.set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]*100:.1f}%)")
+ax.set_zlabel(f"PC3 ({pca.explained_variance_ratio_[2]*100:.1f}%)")
+ax.set_title(f"Standard PCA — colored by mystical rating (Layer {layer_number})")
+
+cbar = fig.colorbar(sc, ax=ax, shrink=0.6, pad=0.1)
+cbar.set_label("Mystical Rating (0–10)")
+
+plt.tight_layout()
+plt.savefig(f"figures/role-figures/pca3d_mystical_layer_{layer_number}.png", dpi=150)
+plt.show()
+
+
+# Standard PCA colored by assistant rating
+colors_assistant_pca = np.array([role_assistant_ratings.get(n, 0.0) for n in all_names])
+
+fig = plt.figure(figsize=(16, 11))
+ax = fig.add_subplot(111, projection='3d')
+
+sc = ax.scatter(pca_projected[:, 0], pca_projected[:, 1], pca_projected[:, 2],
+                c=colors_assistant_pca, cmap='viridis', vmin=0, vmax=10,
+                s=60, edgecolors='k', linewidths=0.3, zorder=5, alpha=0.85)
+
+_tree_ap = cKDTree(pca_projected)
+_k_ap = min(6, len(all_names) - 1)
+_dd_ap, _ii_ap = _tree_ap.query(pca_projected, k=_k_ap + 1)
+_scale_ap = np.ptp(pca_projected, axis=0) * 0.025
+for i, name in enumerate(all_names):
+    neighbors = pca_projected[_ii_ap[i, 1:]]
+    direction = pca_projected[i] - neighbors.mean(axis=0)
+    norm_d = np.linalg.norm(direction)
+    if norm_d > 0:
+        direction = direction / norm_d
+    else:
+        direction = np.array([1, 0, 0])
+    offset = direction * _scale_ap
+    ax.text(pca_projected[i, 0] + offset[0], pca_projected[i, 1] + offset[1],
+            pca_projected[i, 2] + offset[2], name,
+            fontsize=4.5, ha='center', va='center', alpha=0.85)
+
+ax.set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]*100:.1f}%)")
+ax.set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]*100:.1f}%)")
+ax.set_zlabel(f"PC3 ({pca.explained_variance_ratio_[2]*100:.1f}%)")
+ax.set_title(f"Standard PCA — colored by assistant rating (Layer {layer_number})")
+
+cbar = fig.colorbar(sc, ax=ax, shrink=0.6, pad=0.1)
+cbar.set_label("Assistant Rating (0–10)")
+
+plt.tight_layout()
+plt.savefig(f"figures/role-figures/pca3d_assistant_layer_{layer_number}.png", dpi=150)
 plt.show()
 
 
@@ -192,23 +306,101 @@ tsne_vmin = min(tsne_proj_normalized.min(), -1e-8)
 tsne_vmax = max(tsne_proj_normalized.max(), 1e-8)
 tsne_norm = TwoSlopeNorm(vmin=tsne_vmin, vcenter=0, vmax=tsne_vmax)
 
-plt.figure(figsize=(12, 8))
-sc = plt.scatter(tsne_projected[:, 0], tsne_projected[:, 1],
-                 c=tsne_proj_normalized, cmap='coolwarm_r', norm=tsne_norm,
-                 s=80, edgecolors='k', linewidths=0.5, zorder=5)
+fig, ax = plt.subplots(figsize=(16, 11))
+sc = ax.scatter(tsne_projected[:, 0], tsne_projected[:, 1],
+                c=tsne_proj_normalized, cmap='coolwarm_r', norm=tsne_norm,
+                s=60, edgecolors='k', linewidths=0.3, zorder=5, alpha=0.85)
 
+texts = []
 for i, name in enumerate(tsne_names):
-    plt.annotate(name, (tsne_projected[i, 0], tsne_projected[i, 1]),
-                 textcoords="offset points", xytext=(5, 5), fontsize=8)
+    texts.append(ax.text(tsne_projected[i, 0], tsne_projected[i, 1], name,
+                         fontsize=5.5, alpha=0.85))
+adjust_text(texts, ax=ax, arrowprops=dict(arrowstyle='-', color='gray', lw=0.4, alpha=0.5),
+            expand=(1.5, 1.5), force_text=(0.8, 0.8), force_points=(0.3, 0.3))
 
-plt.colorbar(sc, label="Projection onto Assistant Axis")
-plt.xlabel("t-SNE 1")
-plt.ylabel("t-SNE 2")
-plt.title(f"t-SNE of Role Vectors (Layer {layer_number})")
+fig.colorbar(sc, ax=ax, label="Projection onto Assistant Axis", shrink=0.8)
+ax.set_xlabel("t-SNE 1")
+ax.set_ylabel("t-SNE 2")
+ax.set_title(f"t-SNE of Role Vectors (Layer {layer_number})")
 plt.tight_layout()
 plt.savefig("figures/role-figures/tsne_layer_" + str(layer_number) + ".png", dpi=150)
 plt.show()
- 
+
+
+# ============================================================
+# Rating-colored plots (mystical & assistant ratings)
+# ============================================================
+rating_dicts = {
+    "mystical": role_mystical_ratings,
+    "assistant": role_assistant_ratings,
+}
+
+for rating_name, rating_dict in rating_dicts.items():
+    # Build color array matching all_names order
+    colors_rating = np.array([rating_dict.get(n, 0.0) for n in all_names])
+
+    # --- PCA (assistant axis) colored by rating ---
+    fig = plt.figure(figsize=(16, 11))
+    ax = fig.add_subplot(111, projection='3d')
+
+    sc = ax.scatter(projected[:, 0], projected[:, 1], projected[:, 2],
+                    c=colors_rating, cmap='viridis', vmin=0, vmax=10,
+                    s=60, edgecolors='k', linewidths=0.3, zorder=5, alpha=0.85)
+
+    _tree_r = cKDTree(projected)
+    _k_r = min(6, len(all_names) - 1)
+    _dd_r, _ii_r = _tree_r.query(projected, k=_k_r + 1)
+    _scale_r = np.ptp(projected, axis=0) * 0.025
+    for i, name in enumerate(all_names):
+        neighbors = projected[_ii_r[i, 1:]]
+        direction = projected[i] - neighbors.mean(axis=0)
+        norm_d = np.linalg.norm(direction)
+        if norm_d > 0:
+            direction = direction / norm_d
+        else:
+            direction = np.array([1, 0, 0])
+        offset = direction * _scale_r
+        ax.text(projected[i, 0] + offset[0], projected[i, 1] + offset[1],
+                projected[i, 2] + offset[2], name,
+                fontsize=4.5, ha='center', va='center', alpha=0.85)
+
+    t_r = np.linspace(-1, 1, 2) * max(np.abs(projected[:, 0])) * 1.2
+    ax.plot(t_r, [0, 0], [0, 0], 'k--', linewidth=1.5, label="Assistant Axis")
+
+    ax.set_xlabel("Assistant Axis")
+    ax.set_ylabel(f"Residual PC1 ({pca_resid.explained_variance_ratio_[0]*100:.1f}%)")
+    ax.set_zlabel(f"Residual PC2 ({pca_resid.explained_variance_ratio_[1]*100:.1f}%)")
+    ax.set_title(f"Role Vectors — colored by {rating_name} rating (Layer {layer_number})")
+    ax.legend(loc='upper left')
+
+    cbar = fig.colorbar(sc, ax=ax, shrink=0.6, pad=0.1)
+    cbar.set_label(f"{rating_name.capitalize()} Rating (0–10)")
+
+    plt.tight_layout()
+    plt.savefig(f"figures/role-figures/role_colored_pca_{rating_name}_layer_{layer_number}.png", dpi=150)
+    plt.show()
+
+    # --- t-SNE colored by rating ---
+    fig, ax = plt.subplots(figsize=(16, 11))
+    sc = ax.scatter(tsne_projected[:, 0], tsne_projected[:, 1],
+                    c=colors_rating, cmap='viridis', vmin=0, vmax=10,
+                    s=60, edgecolors='k', linewidths=0.3, zorder=5, alpha=0.85)
+
+    texts = []
+    for i, name in enumerate(all_names):
+        texts.append(ax.text(tsne_projected[i, 0], tsne_projected[i, 1], name,
+                             fontsize=5.5, alpha=0.85))
+    adjust_text(texts, ax=ax, arrowprops=dict(arrowstyle='-', color='gray', lw=0.4, alpha=0.5),
+                expand=(1.5, 1.5), force_text=(0.8, 0.8), force_points=(0.3, 0.3))
+
+    fig.colorbar(sc, ax=ax, label=f"{rating_name.capitalize()} Rating (0–10)", shrink=0.8)
+    ax.set_xlabel("t-SNE 1")
+    ax.set_ylabel("t-SNE 2")
+    ax.set_title(f"t-SNE of Role Vectors — colored by {rating_name} rating (Layer {layer_number})")
+    plt.tight_layout()
+    plt.savefig(f"figures/role-figures/role_colored_tsne_{rating_name}_layer_{layer_number}.png", dpi=150)
+    plt.show()
+
 
 # non-negative matrix factorization
 n_components = 6
