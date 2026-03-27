@@ -273,7 +273,9 @@ class GoldPromptExperiments():
                 self._empty_results_df().to_csv(role_save_path, index=False)
                 logger.info("Created role results file: %s", role_save_path)
 
-            assistant_axis_layer = self.assistant_axis_layer if self.assistant_axis_layer is not None else layers[0]
+            # assistant_axis_layer = self.assistant_axis_layer if self.assistant_axis_layer is not None else layers[0]
+            assistant_axis_layer = 16
+            
             assistant_axis_model = AssistantAxisPersonaModel.load_or_create(
                 target_model_id=self.target_model_id,
                 concept=role,
@@ -292,60 +294,60 @@ class GoldPromptExperiments():
                     logger.info("Skipped question as all entries already generated.")
                     continue
                 
-                # If question previously asked before, load in AssistanceAxis and Baseline response to avoid asking
+                # If question previously asked before, load in Baseline response to avoid asking
                 if len(pregen) >= 1:
                     prev_entry = pregen.iloc[0]
-                    assistant_axis_response = pregen["assistant_axis"]
-                    assistant_axis_score = pregen["assistant_axis_score"]
+                    # assistant_axis_response = pregen["assistant_axis"]
+                    # assistant_axis_score = pregen["assistant_axis_score"]
                     
-                    logger.info(
-                        "Loaded former AssistantAxis response (assistant_axis slot) for role '%s' on layer %s, alpha %s, temperature %s:",
-                        role,
-                        assistant_axis_layer,
-                        self.assistant_axis_alpha,
-                        baseline_temperature,
-                    )
-                    logger.info(assistant_axis_response)
+                    # logger.info(
+                    #     "Loaded former AssistantAxis response (assistant_axis slot) for role '%s' on layer %s, alpha %s, temperature %s:",
+                    #     role,
+                    #     assistant_axis_layer,
+                    #     self.assistant_axis_alpha,
+                    #     baseline_temperature,
+                    # )
+                    # logger.info(assistant_axis_response)
                 
                     
-                    baseline_response = pregen["baseline"]
-                    baseline_score = pregen["baseline_score"]
+                    baseline_response = prev_entry["baseline"]
+                    baseline_score = prev_entry["baseline_score"]
                     
                     logger.info("Loaded former Gold Standard response for role '%s' on temperature %s:", role, baseline_temperature)
                     logger.info(baseline_response)
                 
                 # Otherwise, retrieve assistance_axis and gold standard
                 else:
-                    # Use Assistant Axis generation in place of plain assistant_axis baseline.
-                    assistant_axis_response = assistant_axis_model.generate(
-                        prompt=question,
-                        alpha=self.assistant_axis_alpha,
-                        max_new_tokens=max_new_tokens,
-                        temperature=baseline_temperature,
-                    )
-                    logger.info(
-                        "AssistantAxis response (assistant_axis slot) for role '%s' on layer %s, alpha %s, temperature %s:",
-                        role,
-                        assistant_axis_layer,
-                        self.assistant_axis_alpha,
-                        baseline_temperature,
-                    )
-                    logger.info(assistant_axis_response)
+                    # # Use Assistant Axis generation in place of plain assistant_axis baseline.
+                    # assistant_axis_response = assistant_axis_model.generate(
+                    #     prompt=question,
+                    #     alpha=self.assistant_axis_alpha,
+                    #     max_new_tokens=max_new_tokens,
+                    #     temperature=baseline_temperature,
+                    # )
+                    # logger.info(
+                    #     "AssistantAxis response (assistant_axis slot) for role '%s' on layer %s, alpha %s, temperature %s:",
+                    #     role,
+                    #     assistant_axis_layer,
+                    #     self.assistant_axis_alpha,
+                    #     baseline_temperature,
+                    # )
+                    # logger.info(assistant_axis_response)
                 
-                    # calculate judge score for AssistantAxis response in assistant_axis slot
-                    if judge_responses:
-                        assistant_axis_score = self.role_judge(role=role, role_description=role_description, question=question, answer=assistant_axis_response)
-                        logger.info(
-                            "AssistantAxis judge score for role '%s' on layer %s, alpha %s, temperature %s: %s",
-                            role,
-                            assistant_axis_layer,
-                            self.assistant_axis_alpha,
-                            baseline_temperature,
-                            assistant_axis_score,
-                        )
-                    else:
-                        assistant_axis_score = -1
-                        logger.info("AssistantAxis judge scoring skipped on GPU.")
+                    # # calculate judge score for AssistantAxis response in assistant_axis slot
+                    # if judge_responses:
+                    #     assistant_axis_score = self.role_judge(role=role, role_description=role_description, question=question, answer=assistant_axis_response)
+                    #     logger.info(
+                    #         "AssistantAxis judge score for role '%s' on layer %s, alpha %s, temperature %s: %s",
+                    #         role,
+                    #         assistant_axis_layer,
+                    #         self.assistant_axis_alpha,
+                    #         baseline_temperature,
+                    #         assistant_axis_score,
+                    #     )
+                    # else:
+                    #     assistant_axis_score = -1
+                    #     logger.info("AssistantAxis judge scoring skipped on GPU.")
 
                     # Get prompted role answer for prompted baseline
                     baseline_messages = deepcopy(baseline_seed_messages)
@@ -383,10 +385,30 @@ class GoldPromptExperiments():
                             
                             logger.info(
                                 "Skipping already evaluated config: role= %s, layer=%s, sample_count=%s, alpha=%s, temperature=%s",
-                                role, baseline_temperature, model.target_pairs, alpha, temperature)
+                                role, model.layer_steering, model.target_pairs, alpha, temperature)
                             continue
                         
                     layers, sample_count = instant_params
+                    
+                    # Use Assistant Axis generation in place of plain assistant_axis baseline.
+                    assistant_axis_response = assistant_axis_model.generate(
+                        prompt=question,
+                        alpha=alpha,
+                        max_new_tokens=max_new_tokens,
+                        temperature=temperature,
+                    )
+                    logger.info("AssistantAxis response for role '%s' on layer %s, sample_count %s, alpha %s, temperature %s:", 
+                                role, model.layer_steering, model.target_pairs, alpha, temperature)
+                    logger.info(assistant_axis_response)
+                    
+                    # calculate judge score for AssistantAxis response in assistant_axis slot
+                    if judge_responses:
+                        assistant_axis_score = self.role_judge(role=role, role_description=role_description, question=question, answer=assistant_axis_response)
+                        logger.info("AssistantAxis judge score for role '%s' on layer %s, alpha %s, temperature %s: %s",
+                                    role, model.layer_steering, alpha, temperature, assistant_axis_score)
+                    else:
+                        assistant_axis_score = -1
+                        logger.info("AssistantAxis judge scoring skipped on GPU.")
                     
                     # generate prompted role answer for steered response
                     steered_response = model.generate(
@@ -550,8 +572,8 @@ if __name__ == "__main__":
         target_model_id=args.model, 
         safetensors_dir=args.safetensors_dir,
         assistant_axis_pt_dir=args.pt_dir,
-        assistant_axis_layer=args.assistant_axis_layer,
-        assistant_axis_alpha=args.assistant_axis_alpha,
+        assistant_axis_layer=args.assistant_axis_layer, # DEPRECATED - uses 16
+        assistant_axis_alpha=args.assistant_axis_alpha, # DEPRECATED - uses reg alpha
         gold_prompts_dir=args.gold_prompts_dir,
         validation_questions_file=args.questions_file,
         save_dir=args.save_dir
