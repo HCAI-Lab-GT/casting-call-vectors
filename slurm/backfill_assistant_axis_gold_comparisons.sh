@@ -2,8 +2,9 @@
 #SBATCH --job-name=backfill_assistant_axis_gold_comparisons
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
-#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=2G
+#SBATCH --partition=cpu
 #SBATCH --time=08:00:00
 #SBATCH --output=logs/slurm/backfill_assistant_axis_gold_comparisons/backfill_assistant_axis_gold_comparisons_%j.out
 #SBATCH --error=logs/slurm/backfill_assistant_axis_gold_comparisons/backfill_assistant_axis_gold_comparisons_%j.err
