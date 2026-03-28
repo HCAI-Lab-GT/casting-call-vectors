@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import torch
 from safetensors import safe_open
 
-from pvx.pvx_models.abstract_persona_model import AbstractPersonaModel
+from pvx.abstraction.pvx_models.abstract_persona_model import AbstractPersonaModel
 
 
 class StubPersonaModel(AbstractPersonaModel):
@@ -15,21 +15,23 @@ class StubPersonaModel(AbstractPersonaModel):
 
     def __init__(
         self,
+        concept: str = "artistic",
         target_model_id: str = "test/model",
-        trait: str = "artistic",
         layer: int = 14,
         from_json: bool = False,
         **kwargs,
     ):
         self.target_model_id = target_model_id
         self.layer_steering = layer
-        self.trait = trait
+        self.concept = concept
 
         if not from_json:
             self.dataset = MagicMock()
-            self.dataset.trait = trait
+            self.dataset.concept = concept
             self.dataset.num_questions = 100
             self.dataset.positive_negative_pairs = [("pos", "neg")] * 5
+        else:
+            self.dataset = kwargs.get("dataset")
 
     def extract_persona_vector(self, temperature=0.9, max_new_tokens=200):
         raise NotImplementedError("Stub does not extract vectors")
@@ -42,7 +44,7 @@ class TestPersonaModelLifecycle:
         """Test complete lifecycle: create -> save -> load -> verify."""
         original = StubPersonaModel(
             target_model_id="Qwen/Qwen2.5-7B-Instruct",
-            trait="artistic",
+            concept="artistic",
             layer=14,
         )
         original.prompt_persona_vector = mock_persona_vectors["prompt"]
@@ -52,7 +54,7 @@ class TestPersonaModelLifecycle:
         saved_path = original.save_to_safetensors(str(temp_dir) + "/")
         assert Path(saved_path).exists()
 
-        loaded = StubPersonaModel.from_safetensors(saved_path, trait="artistic")
+        loaded = StubPersonaModel.from_safetensors(saved_path, concept="artistic")
 
         assert torch.allclose(loaded.prompt_persona_vector, original.prompt_persona_vector)
         assert torch.allclose(loaded.response_persona_vector, original.response_persona_vector)
@@ -68,7 +70,7 @@ class TestPersonaModelLifecycle:
         for trait in traits:
             model = StubPersonaModel(
                 target_model_id="Qwen/Qwen2.5-7B-Instruct",
-                trait=trait,
+                concept=trait,
             )
             model.prompt_persona_vector = mock_persona_vectors["prompt"] * (traits.index(trait) + 1)
             model.response_persona_vector = mock_persona_vectors["response"]
@@ -94,7 +96,7 @@ class TestPersonaModelLifecycle:
         """Test that re-saving overwrites the existing file with new values."""
         model = StubPersonaModel(
             target_model_id="Qwen/Qwen2.5-7B-Instruct",
-            trait="artistic",
+            concept="artistic",
         )
 
         model.prompt_persona_vector = mock_persona_vectors["prompt"]
@@ -120,7 +122,7 @@ class TestPersonaModelLifecycle:
 
         model = StubPersonaModel(
             target_model_id=json_data["target_model_id"],
-            trait=json_data["dataset_info"]["trait"],
+            concept=json_data["dataset_info"]["trait"],
             layer=json_data["layer_steering"],
         )
         model.prompt_persona_vector = torch.tensor(json_data["prompt_persona_vector"])
@@ -141,7 +143,7 @@ class TestPersonaModelLifecycle:
         """Test that all metadata fields survive the save/load cycle."""
         model = StubPersonaModel(
             target_model_id="Qwen/Qwen2.5-7B-Instruct",
-            trait="social",
+            concept="social",
             layer=16,
         )
         model.prompt_persona_vector = mock_persona_vectors["prompt"]
@@ -154,7 +156,7 @@ class TestPersonaModelLifecycle:
             metadata = f.metadata()
 
         assert metadata["target_model_id"] == "Qwen/Qwen2.5-7B-Instruct"
-        assert metadata["trait"] == "social"
+        assert metadata["concept"] == "social"
         assert metadata["layer_steering"] == "16"
         assert "created_at" in metadata
         assert metadata["num_questions"] == "100"

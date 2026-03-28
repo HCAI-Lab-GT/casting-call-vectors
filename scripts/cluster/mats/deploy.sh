@@ -32,7 +32,7 @@ ssh "$CLUSTER_HOST" "mkdir -p $CLUSTER_DIR/logs/slurm"
 
 echo ""
 echo ">>> Verifying cluster environment..."
-ssh "$CLUSTER_HOST" "cd $CLUSTER_DIR && source ~/.local/bin/env && source .venv/bin/activate && python -c 'from pvx.pvx_models.abstract_persona_model import AbstractPersonaModel; print(\"Import check: OK\")'"
+ssh "$CLUSTER_HOST" "cd $CLUSTER_DIR && source ~/.local/bin/env && source .venv/bin/activate && python -c 'from pvx.abstraction.pvx_models.abstract_persona_model import AbstractPersonaModel; print(\"Import check: OK\")'"
 
 echo ""
 echo "=========================================="

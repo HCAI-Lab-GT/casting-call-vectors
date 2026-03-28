@@ -4,10 +4,10 @@ source .env
 NAME="dataset_batch" # name of the script (mostly for logging purposes)
 
 ###
-# src/pvx/pvx_models/persona_model.py
+# src/pvx/implementations/base/persona_model.py
 #
 # This script is used to generate new persona vectors.
-# It calls src/pvx/pvx_models/persona_model.py with specified run.
+# It calls src/pvx/implementations/base/persona_model.py with specified run.
 #
 # Usage:
 # ./run_evals.sh <run>

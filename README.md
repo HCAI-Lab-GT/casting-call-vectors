@@ -43,7 +43,7 @@ The `llm_as_judge.py` script provides a command-line interface for evaluating mo
 Activate your environment and run:
 
 ```
-python src/pvx/pvx_models/llm_as_judge.py \
+python src/pvx/implementations/judges/llm_as_judge.py \
   --question "My coworker keeps taking credit for my work in meetings. What should I do?" \
   --answer "That’s infuriating, and your coworker is being completely shameless. ..." \
   --backend openai \
@@ -91,11 +91,11 @@ Call from Python or as part of the RIASEC pipeline.
 
 Example (Non-RIASEC Response Generation):
 
-* Use `python src/pvx.pvx_models/response_generation.py --question "What is the theory of relativity"`
+* Use `python src/pvx/utils/response_generation.py --question "What is the theory of relativity"`
 
 Example (RIASEC Response Generation):
 
-* Use `python src/pvx.pvx_models/response_generation.py --riasec_positive --pos_neg_trait "Make your answers realistic" --question "Do you like to build puzzles"`
+* Use `python src/pvx/utils/response_generation.py --riasec_positive --pos_neg_trait "Make your answers realistic" --question "Do you like to build puzzles"`
 
 **Arguments:**
 - `messages`: List of chat messages (system/user/assistant roles)
@@ -111,12 +111,12 @@ The `riasec_persona_model.py` script/class extracts persona vectors for a given 
 
 Pre-generate responses for a trait:
 
-* Use `python src/pvx/pvx_models/riasec_persona_model.py --pre_generate_response --trait social`
+* Use `python src/pvx/implementations/riasec/riasec_persona_model.py --pre_generate_response --trait social`
 
 
 Extract persona vectors and generate a response:
 
-* Use `python src/pvx/pvx_models/riasec_persona_model.py --trait social --model_name Qwen/Qwen2.5-7B-Instruct --question "Do you like organizing events?"`
+* Use `python src/pvx/implementations/riasec/riasec_persona_model.py --trait social --model_name Qwen/Qwen2.5-7B-Instruct --question "Do you like organizing events?"`
 
 
 **Arguments:**
@@ -149,7 +149,7 @@ NOTE: as of right now, `riasec_judge` only works with roles.
 
 Call from Python or as part of the pipeline. Example:
 
-* Use `python src/pvx/pvx_models/judges/riasec_judge.py -c <role> -a 2.0 -m allenai/Olmo-3-7B-Instruct`
+* Use `python src/pvx/implementations/judges/riasec_judge.py -c <role> -a 2.0 -m allenai/Olmo-3-7B-Instruct`
 
 ### Response Examples
 ```
@@ -161,9 +161,9 @@ Call from Python or as part of the pipeline. Example:
 
 ---
 ## Setup Persona Models
-* Use `src/pvx/pvx_models/persona_dataset.py` to build persona traits
-* Use `src/pvx/pvx_models/persona_model.py` to test the persona model core
-* Use `src/pvx/pvx_models/riasec_persona_model.py` to generate a riasec specific persona model
+* Use `src/pvx/implementations/base/persona_dataset.py` to build persona traits
+* Use `src/pvx/implementations/base/persona_model.py` to test the persona model core
+* Use `src/pvx/implementations/riasec/riasec_persona_model.py` to generate a riasec specific persona model
 
 ## CLI runner
 - Use `scripts/run_eval.py` to launch evals from presets.

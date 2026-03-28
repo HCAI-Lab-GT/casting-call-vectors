@@ -1,8 +1,8 @@
 import argparse
 
 from pvx import setup_logging
-from pvx.pvx_models.persona_dataset import PersonaDataset
-from pvx.pvx_models.riasec_persona_model import RIASECPersonaModel
+from pvx.implementations.base.persona_dataset import PersonaDataset
+from pvx.implementations.riasec.riasec_persona_model import RIASECPersonaModel
 from pvx.utils.riasec_utils import RIASECHelpers
 
 logger = setup_logging(name="riasec-persona-model")
@@ -71,7 +71,7 @@ def main():
     )
 
     logger.info("Running RIASEC judge on the model...")
-    from pvx.pvx_models.judges.riasec_judge import RIASECJudge
+    from pvx.implementations.judges.riasec_judge import RIASECJudge
 
     riasec_judge = RIASECJudge(riasec_yaml_path=args.yaml_path)
     results, counts = riasec_judge.evaluate_persona(
