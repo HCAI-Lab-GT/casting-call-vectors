@@ -110,11 +110,17 @@ def main() -> None:
     steered_model_cache: dict[tuple[str, int, int], RoleLayersPersonaModel] = {}
     assistant_axis_model_cache: dict[tuple[str, int, int], AssistantAxisPersonaModel] = {}
 
-    total_regenerated = 0
+    # --- Pre-scan: tally regeneration needs across all roles ---
+    scan_results: list[tuple[Path, str, pd.DataFrame, dict[str, list[int]]]] = []
+    global_counts: dict[str, int] = {col: 0 for col in columns_to_check}
 
     for csv_path in csv_paths:
         role = csv_path.stem.removeprefix("Comparison_GoldStandard_")
         df = pd.read_csv(csv_path)
+
+        for col in ("steered", "assistant_axis"):
+            if col in df.columns:
+                df[col] = df[col].astype(object)
 
         required = {"question", "alpha", "layer", "sample_count", "temperature"}
         required |= set(columns_to_check)
@@ -123,11 +129,7 @@ def main() -> None:
             logger.warning("Skipping %s: missing columns %s", csv_path.name, sorted(missing_cols))
             continue
 
-        logger.info("=== Processing role: %s (%s rows) ===", role, len(df))
-
-        # Identify all rows that need regeneration, grouped by column
         regen_map: dict[str, list[int]] = {col: [] for col in columns_to_check}
-
         for idx in df.index:
             alpha = df.at[idx, "alpha"]
             if allowed_alphas is not None and not any(abs(alpha - a) < 1e-9 for a in allowed_alphas):
@@ -138,15 +140,27 @@ def main() -> None:
 
         total_needed = sum(len(indices) for indices in regen_map.values())
         if total_needed == 0:
-            logger.info("%s: no malformed/missing responses found", csv_path.name)
             continue
 
-        for col, count in regen_map.items():
-            if count:
-                logger.info("%s: %s %s rows need regeneration", csv_path.name, len(count), col)
+        for col in columns_to_check:
+            global_counts[col] += len(regen_map[col])
+        scan_results.append((csv_path, role, df, regen_map))
 
-        if args.dry_run:
-            # Print per-alpha breakdown
+    grand_total = sum(global_counts.values())
+    if grand_total == 0:
+        logger.info("No malformed/missing responses found across %s CSV(s)", len(csv_paths))
+        return
+
+    logger.info(
+        "=== Regeneration summary: %s total (%s) across %s role(s) ===",
+        grand_total,
+        ", ".join(f"{col}={global_counts[col]}" for col in columns_to_check if global_counts[col]),
+        len(scan_results),
+    )
+
+    if args.dry_run:
+        for csv_path, role, df, regen_map in scan_results:
+            logger.info("--- %s ---", role)
             for col in columns_to_check:
                 if not regen_map[col]:
                     continue
@@ -156,8 +170,14 @@ def main() -> None:
                     alpha_counts[a] = alpha_counts.get(a, 0) + 1
                 for a in sorted(alpha_counts):
                     logger.info("  %s alpha=%.2f: %s rows", col, a, alpha_counts[a])
-            total_regenerated += total_needed
-            continue
+        logger.info("Dry run complete: %s total row(s) would be regenerated", grand_total)
+        return
+
+    # --- Regenerate ---
+    total_regenerated = 0
+
+    for csv_path, role, df, regen_map in scan_results:
+        logger.info("=== Processing role: %s ===", role)
 
         # --- Regenerate steered responses ---
         if regen_map.get("steered"):
@@ -238,10 +258,7 @@ def main() -> None:
                 logger.info("%s: saved after regenerating %s assistant_axis rows", csv_path.name, changed)
             total_regenerated += changed
 
-    if args.dry_run:
-        logger.info("Dry run complete: %s total row(s) would be regenerated", total_regenerated)
-    else:
-        logger.info("Completed: %s total row(s) regenerated", total_regenerated)
+    logger.info("Completed: %s total row(s) regenerated", total_regenerated)
 
 
 if __name__ == "__main__":
