@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Fantastic Personas and Where to Find Them</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="" />
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Fantastic Personas and Where to Find Them</h1>
+</header>
+<h1 id="fantastic-personas-and-where-to-find-them">Fantastic Personas
+and Where to Find Them</h1>
+<p><strong>Mapping the Geometry of Role Vectors in Activation
+Space</strong></p>
+<p>Glenn Matlin, Isaac Song, M. R. Parwani, E. T. Anand, A. Theerthala,
+A. Chatterjee, M. Kostylew, Y. G Shavit, S. Krier, M. Riedl</p>
+<p><em>MATS · Human-Centered AI Lab, Georgia Tech · School of CS,
+Georgia Tech · UIUC · OpenAI · Google DeepMind</em></p>
+<hr />
+<h2 id="introduction">Introduction</h2>
+<p>Large language models adopt personas when prompted. Ask a model to
+respond as a pirate, a therapist, or a coral reef, and its outputs shift
+in measurable ways. These shifts are not just surface-level pattern
+matching. They correspond to recoverable directions in the model’s
+activation space (Lu et al., 2026; Chen et al., 2024), and contrastive
+methods can steer outputs along these directions (Panickssery et al.,
+2023; Zou et al., 2023).</p>
+<p>This matters for safety. Persona features have been linked to
+emergent misalignment (Wang et al., 2025). If a model’s internal
+representation of “who it is” can shift, understanding the structure of
+that shift is a prerequisite for monitoring and controlling it.</p>
+<p>The Persona Selection Model (Anthropic, 2026) proposes that LLMs
+learn a structured space of personas during pre-training. In this view,
+the helpful assistant is not the model’s default state but one selected
+region in a larger persona manifold. If this is correct, the space
+should be recoverable. Prior work from Lu et al. found a single dominant
+direction in this space, the “assistant axis,” which separates
+assistant-like behavior from non-assistant behavior. But is there more
+structure beyond this one axis?</p>
+<p>We set out to test this. We extracted contrastive role vectors for
+275 roles from OLMo3-7B-Instruct and analyzed the geometry of the
+resulting space. The vectors outperform the prior state-of-the-art on
+persona fidelity. And the geometry contains a surprise: a clear,
+interpretable separation between fantastical/non-human roles and
+realistic/human roles that no one anticipated.</p>
+<p>This post walks through our method, results, and the discovery. It
+accompanies our poster at the MATS 9.0 symposium.</p>
+<h2 id="the-extraction-pipeline">The Extraction Pipeline</h2>
+<p>Our approach differs from prior work in two key ways: contrastive
+extraction and quality filtering.</p>
+<h3 id="role-selection">Role Selection</h3>
+<p>We selected 275 roles spanning a wide range: realistic professions
+(doctor, lawyer, accountant, mechanic), personality archetypes (stoic,
+rebel, perfectionist), life stages (toddler, teenager, retiree, widow),
+and fantastical/non-human entities (alien, angel, eldritch, coral reef,
+whale, symbiote). This set matches the role list used by Lu et al. for
+direct comparison.</p>
+<h3 id="paired-response-generation">Paired Response Generation</h3>
+<p>For each role, we generate paired responses to the same set of
+questions. One response uses a role-specific system prompt (“You are a
+[role]…”), the other uses no system prompt at all. The model is
+OLMo3-7B-Instruct, and we generate 20 to 50 question-response pairs per
+role.</p>
+<h3 id="quality-filtering">Quality Filtering</h3>
+<p>This is where our pipeline diverges most from prior work. An LLM
+judge (GPT-4.1) scores each response for role alignment on a 0 to 100
+scale. Only response pairs where both the prompted and baseline outputs
+pass a quality threshold are retained. Lu et al. used no filtering. This
+means our vectors are computed from responses that actually demonstrate
+the target persona, not from generic or off-target outputs.</p>
+<h3 id="contrastive-activation-extraction">Contrastive Activation
+Extraction</h3>
+<p>We extract activations at layer 16 (of 32) and compute the
+contrastive difference:</p>
+<blockquote>
+<p><strong>v_role = a_prompted - a_baseline</strong></p>
+</blockquote>
+<p>Each role vector is a 4,096-dimensional direction encoding the
+persona shift in activation space. Unlike Lu et al., we do not apply
+mean subtraction across all roles. The raw contrastive differences are
+the vectors.</p>
+<h3 id="how-this-compares-to-prior-work">How This Compares to Prior
+Work</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><strong>Lu et al.</strong></th>
+<th><strong>Ours</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Extraction</td>
+<td>Mean activation</td>
+<td>Contrastive diff</td>
+</tr>
+<tr>
+<td>Filter</td>
+<td>None</td>
+<td>LLM judge</td>
+</tr>
+<tr>
+<td>Questions</td>
+<td>230+</td>
+<td>20-50</td>
+</tr>
+<tr>
+<td>Behavior target</td>
+<td>Assistant-like</td>
+<td>1st-person role</td>
+</tr>
+<tr>
+<td>Evaluation</td>
+<td>Not done</td>
+<td>5-axis judge</td>
+</tr>
+<tr>
+<td>Mean subtraction</td>
+<td>Yes</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<p>The table highlights a philosophical difference. Lu et al. were
+studying the assistant axis itself, so assistant-like behavior was
+appropriate. We are studying the full persona space, so we optimize for
+role fidelity.</p>
+<p><img src="figures/pipeline.png" alt="Pipeline" /> <em>The four-stage
+extraction pipeline: dataset generation, response generation with judge
+filtering, activation extraction, and evaluation.</em></p>
+<h2 id="does-the-steering-work">Does the Steering Work?</h2>
+<p>Before analyzing geometry, we need to establish that our vectors
+actually produce better persona behavior. We evaluated this with a
+pairwise comparison framework.</p>
+<h3 id="evaluation-protocol">Evaluation Protocol</h3>
+<p>For each of 39 fully evaluated roles, we compare steered outputs from
+our method against steered outputs from the Assistant Axis baseline (Lu
+et al.). Both are compared against a prompt-engineered gold persona
+response, the kind of output you get when you carefully craft a system
+prompt to elicit the target role.</p>
+<p>A GPT-4.1 judge scores each comparison across five axes:</p>
+<ul>
+<li><strong>Emotional register</strong>: Does the output match the
+emotional tone of the role?</li>
+<li><strong>Vocabulary</strong>: Does the word choice reflect the role’s
+domain?</li>
+<li><strong>Social dynamic</strong>: Does the output establish the right
+social relationship?</li>
+<li><strong>Motivation</strong>: Are the character’s goals and drives
+consistent?</li>
+<li><strong>Worldview</strong>: Does the output reflect the role’s
+perspective?</li>
+</ul>
+<p>To control for position bias, we randomize A/B ordering and debias
+the results.</p>
+<h3 id="results">Results</h3>
+<p>Across 7,118 debiased pairwise comparisons over 39 roles, our method
+wins <strong>92.9%</strong> of the time. The mean debiased score is
+<strong>78.7</strong> for our method versus <strong>30.8</strong> for
+the baseline. This separation is distribution-wide. It is not driven by
+a handful of roles where we happen to do well. The improvement is
+consistent across professions, archetypes, and fantastical entities
+alike.</p>
+<p><img src="figures/win_rate.png" alt="Win Rate" /> <em>Pairwise win
+rate across 39 roles. Our method (green) wins 92.9% of debiased
+comparisons.</em></p>
+<p><img src="figures/score_distribution.png" alt="Score Distribution" />
+<em>Score distributions for our method (green) versus the baseline
+(red). The distributions are almost entirely separated.</em></p>
+<h2 id="the-fantastical-separation">The Fantastical Separation</h2>
+<p>This is the finding we did not expect.</p>
+<h3 id="the-discovery">The Discovery</h3>
+<p>After extracting all 275 role vectors, we visualized them using
+t-SNE. Two geometrically distinct clusters appeared. Nothing in our
+extraction pipeline is designed to produce cluster separation. We
+selected roles, generated responses, filtered them, and computed
+activation differences. There is no mechanism in this pipeline that
+knows about “fantastical” versus “realistic.”</p>
+<p>Yet the clusters are there.</p>
+<h3 id="what-the-clusters-contain">What the Clusters Contain</h3>
+<p>The larger cluster contains <strong>human/realistic roles</strong>:
+doctor, lawyer, pirate, mechanic, historian, economist, comedian, spy,
+facilitator, judge. These are entities that could plausibly sit across
+from you and have a conversation.</p>
+<p>The smaller cluster contains <strong>fantastical and non-human
+roles</strong>: avatar, eldritch, alien, angel, mystic, symbiote,
+shaman, whale, coral reef, revenant. These are entities that require the
+model to construct an entirely different mode of interaction.</p>
+<p>One result stands out. <em>Toddler</em> and <em>infant</em> cluster
+with the fantastical group, not with the human roles. This suggests the
+model treats pre-linguistic entities as distinct from adult
+conversational personas. A toddler cannot hold a conversation in the way
+a doctor or a pirate can. In the model’s activation space, the steering
+required to simulate a toddler is more similar to the steering required
+for an angel or a coral reef than for an accountant.</p>
+<h3 id="independent-validation">Independent Validation</h3>
+<p>After observing the clusters, we validated them with an independent
+signal. A separate LLM evaluator rated each of the 275 roles on a 0 to
+10 “mystical-ness” scale: how fantastical, non-human, or supernatural is
+this role? The ratings were computed without knowledge of the t-SNE
+results.</p>
+<p>When we color the t-SNE by these ratings, the alignment is immediate.
+The cluster boundary tracks the mystical rating boundary closely.
+High-mystical roles (yellow/green) concentrate in the lower cluster.
+Low-mystical roles (dark purple) concentrate in the upper cluster.</p>
+<p><img
+src="../figures/role-figures/role_colored_tsne_mystical_layer_16.png"
+alt="Our t-SNE colored by mystical rating" /> <em>t-SNE of 275 role
+vectors (layer 16), colored by independently-rated mystical score
+(0-10). The lower cluster contains fantastical and non-human roles.
+Perplexity = 5.</em></p>
+<h3 id="the-baseline-does-not-show-this">The Baseline Does Not Show
+This</h3>
+<p>We replicated Lu et al.’s methodology (mean activation with mean
+subtraction) and applied the same t-SNE visualization to the same 275
+roles. The baseline vectors do not exhibit analogous cluster separation.
+Mystical roles are scattered throughout, interleaved with realistic
+ones.</p>
+<p>Both methods operate in the same 4,096-dimensional activation space.
+The difference is where each method places each role label within that
+space. Our contrastive extraction with judge filtering recovers
+role-specific structure that mean-activation methods do not.</p>
+<p><img src="figures/christina_tsne_mystical.png"
+alt="Baseline t-SNE colored by mystical rating" /> <em>Baseline t-SNE
+(Lu et al.), colored by the same mystical rating scale. Mystical roles
+(yellow/green) are scattered throughout with no cluster separation. Same
+roles, same t-SNE parameters.</em></p>
+<h3 id="what-this-means">What This Means</h3>
+<p>The model appears to represent a distinction between entities that
+can participate in normal human conversation and entities that require a
+qualitatively different interaction mode. The steering vectors for a
+coral reef or an eldritch entity are not just “a little different” from
+a lawyer or a mechanic. They occupy a separate region of activation
+space entirely.</p>
+<p>This was not engineered. It emerged from better extraction.</p>
+<h2 id="geometric-analysis">Geometric Analysis</h2>
+<p>t-SNE is a visualization tool, not a proof. We use two additional
+analyses to confirm the structure is real.</p>
+<h3 id="pca-variance-structure">PCA Variance Structure</h3>
+<p>PCA on the role vector matrix reveals low-dimensional structure.
+Approximately 20 principal components capture 90% of variance across 275
+roles in 4,096-dimensional space. This means the effective
+dimensionality of the persona space is much lower than the raw
+activation dimensions.</p>
+<p>PC1 (associated with the assistant axis) explains 24.0% of variance
+in our vectors versus 25.8% in the baseline. Our method distributes
+variance more evenly across components. This is consistent with greater
+inter-role separability: our roles are more differentiated from each
+other than in the baseline space.</p>
+<p><img src="figures/pca_variance_comparison.png"
+alt="PCA Variance Comparison" /> <em>Variance explained per principal
+component. Our method (green) has lower PC1 concentration, indicating
+greater separability between roles.</em></p>
+<h3 id="pca-confirms-the-cluster">PCA Confirms the Cluster</h3>
+<p>To test whether the fantastical/realistic separation persists beyond
+t-SNE, we construct a custom 3D basis: the assistant axis as dimension
+1, with two residual PCA components as dimensions 2 and 3. High-mystical
+roles occupy a distinct region along the residual axes, indicating the
+cluster is present in the raw geometry, not an artifact of t-SNE’s
+nonlinear projection.</p>
+<p><img
+src="../figures/role-figures/role_colored_pca_mystical_layer_16.png"
+alt="3D PCA colored by mystical rating" /> <em>3D PCA colored by
+mystical rating. The assistant axis (dashed) defines dimension 1.
+Fantastical roles (yellow/green) cluster in the upper region of the
+residual space.</em></p>
+<h3 id="similarity-structure">Similarity Structure</h3>
+<p>The cosine similarity heatmap across all 275 role vectors reveals
+block structure. Groups of related roles cluster together, and the
+fantastical roles form a visually distinct block.</p>
+<p><img src="../figures/role-figures/cosine_sim_layer_16.png"
+alt="Cosine Similarity" /> <em>Cosine similarity heatmap across 275 role
+vectors. Block structure indicates groups of roles with similar
+activation-space representations.</em></p>
+<h2 id="vector-arithmetic">Vector Arithmetic</h2>
+<p>Role vectors support algebraic composition analogous to word
+embedding arithmetic. By adding and subtracting role directions, we can
+navigate the persona space:</p>
+<blockquote>
+<p><strong>warrior</strong> - <strong>stoic</strong> +
+<strong>pacifist</strong> ≈ <em>activist, evangelist,
+coordinator</em></p>
+<p><strong>scientist</strong> - <strong>critic</strong> +
+<strong>criminal</strong> ≈ <em>smuggler, hacker, detective</em></p>
+</blockquote>
+<p>The second example is particularly intuitive: a scientist who is less
+about critiquing and more about operating outside the law maps to
+hacker, smuggler, and detective.</p>
+<p>These results are computed via nearest neighbors by cosine
+similarity. They suggest the persona space encodes relational structure
+between roles, not just identity. But this is suggestive, not
+systematic. Some combinations produce intuitive results. Others do not.
+We present these as evidence of compositional structure, not as a
+validated claim.</p>
+<p><img src="../figures/role-figures/interpolation_layer_16.png"
+alt="Interpolation" /> <em>Interpolation trajectories between role
+vectors in PCA space, showing smooth transitions through the persona
+manifold.</em></p>
+<h2 id="what-this-means-1">What This Means</h2>
+<p>Our findings are consistent with the Persona Selection Model
+(Anthropic, 2026), which proposes that LLMs learn a structured persona
+space during pre-training. If models organize personas into
+interpretable regions, and if those regions are recoverable via
+activation-space methods, then our results provide evidence in that
+direction.</p>
+<p>The fantastical/realistic separation is particularly relevant. Lu et
+al. found that their PC1 axis separates “professional/realistic” roles
+from “fantastical/mystical” roles across three different models. We find
+the same structure in OLMo3-7B-Instruct using a different extraction
+method. This is converging evidence from independent approaches on
+different models.</p>
+<p>For safety, the fantastical cluster is worth watching. It contains
+entities with fewer human social constraints: beings that are not bound
+by professional norms, social expectations, or even the physics of the
+real world. This is the region of activation space where persona-related
+misalignment behaviors might concentrate. If persona features control
+emergent misalignment (Wang et al., 2025), then understanding the
+geometry of the persona space, including where the boundaries lie, is a
+prerequisite for monitoring.</p>
+<p>This interpretation is speculative. We do not claim to have proven
+the Persona Selection Model or established a causal link between
+fantastical personas and misalignment risk. We have mapped a space.
+Understanding what it means for safety requires further work.</p>
+<h2 id="limitations">Limitations</h2>
+<ul>
+<li><strong>Partial evaluation.</strong> 39 of 275 roles were fully
+evaluated with the pairwise judge. The remaining roles have vectors
+extracted but lack pairwise comparison data.</li>
+<li><strong>Single model.</strong> All results are from
+OLMo3-7B-Instruct. Cross-model generalization has not been tested.</li>
+<li><strong>Cluster validation.</strong> The fantastical/realistic
+clusters are identified via t-SNE and confirmed via PCA. They should be
+further validated with k-means, DBSCAN, or silhouette analysis.</li>
+<li><strong>Post-hoc mystical rating.</strong> The LLM mystical rating
+was computed after observing the clusters, as a validation step. It is
+not a ground-truth label.</li>
+<li><strong>Vector arithmetic.</strong> The compositional results are
+anecdotal. Systematic evaluation of algebraic structure is future
+work.</li>
+</ul>
+<h2 id="future-work">Future Work</h2>
+<ul>
+<li>Full pairwise evaluation across all 275 roles</li>
+<li>Cluster verification via k-means and silhouette scores</li>
+<li>Cross-model generalization to other architectures</li>
+<li>Systematic vector arithmetic evaluation</li>
+<li>Connection to emergent misalignment features (Wang et al.,
+2025)</li>
+</ul>
+<h2 id="references">References</h2>
+<ol type="1">
+<li>Lu et al. (2026). <em>The Assistant Axis.</em></li>
+<li>Chen et al. (2024). <em>From Persona to Personalization.</em></li>
+<li>Panickssery et al. (2023). <em>Steering via Contrastive Activation
+Addition.</em></li>
+<li>Zou et al. (2023). <em>Representation Engineering.</em></li>
+<li>Wang et al. (2025). <em>Persona Features Control Emergent
+Misalignment.</em></li>
+<li>Wang et al. (2023). <em>RoleLLM.</em></li>
+<li>Tan et al. (2024). <em>Analyzing the Generalization and Reliability
+of Steering Vectors.</em></li>
+<li>Li et al. (2024). <em>Measuring and Controlling Instruction
+(In)Stability in Language Model Dialogs.</em></li>
+<li>Anthropic (2026). <em>The Persona Selection Model.</em></li>
+</ol>
+<h2 id="acknowledgments">Acknowledgments</h2>
+<p>This work was supported in part by a gift from Charles Frye of Modal.
+We thank Sumuk Shashidhar and the following for peer review and
+feedback: A. Singh, C. Lu, C. Ackerman, D. Ivanova, D. D. Africa, G.
+Kroiz, J. Chooi, J. Heninger, J. Michala, N. Warncke, R. Dearnaley, R.
+Kidd, T. Hua.</p>
+</body>
+</html>
