@@ -346,7 +346,7 @@ class AbstractPersonaModel(ABC):
         target_model_id: str = "allenai/Olmo-3-7B-Instruct",
         dataset: Optional[AbstractDataset] = None,
         concept: Optional[str] = None,  # alternate to dataset for loading (trait or role)
-        layer: int = 16,
+        layer: int = 14,
         target_pairs: int = 40,
         json_filepath: Optional[str] = None,
         only_load: bool = False,

@@ -32,7 +32,7 @@ python scripts/riasec_pipeline_eval.py --pregenerate --generate_dataset --trait 
 python scripts/riasec_pipeline_eval.py --trait social
 
 # Generate persona vector
-python src/pvx/pvx_models/riasec_persona_model.py --trait social --model_name Qwen/Qwen2.5-7B-Instruct --question "Do you like organizing events?"
+python src/pvx/implementations/riasec/riasec_persona_model.py --trait social --model_name Qwen/Qwen2.5-7B-Instruct --question "Do you like organizing events?"
 ```
 
 ## Code Quality

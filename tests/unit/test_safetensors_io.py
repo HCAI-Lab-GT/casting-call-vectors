@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import torch
 from safetensors import safe_open
 
-from pvx.pvx_models.abstract_persona_model import AbstractPersonaModel
+from pvx.abstraction.pvx_models.abstract_persona_model import AbstractPersonaModel
 
 
 class MockPersonaModel(AbstractPersonaModel):
@@ -16,9 +16,9 @@ class MockPersonaModel(AbstractPersonaModel):
     def __init__(self, target_model_id: str, trait: str, layer: int = 14):
         self.target_model_id = target_model_id
         self.layer_steering = layer
-        self.trait = trait
+        self.concept = trait
         self.dataset = MagicMock()
-        self.dataset.trait = trait
+        self.dataset.concept = trait
         self.dataset.num_questions = 100
         self.dataset.positive_negative_pairs = [("pos", "neg")] * 5
 
@@ -67,7 +67,7 @@ class TestSaveToSafetensors:
             metadata = f.metadata()
 
         assert metadata["target_model_id"] == "Qwen/Qwen2.5-7B-Instruct"
-        assert metadata["trait"] == "artistic"
+        assert metadata["concept"] == "artistic"
         assert metadata["layer_steering"] == "14"
         assert "created_at" in metadata
         assert "prompt_persona_vector_shape" in metadata
@@ -131,7 +131,7 @@ class TestFromSafetensors:
             metadata = f.metadata()
 
         assert metadata["target_model_id"] == "Qwen/Qwen2.5-7B-Instruct"
-        assert metadata["trait"] == "artistic"
+        assert metadata["concept"] == "artistic"
         assert int(metadata["layer_steering"]) == 14
 
 
@@ -193,7 +193,7 @@ class TestManifest:
 
         assert "vectors" in manifest
         assert len(manifest["vectors"]) == 1
-        assert manifest["vectors"][0]["trait"] == "artistic"
+        assert manifest["vectors"][0]["concept"] == "artistic"
 
     def test_manifest_updated_on_resave(self, temp_dir, mock_persona_vectors):
         """Verify existing entry is updated (not duplicated) on re-save."""
@@ -230,8 +230,8 @@ class TestManifest:
             manifest = json.load(f)
 
         assert len(manifest["vectors"]) == 2
-        traits = {v["trait"] for v in manifest["vectors"]}
-        assert traits == {"artistic", "social"}
+        concepts = {v["concept"] for v in manifest["vectors"]}
+        assert concepts == {"artistic", "social"}
 
 
 class TestLoadOrCreate:

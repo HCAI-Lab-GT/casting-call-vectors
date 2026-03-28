@@ -4,11 +4,7 @@ from pathlib import Path
 import pandas as pd
 
 from pvx import setup_logging
-from pvx.implementations.judges.llm_as_judge import (
-    GOLD_COMPARATOR_PROMPT_TEMPLATE,
-    LLMJudge,
-    PROMPT_TEMPLATE,
-)
+from pvx.implementations.judges.llm_as_judge import GOLD_COMPARATOR_PROMPT_TEMPLATE, LLMJudge
 
 logger = setup_logging(name="backfill-assistant-axis-gold-comparisons")
 
@@ -21,23 +17,10 @@ COMPARE_FIELDS = (
 )
 STEERED_COMPARE_COLUMNS = {f"cmp_{n}": (s, k) for n, s, k in COMPARE_FIELDS}
 AA_COMPARE_COLUMNS = {f"assistant_axis_cmp_{n}": (s, k) for n, s, k in COMPARE_FIELDS}
-ROLE_SCORE_COLUMNS = ("assistant_axis_score", "baseline_score", "steered_score")
 
 
 def has_value(value: object) -> bool:
     return not pd.isna(value) and str(value).strip() != ""
-
-
-def needs_backfill(value: object) -> bool:
-    if not has_value(value):
-        return True
-    text = str(value).strip()
-    if text == "-1":
-        return True
-    try:
-        return float(text) == -1.0
-    except ValueError:
-        return False
 
 
 def load_role_description(role: str, gold_prompts_dir: Path, cache: dict[str, str]) -> str:
@@ -55,7 +38,7 @@ def load_role_description(role: str, gold_prompts_dir: Path, cache: dict[str, st
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Backfill role and comparative judge scores into Comparison_GoldStandard_*.csv files"
+        description="Backfill assistant-axis gold comparison scores into Comparison_GoldStandard_*.csv files"
     )
     parser.add_argument("--input_dir", default="./experiment_data/gold_prompt_experiments")
     parser.add_argument("--gold_prompts_dir", default="./persona_data/gold_labels_prompts_dataset")
@@ -79,38 +62,24 @@ def main() -> None:
         logger.info("No matching CSV files found in %s", input_dir)
         return
 
-    role_judge = LLMJudge(
-        backend=args.backend,
-        model=args.judge_model,
-        base_url=args.base_url,
-        api_key_env=args.api_key_env,
-        prompt_template=PROMPT_TEMPLATE,
-    )
-
-    comparator_judge = LLMJudge(
+    judge = LLMJudge(
         backend=args.backend,
         model=args.judge_model,
         base_url=args.base_url,
         api_key_env=args.api_key_env,
         prompt_template=GOLD_COMPARATOR_PROMPT_TEMPLATE,
     )
-    comparator_judge.judge_func = comparator_judge._aggregate_gold_comparator_score
+    judge.judge_func = judge._aggregate_gold_comparator_score
     role_description_cache: dict[str, str] = {}
 
     for csv_path in csv_paths:
         df = pd.read_csv(csv_path)
         changed = False
-        for column in (*STEERED_COMPARE_COLUMNS, *AA_COMPARE_COLUMNS, *ROLE_SCORE_COLUMNS):
+        for column in (*STEERED_COMPARE_COLUMNS, *AA_COMPARE_COLUMNS):
             if column not in df.columns:
                 df[column] = pd.NA
                 changed = True
-        pending_counts = {
-            "assistant_axis_role": 0,
-            "baseline_role": 0,
-            "steered_role": 0,
-            "assistant_axis_compare": 0,
-            "steered_compare": 0,
-        }
+        pending_assistant_axis_rows, pending_steered_rows = 0, 0
 
         for index, row in df.iterrows():
             role = str(row.get("role", "")).strip()
@@ -119,73 +88,23 @@ def main() -> None:
             assistant_axis = str(row.get("assistant_axis", "")).strip()
             steered = str(row.get("steered", "")).strip()
 
-            refresh_assistant_axis_role = has_value(assistant_axis) and (
-                args.overwrite or needs_backfill(row.get("assistant_axis_score"))
-            )
-            refresh_baseline_role = has_value(baseline) and (
-                args.overwrite or needs_backfill(row.get("baseline_score"))
-            )
-            refresh_steered_role = has_value(steered) and (
-                args.overwrite or needs_backfill(row.get("steered_score"))
-            )
-            refresh_assistant_axis_compare = has_value(assistant_axis) and has_value(baseline) and (
+            refresh_assistant_axis = has_value(assistant_axis) and has_value(baseline) and (
                 args.overwrite
-                or any(needs_backfill(row.get(column)) for column in AA_COMPARE_COLUMNS)
+                or any(not has_value(row.get(column)) for column in AA_COMPARE_COLUMNS)
             )
-            refresh_steered_compare = not args.skip_steered_refresh and has_value(steered) and has_value(baseline) and (
-                args.overwrite
-                or any(needs_backfill(row.get(column)) for column in STEERED_COMPARE_COLUMNS)
-            )
-            if not any(
-                (
-                    refresh_assistant_axis_role,
-                    refresh_baseline_role,
-                    refresh_steered_role,
-                    refresh_assistant_axis_compare,
-                    refresh_steered_compare,
-                )
-            ):
+            refresh_steered = not args.skip_steered_refresh and has_value(steered) and has_value(baseline)
+            if not refresh_assistant_axis and not refresh_steered:
                 continue
 
             role_description = load_role_description(role, gold_prompts_dir, role_description_cache)
-            pending_counts["assistant_axis_role"] += int(refresh_assistant_axis_role)
-            pending_counts["baseline_role"] += int(refresh_baseline_role)
-            pending_counts["steered_role"] += int(refresh_steered_role)
-            pending_counts["assistant_axis_compare"] += int(refresh_assistant_axis_compare)
-            pending_counts["steered_compare"] += int(refresh_steered_compare)
+            pending_assistant_axis_rows += int(refresh_assistant_axis)
+            pending_steered_rows += int(refresh_steered)
 
             if args.dry_run:
                 continue
 
-            if refresh_assistant_axis_role:
-                df.at[index, "assistant_axis_score"] = role_judge(
-                    role=role,
-                    role_description=role_description,
-                    question=question,
-                    answer=assistant_axis,
-                )
-                changed = True
-
-            if refresh_baseline_role:
-                df.at[index, "baseline_score"] = role_judge(
-                    role=role,
-                    role_description=role_description,
-                    question=question,
-                    answer=baseline,
-                )
-                changed = True
-
-            if refresh_steered_role:
-                df.at[index, "steered_score"] = role_judge(
-                    role=role,
-                    role_description=role_description,
-                    question=question,
-                    answer=steered,
-                )
-                changed = True
-
-            if refresh_assistant_axis_compare:
-                assistant_axis_scores = comparator_judge(
+            if refresh_assistant_axis:
+                assistant_axis_scores = judge(
                     role=role,
                     role_description=role_description,
                     question=question,
@@ -196,8 +115,8 @@ def main() -> None:
                     df.at[index, column] = assistant_axis_scores[section][key]
                 changed = True
 
-            if refresh_steered_compare:
-                steered_scores = comparator_judge(
+            if refresh_steered:
+                steered_scores = judge(
                     role=role,
                     role_description=role_description,
                     question=question,
@@ -210,25 +129,19 @@ def main() -> None:
 
         if args.dry_run:
             logger.info(
-                "%s: role scores (assistant_axis=%s baseline=%s steered=%s), comparisons (assistant_axis=%s steered=%s) would be updated",
+                "%s: %s assistant-axis rows and %s steered rows would be updated",
                 csv_path.name,
-                pending_counts["assistant_axis_role"],
-                pending_counts["baseline_role"],
-                pending_counts["steered_role"],
-                pending_counts["assistant_axis_compare"],
-                pending_counts["steered_compare"],
+                pending_assistant_axis_rows,
+                pending_steered_rows,
             )
             continue
         if changed:
             df.to_csv(csv_path, index=False)
             logger.info(
-                "Updated %s: role scores (assistant_axis=%s baseline=%s steered=%s), comparisons (assistant_axis=%s steered=%s)",
+                "Updated %s with %s assistant-axis rows and %s steered rows",
                 csv_path,
-                pending_counts["assistant_axis_role"],
-                pending_counts["baseline_role"],
-                pending_counts["steered_role"],
-                pending_counts["assistant_axis_compare"],
-                pending_counts["steered_compare"],
+                pending_assistant_axis_rows,
+                pending_steered_rows,
             )
         else:
             logger.info("No changes needed for %s", csv_path)

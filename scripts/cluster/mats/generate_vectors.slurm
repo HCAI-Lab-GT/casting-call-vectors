@@ -31,8 +31,8 @@ echo ""
 echo "========== VALIDATION =========="
 python -c "
 import torch
-from pvx.pvx_models.riasec_persona_model import RIASECPersonaModel
-from pvx.pvx_models.persona_dataset import PersonaDataset
+from pvx.implementations.riasec.riasec_persona_model import RIASECPersonaModel
+from pvx.implementations.base.persona_dataset import PersonaDataset
 
 assert torch.cuda.is_available(), 'CUDA not available!'
 print('CUDA check: PASSED')
@@ -56,7 +56,7 @@ for trait in $TRAITS; do
     echo ">>> Generating vectors for: $trait"
     python -c "
 import torch
-from pvx.pvx_models.riasec_persona_model import RIASECPersonaModel
+from pvx.implementations.riasec.riasec_persona_model import RIASECPersonaModel
 
 model = RIASECPersonaModel(
     target_model_id='$MODEL_ID',

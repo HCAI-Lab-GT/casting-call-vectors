@@ -81,7 +81,7 @@ def main() -> None:
 	parser.add_argument("--api_key_env", default="OPENROUTER_API_KEY")
 	parser.add_argument("--local_model", default="Qwen/Qwen2.5-7B-Instruct")
 	parser.add_argument("--device", default=None)
-	parser.add_argument("--temperature", type=float, default=0.2)
+	parser.add_argument("--temperature", type=float, default=0.7)
 	parser.add_argument("--max_new_tokens", type=int, default=2048)
 	parser.add_argument("--num_dialogue_prompts", type=int, default=5)
 	parser.add_argument("--overwrite", action="store_true")

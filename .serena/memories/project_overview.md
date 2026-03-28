@@ -19,7 +19,8 @@ Persona dataset generation and evaluation utilities built around Inspect AI. The
 
 ## Key Directories
 - `src/pvx/` - Main library code
-- `src/pvx/pvx_models/` - Persona models, judges, response generation
+- `src/pvx/abstraction/` - Abstract base classes (AbstractPersonaModel, AbstractDataset, AbstractJudge)
+- `src/pvx/implementations/` - Concrete implementations (persona models, judges, datasets)
 - `src/pvx/tasks/` - Inspect AI evaluation tasks
 - `src/pvx/utils/` - Utility functions
 - `scripts/` - CLI runners and pipelines

@@ -10,7 +10,8 @@ persona-vectors/
 ├── tests/                # Test directories (unit, integration, mocks)
 ├── docs/                 # Documentation
 ├── experiments/          # Experiment results
-├── slurm/                # HPC batch scripts
+├── scripts/cluster/pace/ # HPC batch scripts (PACE cluster)
+├── scripts/cluster/mats/ # HPC batch scripts (MATS cluster)
 ├── data/                 # Data directory
 ├── .serena/              # Serena MCP configuration
 └── .claude/              # Claude Code settings
@@ -20,33 +21,44 @@ persona-vectors/
 ```
 src/pvx/
 ├── __init__.py
-├── pvx_models/           # Core persona model implementations
-│   ├── persona_model.py          # Base persona model
-│   ├── riasec_persona_model.py   # RIASEC-specific persona model
-│   ├── persona_dataset.py        # Dataset handling
-│   ├── response_generation.py    # Response synthesis
-│   ├── abstract_persona_model.py # Abstract base class
-│   ├── prompts.py                # Prompt templates
-│   ├── judges/                   # Evaluation judges
-│   │   ├── llm_as_judge.py       # LLM-based evaluation
-│   │   └── riasec_judge.py       # RIASEC trait scoring
-│   └── inspect_modelapi/         # Inspect AI model API integration
-├── tasks/                # Inspect AI evaluation tasks
-│   ├── worfbench/        # WorfBench task
-│   └── boardgame_qa/     # BoardGame QA task
-├── utils/                # Utility modules
-│   ├── riasec_utils.py   # RIASEC helpers
-│   ├── judge_utils.py    # Judge utilities
-│   ├── inspect_utils.py  # Inspect AI utilities
-│   ├── generation_utils.py # Generation helpers
-│   ├── logging_utils.py  # Logging configuration
-│   └── wandb_utils.py    # WandB integration
-├── config/               # Configuration handling
-├── sources/              # Data sources
-├── data/                 # Data utilities
-├── extraction/           # Extraction utilities
-├── analysis/             # Analysis modules
-└── infra/                # Infrastructure utilities
+├── abstraction/              # Abstract base classes
+│   ├── pvx_models/
+│   │   ├── abstract_persona_model.py  # AbstractPersonaModel(ABC)
+│   │   └── abstract_dataset.py        # AbstractDataset(ResponseGeneration)
+│   └── judges/
+│       └── abstract_judge.py          # AbstractJudge(ResponseGeneration, ABC)
+├── implementations/          # Concrete implementations
+│   ├── base/
+│   │   ├── persona_dataset.py         # PersonaDataset(AbstractDataset)
+│   │   └── persona_model.py           # PersonaModel(AbstractPersonaModel)
+│   ├── riasec/
+│   │   ├── riasec_dataset.py          # RiasecDataset(AbstractDataset)
+│   │   └── riasec_persona_model.py    # RIASECPersonaModel(AbstractPersonaModel)
+│   ├── judges/
+│   │   ├── llm_as_judge.py            # LLMJudge(AbstractJudge)
+│   │   ├── riasec_judge.py            # RIASECJudge(AbstractJudge)
+│   │   ├── role_judge.py              # RoleJudge(AbstractJudge)
+│   │   ├── hexaco_judge.py            # HexacoJudge(AbstractJudge)
+│   │   └── batch_scorer.py            # BatchScorer
+│   ├── roles/                         # RolePersonaModel, RoleDataset
+│   ├── roles_layers/                  # RoleLayersPersonaModel, AssistantAxisPersonaModel
+│   ├── roles_optimized/               # RoleQAGenerator, RoleActivationExtractor
+│   └── trait_coverage/                # TraitCoveragePersonaModel, TraitCoverageDataset
+├── experiments/              # Experiment pipelines
+│   ├── gold_prompt_experiments.py
+│   └── pairwise_judge_experiments.py
+├── inspect_modelapi/         # Inspect AI model API integration
+├── tasks/                    # Inspect AI evaluation tasks
+│   ├── worfbench/
+│   └── boardgame_qa/
+└── utils/                    # Utility modules
+    ├── response_generation.py  # ResponseGeneration
+    ├── prompts.py              # PromptTemplates
+    ├── riasec_utils.py         # RIASECHelpers
+    ├── judge_utils.py          # JudgeConfig
+    ├── generation_utils.py     # GenerationConfig
+    ├── logging_utils.py        # Logging configuration
+    └── wandb_utils.py          # WandB integration
 ```
 
 ## Configuration Files
@@ -57,5 +69,5 @@ src/pvx/
 ## Key Entry Points
 - `scripts/run_eval.py` - CLI runner for evaluations
 - `scripts/riasec_pipeline_eval.py` - Full RIASEC pipeline
-- `src/pvx/pvx_models/llm_as_judge.py` - LLM-as-judge CLI
-- `src/pvx/pvx_models/riasec_persona_model.py` - Persona model CLI
+- `src/pvx/implementations/judges/llm_as_judge.py` - LLM-as-judge CLI
+- `src/pvx/implementations/riasec/riasec_persona_model.py` - Persona model CLI

@@ -4,7 +4,7 @@ source .env
 NAME="trait_batch" # name of the script (mostly for logging purposes)
 
 ###
-# src/pvx/pvx_models/persona_model.py
+# src/pvx/implementations/base/persona_model.py
 #
 # This script is used to generate new trait vectors.
 # It calls src/pvx/implementations/base/persona_model.py with specified run.
