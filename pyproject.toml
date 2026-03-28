@@ -1,0 +1,75 @@
+[project]
+name = "pvx"
+version = "0.1.0"
+description = "Eval helpers and persona dataset utilities (Inspect AI, HF/vLLM ready)."
+authors = [{ name = "EILab", email = "dev@eilab.example" }]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "transformers>=4.44.0",
+  "torch>=2.3.0",
+  "openai>=1.53.0",
+  "tqdm>=4.66.0",
+  "datasets>=3.1.0",
+  "accelerate>=1.0.0",
+  "inspect-ai>=0.3.4",
+  "anthropic>=0.75.0",
+  "python-dotenv>=1.0.0",
+  "wandb>=0.18.7",
+  "vllm>=0.5.2",
+  "matplotlib>=3.9.0",
+  "nvitop>=1.6.0",
+  "inspect-evals>=0.3.102",
+  "inspect-wandb>=0.2.0",
+  "pyyaml>=6.0.2",
+  "hf-transfer>=0.1.9",
+  "anyio>=4.12.0",
+  "sentence-transformers>=5.2.0",
+  "safetensors>=0.4.0",
+  "tenacity>=8.0",
+  "spacy>=3.8.11",
+  "modal>=1.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.6.0",
+  "pytest>=8.0.0",
+  "pytest-cov>=4.1.0",
+]
+
+[project.entry-points.inspect_ai]
+pvx = "pvx.pvx_models.inspect_modelapi._registry"
+
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pvx"]
+
+[tool.ruff]
+line-length = 100
+extend-select = ["B", "I", "C4", "RET"]
+
+# ty type checker configuration
+# Note: ty is in beta (stable 2026). These rules are relaxed for third-party
+# library type issues while still catching errors in our own code.
+[tool.ty.src]
+include = ["src", "scripts", "tests"]
+exclude = ["_vendor"]
+
+[tool.ty.rules]
+# Library type stub issues (wandb, torch, transformers, inspect-ai, etc.)
+# These are not bugs in our code - they're incomplete type stubs in libraries.
+invalid-argument-type = "warn"     # Library stubs don't cover all overloads
+unresolved-attribute = "warn"      # Dynamic attrs on library objects
+possibly-missing-attribute = "ignore"
+no-matching-overload = "warn"
+call-non-callable = "warn"         # Transformers tokenizers typed as Optional
+unsupported-operator = "warn"      # Torch tensor / int operations
+invalid-return-type = "warn"       # model.model.layers returns object, Tensor.item() returns int|float
+
+# Keep strict - these catch real bugs in our code
+unresolved-import = "error"
+unresolved-reference = "error"
+invalid-assignment = "error"
