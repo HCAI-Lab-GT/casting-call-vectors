@@ -6,8 +6,8 @@
 #SBATCH --mem=8G
 #SBATCH --time=04:00:00
 #SBATCH --gres=none
-#SBATCH --output=slurm/create_gold_standard_prompts/create_gold_cpu-%j.out
-#SBATCH --error=slurm/create_gold_standard_prompts/create_gold_cpu-%j.err
+#SBATCH --output=logs/slurm/create_gold_standard_prompts/create_gold_cpu-%j.out
+#SBATCH --error=logs/slurm/create_gold_standard_prompts/create_gold_cpu-%j.err
 
 set -euo pipefail
 
@@ -76,8 +76,8 @@ if [ -z "$OUTPUT_DIR" ]; then
 fi
 
 if [ -z "$ROLE" ]; then
-    echo "Usage: sbatch slurm/create_gold_standard_prompts_cpu.sbatch --role <role_name>"
-    echo "   or: sbatch slurm/create_gold_standard_prompts_cpu.sbatch <role_name>"
+    echo "Usage: sbatch scripts/cluster/pace/create_gold_standard_prompts_cpu.sbatch --role <role_name>"
+    echo "   or: sbatch scripts/cluster/pace/create_gold_standard_prompts_cpu.sbatch <role_name>"
     echo "Exactly one role is expected per job."
     exit 1
 fi

@@ -10,7 +10,7 @@ source .env
 # combinations is missing from disk. Already-complete roles are skipped.
 #
 # Usage:
-#   bash slurm/role_layers_persona_model_autobatch.sh [options...]
+#   bash scripts/cluster/pace/role_layers_persona_model_autobatch.sh [options...]
 #
 # Options:
 #   -f, --file              Path to roles JSON (default: configs/role_list.json)
@@ -140,7 +140,7 @@ if [[ "$NUM_BINS" -le 0 ]]; then
         read -ra job_counts  <<< "$(get_counts_for_missing "$missing_str")"
 
         if [[ "$DRY_RUN" == "true" ]]; then
-            echo "  [DRY RUN] sbatch slurm/role_layers_persona_model.sh \\"
+            echo "  [DRY RUN] sbatch scripts/cluster/pace/role_layers_persona_model.sh \\"
             echo "              --model \"$MODEL\" --alpha \"$ALPHA\" \\"
             echo "              --roles \"$role\" \\"
             echo "              --layers ${job_layers[*]} \\"
@@ -148,7 +148,7 @@ if [[ "$NUM_BINS" -le 0 ]]; then
             echo "              # missing: $missing_str"
         else
             echo "  Submitting job for role=$role layers=(${job_layers[*]}) counts=(${job_counts[*]})"
-            sbatch slurm/role_layers_persona_model.sh \
+            sbatch scripts/cluster/pace/role_layers_persona_model.sh \
                 --model "$MODEL" \
                 --alpha "$ALPHA" \
                 --roles "$role" \
@@ -184,14 +184,14 @@ else
 
         if [[ "$DRY_RUN" == "true" ]]; then
             echo "  [DRY RUN] Bin $((bin+1))/$NUM_BINS — roles: ($bin_roles_str)"
-            echo "            sbatch slurm/role_layers_persona_model.sh \\"
+            echo "            sbatch scripts/cluster/pace/role_layers_persona_model.sh \\"
             echo "              --model \"$MODEL\" --alpha \"$ALPHA\" \\"
             echo "              --roles ${bin_roles[*]} \\"
             echo "              --layers ${bin_layers[*]} \\"
             echo "              --sample-counts ${bin_counts[*]}"
         else
             echo "  Submitting bin $((bin+1))/$NUM_BINS: roles=(${bin_roles_str}) layers=(${bin_layers[*]}) counts=(${bin_counts[*]})"
-            sbatch slurm/role_layers_persona_model.sh \
+            sbatch scripts/cluster/pace/role_layers_persona_model.sh \
                 --model "$MODEL" \
                 --alpha "$ALPHA" \
                 --roles "${bin_roles[@]}" \

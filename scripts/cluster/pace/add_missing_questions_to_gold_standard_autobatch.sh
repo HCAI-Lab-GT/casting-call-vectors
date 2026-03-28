@@ -7,7 +7,7 @@
 # No completeness checks are performed: all non-ignored roles are processed.
 #
 # Usage:
-#   bash slurm/add_missing_questions_to_gold_standard_autobatch.sh [options...]
+#   bash scripts/cluster/pace/add_missing_questions_to_gold_standard_autobatch.sh [options...]
 #
 # Options:
 #   -f, --file         Path to roles JSON (default: configs/role_list.json)

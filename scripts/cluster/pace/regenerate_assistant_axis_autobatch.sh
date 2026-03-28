@@ -7,7 +7,7 @@
 # No completeness checks are performed: all non-ignored roles are assumed pending.
 #
 # Usage:
-#   bash slurm/regenerate_assistant_axis_autobatch.sh [options...]
+#   bash scripts/cluster/pace/regenerate_assistant_axis_autobatch.sh [options...]
 #
 # Options:
 #   -f, --file         Path to roles JSON (default: configs/role_list.json)
@@ -93,7 +93,7 @@ echo "Submitting ${#ROLES[@]} role(s) with no completeness checks."
 
 auto_submit() {
   local -a job_roles=("$@")
-  local -a cmd=(sbatch slurm/regenerate_assistant_axis.sh --model "$MODEL" --roles "${job_roles[@]}")
+  local -a cmd=(sbatch scripts/cluster/pace/regenerate_assistant_axis.sh --model "$MODEL" --roles "${job_roles[@]}")
 
   if [[ ${#ALPHAS[@]} -gt 0 ]]; then
     cmd+=(--alphas "${ALPHAS[@]}")

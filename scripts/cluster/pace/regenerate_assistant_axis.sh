@@ -17,7 +17,7 @@ set -euo pipefail
 # using each row's alpha value (matching steered alpha).
 #
 # Usage:
-#   sbatch slurm/regenerate_assistant_axis.sh [--model MODEL] [--alphas A1 A2 ...] [--roles ROLE1 ROLE2 ...]
+#   sbatch scripts/cluster/pace/regenerate_assistant_axis.sh [--model MODEL] [--alphas A1 A2 ...] [--roles ROLE1 ROLE2 ...]
 #
 # Author: iiisong
 ###

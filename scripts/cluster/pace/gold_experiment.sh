@@ -87,7 +87,7 @@ fi
 sbatch  --gres "$GPU_CONFIG" --ntasks-per-node 1 --cpus-per-task "$NUM_WORKERS" --mem "$MEM_PER_NODE" \
         --account "$ACCOUNT" --time "$TIME" \
         --output "$LOG_DIR/$NAME-%j.out" --error "$LOG_DIR/$NAME-%j.err" \
-        "slurm/$NAME.sbatch" \
+        "scripts/cluster/pace/$NAME.sbatch" \
         --model "$MODEL" \
         --roles "${ROLES[@]}" \
         --alphas "${ALPHAS[@]}" \

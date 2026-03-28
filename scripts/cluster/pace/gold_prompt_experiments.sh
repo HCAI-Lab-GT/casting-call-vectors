@@ -13,7 +13,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  sbatch slurm/gold_prompt_experiments.sh \
+  sbatch scripts/cluster/pace/gold_prompt_experiments.sh \
     --role chemist \
     --alpha 2.5 \
     --questions_file ./configs/validation_questions.jsonl \

@@ -130,7 +130,7 @@ print(max(max(e['counts']) for e in entries))
         read -ra counts_arr <<< "$counts"
         echo "Chaining to GPU extraction job for $role (layer=$layer, counts=${counts_arr[*]})..."
 
-        bash slurm/roles_optimized_gpu_batch.sh \
+        bash scripts/cluster/pace/roles_optimized_gpu_batch.sh \
             --role "$role" \
             --model "$MODEL" \
             --answer-model "$MODEL" \
@@ -204,7 +204,7 @@ else
     echo "Chaining to GPU extraction job for $ROLE (layer=$LAYER, counts=${COUNTS[*]})..."
     source .env  # reload for PACE_ACCOUNT in case compute node env doesn't have it
 
-    bash slurm/roles_optimized_gpu_batch.sh \
+    bash scripts/cluster/pace/roles_optimized_gpu_batch.sh \
         --role "$ROLE" \
         --model "$MODEL" \
         --answer-model "$MODEL" \

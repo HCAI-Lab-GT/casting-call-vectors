@@ -199,7 +199,7 @@ for count in "${COUNTS[@]}"; do
             echo "Submitting gold experiment for $ROLE (layer=$LAYER, count=$count)..."
             source .env  # reload for PACE_ACCOUNT on compute node
 
-            bash slurm/gold_experiment.sh \
+            bash scripts/cluster/pace/gold_experiment.sh \
                 --model "$MODEL" \
                 --roles "$ROLE" \
                 --layers "$LAYER" \

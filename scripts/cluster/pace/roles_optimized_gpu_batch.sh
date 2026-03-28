@@ -9,12 +9,12 @@ NAME="roles_optimized_gpu_batch"
 # once per missing sample count.
 #
 # On successful extraction of each count's safetensors file, the sbatch
-# automatically submits slurm/gold_experiment.sh for that (role, count) pairing
+# automatically submits scripts/cluster/pace/gold_experiment.sh for that (role, count) pairing
 # if it has not yet been fully run (checked via CSV completion logic from
 # gold_experiment_autobatch.sh).
 #
 # Usage:
-#   bash slurm/roles_optimized_gpu_batch.sh --role <role> --model <model> \
+#   bash scripts/cluster/pace/roles_optimized_gpu_batch.sh --role <role> --model <model> \
 #       --layer <layer> --counts <c1> [c2 ...] [options...]
 #
 # Author: iiisong
@@ -103,7 +103,7 @@ fi
 sbatch  --gres "$GPU_CONFIG" --ntasks-per-node 1 --cpus-per-task "$NUM_WORKERS" --mem "$MEM_PER_NODE" \
         --account "$ACCOUNT" --qos "$QOS" --time "$TIME" \
         --output "$LOG_DIR/$NAME-%j.out" --error "$LOG_DIR/$NAME-%j.err" \
-        "slurm/$NAME.sbatch" \
+        "scripts/cluster/pace/$NAME.sbatch" \
         --role "$ROLE" \
         --model "$MODEL" \
         $( [[ -n "$ANSWER_MODEL" ]] && echo "--answer-model $ANSWER_MODEL" ) \

@@ -13,7 +13,7 @@ source .env
 # to disable this (e.g. during testing when the full pipeline is not needed).
 #
 # Usage:
-#   bash slurm/roles_optimized_gpu_autobatch.sh [-f <json_file>] [options...]
+#   bash scripts/cluster/pace/roles_optimized_gpu_autobatch.sh [-f <json_file>] [options...]
 #
 # Options:
 #   -f, --file              Path to incomplete inits JSON (default: configs/role_init_incomplete.json)
@@ -177,7 +177,7 @@ if [[ "$NUM_BINS" -le 0 || "$TOTAL_PENDING" -eq 0 ]]; then
         read -ra still_missing <<< "${PENDING_MISSING[$j]}"
 
         echo "  Submitting GPU job for role=$role model=$effective_model answer_model=$effective_answer_model layer=$layer counts=(${still_missing[*]})"
-        bash slurm/roles_optimized_gpu_batch.sh \
+        bash scripts/cluster/pace/roles_optimized_gpu_batch.sh \
             --role "$role" \
             --model "$effective_model" \
             --answer-model "$effective_answer_model" \
@@ -207,7 +207,7 @@ else
             read -ra still_missing <<< "${PENDING_MISSING[$j]}"
 
             echo "  [Bin $((bin+1))/$NUM_BINS] Submitting GPU job for role=$role model=$effective_model answer_model=$effective_answer_model layer=$layer counts=(${still_missing[*]})"
-            bash slurm/roles_optimized_gpu_batch.sh \
+            bash scripts/cluster/pace/roles_optimized_gpu_batch.sh \
                 --role "$role" \
                 --model "$effective_model" \
                 --answer-model "$effective_answer_model" \

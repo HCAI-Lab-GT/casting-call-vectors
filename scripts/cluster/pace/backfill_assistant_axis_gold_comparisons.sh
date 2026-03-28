@@ -13,7 +13,7 @@ set -euo pipefail
 
 # Wrapper for scripts/evaluation/backfill_assistant_axis_gold_comparisons.py
 # Usage:
-#   sbatch slurm/backfill_assistant_axis_gold_comparisons.sh [--roles ROLE1 ROLE2 ...] [--overwrite] [--dry_run] [other options]
+#   sbatch scripts/cluster/pace/backfill_assistant_axis_gold_comparisons.sh [--roles ROLE1 ROLE2 ...] [--overwrite] [--dry_run] [other options]
 
 ROLES=()
 EXTRA_ARGS=()

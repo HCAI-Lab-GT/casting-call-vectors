@@ -60,14 +60,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ -z "$ROLE" ]; then
-  echo "Usage: ./slurm/create_gold_standard_prompts_cpu.sh --role <role_name>"
-  echo "   or: ./slurm/create_gold_standard_prompts_cpu.sh <role_name>"
+  echo "Usage: ./scripts/cluster/pace/create_gold_standard_prompts_cpu.sh --role <role_name>"
+  echo "   or: ./scripts/cluster/pace/create_gold_standard_prompts_cpu.sh <role_name>"
   exit 1
 fi
 
 ACCOUNT="${PACE_ACCOUNT:-}"
 QOS=""
-LOG_DIR="slurm/create_gold_standard_prompts"
+LOG_DIR="logs/slurm/create_gold_standard_prompts"
 
 if [ -z "$ACCOUNT" ]; then
   echo "Error: PACE_ACCOUNT is not set (source .env)."
@@ -79,7 +79,7 @@ mkdir -p "$LOG_DIR"
 SBATCH_ARGS=(
   --account "$ACCOUNT"
   --gres "none"
-  "slurm/create_gold_standard_prompts_cpu.sbatch"
+  "scripts/cluster/pace/create_gold_standard_prompts_cpu.sbatch"
   --role "$ROLE"
   --backend "$BACKEND"
   --model "$MODEL"

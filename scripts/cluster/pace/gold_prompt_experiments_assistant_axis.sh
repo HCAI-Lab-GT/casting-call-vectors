@@ -13,7 +13,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  sbatch slurm/gold_prompt_experiments_assistant_axis.sh \
+  sbatch scripts/cluster/pace/gold_prompt_experiments_assistant_axis.sh \
     -r celebrity \
     --sample_counts 50 \
     --assistant_axis_alpha 2.5 \

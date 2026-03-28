@@ -5,7 +5,7 @@
 # No ignore logic: all roles are processed.
 #
 # Usage:
-#   bash slurm/backfill_assistant_axis_gold_comparisons_autobatch.sh [options...]
+#   bash scripts/cluster/pace/backfill_assistant_axis_gold_comparisons_autobatch.sh [options...]
 #
 # Options:
 #   -f, --file         Path to roles JSON (default: configs/role_list.json)
@@ -78,7 +78,7 @@ echo "Submitting ${#ROLES[@]} role(s) with no ignore logic."
 
 auto_submit() {
   local -a job_roles=("$@")
-  local -a cmd=(sbatch slurm/backfill_assistant_axis_gold_comparisons.sh --roles "${job_roles[@]}" "${EXTRA_ARGS[@]}")
+  local -a cmd=(sbatch scripts/cluster/pace/backfill_assistant_axis_gold_comparisons.sh --roles "${job_roles[@]}" "${EXTRA_ARGS[@]}")
   if [[ "$DRY_RUN" == "true" ]]; then
     echo "  [DRY RUN] ${cmd[*]}"
   else

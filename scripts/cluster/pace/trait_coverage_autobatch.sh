@@ -89,7 +89,7 @@ for ((i=0; i<N; i++)); do
     fi
 
     echo "Bin $((i+1))/$N: ${BIN_TRAITS[*]}"
-    bash slurm/trait_coverage_batch.sh --model "$MODEL" --traits "${BIN_TRAITS[@]}" \
+    bash scripts/cluster/pace/trait_coverage_batch.sh --model "$MODEL" --traits "${BIN_TRAITS[@]}" \
         --layers "${LAYERS[@]}" --sample-counts "${SAMPLE_COUNTS[@]}"
 
 done

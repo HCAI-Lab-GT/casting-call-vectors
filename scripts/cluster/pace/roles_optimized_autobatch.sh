@@ -11,7 +11,7 @@ apt-get update && apt-get install -y jq
 #   CPU (Q/A generation) → GPU (init extraction per count) → gold_experiment.sh (if needed)
 #
 # Usage:
-#   bash slurm/roles_optimized_autobatch.sh [-f <json_file>] [options...]
+#   bash scripts/cluster/pace/roles_optimized_autobatch.sh [-f <json_file>] [options...]
 #
 # Options:
 #   -f, --file              Path to incomplete inits JSON (default: configs/role_init_incomplete.json)
@@ -176,7 +176,7 @@ if [[ "$NUM_BINS" -le 0 || "$TOTAL_PENDING" -eq 0 || "$DRY_RUN" == "true" ]]; th
             echo "  Dry run so did not submit CPU job for role=$role model=$effective_model layer=$layer counts=(${still_missing[*]})"
         else
             echo "  Submitting CPU job for role=$role model=$effective_model layer=$layer counts=(${still_missing[*]})"
-            bash slurm/roles_optimized_cpu_batch.sh \
+            bash scripts/cluster/pace/roles_optimized_cpu_batch.sh \
                 --role "$role" \
                 --model "$effective_model" \
                 --layer "$layer" \
@@ -220,7 +220,7 @@ else
         bin_roles_str=$(jq -r '.[].role' "$BIN_CONFIG_FILE" | tr '\n' ' ')
         echo "  Submitting bin $((bin+1))/$NUM_BINS: roles=($bin_roles_str) model=$bin_model config=$BIN_CONFIG_FILE"
 
-        bash slurm/roles_optimized_cpu_batch.sh \
+        bash scripts/cluster/pace/roles_optimized_cpu_batch.sh \
             --model "$bin_model" \
             --bin-config "$BIN_CONFIG_FILE" \
             "${COMMON_ARGS[@]}"

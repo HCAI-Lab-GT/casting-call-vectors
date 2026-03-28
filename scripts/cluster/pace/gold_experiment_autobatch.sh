@@ -205,7 +205,7 @@ for ((i=0; i<N; i++)); do
     fi
 
     echo "Bin $((i+1))/$N (${#BIN_ROLES[@]} roles): ${BIN_ROLES[*]}"
-    bash slurm/gold_experiment.sh \
+    bash scripts/cluster/pace/gold_experiment.sh \
         --model "$MODEL" \
         --roles "${BIN_ROLES[@]}" \
         --layers "${LAYERS[@]}" \

@@ -11,7 +11,7 @@ NAME="roles_optimized_cpu_batch"
 # chains to roles_optimized_gpu_batch.sh for persona vector extraction.
 #
 # Usage:
-#   bash slurm/roles_optimized_cpu_batch.sh --role <role> --model <model> \
+#   bash scripts/cluster/pace/roles_optimized_cpu_batch.sh --role <role> --model <model> \
 #       --layer <layer> --missing-counts <c1> [c2 ...] [options...]
 #
 # Author: iiisong
@@ -112,7 +112,7 @@ if [ -n "$BIN_CONFIG" ]; then
     sbatch  --ntasks-per-node 1 --cpus-per-task "$NUM_WORKERS" --mem "$MEM_PER_NODE" \
             --account "$ACCOUNT" --qos "$QOS" --time "$TIME" \
             --output "$LOG_DIR/$NAME-%j.out" --error "$LOG_DIR/$NAME-%j.err" \
-            "slurm/$NAME.sbatch" \
+            "scripts/cluster/pace/$NAME.sbatch" \
             --model "$MODEL" \
             --bin-config "$BIN_CONFIG" \
             --safetensors-dir "$SAFETENSORS_DIR" \
@@ -137,7 +137,7 @@ else
     sbatch  --ntasks-per-node 1 --cpus-per-task "$NUM_WORKERS" --mem "$MEM_PER_NODE" \
             --account "$ACCOUNT" --qos "$QOS" --time "$TIME" \
             --output "$LOG_DIR/$NAME-%j.out" --error "$LOG_DIR/$NAME-%j.err" \
-            "slurm/$NAME.sbatch" \
+            "scripts/cluster/pace/$NAME.sbatch" \
             --role "$ROLE" \
             --model "$MODEL" \
             --layer "$LAYER" \
