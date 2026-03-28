@@ -88,7 +88,6 @@ def regenerate_malformed(
     model: str = "allenai/Olmo-3-7B-Instruct",
     safetensors_dir: str = "/data/persona_data/model_layer_inits/",
     pt_dir: str = "/data/persona_data/assistant-axis/olmo-3-7b-instruct/vectors/",
-    gold_prompts_dir: str = "/data/persona_data/gold_labels_prompts_dataset",
     max_new_tokens: int = 2000,
     dry_run: bool = False,
 ):
@@ -103,7 +102,6 @@ def regenerate_malformed(
         "--model", model,
         "--safetensors_dir", safetensors_dir,
         "--pt_dir", pt_dir,
-        "--gold_prompts_dir", gold_prompts_dir,
         "--max_new_tokens", str(max_new_tokens),
         *(["--dry_run"] if dry_run else []),
         *(["--roles"] + roles if roles else []),
@@ -125,14 +123,13 @@ def regenerate_malformed(
 # ---------------------------------------------------------------------------
 @app.local_entrypoint()
 def main(
-    input_dir: str = "/data/gold_prompt_experiments",
+    input_dir: str = "/data/experiment_data/gold_prompt_experiments",
     roles: str = "",
     columns: str = "",
     alphas: str = "",
     model: str = "allenai/Olmo-3-7B-Instruct",
     safetensors_dir: str = "/data/persona_data/model_layer_inits/",
     pt_dir: str = "/data/persona_data/assistant-axis/olmo-3-7b-instruct/vectors/",
-    gold_prompts_dir: str = "/data/persona_data/gold_labels_prompts_dataset",
     max_new_tokens: int = 2000,
     dry_run: bool = False,
 ):
@@ -148,7 +145,6 @@ def main(
         model=model,
         safetensors_dir=safetensors_dir,
         pt_dir=pt_dir,
-        gold_prompts_dir=gold_prompts_dir,
         max_new_tokens=max_new_tokens,
         dry_run=dry_run,
     )

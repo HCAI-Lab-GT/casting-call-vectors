@@ -5,7 +5,6 @@ logic as report_malformed_responses.py).
 
 Supports regenerating:
   - steered    → via RoleLayersPersonaModel
-  - baseline   → via gold-prompt baseline messages + ResponseGeneration
   - assistant_axis → via AssistantAxisPersonaModel
 
 Usage:
@@ -23,8 +22,6 @@ Usage:
 """
 
 import argparse
-import json
-from copy import deepcopy
 from pathlib import Path
 
 import pandas as pd
@@ -32,7 +29,6 @@ import pandas as pd
 from pvx import setup_logging
 from pvx.implementations.roles_layers.assistant_axis_persona_model import AssistantAxisPersonaModel
 from pvx.implementations.roles_layers.role_layers_persona_model import RoleLayersPersonaModel
-from pvx.utils.response_generation import ResponseGeneration
 
 logger = setup_logging(name="regenerate-malformed-responses")
 
@@ -66,55 +62,9 @@ def needs_regeneration(df: pd.DataFrame, idx: int, col: str) -> bool:
     value = df.at[idx, col]
     if is_malformed(value):
         return True
-    if col in ("steered", "assistant_axis") and is_duplicate_across_alphas(df, idx, col):
+    if is_duplicate_across_alphas(df, idx, col):
         return True
     return False
-
-
-# ---------------------------------------------------------------------------
-# Gold-baseline message loading (mirrors GoldPromptExperiments)
-# ---------------------------------------------------------------------------
-
-_gold_baseline_cache: dict[str, list[dict[str, str]]] = {}
-_gold_role_descriptions: dict[str, str] = {}
-
-
-def load_gold_baseline_messages(role: str, gold_prompts_dir: Path) -> list[dict[str, str]]:
-    if role in _gold_baseline_cache:
-        return deepcopy(_gold_baseline_cache[role])
-
-    gold_path = gold_prompts_dir / f"{role.replace('/', '_')}_gold_label.json"
-    if not gold_path.exists():
-        raise FileNotFoundError(f"Gold prompt file not found for role '{role}' at {gold_path}")
-
-    with open(gold_path, "r", encoding="utf-8") as f:
-        payload = json.load(f)
-
-    _gold_role_descriptions[role] = str(payload.get("role_description", "")).strip()
-
-    messages: list[dict[str, str]] = []
-    if isinstance(payload.get("gold_label_prompt"), dict):
-        messages = payload["gold_label_prompt"].get("messages", [])
-    elif isinstance(payload.get("gold_label_prompts"), list) and payload["gold_label_prompts"]:
-        messages = payload["gold_label_prompts"][0].get("messages", [])
-
-    normalized: list[dict[str, str]] = []
-    for msg in messages:
-        if not isinstance(msg, dict):
-            continue
-        role_name = str(msg.get("role", "")).strip()
-        content = str(msg.get("content", "")).strip()
-        if role_name in ("system", "user", "assistant") and content:
-            normalized.append({"role": role_name, "content": content})
-
-    if normalized and normalized[-1]["role"] == "user":
-        normalized = normalized[:-1]
-
-    if not normalized:
-        raise ValueError(f"Gold prompt file for role '{role}' has no valid baseline messages")
-
-    _gold_baseline_cache[role] = normalized
-    return deepcopy(normalized)
 
 
 # ---------------------------------------------------------------------------
@@ -131,20 +81,18 @@ def main() -> None:
         "--columns",
         nargs="+",
         default=["steered", "assistant_axis"],
-        choices=["steered", "baseline", "assistant_axis"],
+        choices=["steered", "assistant_axis"],
         help="Which response columns to check and regenerate",
     )
     parser.add_argument("--alphas", nargs="+", type=float, default=None, help="Only process these alphas")
     parser.add_argument("--model", default="allenai/Olmo-3-7B-Instruct")
     parser.add_argument("--safetensors_dir", default="./persona_data/model_layer_inits/")
     parser.add_argument("--pt_dir", default="persona_data/assistant-axis/olmo-3-7b-instruct/vectors/")
-    parser.add_argument("--gold_prompts_dir", default="./persona_data/gold_labels_prompts_dataset")
     parser.add_argument("--max_new_tokens", type=int, default=2000)
     parser.add_argument("--dry_run", action="store_true", help="Report what would be regenerated without changing files")
     args = parser.parse_args()
 
     input_dir = Path(args.input_dir)
-    gold_prompts_dir = Path(args.gold_prompts_dir)
     allowed_alphas = set(args.alphas) if args.alphas else None
     columns_to_check = args.columns
 
@@ -161,7 +109,6 @@ def main() -> None:
     # Lazy-loaded model caches (shared across roles for same layer/sample_count)
     steered_model_cache: dict[tuple[str, int, int], RoleLayersPersonaModel] = {}
     assistant_axis_model_cache: dict[tuple[str, int, int], AssistantAxisPersonaModel] = {}
-    baseline_generator: ResponseGeneration | None = None
 
     total_regenerated = 0
 
@@ -213,7 +160,7 @@ def main() -> None:
             continue
 
         # --- Regenerate steered responses ---
-        if regen_map["steered"]:
+        if regen_map.get("steered"):
             changed = 0
             for idx in regen_map["steered"]:
                 question = str(df.at[idx, "question"]).strip()
@@ -252,42 +199,8 @@ def main() -> None:
                 logger.info("%s: saved after regenerating %s steered rows", csv_path.name, changed)
             total_regenerated += changed
 
-        # --- Regenerate baseline responses ---
-        if regen_map["baseline"]:
-            try:
-                baseline_messages_seed = load_gold_baseline_messages(role, gold_prompts_dir)
-            except (FileNotFoundError, ValueError) as exc:
-                logger.error("Cannot regenerate baseline for %s: %s", role, exc)
-                regen_map["baseline"] = []
-
-        if regen_map["baseline"]:
-            if baseline_generator is None:
-                baseline_generator = ResponseGeneration()
-
-            changed = 0
-            for idx in regen_map["baseline"]:
-                question = str(df.at[idx, "question"]).strip()
-                temperature = float(df.at[idx, "temperature"])
-
-                messages = deepcopy(baseline_messages_seed)
-                messages.append({"role": "user", "content": question})
-
-                logger.info("Regenerating baseline: row=%s q=%r", idx, question[:50])
-                _, new_response = baseline_generator(
-                    messages=messages,
-                    max_new_tokens=args.max_new_tokens,
-                    temperature=temperature,
-                )
-                df.at[idx, "baseline"] = new_response
-                changed += 1
-
-            if changed:
-                df.to_csv(csv_path, index=False)
-                logger.info("%s: saved after regenerating %s baseline rows", csv_path.name, changed)
-            total_regenerated += changed
-
         # --- Regenerate assistant_axis responses ---
-        if regen_map["assistant_axis"]:
+        if regen_map.get("assistant_axis"):
             changed = 0
             for idx in regen_map["assistant_axis"]:
                 question = str(df.at[idx, "question"]).strip()
