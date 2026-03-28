@@ -65,7 +65,7 @@ def main():
     logger.info(f"Loading or creating RIASECPersonaModel for trait: {args.trait}")
     pvx = RIASECPersonaModel.load_or_create(
         target_model_id=args.model_name,
-        trait=args.trait,
+        concept=args.trait,
         layer=args.layer,
         json_filepath=args.json_filepath,
     )

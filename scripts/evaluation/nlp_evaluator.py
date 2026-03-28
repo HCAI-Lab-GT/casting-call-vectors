@@ -1,0 +1,876 @@
+#!/usr/bin/env python3
+"""
+Persona Steering Evaluation Metrics (Hybrid spaCy + Regex)
+===========================================================
+Comprehensive NLP metrics for evaluating persona steering methodologies.
+Supports single file and batch folder processing.
+
+Uses spaCy where it adds value (lemmatization, sentence segmentation, POS tagging)
+and regex where it's already optimal (fixed patterns, pronoun counting).
+
+Requirements:
+    pip install pandas numpy scipy spacy
+    python -m spacy download en_core_web_sm  # or en_core_web_lg for better accuracy
+
+Usage:
+    # Single file
+    python nlp_evaluator.py --input Comparison_GoldStandard_accountant.csv
+    
+    # Folder of roles
+    python nlp_evaluator.py --input ./comparisons/ --output ./results/
+    
+    # With visualizations
+    python nlp_evaluator.py --input ./comparisons/ --visualize
+    
+    # Force disable spaCy (use regex fallback)
+    python nlp_evaluator.py --input ./comparisons/ --no-spacy
+"""
+
+import pandas as pd
+import numpy as np
+import re
+import os
+import json
+import argparse
+from pathlib import Path
+from collections import Counter, defaultdict
+from typing import Dict, List, Tuple, Optional, Union, Set
+from dataclasses import dataclass, asdict, field
+from scipy import stats
+import warnings
+
+from nlp_helpers import PersonaMetrics, MethodSummary, StatisticalComparison, Lexicons, Filters
+
+warnings.filterwarnings('ignore')
+ 
+# =============================================================================
+# SPACY INITIALIZATION (OPTIONAL)
+# =============================================================================
+
+SPACY_AVAILABLE = False
+nlp = None
+
+def init_spacy(model_name: str = "en_core_web_sm", disable_components: List[str] = None):
+    """Initialize spaCy with specified model. Returns True if successful."""
+    global SPACY_AVAILABLE, nlp
+    
+    if disable_components is None:
+        # Disable NER for speed - we only need tokenizer, lemmatizer, POS tagger, parser
+        disable_components = ["ner"]
+    
+    try:
+        import spacy
+        nlp = spacy.load(model_name, disable=disable_components)
+        # Increase max length for long degenerate responses
+        nlp.max_length = 2_000_000
+        SPACY_AVAILABLE = True
+        print(f"spaCy loaded: {model_name}")
+        return True
+    except ImportError:
+        print("spaCy not installed. Using regex fallback.")
+        print("  Install with: pip install spacy && python -m spacy download en_core_web_sm")
+        return False
+    except OSError:
+        print(f"spaCy model '{model_name}' not found. Using regex fallback.")
+        print(f"  Install with: python -m spacy download {model_name}")
+        return False
+ 
+
+# =============================================================================
+# EVALUATOR CLASS
+# =============================================================================
+ 
+class PersonaEvaluator:
+    """Evaluator for persona steering quality - hybrid spaCy + regex"""
+    
+    def __init__(self, role: str = "default", use_spacy: bool = True):
+        self.role = role
+        self.use_spacy = use_spacy and SPACY_AVAILABLE
+        # self.domain_vocab_lemmas = Lexicons.get_domain_vocab_lemmas(role)
+        # self.domain_vocab_surface = Lexicons.get_domain_vocab_surface(role)
+    
+    # -------------------------------------------------------------------------
+    # Regex-based methods (always used)
+    # -------------------------------------------------------------------------
+    
+    def _get_words_regex(self, text: str) -> List[str]:
+        """Tokenize text into lowercase words using regex"""
+        return re.findall(r'\b\w+\b', text.lower())
+    
+    def _get_bigrams(self, words: List[str]) -> List[Tuple[str, str]]:
+        """Get bigrams from word list"""
+        return [(words[i], words[i+1]) for i in range(len(words)-1)]
+    
+    def _count_pattern(self, text: str, pattern: str) -> int:
+        """Count occurrences of regex pattern"""
+        return len(re.findall(pattern, text, re.IGNORECASE))
+    
+    def _get_sentences_regex(self, text: str) -> List[str]:
+        """Split text into sentences using regex (fallback)"""
+        sentences = re.split(r'[.!?]+', text)
+        return [s.strip() for s in sentences if s.strip()]
+    
+    def _count_first_person(self, words: List[str]) -> int:
+        """Count first-person pronouns (regex-based, optimal)"""
+        return sum(1 for w in words if w in Lexicons.FIRST_PERSON)
+    
+    def _count_epistemic_markers(self, text: str) -> Dict[str, int]:
+        """Count epistemic markers (regex-based, optimal)"""
+        markers = {}
+        for pattern, name in Lexicons.EPISTEMIC_MARKERS:
+            count = self._count_pattern(text, pattern)
+            if count > 0:
+                markers[name] = count
+        return markers
+    
+    def _count_ai_phrases(self, text: str) -> int:
+        """Count AI identity leakage phrases (regex-based, optimal)"""
+        return sum(self._count_pattern(text, p) for p in Lexicons.AI_PHRASES)
+    
+    def _compute_repetition(self, words: List[str]) -> Tuple[float, bool]:
+        """Compute bigram uniqueness ratio (regex-based, optimal)"""
+        bigrams = self._get_bigrams(words)
+        if len(bigrams) == 0:
+            return 1.0, False
+        ratio = len(set(bigrams)) / len(bigrams)
+        is_repetitive = ratio < 0.5
+        return ratio, is_repetitive
+    
+    # -------------------------------------------------------------------------
+    # spaCy-enhanced methods
+    # -------------------------------------------------------------------------
+    
+    def _analyze_with_spacy(self, text: str) -> Dict:
+        """Run spaCy analysis and extract enhanced metrics"""
+        if not self.use_spacy or nlp is None:
+            return None
+        
+        # Truncate very long texts to avoid memory issues
+        max_chars = 100_000
+        if len(text) > max_chars:
+            text = text[:max_chars]
+        
+        doc = nlp(text)
+        
+        # Sentence segmentation (spaCy handles abbreviations better)
+        sentences = list(doc.sents)
+        sentence_count = len(sentences)
+        
+        # Lemmatized tokens
+        lemmas = [token.lemma_.lower() for token in doc if token.is_alpha]
+        
+        # Domain vocabulary (lemmatized matching)
+        # domain_lemma_count = sum(1 for lemma in lemmas if lemma in self.domain_vocab_lemmas)
+        
+        # Modal verbs (POS tag MD)
+        modal_count = sum(1 for token in doc if token.tag_ == 'MD')
+        
+        # Passive voice detection (aux + past participle pattern)
+        passive_count = 0
+        for token in doc:
+            if token.dep_ == 'auxpass' or token.dep_ == 'nsubjpass':
+                passive_count += 1
+        
+        return {
+            'sentence_count': sentence_count,
+            'lemmas': lemmas,
+            # 'domain_lemma_count': domain_lemma_count,
+            'modal_count': modal_count,
+            'passive_count': passive_count,
+        }
+    
+    # -------------------------------------------------------------------------
+    # Main compute method
+    # -------------------------------------------------------------------------
+    
+    def compute_metrics(self, text: str) -> PersonaMetrics:
+        """Compute all metrics for a single response (hybrid approach)"""
+        
+        if pd.isna(text) or not str(text).strip():
+            return PersonaMetrics()
+        
+        text = str(text)
+        
+        # ----- Regex-based metrics (always used) -----
+        words = self._get_words_regex(text)
+        word_count = len(words)
+        
+        if word_count == 0:
+            return PersonaMetrics()
+        
+        # First-person (regex - optimal)
+        first_person_count = self._count_first_person(words)
+        first_person_rate = first_person_count / word_count * 100
+        
+        # Epistemic markers (regex - optimal)
+        epistemic_markers = self._count_epistemic_markers(text)
+        epistemic_total = sum(epistemic_markers.values())
+        
+        # Repetition (regex - optimal)
+        unique_bigram_ratio, is_repetitive = self._compute_repetition(words)
+        is_degenerate = word_count > 500
+        
+        # AI phrases (regex - optimal)
+        ai_phrase_count = self._count_ai_phrases(text)
+        
+        # Questions (regex - optimal)
+        question_count = text.count('?')
+        
+        # Hedging and assertive (word list)
+        hedge_count = sum(1 for w in words if w in Lexicons.HEDGE_WORDS)
+        hedge_rate = hedge_count / word_count * 100
+        assertive_count = sum(1 for w in words if w in Lexicons.ASSERTIVE_WORDS)
+        assertive_rate = assertive_count / word_count * 100
+        
+        # Transitions
+        transition_count = sum(1 for w in words if w in Lexicons.TRANSITIONS)
+        
+        # Domain vocabulary (surface form - regex fallback)
+        # domain_vocab_count = sum(1 for w in words if w in self.domain_vocab_surface)
+        # domain_vocab_rate = domain_vocab_count / word_count * 100
+        
+        # ----- spaCy-enhanced metrics (when available) -----
+        spacy_results = self._analyze_with_spacy(text)
+        
+        if spacy_results:
+            # Use spaCy sentence segmentation
+            sentence_count = spacy_results['sentence_count']
+            avg_sentence_length = word_count / max(sentence_count, 1)
+            
+            # Lemmatized domain vocabulary (better recall)
+            # domain_vocab_lemmatized_count = spacy_results['domain_lemma_count']
+            # domain_vocab_lemmatized_rate = domain_vocab_lemmatized_count / word_count * 100
+            
+            # Modal verbs
+            modal_verb_count = spacy_results['modal_count']
+            modal_verb_rate = modal_verb_count / word_count * 100
+            
+            # Passive voice
+            passive_voice_count = spacy_results['passive_count']
+            passive_voice_rate = passive_voice_count / max(sentence_count, 1) * 100
+            
+            used_spacy = True
+        else:
+            # Regex fallback
+            sentences = self._get_sentences_regex(text)
+            sentence_count = len(sentences)
+            avg_sentence_length = word_count / max(sentence_count, 1)
+            
+            # domain_vocab_lemmatized_count = domain_vocab_count
+            # domain_vocab_lemmatized_rate = domain_vocab_rate
+            
+            # Modal verbs (word list fallback)
+            modal_verb_count = sum(1 for w in words if w in Lexicons.MODAL_VERBS)
+            modal_verb_rate = modal_verb_count / word_count * 100
+            
+            passive_voice_count = 0
+            passive_voice_rate = 0.0
+            
+            used_spacy = False
+        
+        # Role consistency
+        role_consistency_score = self._compute_role_consistency(words)
+        
+        return PersonaMetrics(
+            first_person_count=first_person_count,
+            first_person_rate=first_person_rate,
+            epistemic_markers=epistemic_markers,
+            epistemic_total=epistemic_total,
+            word_count=word_count,
+            unique_bigram_ratio=unique_bigram_ratio,
+            is_repetitive=is_repetitive,
+            is_degenerate=is_degenerate,
+            hedge_count=hedge_count,
+            hedge_rate=hedge_rate,
+            assertive_count=assertive_count,
+            assertive_rate=assertive_rate,
+            question_count=question_count,
+            transition_count=transition_count,
+            avg_sentence_length=avg_sentence_length,
+            sentence_count=sentence_count,
+            modal_verb_count=modal_verb_count,
+            modal_verb_rate=modal_verb_rate,
+            passive_voice_count=passive_voice_count,
+            passive_voice_rate=passive_voice_rate,
+            # domain_vocab_count=domain_vocab_count,
+            # domain_vocab_rate=domain_vocab_rate,
+            # domain_vocab_lemmatized_count=domain_vocab_lemmatized_count,
+            # domain_vocab_lemmatized_rate=domain_vocab_lemmatized_rate,
+            ai_phrase_count=ai_phrase_count,
+            role_consistency_score=role_consistency_score,
+            used_spacy=used_spacy
+        )
+    
+    def _compute_role_consistency(self, words: List[str]) -> float:
+        """Compute consistency of first-person markers across response thirds"""
+        if len(words) < 30:
+            return 1.0
+        
+        third = len(words) // 3
+        parts = [words[:third], words[third:2*third], words[2*third:]]
+        
+        densities = []
+        for part in parts:
+            if len(part) > 0:
+                fp_count = sum(1 for w in part if w in Lexicons.FIRST_PERSON)
+                densities.append(fp_count / len(part))
+            else:
+                densities.append(0)
+        
+        std = np.std(densities)
+        if std == 0:
+            return 1.0
+        
+        return max(0, 1 - std * 10)
+ 
+ 
+# =============================================================================
+# ANALYSIS FUNCTIONS
+# =============================================================================
+ 
+def extract_role_from_filename(filename: str) -> str:
+    """Extract role name from filename like 'Comparison_GoldStandard_accountant.csv'"""
+    name = Path(filename).stem
+    parts = name.split('_')
+    if len(parts) >= 3:
+        return parts[-1]
+    return "default"
+ 
+ 
+def compute_method_summary(metrics_list: List[PersonaMetrics]) -> MethodSummary:
+    """Compute aggregated summary for a list of metrics"""
+    if not metrics_list:
+        return MethodSummary()
+    
+    n = len(metrics_list)
+    
+    return MethodSummary(
+        n_responses=n,
+        first_person_rate_mean=np.mean([m.first_person_rate for m in metrics_list]),
+        first_person_rate_std=np.std([m.first_person_rate for m in metrics_list]),
+        epistemic_total_mean=np.mean([m.epistemic_total for m in metrics_list]),
+        epistemic_total_std=np.std([m.epistemic_total for m in metrics_list]),
+        word_count_mean=np.mean([m.word_count for m in metrics_list]),
+        word_count_std=np.std([m.word_count for m in metrics_list]),
+        unique_bigram_ratio_mean=np.mean([m.unique_bigram_ratio for m in metrics_list]),
+        unique_bigram_ratio_std=np.std([m.unique_bigram_ratio for m in metrics_list]),
+        repetitive_pct=np.mean([m.is_repetitive for m in metrics_list]) * 100,
+        degenerate_pct=np.mean([m.is_degenerate for m in metrics_list]) * 100,
+        hedge_rate_mean=np.mean([m.hedge_rate for m in metrics_list]),
+        assertive_rate_mean=np.mean([m.assertive_rate for m in metrics_list]),
+        question_rate_mean=np.mean([m.question_count for m in metrics_list]),
+        avg_sentence_length_mean=np.mean([m.avg_sentence_length for m in metrics_list]),
+        modal_verb_rate_mean=np.mean([m.modal_verb_rate for m in metrics_list]),
+        passive_voice_rate_mean=np.mean([m.passive_voice_rate for m in metrics_list]),
+        # domain_vocab_rate_mean=np.mean([m.domain_vocab_rate for m in metrics_list]),
+        # domain_vocab_lemmatized_rate_mean=np.mean([m.domain_vocab_lemmatized_rate for m in metrics_list]),
+        ai_phrase_rate_mean=np.mean([m.ai_phrase_count for m in metrics_list]),
+        role_consistency_mean=np.mean([m.role_consistency_score for m in metrics_list])
+    )
+ 
+ 
+def compute_statistical_comparison(
+    values1: List[float], 
+    values2: List[float],
+    metric: str,
+    method1: str,
+    method2: str
+) -> StatisticalComparison:
+    """Compute statistical comparison between two sets of values"""
+    
+    if len(values1) != len(values2) or len(values1) == 0:
+        return StatisticalComparison(metric=metric, method1=method1, method2=method2)
+    
+    mean1 = np.mean(values1)
+    mean2 = np.mean(values2)
+    
+    try:
+        t_stat, p_value = stats.ttest_rel(values1, values2)
+    except:
+        t_stat, p_value = 0.0, 1.0
+    
+    diff = np.array(values1) - np.array(values2)
+    std_diff = np.std(diff)
+    cohens_d = np.mean(diff) / std_diff if std_diff > 0 else 0
+    
+    abs_d = abs(cohens_d)
+    if abs_d < 0.2:
+        effect_size = "negligible"
+    elif abs_d < 0.5:
+        effect_size = "small"
+    elif abs_d < 0.8:
+        effect_size = "medium"
+    else:
+        effect_size = "large"
+    
+    return StatisticalComparison(
+        metric=metric,
+        method1=method1,
+        method2=method2,
+        mean1=mean1,
+        mean2=mean2,
+        t_statistic=t_stat,
+        p_value=p_value,
+        cohens_d=cohens_d,
+        significant=p_value < 0.05,
+        effect_size=effect_size
+    )
+ 
+ 
+def analyze_single_file(
+    filepath: str,
+    columns: List[str] = ['assistant_axis', 'baseline', 'steered'],
+    role: Optional[str] = None,
+    use_spacy: bool = True,
+    filters: Optional[Filters] = None
+) -> Dict:
+    """Analyze a single CSV file"""
+    
+    df = pd.read_csv(filepath)
+    original_count = len(df)
+    
+    # Apply filters if provided
+    if filters is not None and not filters.is_empty():
+        df = filters.apply(df)
+        filtered_count = len(df)
+        if filtered_count == 0:
+            print(f"  Warning: No rows remaining after filtering in {filepath}")
+            return {
+                'role': role or extract_role_from_filename(filepath),
+                'filepath': filepath,
+                'n_questions': 0,
+                'n_questions_original': original_count,
+                'filters_applied': filters.describe(),
+                'spacy_used': False,
+                'summaries': {},
+                'comparisons': [],
+                'raw_metrics': {}
+            }
+    else:
+        filtered_count = original_count
+    
+    if role is None:
+        role = extract_role_from_filename(filepath)
+    
+    evaluator = PersonaEvaluator(role=role, use_spacy=use_spacy)
+    
+    all_metrics = {}
+    summaries = {}
+    
+    for col in columns:
+        if col not in df.columns:
+            print(f"  Warning: Column '{col}' not found in {filepath}")
+            continue
+        
+        metrics_list = [evaluator.compute_metrics(text) for text in df[col]]
+        all_metrics[col] = metrics_list
+        summaries[col] = compute_method_summary(metrics_list)
+    
+    comparisons = []
+    metric_names = [
+        'first_person_rate',
+        'epistemic_total',
+        'unique_bigram_ratio',
+        'hedge_rate',
+        # 'domain_vocab_rate',
+        # 'domain_vocab_lemmatized_rate',
+        'modal_verb_rate',
+    ]
+    
+    cols = list(all_metrics.keys())
+    for i, col1 in enumerate(cols):
+        for col2 in cols[i+1:]:
+            for attr in metric_names:
+                values1 = [getattr(m, attr) for m in all_metrics[col1]]
+                values2 = [getattr(m, attr) for m in all_metrics[col2]]
+                comp = compute_statistical_comparison(values1, values2, attr, col1, col2)
+                comparisons.append(comp)
+    
+    spacy_used = any(m.used_spacy for metrics in all_metrics.values() for m in metrics)
+    
+    return {
+        'role': role,
+        'filepath': filepath,
+        'n_questions': filtered_count,
+        'n_questions_original': original_count,
+        'filters_applied': filters.describe() if filters else "None",
+        'spacy_used': spacy_used,
+        'summaries': {k: asdict(v) for k, v in summaries.items()},
+        'comparisons': [asdict(c) for c in comparisons],
+        'raw_metrics': {k: [asdict(m) for m in v] for k, v in all_metrics.items()}
+    }
+ 
+ 
+def analyze_folder(
+    folder_path: str,
+    columns: List[str] = ['assistant_axis', 'baseline', 'steered'],
+    pattern: str = "*.csv",
+    use_spacy: bool = True,
+    filters: Optional[Filters] = None
+) -> Dict:
+    """Analyze all CSV files in a folder"""
+    
+    folder = Path(folder_path)
+    files = list(folder.glob(pattern))
+    
+    print(f"Found {len(files)} CSV files in {folder_path}")
+    if filters and not filters.is_empty():
+        print(f"Applying filters: {filters.describe()}")
+    
+    per_role_results = {}
+    aggregated_metrics = defaultdict(list)
+    total_original = 0
+    total_filtered = 0
+    
+    for filepath in files:
+        print(f"  Processing: {filepath.name}")
+        result = analyze_single_file(str(filepath), columns, use_spacy=use_spacy, filters=filters)
+        role = result['role']
+        per_role_results[role] = result
+        
+        total_original += result.get('n_questions_original', result['n_questions'])
+        total_filtered += result['n_questions']
+        
+        for col, metrics in result['raw_metrics'].items():
+            for m in metrics:
+                aggregated_metrics[col].append(m)
+    
+    aggregated_summaries = {}
+    for col, metrics_dicts in aggregated_metrics.items():
+        metrics_list = []
+        for m in metrics_dicts:
+            m_copy = {k: v for k, v in m.items() if k != 'epistemic_markers'}
+            metrics_list.append(PersonaMetrics(**m_copy))
+        aggregated_summaries[col] = asdict(compute_method_summary(metrics_list))
+    
+    aggregated_comparisons = []
+    metric_names = [
+        'first_person_rate',
+        'epistemic_total',
+        'unique_bigram_ratio',
+        'modal_verb_rate',
+    ]
+    
+    cols = list(aggregated_metrics.keys())
+    for i, col1 in enumerate(cols):
+        for col2 in cols[i+1:]:
+            for attr in metric_names:
+                values1 = [m[attr] for m in aggregated_metrics[col1]]
+                values2 = [m[attr] for m in aggregated_metrics[col2]]
+                comp = compute_statistical_comparison(values1, values2, attr, col1, col2)
+                aggregated_comparisons.append(asdict(comp))
+    
+    return {
+        'n_roles': len(per_role_results),
+        'n_total_responses': total_filtered,
+        'n_total_responses_original': total_original,
+        'filters_applied': filters.describe() if filters else "None",
+        'roles': list(per_role_results.keys()),
+        'aggregated_summaries': aggregated_summaries,
+        'aggregated_comparisons': aggregated_comparisons,
+        'per_role_results': per_role_results
+    }
+ 
+ 
+# =============================================================================
+# REPORT GENERATION
+# =============================================================================
+ 
+def generate_markdown_report(results: Dict, is_folder: bool = False) -> str:
+    """Generate a markdown report from results"""
+    
+    lines = []
+    lines.append("# Persona Steering Evaluation Report\n")
+    
+    if is_folder:
+        lines.append(f"**Roles Analyzed**: {results['n_roles']}")
+        lines.append(f"**Total Responses**: {results['n_total_responses']}")
+        if results.get('n_total_responses_original') and results['n_total_responses_original'] != results['n_total_responses']:
+            lines.append(f"**Original Responses**: {results['n_total_responses_original']}")
+        lines.append(f"**Filters**: {results.get('filters_applied', 'None')}")
+        lines.append(f"**spaCy**: {'Enabled' if SPACY_AVAILABLE else 'Disabled (regex fallback)'}\n")
+        summaries = results['aggregated_summaries']
+        comparisons = results['aggregated_comparisons']
+    else:
+        lines.append(f"**Role**: {results['role']}")
+        lines.append(f"**Questions**: {results['n_questions']}")
+        if results.get('n_questions_original') and results['n_questions_original'] != results['n_questions']:
+            lines.append(f"**Original Questions**: {results['n_questions_original']}")
+        lines.append(f"**Filters**: {results.get('filters_applied', 'None')}")
+        lines.append(f"**spaCy**: {'Used' if results.get('spacy_used', False) else 'Not used'}\n")
+        summaries = results['summaries']
+        comparisons = results['comparisons']
+    
+    lines.append("## Method Summaries\n")
+    lines.append("| Metric | " + " | ".join(summaries.keys()) + " |")
+    lines.append("|--------|" + "|".join(["--------"] * len(summaries)) + "|")
+    
+    metrics_to_show = [
+        ('first_person_rate_mean', 'First-Person Rate (%)', '.2f'),
+        ('epistemic_total_mean', 'Epistemic Markers', '.2f'),
+        ('word_count_mean', 'Avg Word Count', '.1f'),
+        ('unique_bigram_ratio_mean', 'Unique Bigram Ratio', '.3f'),
+        ('repetitive_pct', 'Repetitive (%)', '.1f'),
+        ('degenerate_pct', 'Degenerate Length (%)', '.1f'),
+        ('modal_verb_rate_mean', 'Modal Verb Rate (%)', '.2f'),
+        # ('domain_vocab_rate_mean', 'Domain Vocab Rate (%)', '.2f'),
+        # ('domain_vocab_lemmatized_rate_mean', 'Domain Vocab Lemmatized (%)', '.2f'),
+        ('question_rate_mean', 'Questions/Response', '.2f'),
+        ('ai_phrase_rate_mean', 'AI Phrase Leakage', '.3f'),
+    ]
+    
+    for key, label, fmt in metrics_to_show:
+        values = []
+        for method in summaries.keys():
+            val = summaries[method].get(key, 0)
+            values.append(f"{val:{fmt}}")
+        lines.append(f"| {label} | " + " | ".join(values) + " |")
+    
+    lines.append("\n## Statistical Comparisons\n")
+    
+    for comp in comparisons:
+        sig = "***" if comp['p_value'] < 0.001 else "**" if comp['p_value'] < 0.01 else "*" if comp['p_value'] < 0.05 else ""
+        lines.append(f"### {comp['method1']} vs {comp['method2']}: {comp['metric']}")
+        lines.append(f"- Means: {comp['mean1']:.3f} vs {comp['mean2']:.3f}")
+        lines.append(f"- p-value: {comp['p_value']:.4f} {sig}")
+        lines.append(f"- Cohen's d: {comp['cohens_d']:.3f} ({comp['effect_size']})")
+        lines.append("")
+    
+    lines.append("\n## Key Findings\n")
+    
+    key_metrics = [
+        ('first_person_rate_mean', 'First-Person Rate', True),
+        ('epistemic_total_mean', 'Epistemic Markers', True),
+        ('unique_bigram_ratio_mean', 'Unique Bigram Ratio', True),
+        ('repetitive_pct', 'Repetitive %', False),
+        ('modal_verb_rate_mean', 'Modal Verb Rate', True),
+    ]
+    
+    for key, label, higher_is_better in key_metrics:
+        if higher_is_better:
+            best_method = max(summaries.keys(), key=lambda m: summaries[m].get(key, 0))
+        else:
+            best_method = min(summaries.keys(), key=lambda m: summaries[m].get(key, float('inf')))
+        
+        best_val = summaries[best_method].get(key, 0)
+        lines.append(f"- **{label}**: {best_method} leads with {best_val:.2f}")
+    
+    return "\n".join(lines)
+ 
+ 
+def generate_per_role_summary(results: Dict) -> str:
+    """Generate per-role summary table"""
+    
+    if 'per_role_results' not in results:
+        return ""
+    
+    lines = []
+    lines.append("\n## Per-Role Summary\n")
+    lines.append("| Role | Best (First-Person) | Best (Epistemic) | Repetitive Issues |")
+    lines.append("|------|---------------------|------------------|-------------------|")
+    
+    for role, role_result in sorted(results['per_role_results'].items()):
+        summaries = role_result['summaries']
+        
+        if not summaries:
+            continue
+        
+        best_fp = max(summaries.keys(), key=lambda m: summaries[m].get('first_person_rate_mean', 0))
+        best_ep = max(summaries.keys(), key=lambda m: summaries[m].get('epistemic_total_mean', 0))
+        
+        repetitive_issues = [m for m, s in summaries.items() if s.get('repetitive_pct', 0) > 50]
+        rep_str = ", ".join(repetitive_issues) if repetitive_issues else "None"
+        
+        lines.append(f"| {role} | {best_fp} | {best_ep} | {rep_str} |")
+    
+    return "\n".join(lines)
+ 
+ 
+# =============================================================================
+# VISUALIZATION
+# =============================================================================
+ 
+def generate_visualizations(results: Dict, output_dir: str, is_folder: bool = False):
+    """Generate visualization plots"""
+    try:
+        import matplotlib.pyplot as plt
+        import matplotlib
+        matplotlib.use('Agg')
+    except ImportError:
+        print("Warning: matplotlib not available, skipping visualizations")
+        return
+    
+    viz_dir = Path(output_dir) / "visualizations"
+    viz_dir.mkdir(parents=True, exist_ok=True)
+    
+    if is_folder:
+        summaries = results['aggregated_summaries']
+    else:
+        summaries = results['summaries']
+    
+    methods = list(summaries.keys())
+    colors = {'assistant_axis': '#e74c3c', 'baseline': '#2ecc71', 'steered': '#3498db'}
+    
+    fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+    
+    metrics_to_plot = [
+        ('first_person_rate_mean', 'First-Person Rate (%)'),
+        ('epistemic_total_mean', 'Epistemic Markers'),
+        ('unique_bigram_ratio_mean', 'Unique Bigram Ratio'),
+        ('repetitive_pct', 'Repetitive (%)'),
+        ('modal_verb_rate_mean', 'Modal Verb Rate (%)'),
+        # ('domain_vocab_lemmatized_rate_mean', 'Domain Vocab (Lemma) (%)'),
+        ('question_rate_mean', 'Questions/Response'),
+        ('word_count_mean', 'Avg Word Count'),
+    ]
+    
+    for idx, (key, label) in enumerate(metrics_to_plot):
+        ax = axes[idx // 4, idx % 4]
+        values = [summaries[m].get(key, 0) for m in methods]
+        bar_colors = [colors.get(m, '#888888') for m in methods]
+        bars = ax.bar(methods, values, color=bar_colors)
+        ax.set_title(label, fontsize=10)
+        ax.tick_params(axis='x', rotation=45, labelsize=8)
+        
+        for bar, val in zip(bars, values):
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2, height,
+                   f'{val:.2f}', ha='center', va='bottom', fontsize=8)
+    
+    plt.suptitle('Persona Steering Method Comparison', fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(viz_dir / "method_comparison.png", dpi=150, bbox_inches='tight')
+    plt.close()
+    
+    print(f"  Saved: {viz_dir / 'method_comparison.png'}")
+ 
+
+# =============================================================================
+# MAIN
+# =============================================================================
+ 
+def main():
+    parser = argparse.ArgumentParser(
+        description='Evaluate persona steering methodologies (hybrid spaCy + regex)',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Basic usage
+  python nlp_evaluator.py --input comparison.csv
+  python nlp_evaluator.py --input ./comparisons/ --output ./results/
+  
+  # With visualizations
+  python nlp_evaluator.py --input ./comparisons/ --visualize
+  
+  # Filter by specific parameters
+  python nlp_evaluator.py --input ./comparisons/ --layer 16
+  python nlp_evaluator.py --input ./comparisons/ --alpha 2.5 --temperature 0.2
+  python nlp_evaluator.py --input ./comparisons/ --role accountant teacher doctor
+  
+  # Combine multiple filters
+  python nlp_evaluator.py --input ./comparisons/ --layer 16 32 --alpha 2.5
+  
+  # Disable spaCy
+  python nlp_evaluator.py --input ./comparisons/ --no-spacy
+        """
+    )
+    
+    parser.add_argument('--input', '-i', type=str, required=True,
+                       help='Input CSV file or folder containing CSVs')
+    parser.add_argument('--output', '-o', type=str, default='./experiment_data/nlp_experiments/',
+                       help='Output directory')
+    parser.add_argument('--columns', '-c', nargs='+', 
+                       default=['assistant_axis', 'baseline', 'steered'],
+                       help='Response columns to compare')
+    parser.add_argument('--visualize', '-v', action='store_true',
+                       help='Generate visualization plots')
+    parser.add_argument('--no-spacy', action='store_true',
+                       help='Disable spaCy (use regex fallback)')
+    parser.add_argument('--spacy-model', type=str, default='en_core_web_sm',
+                       help='spaCy model to use')
+    
+    # Filter arguments
+    parser.add_argument('--role', type=str, nargs='+', default=None,
+                       help='Filter by role(s), e.g., --role accountant teacher')
+    parser.add_argument('--layer', type=int, nargs='+', default=None,
+                       help='Filter by layer(s), e.g., --layer 16 32')
+    parser.add_argument('--sample-count', type=int, nargs='+', default=None,
+                       help='Filter by sample_count(s), e.g., --sample-count 50 100')
+    parser.add_argument('--alpha', type=float, nargs='+', default=None,
+                       help='Filter by alpha(s), e.g., --alpha 2.5 3.0')
+    parser.add_argument('--temperature', type=float, nargs='+', default=None,
+                       help='Filter by temperature(s), e.g., --temperature 0.2 0.5')
+    
+    args = parser.parse_args()
+    
+    # Construct filters from arguments
+    filters = Filters(
+        role=args.role,
+        layer=args.layer,
+        sample_count=args.sample_count,
+        alpha=args.alpha,
+        temperature=args.temperature
+    )
+    
+    use_spacy = True
+    if args.no_spacy:
+        use_spacy = False
+        print("spaCy disabled by --no-spacy flag")
+    else:
+        init_spacy(args.spacy_model)
+        use_spacy = SPACY_AVAILABLE
+    
+    input_path = Path(args.input)
+    output_dir = Path(args.output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    is_folder = input_path.is_dir()
+    
+    print(f"\nInput: {input_path} ({'folder' if is_folder else 'file'})")
+    print(f"Output: {output_dir}")
+    print(f"Columns: {args.columns}")
+    print(f"Filters: {filters.describe()}")
+    print(f"spaCy: {'Enabled' if use_spacy else 'Disabled'}\n")
+    
+    if is_folder:
+        results = analyze_folder(str(input_path), args.columns, use_spacy=use_spacy, filters=filters)
+    else:
+        results = analyze_single_file(str(input_path), args.columns, use_spacy=use_spacy, filters=filters)
+    
+    json_path = output_dir / "results.json"
+    with open(json_path, 'w') as f:
+        json.dump(results, f, indent=2, default=str)
+    print(f"Saved: {json_path}")
+    
+    report = generate_markdown_report(results, is_folder)
+    if is_folder:
+        report += generate_per_role_summary(results)
+    
+    md_path = output_dir / "report.md"
+    with open(md_path, 'w') as f:
+        f.write(report)
+    print(f"Saved: {md_path}")
+    
+    print("\n" + "="*60)
+    print(report[:2500])
+    if len(report) > 2500:
+        print("\n... (see full report in file)")
+    
+    if args.visualize:
+        print("\nGenerating visualizations...")
+        generate_visualizations(results, str(output_dir), is_folder)
+    
+    if is_folder and 'per_role_results' in results:
+        per_role_dir = output_dir / "per_role"
+        per_role_dir.mkdir(exist_ok=True)
+        for role, role_result in results['per_role_results'].items():
+            with open(per_role_dir / f"{role}.json", 'w') as f:
+                slim = {k: v for k, v in role_result.items() if k != 'raw_metrics'}
+                json.dump(slim, f, indent=2, default=str)
+        print(f"Saved {len(results['per_role_results'])} per-role results to {per_role_dir}")
+    
+    print("\nDone!")
+ 
+ 
+if __name__ == "__main__":
+    main()

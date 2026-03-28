@@ -2,10 +2,10 @@ class JudgeConfig:
     def __init__(
         self,
         backend="openai",
-        model="openai/gpt-oss-20b",
+        model="openai/gpt-4.1-mini",
         local_model="Qwen/Qwen2.5-7B-Instruct",
-        base_url="https://api.together.xyz/v1",
-        api_key_env="TOGETHER_API_KEY",
+        base_url="https://openrouter.ai/api/v1",
+        api_key_env="OPENROUTER_API_KEY",
         eval_type="0_100",
         device=None,
         dtype="float16",

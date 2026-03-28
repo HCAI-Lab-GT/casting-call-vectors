@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CSV Results Viewer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg-shape shape-a" aria-hidden="true"></div>
+    <div class="bg-shape shape-b" aria-hidden="true"></div>
+
+    <main class="app-shell">
+      <header class="app-header">
+        <p class="eyebrow">Persona Vectors</p>
+        <h1>CSV Table Viewer</h1>
+        <p class="subhead">Load a results CSV and inspect rows with sorting, filtering, and pagination.</p>
+      </header>
+
+      <section class="panel controls" aria-label="Controls">
+        <label class="file-picker">
+          <span>Select CSV</span>
+          <input id="csv-file-input" type="file" accept=".csv,text/csv" />
+        </label>
+
+        <label class="control">
+          <span>Search</span>
+          <input id="search-input" type="search" placeholder="Filter rows by text..." />
+        </label>
+
+        <label class="control">
+          <span>Rows per page</span>
+          <select id="rows-per-page">
+            <option value="10">10</option>
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="panel status" aria-live="polite">
+        <p id="status-message">Select a CSV file to begin.</p>
+      </section>
+
+      <section class="panel table-panel" aria-label="CSV data table">
+        <div id="table-container" class="table-container"></div>
+      </section>
+
+      <section class="panel pagination" aria-label="Pagination controls">
+        <button id="prev-page" type="button">Previous</button>
+        <p id="page-info">Page 0 of 0</p>
+        <button id="next-page" type="button">Next</button>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

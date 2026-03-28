@@ -132,16 +132,32 @@ Extract persona vectors and generate a response:
 
 The `riasec_judge.py` module provides a class for evaluating responses according to RIASEC trait alignment. Used in the pipeline for scoring generated answers.
 
+### Description:
+
+We have a file `interest_profiler.json` which lists all the questions and which dimension of RIASEC each question correlates too. The judge will take each of the question (60 total) and prompt the steered model with a system prompt signaling one token output of YES/NO and then compute the count of "YES" answers for each dimension. The judge returns the output of the steered model for each question and the dictionary of the counts.
+
+NOTE: as of right now, `riasec_judge` only works with roles.
+
+
+**Arguments:**
+- `concept (-c)`: RIASEC trait name
+- `alpha (-a)`: The alpha value for steering
+- `model_name (-m)`: The model name for which the persona vector is to be used from
+- `print_results (-r)`: A flag to print the textual response of the steered model when asked with a question
+
 ### Usage
 
 Call from Python or as part of the pipeline. Example:
 
-* Use `python src/pvx/pvx_models/judges/riasec_judge.py --trait social`
+* Use `python src/pvx/pvx_models/judges/riasec_judge.py -c <role> -a 2.0 -m allenai/Olmo-3-7B-Instruct`
 
-**Arguments:**
-- `trait`: RIASEC trait name
-- `question`: The question being evaluated
-- `answer`: The model response to score
+### Response Examples
+```
+| INFO | riasec-judge | ===CONCEPT===
+| INFO | riasec-judge | Graphic Designers
+| INFO | riasec-judge | ===RIASEC Counts===
+| INFO | riasec-judge | {'Realistic': 10, 'Investigative': 9, 'Artistic': 10, 'Social': 7, 'Enterprising': 10, 'Conventional': 8}
+```
 
 ---
 ## Setup Persona Models
@@ -170,3 +186,12 @@ Call from Python or as part of the pipeline. Example:
   - `--generate_dataset` will generate the dataset for the trait specified.
   - `--trait` the RIASEC trait to generate a persona vector for with the RIASEC pipeline.
   - `--target_count` the target number of pregenerated responses to be generated for each question's positive and negative responses.
+- Use `scripts/batch_riasec_eval.py` to run the RIASEC Judge pipeline on a set of roles defined in `riasec_runs.yaml` or a specific set of roles which can be added
+- Examples:
+  - `python scripts/batch_riasec_eval.py --model_type olmo-7b_response --model_name allenai/olmo-3-7b-instruct --alpha 1.0 --roles_run "all_roles"`
+- Flags:
+  - `--model_type TYPE` Specifies the model_type (olmo versus marin)
+  - `--model_name NAME` overrides the model preset
+  - `--alpha ALPHA` alpha value used for steering
+  - `--roles_run RUN` the list of roles to be used for the batch
+Note: if using model name and persona vector already generated, ensure model name matches exactly (case-sensitive) with model name used for persona vector generation
