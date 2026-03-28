@@ -10,7 +10,7 @@ def is_malformed(value):
     if not has_value(value):
         return True
     text = str(value)
-    if "dtype:" in text or "Name:" in text:
+    if "dtype:" in text:
         return True
     return False
 

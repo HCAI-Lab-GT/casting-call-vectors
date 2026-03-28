@@ -84,7 +84,7 @@ app = modal.App("gold-prompt-experiments")
     gpu="H100:3",
     cpu=4,
     memory=16384,
-    timeout=7200,
+    timeout=28800,
     volumes={"/data": volume},
     secrets=[modal.Secret.from_dotenv()],
 )

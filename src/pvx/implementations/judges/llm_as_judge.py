@@ -201,6 +201,28 @@ class LLMJudge(AbstractJudge):
             "content": {"motivation": 3, "worldview_alignment": 3},
         }
 
+    async def async_gold_comparator_judge(self, **kwargs) -> dict:
+        """Async version of the gold comparator judge. Returns parsed Likert dict."""
+        if self.backend == "hf_local":
+            raise ValueError("async_gold_comparator_judge does not support hf_local backend")
+        messages = [{"role": "user", "content": self.prompt_template.format(**kwargs)}]
+        response = await self._async_inference_with_client(messages=messages)
+        cleaned = re.sub(r"```(?:json)?\s*|\s*```", "", response.strip())
+        try:
+            return json.loads(cleaned)
+        except (json.JSONDecodeError, AttributeError):
+            match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+            if match:
+                try:
+                    return json.loads(match.group())
+                except json.JSONDecodeError:
+                    pass
+        logger.warning("async gold comparator score parsing failed; returning neutral scores.")
+        return {
+            "style":   {"emotional_register": 3, "vocab_choice": 3, "social_dynamic": 3},
+            "content": {"motivation": 3, "worldview_alignment": 3},
+        }
+
     def judge(self, **kwargs):
         """
         Evaluate a model response using the configured prompt template and aggregation method.
