@@ -81,10 +81,10 @@ app = modal.App("gold-prompt-experiments")
 # ---------------------------------------------------------------------------
 @app.function(
     image=image,
-    gpu="H100:3",
+    gpu="H100:2",
     cpu=4,
     memory=16384,
-    timeout=28800,
+    timeout=36000,
     volumes={"/data": volume},
     secrets=[modal.Secret.from_dotenv()],
 )

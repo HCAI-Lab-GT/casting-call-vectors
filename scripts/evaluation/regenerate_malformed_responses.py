@@ -54,7 +54,12 @@ def is_duplicate_across_alphas(df: pd.DataFrame, idx: int, col: str) -> bool:
     if not has_value(value):
         return False
     mask = (df["question"] == question) & (df["alpha"] != alpha)
-    return any(str(v).strip() == value for v in df.loc[mask, col] if has_value(v))
+    matching = [v for v in df.loc[mask, col] if has_value(v) and str(v).strip() == value]
+    if not matching:
+        return False
+    # Preserve the highest alpha among duplicates, flag all others
+    max_alpha = df.loc[(df["question"] == question) & (df[col].apply(lambda v: has_value(v) and str(v).strip() == value)), "alpha"].max()
+    return alpha < max_alpha
 
 
 def needs_regeneration(df: pd.DataFrame, idx: int, col: str) -> bool:
@@ -131,6 +136,9 @@ def main() -> None:
 
         regen_map: dict[str, list[int]] = {col: [] for col in columns_to_check}
         for idx in df.index:
+            sample_count = int(df.at[idx, "sample_count"])
+            if sample_count != 50:
+                continue
             alpha = df.at[idx, "alpha"]
             if allowed_alphas is not None and not any(abs(alpha - a) < 1e-9 for a in allowed_alphas):
                 continue
@@ -182,7 +190,11 @@ def main() -> None:
         # --- Regenerate steered responses ---
         if regen_map.get("steered"):
             changed = 0
-            for idx in regen_map["steered"]:
+            sorted_indices = sorted(
+                regen_map["steered"],
+                key=lambda i: (int(df.at[i, "layer"]), int(df.at[i, "sample_count"]), float(df.at[i, "alpha"])),
+            )
+            for idx in sorted_indices:
                 question = str(df.at[idx, "question"]).strip()
                 alpha = float(df.at[idx, "alpha"])
                 layer = int(df.at[idx, "layer"])
@@ -213,16 +225,19 @@ def main() -> None:
                 )
                 df.at[idx, "steered"] = new_response
                 changed += 1
-
-            if changed:
                 df.to_csv(csv_path, index=False)
-                logger.info("%s: saved after regenerating %s steered rows", csv_path.name, changed)
+                logger.info("%s: saved steered row %s (%s/%s)", csv_path.name, idx, changed, len(regen_map["steered"]))
+
             total_regenerated += changed
 
         # --- Regenerate assistant_axis responses ---
         if regen_map.get("assistant_axis"):
             changed = 0
-            for idx in regen_map["assistant_axis"]:
+            sorted_indices = sorted(
+                regen_map["assistant_axis"],
+                key=lambda i: (int(df.at[i, "layer"]), int(df.at[i, "sample_count"]), float(df.at[i, "alpha"])),
+            )
+            for idx in sorted_indices:
                 question = str(df.at[idx, "question"]).strip()
                 alpha = float(df.at[idx, "alpha"])
                 layer = int(df.at[idx, "layer"])
@@ -252,10 +267,9 @@ def main() -> None:
                 )
                 df.at[idx, "assistant_axis"] = new_response
                 changed += 1
-
-            if changed:
                 df.to_csv(csv_path, index=False)
-                logger.info("%s: saved after regenerating %s assistant_axis rows", csv_path.name, changed)
+                logger.info("%s: saved assistant_axis row %s (%s/%s)", csv_path.name, idx, changed, len(regen_map["assistant_axis"]))
+
             total_regenerated += changed
 
     logger.info("Completed: %s total row(s) regenerated", total_regenerated)

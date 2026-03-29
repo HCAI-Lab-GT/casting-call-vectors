@@ -74,10 +74,10 @@ app = modal.App("regenerate-malformed-responses")
 # ---------------------------------------------------------------------------
 @app.function(
     image=image,
-    gpu="H100:2",
+    gpu="H100:1",
     cpu=4,
     memory=16384,
-    timeout=21600,  # 6 hours
+    timeout=36000,  # 6 hours
     volumes={"/data": volume},
 )
 def regenerate_malformed(
