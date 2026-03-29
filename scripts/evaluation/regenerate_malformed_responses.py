@@ -80,7 +80,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Regenerate missing/malformed responses per question×alpha×layer in role CSVs."
     )
-    parser.add_argument("--input_dir", default="./experiment_data/gold_prompt_experiments")
+    parser.add_argument("--input_dir", default="./experiment_data/regenerated_modal/gold_prompt_experiments/")
     parser.add_argument("--roles", nargs="+", default=None, help="Roles to process (default: all)")
     parser.add_argument(
         "--columns",
