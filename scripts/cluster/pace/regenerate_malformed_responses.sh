@@ -3,12 +3,19 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --gres=gpu:1
-#SBATCH --time=08:00:00
+#SBATCH --gres=gpu:h200:1
+#SBATCH --time=04:00:00
 #SBATCH --output=logs/slurm/regenerate_malformed/regenerate_malformed_%j.out
 #SBATCH --error=logs/slurm/regenerate_malformed/regenerate_malformed_%j.err
+#SBATCH --account=gts-schava6-fy20phase3
+#SBATCH --qos=inferno
+#SBATCH --mem 512G
 
 set -euo pipefail
+
+# --gres=gpu:1
+# --time=08:00:00
+
 
 ###
 # scripts/evaluation/regenerate_malformed_responses.py
@@ -75,7 +82,7 @@ echo "ROLES: ${ROLES[*]}"
 echo "ALPHAS: ${ALPHAS[*]}"
 echo "COLUMNS: ${COLUMNS[*]}"
 
-cd /workspace/personality-vectors
+# cd /workspace/personality-vectors
 
 if command -v module >/dev/null 2>&1; then
   module load uv || true
@@ -102,7 +109,7 @@ if [[ ${#COLUMNS[@]} -gt 0 ]]; then
   COLUMNS_ARG=(--columns "${COLUMNS[@]}")
 fi
 
-srun uv run python scripts/evaluation/regenerate_malformed_responses.py \
+srun python scripts/evaluation/regenerate_malformed_responses.py \
   --model "$MODEL" \
   "${ROLES_ARG[@]}" \
   "${ALPHAS_ARG[@]}" \
