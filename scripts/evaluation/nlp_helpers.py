@@ -127,38 +127,37 @@ class Filters:
     sample_count: Optional[List[int]] = None
     alpha: Optional[List[float]] = None
     temperature: Optional[List[float]] = None
-    
+
     def is_empty(self) -> bool:
         """Check if no filters are set"""
-        return all(v is None for v in [self.role, self.layer, self.sample_count, 
+        return all(v is None for v in [self.role, self.layer, self.sample_count,
                                         self.alpha, self.temperature])
-    
+
     def apply(self, df: pd.DataFrame) -> pd.DataFrame:
         """Apply filters to a DataFrame, return filtered copy"""
         filtered = df.copy()
-        
+
         if self.role is not None and 'role' in filtered.columns:
             filtered = filtered[filtered['role'].isin(self.role)]
-        
+
         if self.layer is not None and 'layer' in filtered.columns:
             filtered = filtered[filtered['layer'].isin(self.layer)]
-        
+
         if self.sample_count is not None and 'sample_count' in filtered.columns:
             filtered = filtered[filtered['sample_count'].isin(self.sample_count)]
-        
+
         if self.alpha is not None and 'alpha' in filtered.columns:
-            # Use approximate matching for floats
             filtered = filtered[filtered['alpha'].apply(
                 lambda x: any(abs(x - a) < 0.001 for a in self.alpha)
             )]
-        
+
         if self.temperature is not None and 'temperature' in filtered.columns:
             filtered = filtered[filtered['temperature'].apply(
                 lambda x: any(abs(x - t) < 0.001 for t in self.temperature)
             )]
-        
+
         return filtered
-    
+
     def describe(self) -> str:
         """Return human-readable description of active filters"""
         parts = []

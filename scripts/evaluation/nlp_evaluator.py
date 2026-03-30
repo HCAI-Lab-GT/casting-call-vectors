@@ -24,6 +24,9 @@ Usage:
     
     # Force disable spaCy (use regex fallback)
     python nlp_evaluator.py --input ./comparisons/ --no-spacy
+
+    # Parallel processing (folder mode)
+    python nlp_evaluator.py --input ./comparisons/ --workers 4
 """
 
 import pandas as pd
@@ -37,6 +40,8 @@ from collections import Counter, defaultdict
 from typing import Dict, List, Tuple, Optional, Union, Set
 from dataclasses import dataclass, asdict, field
 from scipy import stats
+import concurrent.futures
+from tqdm import tqdm
 import warnings
 
 from nlp_helpers import PersonaMetrics, MethodSummary, StatisticalComparison, Lexicons, Filters
@@ -74,7 +79,13 @@ def init_spacy(model_name: str = "en_core_web_sm", disable_components: List[str]
         print(f"spaCy model '{model_name}' not found. Using regex fallback.")
         print(f"  Install with: python -m spacy download {model_name}")
         return False
- 
+
+
+def _process_file_worker(args):
+    """Process a single file in a worker process."""
+    filepath, columns, use_spacy, filters = args
+    return analyze_single_file(filepath, columns, use_spacy=use_spacy, filters=filters)
+
 
 # =============================================================================
 # EVALUATOR CLASS
@@ -183,7 +194,7 @@ class PersonaEvaluator:
     # Main compute method
     # -------------------------------------------------------------------------
     
-    def compute_metrics(self, text: str) -> PersonaMetrics:
+    def compute_metrics(self, text: str, spacy_result: dict = None) -> PersonaMetrics:
         """Compute all metrics for a single response (hybrid approach)"""
         
         if pd.isna(text) or not str(text).strip():
@@ -230,7 +241,10 @@ class PersonaEvaluator:
         # domain_vocab_rate = domain_vocab_count / word_count * 100
         
         # ----- spaCy-enhanced metrics (when available) -----
-        spacy_results = self._analyze_with_spacy(text)
+        if spacy_result is not None:
+            spacy_results = spacy_result
+        else:
+            spacy_results = self._analyze_with_spacy(text)
         
         if spacy_results:
             # Use spaCy sentence segmentation
@@ -417,6 +431,62 @@ def compute_statistical_comparison(
     )
  
  
+def _compute_group_metrics(
+    df: pd.DataFrame,
+    columns: List[str],
+    evaluator: PersonaEvaluator,
+    use_spacy: bool,
+) -> Tuple[Dict, Dict, List]:
+    """Compute metrics, summaries, and comparisons for a DataFrame group."""
+    all_metrics = {}
+    summaries = {}
+
+    for col in columns:
+        if col not in df.columns:
+            continue
+        texts = df[col].tolist()
+        spacy_batch = [None] * len(texts)
+        if use_spacy and SPACY_AVAILABLE and nlp is not None:
+            valid = []
+            for i, t in enumerate(texts):
+                if not pd.isna(t) and str(t).strip():
+                    valid.append((i, str(t)[:100_000]))
+            if valid:
+                indices, truncated = zip(*valid)
+                for j, doc in enumerate(nlp.pipe(truncated, batch_size=50)):
+                    sentences = list(doc.sents)
+                    spacy_batch[indices[j]] = {
+                        'sentence_count': len(sentences),
+                        'lemmas': [tk.lemma_.lower() for tk in doc if tk.is_alpha],
+                        'modal_count': sum(1 for tk in doc if tk.tag_ == 'MD'),
+                        'passive_count': sum(
+                            1 for tk in doc if tk.dep_ in ('auxpass', 'nsubjpass')
+                        ),
+                    }
+        metrics_list = [
+            evaluator.compute_metrics(text, spacy_result=sr)
+            for text, sr in zip(texts, spacy_batch)
+        ]
+        all_metrics[col] = metrics_list
+        summaries[col] = compute_method_summary(metrics_list)
+
+    comparison_attrs = [
+        'first_person_rate', 'unique_bigram_ratio',
+        'hedge_rate', 'modal_verb_rate',
+    ]
+    comparisons = []
+    cols = list(all_metrics.keys())
+    for i, col1 in enumerate(cols):
+        for col2 in cols[i + 1:]:
+            for attr in comparison_attrs:
+                values1 = [getattr(m, attr) for m in all_metrics[col1]]
+                values2 = [getattr(m, attr) for m in all_metrics[col2]]
+                comp = compute_statistical_comparison(values1, values2, attr, col1, col2)
+                comparisons.append(comp)
+
+    return all_metrics, summaries, comparisons
+
+
 def analyze_single_file(
     filepath: str,
     columns: List[str] = ['assistant_axis', 'baseline', 'steered'],
@@ -425,10 +495,10 @@ def analyze_single_file(
     filters: Optional[Filters] = None
 ) -> Dict:
     """Analyze a single CSV file"""
-    
+
     df = pd.read_csv(filepath)
     original_count = len(df)
-    
+
     # Apply filters if provided
     if filters is not None and not filters.is_empty():
         df = filters.apply(df)
@@ -444,50 +514,39 @@ def analyze_single_file(
                 'spacy_used': False,
                 'summaries': {},
                 'comparisons': [],
-                'raw_metrics': {}
+                'raw_metrics': {},
+                'per_alpha': {},
             }
     else:
         filtered_count = original_count
-    
+
     if role is None:
         role = extract_role_from_filename(filepath)
-    
+
     evaluator = PersonaEvaluator(role=role, use_spacy=use_spacy)
-    
-    all_metrics = {}
-    summaries = {}
-    
-    for col in columns:
-        if col not in df.columns:
-            print(f"  Warning: Column '{col}' not found in {filepath}")
-            continue
-        
-        metrics_list = [evaluator.compute_metrics(text) for text in df[col]]
-        all_metrics[col] = metrics_list
-        summaries[col] = compute_method_summary(metrics_list)
-    
-    comparisons = []
-    metric_names = [
-        'first_person_rate',
-        'epistemic_total',
-        'unique_bigram_ratio',
-        'hedge_rate',
-        # 'domain_vocab_rate',
-        # 'domain_vocab_lemmatized_rate',
-        'modal_verb_rate',
-    ]
-    
-    cols = list(all_metrics.keys())
-    for i, col1 in enumerate(cols):
-        for col2 in cols[i+1:]:
-            for attr in metric_names:
-                values1 = [getattr(m, attr) for m in all_metrics[col1]]
-                values2 = [getattr(m, attr) for m in all_metrics[col2]]
-                comp = compute_statistical_comparison(values1, values2, attr, col1, col2)
-                comparisons.append(comp)
-    
+
+    # Overall metrics
+    all_metrics, summaries, comparisons = _compute_group_metrics(
+        df, columns, evaluator, use_spacy
+    )
+
+    # Per-alpha breakdown
+    per_alpha = {}
+    if 'alpha' in df.columns:
+        for alpha_val in sorted(df['alpha'].unique()):
+            alpha_df = df[df['alpha'].apply(lambda x: abs(x - alpha_val) < 0.001)]
+            a_metrics, a_summaries, a_comparisons = _compute_group_metrics(
+                alpha_df, columns, evaluator, use_spacy
+            )
+            per_alpha[float(alpha_val)] = {
+                'n_questions': len(alpha_df),
+                'summaries': {k: asdict(v) for k, v in a_summaries.items()},
+                'comparisons': [asdict(c) for c in a_comparisons],
+                'raw_metrics': {k: [asdict(m) for m in v] for k, v in a_metrics.items()},
+            }
+
     spacy_used = any(m.used_spacy for metrics in all_metrics.values() for m in metrics)
-    
+
     return {
         'role': role,
         'filepath': filepath,
@@ -497,7 +556,8 @@ def analyze_single_file(
         'spacy_used': spacy_used,
         'summaries': {k: asdict(v) for k, v in summaries.items()},
         'comparisons': [asdict(c) for c in comparisons],
-        'raw_metrics': {k: [asdict(m) for m in v] for k, v in all_metrics.items()}
+        'raw_metrics': {k: [asdict(m) for m in v] for k, v in all_metrics.items()},
+        'per_alpha': per_alpha,
     }
  
  
@@ -506,34 +566,57 @@ def analyze_folder(
     columns: List[str] = ['assistant_axis', 'baseline', 'steered'],
     pattern: str = "*.csv",
     use_spacy: bool = True,
-    filters: Optional[Filters] = None
+    filters: Optional[Filters] = None,
+    workers: int = 1,
+    spacy_model: str = "en_core_web_sm",
 ) -> Dict:
     """Analyze all CSV files in a folder"""
-    
+
     folder = Path(folder_path)
     files = list(folder.glob(pattern))
-    
+
     print(f"Found {len(files)} CSV files in {folder_path}")
     if filters and not filters.is_empty():
         print(f"Applying filters: {filters.describe()}")
-    
+
     per_role_results = {}
     aggregated_metrics = defaultdict(list)
     total_original = 0
     total_filtered = 0
-    
-    for filepath in files:
-        print(f"  Processing: {filepath.name}")
-        result = analyze_single_file(str(filepath), columns, use_spacy=use_spacy, filters=filters)
-        role = result['role']
-        per_role_results[role] = result
-        
-        total_original += result.get('n_questions_original', result['n_questions'])
-        total_filtered += result['n_questions']
-        
-        for col, metrics in result['raw_metrics'].items():
-            for m in metrics:
-                aggregated_metrics[col].append(m)
+
+    n_workers = max(1, min(workers, len(files)))
+
+    if n_workers > 1:
+        work_args = [
+            (str(fp), columns, use_spacy, filters) for fp in files
+        ]
+        print(f"  Using {n_workers} worker processes")
+        with concurrent.futures.ProcessPoolExecutor(
+            max_workers=n_workers,
+            initializer=init_spacy if use_spacy else None,
+            initargs=(spacy_model,) if use_spacy else (),
+        ) as executor:
+            results_iter = executor.map(_process_file_worker, work_args)
+            for result in tqdm(results_iter, total=len(files), desc="Processing"):
+                role = result['role']
+                per_role_results[role] = result
+                total_original += result.get('n_questions_original', result['n_questions'])
+                total_filtered += result['n_questions']
+                for col, metrics in result['raw_metrics'].items():
+                    for m in metrics:
+                        aggregated_metrics[col].append(m)
+    else:
+        for filepath in tqdm(files, desc="Processing"):
+            result = analyze_single_file(
+                str(filepath), columns, use_spacy=use_spacy, filters=filters
+            )
+            role = result['role']
+            per_role_results[role] = result
+            total_original += result.get('n_questions_original', result['n_questions'])
+            total_filtered += result['n_questions']
+            for col, metrics in result['raw_metrics'].items():
+                for m in metrics:
+                    aggregated_metrics[col].append(m)
     
     aggregated_summaries = {}
     for col, metrics_dicts in aggregated_metrics.items():
@@ -542,15 +625,14 @@ def analyze_folder(
             m_copy = {k: v for k, v in m.items() if k != 'epistemic_markers'}
             metrics_list.append(PersonaMetrics(**m_copy))
         aggregated_summaries[col] = asdict(compute_method_summary(metrics_list))
-    
+
     aggregated_comparisons = []
     metric_names = [
         'first_person_rate',
-        'epistemic_total',
         'unique_bigram_ratio',
         'modal_verb_rate',
     ]
-    
+
     cols = list(aggregated_metrics.keys())
     for i, col1 in enumerate(cols):
         for col2 in cols[i+1:]:
@@ -559,7 +641,26 @@ def analyze_folder(
                 values2 = [m[attr] for m in aggregated_metrics[col2]]
                 comp = compute_statistical_comparison(values1, values2, attr, col1, col2)
                 aggregated_comparisons.append(asdict(comp))
-    
+
+    # Aggregate per-alpha across roles
+    aggregated_per_alpha = defaultdict(lambda: defaultdict(list))
+    for role_result in per_role_results.values():
+        for alpha_str, alpha_data in role_result.get('per_alpha', {}).items():
+            alpha_key = float(alpha_str)
+            for col, metrics in alpha_data['raw_metrics'].items():
+                aggregated_per_alpha[alpha_key][col].extend(metrics)
+
+    per_alpha_summaries = {}
+    for alpha_key in sorted(aggregated_per_alpha.keys()):
+        alpha_sums = {}
+        for col, metrics_dicts in aggregated_per_alpha[alpha_key].items():
+            metrics_list = []
+            for m in metrics_dicts:
+                m_copy = {k: v for k, v in m.items() if k != 'epistemic_markers'}
+                metrics_list.append(PersonaMetrics(**m_copy))
+            alpha_sums[col] = asdict(compute_method_summary(metrics_list))
+        per_alpha_summaries[alpha_key] = alpha_sums
+
     return {
         'n_roles': len(per_role_results),
         'n_total_responses': total_filtered,
@@ -568,7 +669,8 @@ def analyze_folder(
         'roles': list(per_role_results.keys()),
         'aggregated_summaries': aggregated_summaries,
         'aggregated_comparisons': aggregated_comparisons,
-        'per_role_results': per_role_results
+        'per_role_results': per_role_results,
+        'per_alpha_summaries': per_alpha_summaries,
     }
  
  
@@ -607,14 +709,11 @@ def generate_markdown_report(results: Dict, is_folder: bool = False) -> str:
     
     metrics_to_show = [
         ('first_person_rate_mean', 'First-Person Rate (%)', '.2f'),
-        ('epistemic_total_mean', 'Epistemic Markers', '.2f'),
         ('word_count_mean', 'Avg Word Count', '.1f'),
         ('unique_bigram_ratio_mean', 'Unique Bigram Ratio', '.3f'),
         ('repetitive_pct', 'Repetitive (%)', '.1f'),
         ('degenerate_pct', 'Degenerate Length (%)', '.1f'),
         ('modal_verb_rate_mean', 'Modal Verb Rate (%)', '.2f'),
-        # ('domain_vocab_rate_mean', 'Domain Vocab Rate (%)', '.2f'),
-        # ('domain_vocab_lemmatized_rate_mean', 'Domain Vocab Lemmatized (%)', '.2f'),
         ('question_rate_mean', 'Questions/Response', '.2f'),
         ('ai_phrase_rate_mean', 'AI Phrase Leakage', '.3f'),
     ]
@@ -640,7 +739,6 @@ def generate_markdown_report(results: Dict, is_folder: bool = False) -> str:
     
     key_metrics = [
         ('first_person_rate_mean', 'First-Person Rate', True),
-        ('epistemic_total_mean', 'Epistemic Markers', True),
         ('unique_bigram_ratio_mean', 'Unique Bigram Ratio', True),
         ('repetitive_pct', 'Repetitive %', False),
         ('modal_verb_rate_mean', 'Modal Verb Rate', True),
@@ -666,82 +764,190 @@ def generate_per_role_summary(results: Dict) -> str:
     
     lines = []
     lines.append("\n## Per-Role Summary\n")
-    lines.append("| Role | Best (First-Person) | Best (Epistemic) | Repetitive Issues |")
-    lines.append("|------|---------------------|------------------|-------------------|")
-    
+    lines.append("| Role | Best (First-Person) | Best (Bigram Ratio) | Repetitive Issues |")
+    lines.append("|------|---------------------|---------------------|-------------------|")
+
     for role, role_result in sorted(results['per_role_results'].items()):
         summaries = role_result['summaries']
-        
+
         if not summaries:
             continue
-        
+
         best_fp = max(summaries.keys(), key=lambda m: summaries[m].get('first_person_rate_mean', 0))
-        best_ep = max(summaries.keys(), key=lambda m: summaries[m].get('epistemic_total_mean', 0))
-        
+        best_br = max(summaries.keys(), key=lambda m: summaries[m].get('unique_bigram_ratio_mean', 0))
+
         repetitive_issues = [m for m, s in summaries.items() if s.get('repetitive_pct', 0) > 50]
         rep_str = ", ".join(repetitive_issues) if repetitive_issues else "None"
-        
-        lines.append(f"| {role} | {best_fp} | {best_ep} | {rep_str} |")
+
+        lines.append(f"| {role} | {best_fp} | {best_br} | {rep_str} |")
     
     return "\n".join(lines)
- 
- 
+
+
+def generate_per_alpha_report(results: Dict, is_folder: bool = False) -> str:
+    """Generate per-alpha breakdown table."""
+    if is_folder:
+        per_alpha = results.get('per_alpha_summaries', {})
+    else:
+        per_alpha = results.get('per_alpha', {})
+
+    if not per_alpha:
+        return ""
+
+    lines = []
+    lines.append("\n## Per-Alpha Breakdown\n")
+
+    # For single-file mode, per_alpha values contain full result dicts with 'summaries'
+    # For folder mode, per_alpha_summaries values are already {col: summary_dict}
+    alpha_keys = sorted(per_alpha.keys(), key=float)
+
+    # Determine available methods from first alpha entry
+    first_entry = per_alpha[alpha_keys[0]]
+    if 'summaries' in first_entry:
+        methods = list(first_entry['summaries'].keys())
+        get_summaries = lambda entry: entry['summaries']
+    else:
+        methods = list(first_entry.keys())
+        get_summaries = lambda entry: entry
+
+    metrics_to_show = [
+        ('first_person_rate_mean', '1P Rate %', '.2f'),
+        ('word_count_mean', 'Words', '.0f'),
+        ('unique_bigram_ratio_mean', 'Bigram Ratio', '.3f'),
+        ('repetitive_pct', 'Repet. %', '.1f'),
+        ('degenerate_pct', 'Degen. %', '.1f'),
+    ]
+
+    for method in methods:
+        lines.append(f"### {method}\n")
+        header_labels = [label for _, label, _ in metrics_to_show]
+        lines.append("| Alpha | " + " | ".join(header_labels) + " |")
+        lines.append("|-------|" + "|".join(["--------"] * len(metrics_to_show)) + "|")
+
+        for alpha_key in alpha_keys:
+            sums = get_summaries(per_alpha[alpha_key])
+            if method not in sums:
+                continue
+            method_summary = sums[method]
+            vals = []
+            for key, _, fmt in metrics_to_show:
+                val = method_summary.get(key, 0)
+                vals.append(f"{val:{fmt}}")
+            lines.append(f"| {float(alpha_key):.1f} | " + " | ".join(vals) + " |")
+
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 # =============================================================================
 # VISUALIZATION
 # =============================================================================
  
-def generate_visualizations(results: Dict, output_dir: str, is_folder: bool = False):
-    """Generate visualization plots"""
+def generate_visualizations(results: Dict, output_dir: str, is_folder: bool = False, boxplot: bool = False):
+    """Generate per-alpha visualizations as bar charts (default) or box-and-whisker plots."""
     try:
         import matplotlib.pyplot as plt
         import matplotlib
         matplotlib.use('Agg')
+        import matplotlib.patches as mpatches
     except ImportError:
         print("Warning: matplotlib not available, skipping visualizations")
         return
-    
+
     viz_dir = Path(output_dir) / "visualizations"
     viz_dir.mkdir(parents=True, exist_ok=True)
-    
+
+    # Collect raw per-alpha metrics
+    per_alpha_raw = defaultdict(lambda: defaultdict(list))
     if is_folder:
-        summaries = results['aggregated_summaries']
+        for role_result in results.get('per_role_results', {}).values():
+            for alpha_str, alpha_data in role_result.get('per_alpha', {}).items():
+                for col, metrics in alpha_data['raw_metrics'].items():
+                    per_alpha_raw[float(alpha_str)][col].extend(metrics)
     else:
-        summaries = results['summaries']
-    
-    methods = list(summaries.keys())
+        for alpha_str, alpha_data in results.get('per_alpha', {}).items():
+            for col, metrics in alpha_data['raw_metrics'].items():
+                per_alpha_raw[float(alpha_str)][col].extend(metrics)
+
+    if not per_alpha_raw:
+        print("  No per-alpha data available for visualization")
+        return
+
+    alphas = sorted(per_alpha_raw.keys())
+    methods = list(next(iter(per_alpha_raw.values())).keys())
     colors = {'assistant_axis': '#e74c3c', 'baseline': '#2ecc71', 'steered': '#3498db'}
-    
-    fig, axes = plt.subplots(2, 4, figsize=(16, 8))
-    
+
     metrics_to_plot = [
-        ('first_person_rate_mean', 'First-Person Rate (%)'),
-        ('epistemic_total_mean', 'Epistemic Markers'),
-        ('unique_bigram_ratio_mean', 'Unique Bigram Ratio'),
-        ('repetitive_pct', 'Repetitive (%)'),
-        ('modal_verb_rate_mean', 'Modal Verb Rate (%)'),
-        # ('domain_vocab_lemmatized_rate_mean', 'Domain Vocab (Lemma) (%)'),
-        ('question_rate_mean', 'Questions/Response'),
-        ('word_count_mean', 'Avg Word Count'),
+        ('first_person_rate', 'First-Person Rate (%)'),
+        ('unique_bigram_ratio', 'Unique Bigram Ratio'),
+        ('word_count', 'Word Count'),
+        ('modal_verb_rate', 'Modal Verb Rate (%)'),
+        ('hedge_rate', 'Hedge Rate (%)'),
+        ('question_count', 'Questions/Response'),
     ]
-    
-    for idx, (key, label) in enumerate(metrics_to_plot):
-        ax = axes[idx // 4, idx % 4]
-        values = [summaries[m].get(key, 0) for m in methods]
-        bar_colors = [colors.get(m, '#888888') for m in methods]
-        bars = ax.bar(methods, values, color=bar_colors)
+
+    n_methods = len(methods)
+    n_alphas = len(alphas)
+    group_width = 0.7 / n_methods
+
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+
+    for idx, (attr, label) in enumerate(metrics_to_plot):
+        ax = axes[idx // 3, idx % 3]
+
+        for m_idx, method in enumerate(methods):
+            color = colors.get(method, '#888888')
+            offset = (m_idx - n_methods / 2 + 0.5) * group_width
+
+            if boxplot:
+                positions = []
+                data = []
+                for a_idx, alpha in enumerate(alphas):
+                    raw = per_alpha_raw[alpha].get(method, [])
+                    values = [m[attr] for m in raw if attr in m]
+                    if values:
+                        data.append(values)
+                        positions.append(a_idx + offset)
+                if data:
+                    bp = ax.boxplot(
+                        data, positions=positions, widths=group_width * 0.85,
+                        patch_artist=True, showfliers=False,
+                        medianprops={'color': 'black', 'linewidth': 1.2},
+                    )
+                    for patch in bp['boxes']:
+                        patch.set_facecolor(color)
+                        patch.set_alpha(0.7)
+            else:
+                means = []
+                for alpha in alphas:
+                    raw = per_alpha_raw[alpha].get(method, [])
+                    values = [m[attr] for m in raw if attr in m]
+                    means.append(np.mean(values) if values else 0)
+                x = np.arange(n_alphas) + offset
+                bars = ax.bar(x, means, group_width, color=color, alpha=0.8)
+                for bar, val in zip(bars, means):
+                    if val != 0:
+                        ax.text(
+                            bar.get_x() + bar.get_width() / 2, bar.get_height(),
+                            f'{val:.1f}', ha='center', va='bottom', fontsize=6,
+                        )
+
         ax.set_title(label, fontsize=10)
-        ax.tick_params(axis='x', rotation=45, labelsize=8)
-        
-        for bar, val in zip(bars, values):
-            height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2, height,
-                   f'{val:.2f}', ha='center', va='bottom', fontsize=8)
-    
-    plt.suptitle('Persona Steering Method Comparison', fontsize=14, fontweight='bold')
-    plt.tight_layout()
+        ax.set_xticks(range(n_alphas))
+        ax.set_xticklabels([f'{a:.1f}' for a in alphas], fontsize=8)
+        ax.set_xlabel('alpha', fontsize=8)
+
+    legend_patches = [
+        mpatches.Patch(color=colors.get(m, '#888888'), alpha=0.7, label=m)
+        for m in methods
+    ]
+    fig.legend(handles=legend_patches, loc='lower center', ncol=n_methods, fontsize=9)
+    plt.suptitle('Persona Steering by Alpha', fontsize=14, fontweight='bold')
+    plt.tight_layout(rect=[0, 0.05, 1, 0.96])
     plt.savefig(viz_dir / "method_comparison.png", dpi=150, bbox_inches='tight')
     plt.close()
-    
+
     print(f"  Saved: {viz_dir / 'method_comparison.png'}")
  
 
@@ -772,10 +978,14 @@ Examples:
   
   # Disable spaCy
   python nlp_evaluator.py --input ./comparisons/ --no-spacy
+
+  # Parallel processing with 4 workers
+  python nlp_evaluator.py --input ./comparisons/ --workers 4
         """
     )
     
-    parser.add_argument('--input', '-i', type=str, required=True,
+    parser.add_argument('--input', '-i', type=str,
+                       default='experiment_data/regenerated_modal/gold_prompt_experiments',
                        help='Input CSV file or folder containing CSVs')
     parser.add_argument('--output', '-o', type=str, default='./experiment_data/nlp_experiments/',
                        help='Output directory')
@@ -784,11 +994,14 @@ Examples:
                        help='Response columns to compare')
     parser.add_argument('--visualize', '-v', action='store_true',
                        help='Generate visualization plots')
+    parser.add_argument('--boxplot', action='store_true',
+                       help='Use box-and-whisker plots instead of bar charts')
     parser.add_argument('--no-spacy', action='store_true',
                        help='Disable spaCy (use regex fallback)')
     parser.add_argument('--spacy-model', type=str, default='en_core_web_sm',
                        help='spaCy model to use')
-    
+    parser.add_argument('--workers', '-w', type=int, default=1,
+                       help='Number of worker processes for folder mode (default: 1)')
     # Filter arguments
     parser.add_argument('--role', type=str, nargs='+', default=None,
                        help='Filter by role(s), e.g., --role accountant teacher')
@@ -830,10 +1043,16 @@ Examples:
     print(f"Output: {output_dir}")
     print(f"Columns: {args.columns}")
     print(f"Filters: {filters.describe()}")
-    print(f"spaCy: {'Enabled' if use_spacy else 'Disabled'}\n")
-    
+    print(f"spaCy: {'Enabled' if use_spacy else 'Disabled'}")
+    if is_folder and args.workers > 1:
+        print(f"Workers: {args.workers}")
+    print()
+
     if is_folder:
-        results = analyze_folder(str(input_path), args.columns, use_spacy=use_spacy, filters=filters)
+        results = analyze_folder(
+            str(input_path), args.columns, use_spacy=use_spacy, filters=filters,
+            workers=args.workers, spacy_model=args.spacy_model,
+        )
     else:
         results = analyze_single_file(str(input_path), args.columns, use_spacy=use_spacy, filters=filters)
     
@@ -843,6 +1062,7 @@ Examples:
     print(f"Saved: {json_path}")
     
     report = generate_markdown_report(results, is_folder)
+    report += generate_per_alpha_report(results, is_folder)
     if is_folder:
         report += generate_per_role_summary(results)
     
@@ -858,7 +1078,7 @@ Examples:
     
     if args.visualize:
         print("\nGenerating visualizations...")
-        generate_visualizations(results, str(output_dir), is_folder)
+        generate_visualizations(results, str(output_dir), is_folder, boxplot=args.boxplot)
     
     if is_folder and 'per_role_results' in results:
         per_role_dir = output_dir / "per_role"
