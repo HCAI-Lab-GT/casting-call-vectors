@@ -181,7 +181,8 @@ Mean sub. & Yes & No \\
 {\scriptsize\textbf{Model:} OLMo3-7B-Instruct\enspace|\enspace
 \textbf{Layer:} 16\enspace|\enspace
 \textbf{Judge:} GPT-4.1\\
-\textbf{Roles:} 275 extracted, 39 fully evaluated pairwise}
+\textbf{Roles:} 275 extracted, 97 evaluated\enspace|\enspace
+\textbf{Scale:} 500k+ Q/A pairs}
 \end{block}
 
 \begin{block}{Empirical Results}
@@ -202,10 +203,10 @@ A/B ordering randomized; results debiased.
 
 \vspace{2pt}
 \begin{hlbox}
-\textbf{92.9\%} pairwise win rate across 7,118 debiased
-comparisons (39 roles). Mean debiased score: \textbf{78.7}
-(ours) vs.\ \textbf{30.8} (baseline). The separation is
-distribution-wide, not driven by outlier roles.
+\textbf{70.9\%} win rate across 22,118 comparisons
+(97 roles). Mean role-alignment score: \textbf{53.1}
+(ours) vs.\ \textbf{12.9} (baseline). We lead on all
+97 evaluated roles with zero losses.
 \end{hlbox}
 \end{block}
 
@@ -338,9 +339,9 @@ further systematic validation.}
 \begin{column}{0.42\textwidth}
 \begin{itemize}[leftmargin=1em, itemsep=2pt, topsep=0pt, parsep=0pt, label=$\bullet$]
   \item \textbf{Contrastive extraction with judge filtering} wins
-    92.9\% of pairwise evaluations against the Assistant Axis
-    baseline [1] across five behavioral dimensions, with
-    distribution-wide score separation (mean 78.7 vs.\ 30.8).
+    70.9\% of comparisons against the Assistant Axis baseline [1]
+    across 97 roles (22,118 comparisons, 500k+ Q/A pairs),
+    with mean score 53.1 vs.\ 12.9. Zero role-level losses.
   \item \textbf{Fantastical/non-human roles} occupy a
     geometrically distinct subspace, visible in both t-SNE and
     PCA, with boundaries aligned to an independent mystical
