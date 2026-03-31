@@ -1,7 +1,22 @@
 import argparse
+import json
 from pathlib import Path
 import pandas as pd
 from collections import defaultdict
+
+EXPECTED_ALPHAS = {1.0, 1.5, 2.0, 2.5}
+
+
+def load_unique_questions(path: Path) -> set[str]:
+    questions = set()
+    with path.open() as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                obj = json.loads(line)
+                questions.add(obj["question"])
+    return questions
+
 
 def has_value(value):
     return not pd.isna(value) and str(value).strip() != ""
@@ -29,10 +44,12 @@ def is_duplicate_across_alphas(df, idx, col):
 def main():
     parser = argparse.ArgumentParser(description="Report malformed/missing steered and baseline responses by alpha.")
     parser.add_argument("--input_dir", default="./experiment_data/gold_prompt_experiments")
+    parser.add_argument("--questions_file", default="./configs/validation_questions.jsonl")
     parser.add_argument("--role", type=str, default=None, help="Role name (matches CSV suffix, e.g., 'aberration')")
     args = parser.parse_args()
 
     input_dir = Path(args.input_dir)
+    expected_questions = load_unique_questions(Path(args.questions_file))
     if args.role:
         role_csv = f"Comparison_GoldStandard_{args.role.replace('/', '_')}.csv"
         csv_paths = [input_dir / role_csv] if (input_dir / role_csv).exists() else []
@@ -43,7 +60,8 @@ def main():
         csv_paths = sorted(input_dir.glob("Comparison_GoldStandard_*.csv"))
 
     # Ensure output directory exists
-    output_dir = Path("experiment_data/experiment_missing_data")
+    # output_dir = Path("experiment_data/experiment_missing_data")
+    output_dir = Path("experiment_data/experiment_missing_data_modal")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     for csv_path in csv_paths:
@@ -58,6 +76,7 @@ def main():
             "steered_missing": 0, "steered_malformed": 0, "steered_duplicate": 0,
             "baseline_missing": 0, "baseline_malformed": 0,
             "assistant_axis_missing": 0, "assistant_axis_malformed": 0, "assistant_axis_duplicate": 0,
+            "questions_missing": 0,
             "total": 0
         })
         for idx, row in df.iterrows():
@@ -86,6 +105,10 @@ def main():
             elif is_duplicate_across_alphas(df, idx, "assistant_axis"):
                 report[alpha]["assistant_axis_duplicate"] += 1
 
+        for alpha in EXPECTED_ALPHAS:
+            alpha_questions = set(df.loc[df["alpha"] == alpha, "question"].str.strip())
+            report[alpha]["questions_missing"] = len(expected_questions - alpha_questions)
+
         # Prepare table for CSV output
         import csv
         table_rows = []
@@ -94,6 +117,7 @@ def main():
             table_rows.append({
                 "alpha": alpha,
                 "total": stats["total"],
+                "questions_missing": stats["questions_missing"],
                 "steered_missing": stats["steered_missing"],
                 "steered_malformed": stats["steered_malformed"],
                 "steered_duplicate": stats["steered_duplicate"],
@@ -109,7 +133,7 @@ def main():
         out_csv = output_dir / f"{role_name}_missing_data.csv"
         with open(out_csv, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=[
-                "alpha", "total",
+                "alpha", "total", "questions_missing",
                 "steered_missing", "steered_malformed", "steered_duplicate",
                 "baseline_missing", "baseline_malformed",
                 "assistant_axis_missing", "assistant_axis_malformed", "assistant_axis_duplicate"

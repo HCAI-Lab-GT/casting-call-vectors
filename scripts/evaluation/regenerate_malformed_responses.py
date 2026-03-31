@@ -22,6 +22,7 @@ Usage:
 """
 
 import argparse
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -31,6 +32,19 @@ from pvx.implementations.roles_layers.assistant_axis_persona_model import Assist
 from pvx.implementations.roles_layers.role_layers_persona_model import RoleLayersPersonaModel
 
 logger = setup_logging(name="regenerate-malformed-responses")
+
+EXPECTED_ALPHAS = {1.0, 1.5, 2.0, 2.5}
+
+
+def load_unique_questions(path: Path) -> set[str]:
+    questions = set()
+    with path.open() as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                obj = json.loads(line)
+                questions.add(obj["question"])
+    return questions
 
 # ---------------------------------------------------------------------------
 # Malformedness detection (mirrors report_malformed_responses.py)
@@ -94,10 +108,12 @@ def main() -> None:
     parser.add_argument("--safetensors_dir", default="./persona_data/model_layer_inits/")
     parser.add_argument("--pt_dir", default="persona_data/assistant-axis/olmo-3-7b-instruct/vectors/")
     parser.add_argument("--max_new_tokens", type=int, default=2000)
+    parser.add_argument("--questions_file", default="./configs/validation_questions.jsonl")
     parser.add_argument("--dry_run", action="store_true", help="Report what would be regenerated without changing files")
     args = parser.parse_args()
 
     input_dir = Path(args.input_dir)
+    expected_questions = load_unique_questions(Path(args.questions_file))
     allowed_alphas = set(args.alphas) if args.alphas else None
     columns_to_check = args.columns
 
@@ -133,6 +149,31 @@ def main() -> None:
         if missing_cols:
             logger.warning("Skipping %s: missing columns %s", csv_path.name, sorted(missing_cols))
             continue
+
+        ref_row = df.iloc[0]
+        alphas_to_scan = allowed_alphas if allowed_alphas is not None else EXPECTED_ALPHAS
+        skeleton_rows = []
+        for question in expected_questions:
+            for alpha in alphas_to_scan:
+                mask = (df["question"].str.strip() == question) & (df["alpha"].apply(lambda a: abs(float(a) - alpha) < 1e-9))
+                if not mask.any():
+                    skeleton = {col: pd.NA for col in df.columns}
+                    skeleton.update({
+                        "role": ref_row["role"],
+                        "layer": ref_row["layer"],
+                        "sample_count": ref_row["sample_count"],
+                        "alpha": alpha,
+                        "temperature": ref_row["temperature"],
+                        "question": question,
+                    })
+                    skeleton_rows.append(skeleton)
+
+        if skeleton_rows:
+            df = pd.concat([df, pd.DataFrame(skeleton_rows)], ignore_index=True)
+            for col in ("steered", "assistant_axis"):
+                if col in df.columns:
+                    df[col] = df[col].astype(object)
+            logger.info("%s: appended %s skeleton row(s) for missing questions", role, len(skeleton_rows))
 
         regen_map: dict[str, list[int]] = {col: [] for col in columns_to_check}
         for idx in df.index:
@@ -193,6 +234,7 @@ def main() -> None:
             sorted_indices = sorted(
                 regen_map["steered"],
                 key=lambda i: (int(df.at[i, "layer"]), int(df.at[i, "sample_count"]), float(df.at[i, "alpha"])),
+                # reverse=True,
             )
             for idx in sorted_indices:
                 question = str(df.at[idx, "question"]).strip()
