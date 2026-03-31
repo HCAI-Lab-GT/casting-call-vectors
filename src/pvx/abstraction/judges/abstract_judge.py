@@ -14,7 +14,8 @@ if TYPE_CHECKING:
     import torch
     
 from openai import AsyncOpenAI, RateLimitError, APIStatusError
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential, before_sleep_log
+import logging
 
 from pvx import setup_logging
 logger = setup_logging(name="abstract-judge")
@@ -86,6 +87,7 @@ class AbstractJudge(ResponseGeneration, ABC):
         wait=wait_exponential(multiplier=1, min=2, max=60),
         stop=stop_after_attempt(6),
         reraise=True,
+        before_sleep=before_sleep_log(logging.getLogger("abstract-judge"), logging.WARNING),
     )
     async def _async_inference_with_client(
         self, messages: List[Dict[str, str]], temperature: float = 0.9, max_new_tokens: int = 1024
@@ -120,7 +122,7 @@ class AbstractJudge(ResponseGeneration, ABC):
         if base_url is None:
             base_url = "https://glados.ctisl.gtri.org"
 
-        client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=15.0)
         resp = await client.chat.completions.create(
             model=self.model,
             messages=messages,
