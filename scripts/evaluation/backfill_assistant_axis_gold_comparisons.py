@@ -17,7 +17,6 @@ from pvx.implementations.judges.llm_as_judge import (
 
 logger = setup_logging(name="backfill-assistant-axis-gold-comparisons")
 
-IGNORE_ROLES = {"biologist", "critic", "hedonist", "philosopher", "pilot", "pragmatist", "tree", "pirate", "fool"}
 
 COMPARE_FIELDS = (
     ("emotional_register", "style", "emotional_register"),
@@ -69,6 +68,7 @@ class RoleScoreTask:
     column: str  # "assistant_axis_score" | "baseline_score" | "steered_score"
     kwargs: dict = field(default_factory=dict)
     result: float | None = None
+    propagate_to: list[Any] = field(default_factory=list)
 
 
 @dataclass
@@ -167,7 +167,6 @@ async def async_main() -> None:
     if roles_filter:
         allowed = {role.replace("/", "_") for role in roles_filter}
         csv_paths = [path for path in csv_paths if path.stem.removeprefix("Comparison_GoldStandard_") in allowed]
-    csv_paths = [path for path in csv_paths if path.stem.removeprefix("Comparison_GoldStandard_") not in IGNORE_ROLES]
     if not csv_paths:
         logger.info("No matching CSV files found in %s", input_dir)
         return
@@ -219,6 +218,7 @@ async def async_main() -> None:
         }
         role_score_tasks: list[RoleScoreTask] = []
         comparator_tasks: list[ComparatorTask] = []
+        baseline_task_seen: dict[tuple[str, str], RoleScoreTask] = {}
 
         for index, row in df.iterrows():
             role = str(row.get("role", "")).strip()
@@ -263,10 +263,16 @@ async def async_main() -> None:
             if refresh_baseline_role:
                 pending_counts["baseline_role"] += 1
                 if not args.dry_run:
-                    role_score_tasks.append(RoleScoreTask(
-                        csv_path=csv_path, index=index, column="baseline_score",
-                        kwargs=dict(role=role, role_description=role_description, question=question, answer=baseline),
-                    ))
+                    b_key = (role, question)
+                    if b_key in baseline_task_seen:
+                        baseline_task_seen[b_key].propagate_to.append(index)
+                    else:
+                        task = RoleScoreTask(
+                            csv_path=csv_path, index=index, column="baseline_score",
+                            kwargs=dict(role=role, role_description=role_description, question=question, answer=baseline),
+                        )
+                        role_score_tasks.append(task)
+                        baseline_task_seen[b_key] = task
             if refresh_steered_role:
                 pending_counts["steered_role"] += 1
                 if not args.dry_run:
@@ -355,6 +361,8 @@ async def async_main() -> None:
             for task in all_role_score_tasks:
                 if task.csv_path == csv_path and task.result is not None:
                     df.at[task.index, task.column] = task.result
+                    for extra_idx in task.propagate_to:
+                        df.at[extra_idx, task.column] = task.result
             for task in all_comparator_tasks:
                 if task.csv_path == csv_path and task.result is not None:
                     for column, (section, key) in task.column_map.items():

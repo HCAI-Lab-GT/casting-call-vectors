@@ -151,7 +151,8 @@ def main() -> None:
             logger.warning("Skipping %s: missing columns %s", csv_path.name, sorted(missing_cols))
             continue
 
-        ref_row = df.iloc[0]
+        sc50 = df[df["sample_count"].astype(int) == 50]
+        ref_row = sc50.iloc[0] if not sc50.empty else df.iloc[0]
         alphas_to_scan = allowed_alphas if allowed_alphas is not None else EXPECTED_ALPHAS
         skeleton_rows = []
         for question in expected_questions:
