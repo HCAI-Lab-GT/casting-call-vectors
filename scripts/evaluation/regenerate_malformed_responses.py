@@ -37,7 +37,7 @@ logger = setup_logging(name="regenerate-malformed-responses")
 # ---------------------------------------------------------------------------
 
 def has_value(value: object) -> bool:
-    return not pd.isna(value) and str(value).strip() != ""
+    return not pd.isna(value) and str(value).strip() not in ("", "nan", "NaN", "NAN") and value not in ("", "nan", "NaN", "NAN")
 
 
 def is_malformed(value: object) -> bool:
@@ -116,8 +116,9 @@ def main() -> None:
     assistant_axis_model_cache: dict[tuple[str, int, int], AssistantAxisPersonaModel] = {}
 
     # --- Pre-scan: tally regeneration needs across all roles ---
-    scan_results: list[tuple[Path, str, pd.DataFrame, dict[str, list[int]]]] = []
+    scan_results: list[tuple[Path, str, pd.DataFrame, dict[str, list[int]], dict[float, int]]] = []
     global_counts: dict[str, int] = {col: 0 for col in columns_to_check}
+    global_baseline_missing = 0
 
     for csv_path in csv_paths:
         role = csv_path.stem.removeprefix("Comparison_GoldStandard_")
@@ -135,6 +136,7 @@ def main() -> None:
             continue
 
         regen_map: dict[str, list[int]] = {col: [] for col in columns_to_check}
+        baseline_alpha_counts: dict[float, int] = {}
         for idx in df.index:
             sample_count = int(df.at[idx, "sample_count"])
             if sample_count != 50:
@@ -145,46 +147,59 @@ def main() -> None:
             for col in columns_to_check:
                 if needs_regeneration(df, idx, col):
                     regen_map[col].append(idx)
+            # Track missing/malformed baseline responses (report-only, not regenerated)
+            if "baseline" in df.columns and is_malformed(df.at[idx, "baseline"]):
+                baseline_alpha_counts[alpha] = baseline_alpha_counts.get(alpha, 0) + 1
 
         total_needed = sum(len(indices) for indices in regen_map.values())
-        if total_needed == 0:
+        role_baseline_total = sum(baseline_alpha_counts.values())
+        if total_needed == 0 and role_baseline_total == 0:
             continue
 
         for col in columns_to_check:
             global_counts[col] += len(regen_map[col])
-        scan_results.append((csv_path, role, df, regen_map))
+        global_baseline_missing += role_baseline_total
+        scan_results.append((csv_path, role, df, regen_map, baseline_alpha_counts))
 
     grand_total = sum(global_counts.values())
-    if grand_total == 0:
+    if grand_total == 0 and global_baseline_missing == 0:
         logger.info("No malformed/missing responses found across %s CSV(s)", len(csv_paths))
         return
 
+    summary_parts = [f"{col}={global_counts[col]}" for col in columns_to_check if global_counts[col]]
+    if global_baseline_missing:
+        summary_parts.append(f"baseline={global_baseline_missing} (report only)")
     logger.info(
         "=== Regeneration summary: %s total (%s) across %s role(s) ===",
         grand_total,
-        ", ".join(f"{col}={global_counts[col]}" for col in columns_to_check if global_counts[col]),
+        ", ".join(summary_parts),
         len(scan_results),
     )
 
+    # Always log per-role/per-alpha breakdown (including baseline missing counts)
+    for csv_path, role, df, regen_map, baseline_alpha_counts in scan_results:
+        logger.info("--- %s ---", role)
+        for col in columns_to_check:
+            if not regen_map[col]:
+                continue
+            alpha_counts: dict[float, int] = {}
+            for idx in regen_map[col]:
+                a = df.at[idx, "alpha"]
+                alpha_counts[a] = alpha_counts.get(a, 0) + 1
+            for a in sorted(alpha_counts):
+                logger.info("  %s alpha=%.2f: %s rows", col, a, alpha_counts[a])
+        if baseline_alpha_counts:
+            for a in sorted(baseline_alpha_counts):
+                logger.info("  baseline (missing/malformed) alpha=%.2f: %s rows", a, baseline_alpha_counts[a])
+
     if args.dry_run:
-        for csv_path, role, df, regen_map in scan_results:
-            logger.info("--- %s ---", role)
-            for col in columns_to_check:
-                if not regen_map[col]:
-                    continue
-                alpha_counts: dict[float, int] = {}
-                for idx in regen_map[col]:
-                    a = df.at[idx, "alpha"]
-                    alpha_counts[a] = alpha_counts.get(a, 0) + 1
-                for a in sorted(alpha_counts):
-                    logger.info("  %s alpha=%.2f: %s rows", col, a, alpha_counts[a])
         logger.info("Dry run complete: %s total row(s) would be regenerated", grand_total)
         return
 
     # --- Regenerate ---
     total_regenerated = 0
 
-    for csv_path, role, df, regen_map in scan_results:
+    for csv_path, role, df, regen_map, _baseline_alpha_counts in scan_results:
         logger.info("=== Processing role: %s ===", role)
 
         # --- Regenerate steered responses ---
