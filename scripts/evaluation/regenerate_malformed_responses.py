@@ -158,31 +158,40 @@ def main() -> None:
             for alpha in alphas_to_scan:
                 mask = (df["question"].str.strip() == question) & (df["alpha"].apply(lambda a: abs(float(a) - alpha) < 1e-9))
                 if not mask.any():
-                    skeleton = {col: pd.NA for col in df.columns}
+                    skeleton = {c: None for c in df.columns}
                     skeleton.update({
                         "role": ref_row["role"],
                         "layer": ref_row["layer"],
-                        "sample_count": ref_row["sample_count"],
-                        "alpha": alpha,
-                        "temperature": ref_row["temperature"],
+                        "sample_count": int(ref_row["sample_count"]),
+                        "alpha": float(alpha),
+                        "temperature": float(ref_row["temperature"]),
                         "question": question,
                     })
                     skeleton_rows.append(skeleton)
 
+        skeleton_indices: set[int] = set()
         if skeleton_rows:
+            skeleton_start = len(df)
             df = pd.concat([df, pd.DataFrame(skeleton_rows)], ignore_index=True)
-            for col in ("steered", "assistant_axis"):
-                if col in df.columns:
-                    df[col] = df[col].astype(object)
+            for c in ("steered", "assistant_axis"):
+                if c in df.columns:
+                    df[c] = df[c].astype(object)
+            skeleton_indices = set(range(skeleton_start, len(df)))
             logger.info("%s: appended %s skeleton row(s) for missing questions", role, len(skeleton_rows))
 
         regen_map: dict[str, list[int]] = {col: [] for col in columns_to_check}
         baseline_alpha_counts: dict[float, int] = {}
         for idx in df.index:
+            alpha = df.at[idx, "alpha"]
+            if idx in skeleton_indices:
+                # always regenerate skeleton rows
+                if allowed_alphas is None or any(abs(float(alpha) - a) < 1e-9 for a in allowed_alphas):
+                    for col in columns_to_check:
+                        regen_map[col].append(idx)
+                continue
             sample_count = int(df.at[idx, "sample_count"])
             if sample_count != 50:
                 continue
-            alpha = df.at[idx, "alpha"]
             if allowed_alphas is not None and not any(abs(alpha - a) < 1e-9 for a in allowed_alphas):
                 continue
             for col in columns_to_check:
