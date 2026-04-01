@@ -114,6 +114,7 @@ def load_results(input_dir: str) -> pd.DataFrame:
     if not dfs:
         raise FileNotFoundError(f"No valid Comparison CSVs found in {input_dir}")
     combined = pd.concat(dfs, ignore_index=True)
+    combined = combined[combined["sample_count"] == 50].copy()
     for col in SCORE_COLS:
         if col in combined.columns:
             combined[col] = combined[col].apply(_parse_score)
@@ -339,6 +340,7 @@ def figure5_3d_style_scatter(df: pd.DataFrame, output_dir: Path) -> None:
 
     fig.suptitle("Style Dimension Alignment by Role: Steered vs. Assistant Axis", y=1.01)
     plt.tight_layout()
+    plt.subplots_adjust(right=0.88)
     path = output_dir / "figure5_3d_style_scatter.pdf"
     plt.savefig(path)
     plt.savefig(str(path).replace(".pdf", ".png"))
