@@ -11,7 +11,7 @@
 #     --model_id     allenai/Olmo-3-7B-Instruct \
 #     --layer        16 \
 #     --target_pairs 20 40 60 \
-#     --folder_dir   persona_data/model_layer_inits \
+#     --folder_dir   persona_data/model_inits \
 #     --output       configs/role_init_incomplete.json
 #
 # Requires: jq
@@ -23,7 +23,7 @@ ROLES_LIST="configs/role_list.json"
 MODEL_ID=""
 LAYER=""
 TARGET_PAIRS=()
-FOLDER_DIR="persona_data/model_layer_inits"
+FOLDER_DIR="persona_data/model_inits"
 OUTPUT="configs/role_init_incomplete.json"
 
 # ---------- arg parsing ----------

@@ -18,7 +18,7 @@ source .env
 # Options:
 #   -f, --file              Path to incomplete inits JSON (default: configs/role_init_incomplete.json)
 #   -m, --model             Model ID override (default: reads per-entry from JSON)
-#   --safetensors-dir       Dir to check/write safetensors (default: ./persona_data/model_layer_inits/)
+#   --safetensors-dir       Dir to check/write safetensors (default: ./persona_data/model_inits/)
 #   --qa-responses-dir      Dir for Q/A responses JSON (default: ./persona_data/model_qa_responses)
 #   --dataset-dir           Role dataset directory (default: ./persona_data/role_datasets/)
 #   --no-chain              Disable gold experiment chaining after GPU extraction (e.g. for testing)
@@ -41,7 +41,7 @@ source .env
 JSON_FILE="configs/role_init_incomplete.json"
 MODEL=""        # empty = use model_id from each JSON entry
 ANSWER_MODEL="" # model used for Q/A generation; defaults to MODEL if empty
-SAFETENSORS_DIR="./persona_data/model_layer_inits/"
+SAFETENSORS_DIR="./persona_data/model_inits/"
 QA_RESPONSES_DIR="./persona_data/model_qa_responses"
 DATASET_DIR="./persona_data/role_datasets/"
 NO_CHAIN=false

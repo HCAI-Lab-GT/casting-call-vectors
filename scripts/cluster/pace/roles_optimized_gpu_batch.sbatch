@@ -14,7 +14,7 @@ MODEL="allenai/Olmo-3-7B-Instruct"
 ANSWER_MODEL=""  # model used for Q/A generation; defaults to MODEL if empty
 LAYER=16
 COUNTS=()
-SAFETENSORS_DIR="./persona_data/model_layer_inits/"
+SAFETENSORS_DIR="./persona_data/model_inits/"
 QA_RESPONSES_DIR="./persona_data/model_qa_responses"
 DATASET_DIR="./persona_data/role_datasets/"
 # Gold experiment params

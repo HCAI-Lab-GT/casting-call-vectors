@@ -4,7 +4,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:h200:1
-#SBATCH --time=04:00:00
+#SBATCH --time=02:30:00
 #SBATCH --output=logs/slurm/regenerate_malformed/regenerate_malformed_%j.out
 #SBATCH --error=logs/slurm/regenerate_malformed/regenerate_malformed_%j.err
 #SBATCH --account=gts-schava6-fy20phase3

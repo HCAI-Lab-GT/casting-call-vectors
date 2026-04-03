@@ -105,7 +105,7 @@ def main() -> None:
     )
     parser.add_argument("--alphas", nargs="+", type=float, default=None, help="Only process these alphas")
     parser.add_argument("--model", default="allenai/Olmo-3-7B-Instruct")
-    parser.add_argument("--safetensors_dir", default="./persona_data/model_layer_inits/")
+    parser.add_argument("--safetensors_dir", default="./persona_data/model_inits/")
     parser.add_argument("--pt_dir", default="persona_data/assistant-axis/olmo-3-7b-instruct/vectors/")
     parser.add_argument("--max_new_tokens", type=int, default=2000)
     parser.add_argument("--questions_file", default="./configs/validation_questions.jsonl")
@@ -157,13 +157,13 @@ def main() -> None:
         skeleton_rows = []
         for question in expected_questions:
             for alpha in alphas_to_scan:
-                mask = (df["question"].str.strip() == question) & (df["alpha"].apply(lambda a: abs(float(a) - alpha) < 1e-9))
+                mask = (df["question"].str.strip() == question) & (df["alpha"].apply(lambda a: abs(float(a) - alpha) < 1e-9)) & (df["sample_count"].apply(lambda s: int(s) == 50))
                 if not mask.any():
                     skeleton = {c: None for c in df.columns}
                     skeleton.update({
                         "role": ref_row["role"],
                         "layer": ref_row["layer"],
-                        "sample_count": int(ref_row["sample_count"]),
+                        "sample_count": 50,
                         "alpha": float(alpha),
                         "temperature": float(ref_row["temperature"]),
                         "question": question,

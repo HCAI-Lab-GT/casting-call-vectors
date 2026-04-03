@@ -35,6 +35,11 @@ def check_csv(csv_path: Path, expected_questions: dict[int, str]) -> tuple[int, 
     with csv_path.open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
+            try:
+                if int(row["sample_count"]) != 50:
+                    continue
+            except (ValueError, KeyError):
+                continue
             q = row["question"].strip()
             try:
                 alpha = float(row["alpha"])

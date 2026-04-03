@@ -212,7 +212,7 @@ class RoleLayersPersonaModel(RolePersonaModel):
     @classmethod
     def get_path(cls, 
                  target_model_id: str, concept: str, 
-                 safetensors_dir: str= "./persona_data/model_layer_inits/", use_json: bool=False, 
+                 safetensors_dir: str= "./persona_data/model_inits/", use_json: bool=False, 
                  kwargs: Optional[dict]=None, obj: Optional[RolePersonaModel]=None):
         safe_model_id = target_model_id.replace("/", "__")
         
@@ -271,7 +271,7 @@ if __name__ == "__main__":
         "-f",
         "--safetensor_dir",
         type=str,
-        default="./persona_data/model_layer_inits/",
+        default="./persona_data/model_inits/",
         help="Directory for the model init safetensor (not role dataset)",
     )
     ap.add_argument(

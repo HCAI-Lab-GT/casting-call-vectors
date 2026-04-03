@@ -20,7 +20,7 @@ source .env
 #   -a, --alpha             Alpha for steering (default: 1.0)
 #   -l, --layers            Layers to check/generate (default: 16)
 #   -N, --sample-counts     Sample counts to check/generate (default: 40)
-#   --safetensors-dir       Dir to check/write safetensors (default: ./persona_data/model_layer_inits/)
+#   --safetensors-dir       Dir to check/write safetensors (default: ./persona_data/model_inits/)
 #   -b, --num-bins          Number of sbatch jobs to group roles into (default: 0 = one job per role).
 #                           In bin mode each sbatch job receives multiple roles and processes
 #                           them sequentially via the --roles flag.
@@ -38,7 +38,7 @@ MODEL="allenai/Olmo-3-7B-Instruct"
 ALPHA="1.0"
 LAYERS=(16)
 SAMPLE_COUNTS=(40)
-SAFETENSORS_DIR="./persona_data/model_layer_inits/"
+SAFETENSORS_DIR="./persona_data/model_inits/"
 NUM_BINS=0   # 0 = one job per role (default); N > 0 = group into N bins
 DRY_RUN=false
 

@@ -16,7 +16,7 @@ apt-get update && apt-get install -y jq
 # Options:
 #   -f, --file              Path to incomplete inits JSON (default: configs/role_init_incomplete.json)
 #   -m, --model             Model ID override (default: reads per-entry from JSON)
-#   --safetensors-dir       Dir to check/write safetensors (default: ./persona_data/model_layer_inits/)
+#   --safetensors-dir       Dir to check/write safetensors (default: ./persona_data/model_inits/)
 #   --qa-responses-dir      Dir for generated Q/A JSON (default: ./persona_data/model_qa_responses)
 #   --dataset-dir           Role dataset directory (default: ./persona_data/role_datasets/)
 #   --backend               API backend for CPU phase (default: openai)
@@ -41,7 +41,7 @@ apt-get update && apt-get install -y jq
 # defaults
 JSON_FILE="configs/role_init_incomplete.json"
 MODEL=""   # empty = use model_id from each JSON entry
-SAFETENSORS_DIR="./persona_data/model_layer_inits/"
+SAFETENSORS_DIR="./persona_data/model_inits/"
 QA_RESPONSES_DIR="./persona_data/model_qa_responses"
 DATASET_DIR="./persona_data/role_datasets/"
 BACKEND="openai"

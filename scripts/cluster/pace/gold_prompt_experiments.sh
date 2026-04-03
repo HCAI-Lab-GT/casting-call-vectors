@@ -46,7 +46,7 @@ LAYERS=(16)
 SAMPLE_COUNTS=(20 40 50)
 TEMPERATURES=(0.2)
 MAX_NEW_TOKENS=2000
-SAFETENSORS_DIR="./persona_data/model_layer_inits/"
+SAFETENSORS_DIR="./persona_data/model_inits/"
 GOLD_PROMPTS_DIR="./persona_data/gold_labels_prompts_dataset"
 
 # Parse CLI args

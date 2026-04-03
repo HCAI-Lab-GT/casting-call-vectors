@@ -60,8 +60,7 @@ def main():
         csv_paths = sorted(input_dir.glob("Comparison_GoldStandard_*.csv"))
 
     # Ensure output directory exists
-    # output_dir = Path("experiment_data/experiment_missing_data")
-    output_dir = Path("experiment_data/experiment_missing_data_modal")
+    output_dir = Path("experiment_data/experiment_missing_data")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     for csv_path in csv_paths:

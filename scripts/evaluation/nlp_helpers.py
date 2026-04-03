@@ -27,43 +27,41 @@ warnings.filterwarnings('ignore')
 class PersonaMetrics:
     """Container for all persona-related metrics for a single response"""
     # Identity metrics (regex-based)
-    first_person_count: int = 0
     first_person_rate: float = 0.0
     epistemic_markers: Dict[str, int] = field(default_factory=dict)
     epistemic_total: int = 0
-    
+
     # Quality metrics (regex-based)
     word_count: int = 0
     unique_bigram_ratio: float = 1.0
     is_repetitive: bool = False
     is_degenerate: bool = False
-    
+
     # Style metrics (hybrid)
-    hedge_count: int = 0
     hedge_rate: float = 0.0
-    assertive_count: int = 0
     assertive_rate: float = 0.0
-    question_count: int = 0
-    transition_count: int = 0
+    question_rate: float = 0.0
+    transition_rate: float = 0.0
     avg_sentence_length: float = 0.0  # spaCy-enhanced
     sentence_count: int = 0
-    
+
     # spaCy-enhanced metrics
-    modal_verb_count: int = 0
     modal_verb_rate: float = 0.0
-    passive_voice_count: int = 0
     passive_voice_rate: float = 0.0
-    
+
     # Role metrics (spaCy-enhanced for lemmatization)
     # domain_vocab_count: int = 0
     # domain_vocab_rate: float = 0.0
     # domain_vocab_lemmatized_count: int = 0
     # domain_vocab_lemmatized_rate: float = 0.0
-    ai_phrase_count: int = 0
-    
+    ai_phrase_rate: float = 0.0
+
     # Consistency
     role_consistency_score: float = 1.0
-    
+
+    # Language model
+    gpt2_perplexity: float = 0.0
+
     # Meta
     used_spacy: bool = False
  
@@ -91,6 +89,7 @@ class MethodSummary:
     hedge_rate_mean: float = 0.0
     assertive_rate_mean: float = 0.0
     question_rate_mean: float = 0.0
+    transition_rate_mean: float = 0.0
     avg_sentence_length_mean: float = 0.0
     
     # spaCy-enhanced means
@@ -102,6 +101,8 @@ class MethodSummary:
     # domain_vocab_lemmatized_rate_mean: float = 0.0
     ai_phrase_rate_mean: float = 0.0
     role_consistency_mean: float = 0.0
+    gpt2_perplexity_mean: float = 0.0
+    gpt2_perplexity_std: float = 0.0
  
  
 @dataclass 

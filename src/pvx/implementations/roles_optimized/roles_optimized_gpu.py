@@ -366,7 +366,7 @@ def main():
         "-o",
         "--output_dir",
         type=str,
-        default="./persona_data/model_layer_inits/",
+        default="./persona_data/model_inits/",
         help="Output directory for persona vectors",
     )
     args = ap.parse_args()

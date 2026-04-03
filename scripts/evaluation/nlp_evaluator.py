@@ -81,6 +81,96 @@ def init_spacy(model_name: str = "en_core_web_sm", disable_components: List[str]
         return False
 
 
+# =============================================================================
+# GPT-2 INITIALIZATION (OPTIONAL)
+# =============================================================================
+
+GPT2_AVAILABLE = False
+_gpt2_model = None
+_gpt2_tokenizer = None
+_gpt2_device = None
+_gpt2_loss_fct = None
+
+def init_gpt2():
+    """Initialize GPT-2 for perplexity scoring. Returns True if successful."""
+    global GPT2_AVAILABLE, _gpt2_model, _gpt2_tokenizer, _gpt2_device, _gpt2_loss_fct
+    try:
+        from transformers import GPT2LMHeadModel, GPT2TokenizerFast
+        import torch
+        _gpt2_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        dtype = torch.bfloat16 if _gpt2_device.type == 'cuda' else torch.float32
+        _gpt2_tokenizer = GPT2TokenizerFast.from_pretrained('gpt2')
+        _gpt2_tokenizer.pad_token = _gpt2_tokenizer.eos_token
+        _gpt2_model = GPT2LMHeadModel.from_pretrained('gpt2', dtype=dtype).to(_gpt2_device)
+        _gpt2_model.eval()
+        try:
+            _gpt2_model = torch.compile(_gpt2_model)
+            print("  torch.compile enabled")
+        except Exception:
+            pass
+        _gpt2_loss_fct = torch.nn.CrossEntropyLoss(reduction='none')
+        GPT2_AVAILABLE = True
+        print(f"GPT-2 loaded (device: {_gpt2_device}, dtype: {dtype})")
+        return True
+    except ImportError:
+        print("transformers not installed, skipping perplexity. Install with: pip install transformers torch")
+        return False
+    except Exception as e:
+        print(f"GPT-2 init failed: {e}")
+        return False
+
+
+def _compute_perplexity_batch(texts: List[str], max_length: int = 1024, batch_size: int = 64, label: str = "") -> List[float]:
+    """Compute GPT-2 perplexity for a list of texts, one score per text."""
+    if not GPT2_AVAILABLE:
+        return [0.0] * len(texts)
+    import torch
+
+    valid_indices = [i for i, t in enumerate(texts) if t and str(t).strip()]
+    results = [0.0] * len(texts)
+    if not valid_indices:
+        return results
+
+    encodings = _gpt2_tokenizer(
+        [str(texts[i]) for i in valid_indices],
+        return_tensors='pt',
+        truncation=True,
+        max_length=max_length,
+        padding=True,
+    )
+    input_ids_all = encodings['input_ids']
+    attention_mask_all = encodings['attention_mask']
+
+    desc = f"perplexity {label}" if label else "perplexity"
+    n_batches = (len(valid_indices) + batch_size - 1) // batch_size
+    ppl_values = []
+
+    for b in tqdm(range(n_batches), desc=desc, leave=False):
+        start, end = b * batch_size, min((b + 1) * batch_size, len(valid_indices))
+        input_ids = input_ids_all[start:end].to(_gpt2_device, non_blocking=True)
+        attention_mask = attention_mask_all[start:end].to(_gpt2_device, non_blocking=True)
+
+        with torch.no_grad():
+            logits = _gpt2_model(input_ids=input_ids, attention_mask=attention_mask).logits
+
+        shift_logits = logits[:, :-1].contiguous()
+        shift_labels = input_ids[:, 1:].contiguous()
+        shift_mask = attention_mask[:, 1:].contiguous().float()
+
+        token_loss = _gpt2_loss_fct(
+            shift_logits.view(-1, shift_logits.size(-1)),
+            shift_labels.view(-1),
+        ).view(shift_labels.shape)
+
+        sample_loss = (token_loss * shift_mask).sum(dim=1) / shift_mask.sum(dim=1).clamp(min=1)
+        ppl_values.extend(torch.exp(sample_loss.clamp(max=20)).cpu().tolist())
+
+    for i, orig_i in enumerate(valid_indices):
+        results[orig_i] = ppl_values[i]
+
+    return results
+
+
 def _process_file_worker(args):
     """Process a single file in a worker process."""
     filepath, columns, use_spacy, filters = args
@@ -194,7 +284,7 @@ class PersonaEvaluator:
     # Main compute method
     # -------------------------------------------------------------------------
     
-    def compute_metrics(self, text: str, spacy_result: dict = None) -> PersonaMetrics:
+    def compute_metrics(self, text: str, spacy_result: dict = None, perplexity: float = 0.0) -> PersonaMetrics:
         """Compute all metrics for a single response (hybrid approach)"""
         
         if pd.isna(text) or not str(text).strip():
@@ -286,7 +376,6 @@ class PersonaEvaluator:
         role_consistency_score = self._compute_role_consistency(words)
         
         return PersonaMetrics(
-            first_person_count=first_person_count,
             first_person_rate=first_person_rate,
             epistemic_markers=epistemic_markers,
             epistemic_total=epistemic_total,
@@ -294,24 +383,21 @@ class PersonaEvaluator:
             unique_bigram_ratio=unique_bigram_ratio,
             is_repetitive=is_repetitive,
             is_degenerate=is_degenerate,
-            hedge_count=hedge_count,
             hedge_rate=hedge_rate,
-            assertive_count=assertive_count,
             assertive_rate=assertive_rate,
-            question_count=question_count,
-            transition_count=transition_count,
+            question_rate=question_count / word_count * 100,
+            transition_rate=transition_count / word_count * 100,
             avg_sentence_length=avg_sentence_length,
             sentence_count=sentence_count,
-            modal_verb_count=modal_verb_count,
             modal_verb_rate=modal_verb_rate,
-            passive_voice_count=passive_voice_count,
             passive_voice_rate=passive_voice_rate,
             # domain_vocab_count=domain_vocab_count,
             # domain_vocab_rate=domain_vocab_rate,
             # domain_vocab_lemmatized_count=domain_vocab_lemmatized_count,
             # domain_vocab_lemmatized_rate=domain_vocab_lemmatized_rate,
-            ai_phrase_count=ai_phrase_count,
+            ai_phrase_rate=ai_phrase_count / word_count * 100,
             role_consistency_score=role_consistency_score,
+            gpt2_perplexity=perplexity,
             used_spacy=used_spacy
         )
     
@@ -347,7 +433,7 @@ def extract_role_from_filename(filename: str) -> str:
     name = Path(filename).stem
     parts = name.split('_')
     if len(parts) >= 3:
-        return parts[-1]
+        return '_'.join(parts[2:])
     return "default"
  
  
@@ -372,14 +458,17 @@ def compute_method_summary(metrics_list: List[PersonaMetrics]) -> MethodSummary:
         degenerate_pct=np.mean([m.is_degenerate for m in metrics_list]) * 100,
         hedge_rate_mean=np.mean([m.hedge_rate for m in metrics_list]),
         assertive_rate_mean=np.mean([m.assertive_rate for m in metrics_list]),
-        question_rate_mean=np.mean([m.question_count for m in metrics_list]),
+        question_rate_mean=np.mean([m.question_rate for m in metrics_list]),
+        transition_rate_mean=np.mean([m.transition_rate for m in metrics_list]),
         avg_sentence_length_mean=np.mean([m.avg_sentence_length for m in metrics_list]),
         modal_verb_rate_mean=np.mean([m.modal_verb_rate for m in metrics_list]),
         passive_voice_rate_mean=np.mean([m.passive_voice_rate for m in metrics_list]),
         # domain_vocab_rate_mean=np.mean([m.domain_vocab_rate for m in metrics_list]),
         # domain_vocab_lemmatized_rate_mean=np.mean([m.domain_vocab_lemmatized_rate for m in metrics_list]),
-        ai_phrase_rate_mean=np.mean([m.ai_phrase_count for m in metrics_list]),
-        role_consistency_mean=np.mean([m.role_consistency_score for m in metrics_list])
+        ai_phrase_rate_mean=np.mean([m.ai_phrase_rate for m in metrics_list]),
+        role_consistency_mean=np.mean([m.role_consistency_score for m in metrics_list]),
+        gpt2_perplexity_mean=np.mean([m.gpt2_perplexity for m in metrics_list]),
+        gpt2_perplexity_std=np.std([m.gpt2_perplexity for m in metrics_list]),
     )
  
  
@@ -436,15 +525,21 @@ def _compute_group_metrics(
     columns: List[str],
     evaluator: PersonaEvaluator,
     use_spacy: bool,
+    label: str = "",
+    show_columns: bool = True,
 ) -> Tuple[Dict, Dict, List]:
     """Compute metrics, summaries, and comparisons for a DataFrame group."""
     all_metrics = {}
     summaries = {}
 
+    prefix = f"  [{label}] " if label else "  "
+
     for col in columns:
         if col not in df.columns:
             continue
         texts = df[col].tolist()
+        if show_columns:
+            tqdm.write(f"{prefix}{col}: {len(texts)} texts")
         spacy_batch = [None] * len(texts)
         if use_spacy and SPACY_AVAILABLE and nlp is not None:
             valid = []
@@ -452,8 +547,9 @@ def _compute_group_metrics(
                 if not pd.isna(t) and str(t).strip():
                     valid.append((i, str(t)[:100_000]))
             if valid:
+                tqdm.write(f"{prefix}{col}: running spaCy on {len(valid)} texts")
                 indices, truncated = zip(*valid)
-                for j, doc in enumerate(nlp.pipe(truncated, batch_size=50)):
+                for j, doc in enumerate(tqdm(nlp.pipe(truncated, batch_size=50), total=len(valid), desc=f"spaCy {label}/{col}", leave=False)):
                     sentences = list(doc.sents)
                     spacy_batch[indices[j]] = {
                         'sentence_count': len(sentences),
@@ -463,9 +559,13 @@ def _compute_group_metrics(
                             1 for tk in doc if tk.dep_ in ('auxpass', 'nsubjpass')
                         ),
                     }
+        clean_texts = [str(t) if not pd.isna(t) else '' for t in texts]
+        if GPT2_AVAILABLE:
+            tqdm.write(f"{prefix}{col}: running perplexity on {len(clean_texts)} texts")
+        perplexity_batch = _compute_perplexity_batch(clean_texts, label=f"{label}/{col}" if label else col)
         metrics_list = [
-            evaluator.compute_metrics(text, spacy_result=sr)
-            for text, sr in zip(texts, spacy_batch)
+            evaluator.compute_metrics(text, spacy_result=sr, perplexity=ppl)
+            for text, sr, ppl in zip(texts, spacy_batch, perplexity_batch)
         ]
         all_metrics[col] = metrics_list
         summaries[col] = compute_method_summary(metrics_list)
@@ -523,20 +623,21 @@ def analyze_single_file(
     if role is None:
         role = extract_role_from_filename(filepath)
 
+    tqdm.write(f"[{role}] {filtered_count} rows")
+
     evaluator = PersonaEvaluator(role=role, use_spacy=use_spacy)
 
-    # Overall metrics
-    all_metrics, summaries, comparisons = _compute_group_metrics(
-        df, columns, evaluator, use_spacy
-    )
-
-    # Per-alpha breakdown
     per_alpha = {}
+    combined_metrics: Dict[str, List[PersonaMetrics]] = {}
+
     if 'alpha' in df.columns:
-        for alpha_val in sorted(df['alpha'].unique()):
+        alpha_vals = sorted(df['alpha'].unique())
+        tqdm.write(f"  [{role}] per-alpha ({len(alpha_vals)} alphas)")
+        for alpha_val in alpha_vals:
             alpha_df = df[df['alpha'].apply(lambda x: abs(x - alpha_val) < 0.001)]
+            tqdm.write(f"  [{role}] alpha={alpha_val:.1f} ({len(alpha_df)} rows)")
             a_metrics, a_summaries, a_comparisons = _compute_group_metrics(
-                alpha_df, columns, evaluator, use_spacy
+                alpha_df, columns, evaluator, use_spacy, label=f"{role} a={alpha_val:.1f}", show_columns=False
             )
             per_alpha[float(alpha_val)] = {
                 'n_questions': len(alpha_df),
@@ -544,6 +645,25 @@ def analyze_single_file(
                 'comparisons': [asdict(c) for c in a_comparisons],
                 'raw_metrics': {k: [asdict(m) for m in v] for k, v in a_metrics.items()},
             }
+            for col, metrics in a_metrics.items():
+                combined_metrics.setdefault(col, []).extend(metrics)
+
+        summaries = {col: compute_method_summary(metrics) for col, metrics in combined_metrics.items()}
+        comparison_attrs = ['first_person_rate', 'unique_bigram_ratio', 'hedge_rate', 'modal_verb_rate']
+        comparisons = []
+        cols_list = list(combined_metrics.keys())
+        for i, col1 in enumerate(cols_list):
+            for col2 in cols_list[i + 1:]:
+                for attr in comparison_attrs:
+                    values1 = [getattr(m, attr) for m in combined_metrics[col1]]
+                    values2 = [getattr(m, attr) for m in combined_metrics[col2]]
+                    comparisons.append(compute_statistical_comparison(values1, values2, attr, col1, col2))
+        all_metrics = combined_metrics
+    else:
+        tqdm.write(f"  [{role}] overall metrics")
+        all_metrics, summaries, comparisons = _compute_group_metrics(
+            df, columns, evaluator, use_spacy, label=role
+        )
 
     spacy_used = any(m.used_spacy for metrics in all_metrics.values() for m in metrics)
 
@@ -561,6 +681,37 @@ def analyze_single_file(
     }
  
  
+def _metric_fields() -> frozenset:
+    from dataclasses import fields as dc_fields
+    excluded = {'epistemic_markers', 'used_spacy'}
+    return frozenset(f.name for f in dc_fields(PersonaMetrics) if f.name not in excluded)
+
+
+def _load_role_cache(cache_path: Path, current_fields: frozenset, filters_key: str) -> Optional[Dict]:
+    if not cache_path.exists():
+        return None
+    with open(cache_path) as f:
+        cached = json.load(f)
+    if 'raw_metrics' not in cached:
+        return None
+    if cached.get('_cached_filters') != filters_key:
+        print(f"  Cache filters changed for {cache_path.stem}, recomputing")
+        return None
+    cached_fields = frozenset(cached.get('_cached_fields', []))
+    missing = current_fields - cached_fields
+    if missing:
+        print(f"  Cache outdated for {cache_path.stem}: missing {missing}, recomputing")
+        return None
+    return cached
+
+
+def _save_role_cache(cache_path: Path, result: Dict, current_fields: frozenset, filters_key: str):
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    to_save = {**result, '_cached_fields': sorted(current_fields), '_cached_filters': filters_key}
+    with open(cache_path, 'w') as f:
+        json.dump(to_save, f, indent=2, default=str)
+
+
 def analyze_folder(
     folder_path: str,
     columns: List[str] = ['assistant_axis', 'baseline', 'steered'],
@@ -569,6 +720,7 @@ def analyze_folder(
     filters: Optional[Filters] = None,
     workers: int = 1,
     spacy_model: str = "en_core_web_sm",
+    cache_dir: Optional[Path] = None,
 ) -> Dict:
     """Analyze all CSV files in a folder"""
 
@@ -584,11 +736,51 @@ def analyze_folder(
     total_original = 0
     total_filtered = 0
 
-    n_workers = max(1, min(workers, len(files)))
+    current_fields = _metric_fields()
+    filters_key = filters.describe() if filters else "None"
 
-    if n_workers > 1:
+    cached_roles = []
+    uncached_files = []
+    for fp in files:
+        role = extract_role_from_filename(str(fp))
+        if cache_dir is not None:
+            hit = _load_role_cache(cache_dir / f"{role}.json", current_fields, filters_key)
+            if hit is not None:
+                cached_roles.append((role, hit))
+                continue
+        uncached_files.append(fp)
+
+    if cached_roles:
+        print(f"  Cache hits: {len(cached_roles)}, recomputing: {len(uncached_files)}")
+
+    for role, cached in cached_roles:
+        per_role_results[role] = cached
+        total_original += cached.get('n_questions_original', cached['n_questions'])
+        total_filtered += cached['n_questions']
+        for col, metrics in cached['raw_metrics'].items():
+            for m in metrics:
+                aggregated_metrics[col].append(m)
+
+    def _register_result(result: Dict):
+        role = result['role']
+        per_role_results[role] = result
+        total_original_local = result.get('n_questions_original', result['n_questions'])
+        total_filtered_local = result['n_questions']
+        for col, metrics in result['raw_metrics'].items():
+            for m in metrics:
+                aggregated_metrics[col].append(m)
+        if cache_dir is not None:
+            _save_role_cache(cache_dir / f"{role}.json", result, current_fields, filters_key)
+        return total_original_local, total_filtered_local
+
+    n_workers = max(1, min(workers, len(uncached_files))) if uncached_files else 1
+    if GPT2_AVAILABLE and n_workers > 1:
+        print("  GPT-2 is active: forcing sequential processing (workers=1) to keep model on single process")
+        n_workers = 1
+
+    if n_workers > 1 and uncached_files:
         work_args = [
-            (str(fp), columns, use_spacy, filters) for fp in files
+            (str(fp), columns, use_spacy, filters) for fp in uncached_files
         ]
         print(f"  Using {n_workers} worker processes")
         with concurrent.futures.ProcessPoolExecutor(
@@ -597,26 +789,18 @@ def analyze_folder(
             initargs=(spacy_model,) if use_spacy else (),
         ) as executor:
             results_iter = executor.map(_process_file_worker, work_args)
-            for result in tqdm(results_iter, total=len(files), desc="Processing"):
-                role = result['role']
-                per_role_results[role] = result
-                total_original += result.get('n_questions_original', result['n_questions'])
-                total_filtered += result['n_questions']
-                for col, metrics in result['raw_metrics'].items():
-                    for m in metrics:
-                        aggregated_metrics[col].append(m)
+            for result in tqdm(results_iter, total=len(uncached_files), desc="Processing"):
+                o, f = _register_result(result)
+                total_original += o
+                total_filtered += f
     else:
-        for filepath in tqdm(files, desc="Processing"):
+        for filepath in tqdm(uncached_files, desc="Processing"):
             result = analyze_single_file(
                 str(filepath), columns, use_spacy=use_spacy, filters=filters
             )
-            role = result['role']
-            per_role_results[role] = result
-            total_original += result.get('n_questions_original', result['n_questions'])
-            total_filtered += result['n_questions']
-            for col, metrics in result['raw_metrics'].items():
-                for m in metrics:
-                    aggregated_metrics[col].append(m)
+            o, f = _register_result(result)
+            total_original += o
+            total_filtered += f
     
     aggregated_summaries = {}
     for col, metrics_dicts in aggregated_metrics.items():
@@ -716,6 +900,7 @@ def generate_markdown_report(results: Dict, is_folder: bool = False) -> str:
         ('modal_verb_rate_mean', 'Modal Verb Rate (%)', '.2f'),
         ('question_rate_mean', 'Questions/Response', '.2f'),
         ('ai_phrase_rate_mean', 'AI Phrase Leakage', '.3f'),
+        ('gpt2_perplexity_mean', 'GPT-2 Perplexity', '.1f'),
     ]
     
     for key, label, fmt in metrics_to_show:
@@ -884,17 +1069,23 @@ def generate_visualizations(results: Dict, output_dir: str, is_folder: bool = Fa
         ('word_count', 'Word Count'),
         ('modal_verb_rate', 'Modal Verb Rate (%)'),
         ('hedge_rate', 'Hedge Rate (%)'),
-        ('question_count', 'Questions/Response'),
+        ('question_rate', 'Question Rate (%)'),
+        ('gpt2_perplexity', 'GPT-2 Perplexity'),
     ]
 
     n_methods = len(methods)
     n_alphas = len(alphas)
     group_width = 0.7 / n_methods
 
-    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+    n_cols = 3
+    n_rows = int(np.ceil(len(metrics_to_plot) / n_cols))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(18, n_rows * 5))
+
+    for ax in axes.flat[len(metrics_to_plot):]:
+        ax.set_visible(False)
 
     for idx, (attr, label) in enumerate(metrics_to_plot):
-        ax = axes[idx // 3, idx % 3]
+        ax = axes[idx // n_cols, idx % n_cols]
 
         for m_idx, method in enumerate(methods):
             color = colors.get(method, '#888888')
@@ -998,30 +1189,33 @@ Examples:
                        help='Use box-and-whisker plots instead of bar charts')
     parser.add_argument('--no-spacy', action='store_true',
                        help='Disable spaCy (use regex fallback)')
+    parser.add_argument('--no-gpt2', action='store_true',
+                       help='Disable GPT-2 perplexity scoring')
     parser.add_argument('--spacy-model', type=str, default='en_core_web_sm',
                        help='spaCy model to use')
-    parser.add_argument('--workers', '-w', type=int, default=1,
-                       help='Number of worker processes for folder mode (default: 1)')
+    parser.add_argument('--workers', '-w', type=int, default=8,
+                       help='Number of worker processes for folder mode (default: 8)')
     # Filter arguments
     parser.add_argument('--role', type=str, nargs='+', default=None,
                        help='Filter by role(s), e.g., --role accountant teacher')
-    parser.add_argument('--layer', type=int, nargs='+', default=None,
-                       help='Filter by layer(s), e.g., --layer 16 32')
-    parser.add_argument('--sample-count', type=int, nargs='+', default=None,
-                       help='Filter by sample_count(s), e.g., --sample-count 50 100')
+    parser.add_argument('--layer', type=int, nargs='+', default=[16],
+                       help='Filter by layer(s) (default: 16)')
+    parser.add_argument('--sample-count', type=int, nargs='+', default=[50],
+                       help='Filter by sample_count(s) (default: 50)')
     parser.add_argument('--alpha', type=float, nargs='+', default=None,
-                       help='Filter by alpha(s), e.g., --alpha 2.5 3.0')
+                       help='Filter by alpha(s) (default: all of 1.0 1.5 2.0 2.5)')
     parser.add_argument('--temperature', type=float, nargs='+', default=None,
                        help='Filter by temperature(s), e.g., --temperature 0.2 0.5')
-    
+
     args = parser.parse_args()
-    
-    # Construct filters from arguments
+
+    alpha = args.alpha if args.alpha is not None else [1.0, 1.5, 2.0, 2.5]
+
     filters = Filters(
         role=args.role,
         layer=args.layer,
         sample_count=args.sample_count,
-        alpha=args.alpha,
+        alpha=alpha,
         temperature=args.temperature
     )
     
@@ -1032,6 +1226,11 @@ Examples:
     else:
         init_spacy(args.spacy_model)
         use_spacy = SPACY_AVAILABLE
+
+    if args.no_gpt2:
+        print("GPT-2 disabled by --no-gpt2 flag")
+    else:
+        init_gpt2()
     
     input_path = Path(args.input)
     output_dir = Path(args.output)
@@ -1048,10 +1247,13 @@ Examples:
         print(f"Workers: {args.workers}")
     print()
 
+    cache_dir = output_dir / "per_role" if is_folder else None
+
     if is_folder:
         results = analyze_folder(
             str(input_path), args.columns, use_spacy=use_spacy, filters=filters,
             workers=args.workers, spacy_model=args.spacy_model,
+            cache_dir=cache_dir,
         )
     else:
         results = analyze_single_file(str(input_path), args.columns, use_spacy=use_spacy, filters=filters)
@@ -1080,14 +1282,8 @@ Examples:
         print("\nGenerating visualizations...")
         generate_visualizations(results, str(output_dir), is_folder, boxplot=args.boxplot)
     
-    if is_folder and 'per_role_results' in results:
-        per_role_dir = output_dir / "per_role"
-        per_role_dir.mkdir(exist_ok=True)
-        for role, role_result in results['per_role_results'].items():
-            with open(per_role_dir / f"{role}.json", 'w') as f:
-                slim = {k: v for k, v in role_result.items() if k != 'raw_metrics'}
-                json.dump(slim, f, indent=2, default=str)
-        print(f"Saved {len(results['per_role_results'])} per-role results to {per_role_dir}")
+    if is_folder and cache_dir is not None:
+        print(f"Per-role cache: {cache_dir} ({len(results.get('per_role_results', {}))} roles)")
     
     print("\nDone!")
  

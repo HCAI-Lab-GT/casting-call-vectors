@@ -15,7 +15,7 @@ TEMPERATURES=(0.2)
 MAX_NEW_TOKENS=2000
 QUESTIONS_FILE="./configs/validation_questions.jsonl"
 SAVE_DIR="./experiment_data/gold_prompt_experiments/"
-SAFETENSORS_DIR="./persona_data/model_layer_inits/"
+SAFETENSORS_DIR="./persona_data/model_inits/"
 GOLD_PROMPTS_DIR="./persona_data/gold_labels_prompts_dataset"
 
 while [[ $# -gt 0 ]]; do

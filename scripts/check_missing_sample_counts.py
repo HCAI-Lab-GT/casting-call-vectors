@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Check which roles don't have 20, 40, or 50 sample count inits in model_layer_inits.
+Check which roles don't have 20, 40, or 50 sample count inits in model_inits.
 """
 import json
 from pathlib import Path
@@ -12,8 +12,8 @@ def main():
     with open(role_list_path) as f:
         roles = list(json.load(f).keys())
     
-    # Path to model_layer_inits
-    model_layer_inits_path = Path("persona_data/model_layer_inits")
+    # Path to model_inits
+    model_inits_path = Path("persona_data/model_inits")
     
     # Track roles and missing sample counts.
     missing_roles = []
@@ -23,7 +23,7 @@ def main():
     missing_50_roles = []
     
     for role in roles:
-        role_dir = model_layer_inits_path / f"{role}_persona_initialization"
+        role_dir = model_inits_path / f"{role}_persona_initialization"
         
         if not role_dir.exists():
             missing_roles.append(role)
@@ -87,7 +87,7 @@ def main():
         print(f"  - {role}")
     
     if missing_roles:
-        print(f"\nRoles without any model_layer_inits folder:")
+        print(f"\nRoles without any model_inits folder:")
         for role in sorted(missing_roles):
             print(f"  - {role}")
 

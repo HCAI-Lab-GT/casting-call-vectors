@@ -22,7 +22,7 @@ class GoldPromptExperiments():
                  target_model_id: str = "allenai/Olmo-3-7B-Instruct",
                  judge_model_id: str = "gpt-4.1-mini",
                  json_filepath: str = "./persona_data/persona_models.json",
-                 safetensors_dir: str = "./persona_data/model_layer_inits/",
+                 safetensors_dir: str = "./persona_data/model_inits/",
                  assistant_axis_pt_dir: str = "./assistant_axis_vectors",
                  assistant_axis_layer: int | None = None,
                  assistant_axis_alpha: float = 2.5,
@@ -524,7 +524,7 @@ if __name__ == "__main__":
         "-f",
         "--safetensors_dir",
         type=str,
-        default="./persona_data/model_layer_inits/",
+        default="./persona_data/model_inits/",
         help="Directory containing model layer initialization safetensors files",
     )
     ap.add_argument(
