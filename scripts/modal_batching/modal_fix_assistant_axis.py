@@ -5,13 +5,13 @@ Runs the repair script on Modal's cloud infrastructure, similar to SLURM sbatch.
 
 Usage:
     # Dry run (preview changes)
-    modal run scripts/evaluation/modal_fix_assistant_axis.py --dry-run
+    modal run scripts/modal_batching/modal_fix_assistant_axis.py --dry-run
 
     # Fire-and-forget (like sbatch)
-    modal run --detach scripts/evaluation/modal_fix_assistant_axis.py --alpha 2.5
+    modal run --detach scripts/modal_batching/modal_fix_assistant_axis.py --alpha 2.5
 
     # Specific roles
-    modal run --detach scripts/evaluation/modal_fix_assistant_axis.py \
+    modal run --detach scripts/modal_batching/modal_fix_assistant_axis.py \
         --roles "soldier,scholar,whale" --alpha 2.5
 
     # Check status / logs
@@ -37,7 +37,7 @@ image = (
     .add_local_python_source("pvx", remote_path="/root/pvx")
     # Copy the script itself so we can import it inside the container.
     .add_local_file(
-        "scripts/evaluation/fix_assistant_axis_alpha_response.py",
+        "scripts/patch_scripts/fix_assistant_axis_alpha_response.py",
         remote_path="/root/fix_assistant_axis_alpha_response.py",
     )
 )

@@ -21,7 +21,7 @@ METRICS = (
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Create one comparison graph per role")
     parser.add_argument("--input_dir", default="./experiment_data/gold_prompt_experiments")
-    parser.add_argument("--output_dir", default="./analysis/gold_prompt_role_graphs")
+    parser.add_argument("--output_dir", default="./analysis/empirical/gold_prompt_role_graphs")
     parser.add_argument("--roles", nargs="+", default=None)
     parser.add_argument("--layer", type=int, default=None)
     parser.add_argument("--sample_count", type=int, default=None)

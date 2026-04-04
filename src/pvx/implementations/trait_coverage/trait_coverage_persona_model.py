@@ -19,7 +19,7 @@ class TraitCoveragePersonaModel(PersonaModel):
     def __init__(self,
                  trait: str,
                  dataset: Optional[TraitCoverageDataset] = None,
-                 dataset_dirpath: str = './persona_data/trait_coverage_datasets/',
+                 dataset_dirpath: str = './persona_data/trait_datasets/',
                  *args,
                  **kwargs):
         self.trait = trait
@@ -31,7 +31,7 @@ class TraitCoveragePersonaModel(PersonaModel):
     @classmethod
     def get_path(cls,
                  target_model_id: str, concept: str,
-                 safetensors_dir: str = "./persona_data/trait_coverage_inits/", use_json: bool = False,
+                 safetensors_dir: str = "./persona_data/trait_inits/", use_json: bool = False,
                  kwargs: Optional[dict] = None, obj: Optional[AbstractPersonaModel] = None):
         safe_model_id = target_model_id.replace("/", "__")
 
@@ -80,7 +80,7 @@ if __name__ == "__main__":
         "-f",
         "--safetensor_dir",
         type=str,
-        default="./persona_data/trait_coverage_inits/",
+        default="./persona_data/trait_inits/",
         help="Directory for the model init safetensor (not role dataset)",
     )
     args = ap.parse_args()

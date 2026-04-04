@@ -5,17 +5,17 @@ Runs the regeneration script on Modal's cloud infrastructure with GPU support.
 
 Usage:
     # Dry run (preview changes)
-    modal run scripts/evaluation/modal_regenerate_assistant_axis.py --dry-run
+    modal run scripts/modal_batching/modal_regenerate_assistant_axis.py --dry-run
 
     # Fire-and-forget (like sbatch)
-    modal run --detach scripts/evaluation/modal_regenerate_assistant_axis.py --alphas "2.5"
+    modal run --detach scripts/modal_batching/modal_regenerate_assistant_axis.py --alphas "2.5"
 
     # Specific roles and alphas
-    modal run --detach scripts/evaluation/modal_regenerate_assistant_axis.py \
+    modal run --detach scripts/modal_batching/modal_regenerate_assistant_axis.py \
         --roles "soldier,scholar,whale" --alphas "1.0,2.5,5.0"
 
     # Custom model / layer
-    modal run --detach scripts/evaluation/modal_regenerate_assistant_axis.py \
+    modal run --detach scripts/modal_batching/modal_regenerate_assistant_axis.py \
         --alphas "2.5" --assistant-axis-layer 14
 
     # Check status / logs
@@ -50,7 +50,7 @@ image = (
     .add_local_python_source("pvx")
     # Copy the script itself so we can import it inside the container.
     .add_local_file(
-        "scripts/evaluation/regenerate_assistant_axis_by_alpha.py",
+        "scripts/patch_scripts/regenerate_assistant_axis_by_alpha.py",
         remote_path="/root/regenerate_assistant_axis_by_alpha.py",
     )
 )

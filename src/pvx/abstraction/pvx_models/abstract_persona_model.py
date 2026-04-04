@@ -104,7 +104,7 @@ class AbstractPersonaModel(ABC):
         
 
         # Save initialization (with extracted persona vector) to JSON
-        self.save_to_json(filepath=json_filepath)
+        self.save_to_json(filepath=safetensors_dir)
         self.save_to_safetensors(filepath=safetensors_dir)
 
     @classmethod
@@ -372,7 +372,7 @@ class AbstractPersonaModel(ABC):
         # Fall back to legacy JSON
         json_filepath = (
             json_filepath
-            or cls.get_path(target_model_id, concept, safetensors_dir, use_json=True)[0]
+            or cls.get_path(target_model_id, concept, safetensors_dir, use_json=True, kwargs=locals())[0]
         )
         
         logger.info(f"JSON Path: {safetensors_path}")

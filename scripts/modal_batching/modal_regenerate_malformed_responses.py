@@ -46,7 +46,7 @@ image = (
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HOME": "/data/hf_cache"})
     .add_local_python_source("pvx")
     .add_local_file(
-        "scripts/evaluation/regenerate_malformed_responses.py",
+        "scripts/patch_scripts/regenerate_malformed_responses.py",
         remote_path="/root/regenerate_malformed_responses.py",
     )
 )

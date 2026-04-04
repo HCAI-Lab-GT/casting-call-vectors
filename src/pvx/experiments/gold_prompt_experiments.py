@@ -144,7 +144,7 @@ class GoldPromptExperiments():
         if not gold_path.exists():
             raise FileNotFoundError(
                 f"Gold prompt file not found for role '{role}' at {gold_path}. "
-                "Generate it with scripts/evaluation/create_gold_standard_prompts.py first."
+                "Generate it with scripts/patch_scripts/create_gold_standard_prompts.py first."
             )
 
         with open(gold_path, "r", encoding="utf-8") as f:

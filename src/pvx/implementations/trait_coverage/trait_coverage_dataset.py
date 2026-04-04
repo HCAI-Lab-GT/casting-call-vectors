@@ -39,7 +39,7 @@ class TraitCoverageDataset(PersonaDataset):
         local_model: Optional[str] = "Qwen/Qwen2.5-7B-Instruct",
         device: Optional[str] = None,
         dtype: torch.dtype = torch.float16,
-        dirpath: str = "./persona_data/trait_coverage_datasets/",
+        dirpath: str = "./persona_data/trait_datasets/",
     ):
         super().__init__(
             trait=trait,
@@ -58,7 +58,7 @@ class TraitCoverageDataset(PersonaDataset):
     def from_json(
         trait: str,
         trait_description: Optional[str] = None,
-        dirpath: str = "./persona_data/trait_coverage_datasets",
+        dirpath: str = "./persona_data/trait_datasets",
     ) -> "TraitCoverageDataset":
         filepath = os.path.join(dirpath, f"{trait}_dataset.json")
         
@@ -109,7 +109,7 @@ if __name__ == "__main__":
     ap.add_argument(
         "-f",
         "--dirpath",
-        default="./persona_data/trait_coverage_datasets/",
+        default="./persona_data/trait_datasets/",
         help="Directory filepath to save generated datasets",
     )
     ap.add_argument(

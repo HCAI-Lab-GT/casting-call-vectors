@@ -49,7 +49,7 @@ image = (
     )
     .add_local_python_source("pvx")
     .add_local_file(
-        "scripts/evaluation/backfill_assistant_axis_gold_comparisons.py",
+        "scripts/patch_scripts/backfill_assistant_axis_gold_comparisons.py",
         remote_path="/root/backfill_assistant_axis_gold_comparisons.py",
     )
 )
