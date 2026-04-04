@@ -43,7 +43,7 @@ def main() -> None:
         help="Optional list of alphas to regenerate (defaults to all alphas present in CSV rows)",
     )
     parser.add_argument("--model", default="allenai/Olmo-3-7B-Instruct")
-    parser.add_argument("--json_filepath", default="./persona_data/persona_models.json")
+    parser.add_argument("--json_filepath", default=None)
     parser.add_argument("--pt_dir", default="persona_data/assistant-axis/olmo-3-7b-instruct/vectors/")
     parser.add_argument(
         "--assistant_axis_layer",

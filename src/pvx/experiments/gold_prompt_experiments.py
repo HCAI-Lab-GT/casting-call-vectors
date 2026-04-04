@@ -21,7 +21,7 @@ class GoldPromptExperiments():
                  persona_model: type[AbstractPersonaModel] = None, 
                  target_model_id: str = "allenai/Olmo-3-7B-Instruct",
                  judge_model_id: str = "gpt-4.1-mini",
-                 json_filepath: str = "./persona_data/persona_models.json",
+                 json_filepath: str | None = None,
                  safetensors_dir: str = "./persona_data/model_inits/",
                  assistant_axis_pt_dir: str = "./assistant_axis_vectors",
                  assistant_axis_layer: int | None = None,
@@ -36,7 +36,7 @@ class GoldPromptExperiments():
             persona_model (type[AbstractPersonaModel], optional): A class of a persona model to use for
                 generating responses. If None, a default RolePersonaModel will be used.
             judge_model_id (str, optional): The model ID to use for the LLM judge. Defaults to "gpt-4-0613".
-            json_filepath (str, optional): The filepath to the JSON file containing persona model data. Defaults to "./persona_data/persona_models.json".
+            json_filepath (str, optional): Path to a role-specific JSON file. If None, the path is constructed from safetensors_dir and the role name.
         '''
         self.json_filepath = json_filepath
         self.safetensors_dir = safetensors_dir
