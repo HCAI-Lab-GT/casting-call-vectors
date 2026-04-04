@@ -21,7 +21,7 @@ def get_roles(df: pd.DataFrame, col: str) -> set[str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Summarise missing/malformed data across all role reports.")
-    parser.add_argument("--input_dir", default="experiment_data/experiment_missing_data_modal")
+    parser.add_argument("--input_dir", default="experiment_data/experiment_missing_data")
     args = parser.parse_args()
 
     df = load_all_roles(Path(args.input_dir))
