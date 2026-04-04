@@ -1,4 +1,6 @@
-# pvx
+under construction
+
+<!-- # pvx
 
 This repository contains persona dataset generation and evaluation utilities built around Inspect AI. Library code lives under `src/pvx/` (datasets, helpers, tasks).
 
@@ -194,4 +196,4 @@ Call from Python or as part of the pipeline. Example:
   - `--model_name NAME` overrides the model preset
   - `--alpha ALPHA` alpha value used for steering
   - `--roles_run RUN` the list of roles to be used for the batch
-Note: if using model name and persona vector already generated, ensure model name matches exactly (case-sensitive) with model name used for persona vector generation
+Note: if using model name and persona vector already generated, ensure model name matches exactly (case-sensitive) with model name used for persona vector generation -->
