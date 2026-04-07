@@ -45,6 +45,7 @@ from tqdm import tqdm
 import warnings
 
 from nlp_helpers import PersonaMetrics, MethodSummary, StatisticalComparison, Lexicons, Filters
+from nlp_visualizer import generate_visualizations
 
 warnings.filterwarnings('ignore')
  
@@ -82,91 +83,66 @@ def init_spacy(model_name: str = "en_core_web_sm", disable_components: List[str]
 
 
 # =============================================================================
-# GPT-2 INITIALIZATION (OPTIONAL)
+# BLEU & COMPRESSION RATIO
 # =============================================================================
 
-GPT2_AVAILABLE = False
-_gpt2_model = None
-_gpt2_tokenizer = None
-_gpt2_device = None
-_gpt2_loss_fct = None
-
-def init_gpt2():
-    """Initialize GPT-2 for perplexity scoring. Returns True if successful."""
-    global GPT2_AVAILABLE, _gpt2_model, _gpt2_tokenizer, _gpt2_device, _gpt2_loss_fct
-    try:
-        from transformers import GPT2LMHeadModel, GPT2TokenizerFast
-        import torch
-        _gpt2_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        dtype = torch.bfloat16 if _gpt2_device.type == 'cuda' else torch.float32
-        _gpt2_tokenizer = GPT2TokenizerFast.from_pretrained('gpt2')
-        _gpt2_tokenizer.pad_token = _gpt2_tokenizer.eos_token
-        _gpt2_model = GPT2LMHeadModel.from_pretrained('gpt2', dtype=dtype).to(_gpt2_device)
-        _gpt2_model.eval()
-        try:
-            _gpt2_model = torch.compile(_gpt2_model)
-            print("  torch.compile enabled")
-        except Exception:
-            pass
-        _gpt2_loss_fct = torch.nn.CrossEntropyLoss(reduction='none')
-        GPT2_AVAILABLE = True
-        print(f"GPT-2 loaded (device: {_gpt2_device}, dtype: {dtype})")
-        return True
-    except ImportError:
-        print("transformers not installed, skipping perplexity. Install with: pip install transformers torch")
-        return False
-    except Exception as e:
-        print(f"GPT-2 init failed: {e}")
-        return False
+import zlib
 
 
-def _compute_perplexity_batch(texts: List[str], max_length: int = 1024, batch_size: int = 64, label: str = "") -> List[float]:
-    """Compute GPT-2 perplexity for a list of texts, one score per text."""
-    if not GPT2_AVAILABLE:
-        return [0.0] * len(texts)
-    import torch
+def _compute_compression_ratio(text: str) -> float:
+    """Compute compression ratio: compressed_size / original_size.
+    Lower values indicate more repetitive/compressible text."""
+    if not text or not text.strip():
+        return 0.0
+    encoded = text.encode('utf-8')
+    compressed = zlib.compress(encoded)
+    return len(compressed) / len(encoded)
 
-    valid_indices = [i for i, t in enumerate(texts) if t and str(t).strip()]
-    results = [0.0] * len(texts)
-    if not valid_indices:
-        return results
 
-    encodings = _gpt2_tokenizer(
-        [str(texts[i]) for i in valid_indices],
-        return_tensors='pt',
-        truncation=True,
-        max_length=max_length,
-        padding=True,
-    )
-    input_ids_all = encodings['input_ids']
-    attention_mask_all = encodings['attention_mask']
+def _ngrams(tokens: List[str], n: int) -> List[Tuple[str, ...]]:
+    """Extract n-grams from token list."""
+    return [tuple(tokens[i:i+n]) for i in range(len(tokens) - n + 1)]
 
-    desc = f"perplexity {label}" if label else "perplexity"
-    n_batches = (len(valid_indices) + batch_size - 1) // batch_size
-    ppl_values = []
 
-    for b in tqdm(range(n_batches), desc=desc, leave=False):
-        start, end = b * batch_size, min((b + 1) * batch_size, len(valid_indices))
-        input_ids = input_ids_all[start:end].to(_gpt2_device, non_blocking=True)
-        attention_mask = attention_mask_all[start:end].to(_gpt2_device, non_blocking=True)
+def _compute_bleu_against_reference(texts: List[str], references: List[str], max_n: int = 4) -> List[float]:
+    """Compute BLEU for each text against its corresponding reference.
+    Higher BLEU = more similar to reference."""
+    assert len(texts) == len(references), "texts and references must have the same length"
 
-        with torch.no_grad():
-            logits = _gpt2_model(input_ids=input_ids, attention_mask=attention_mask).logits
+    results = []
+    for text, ref in zip(texts, references):
+        hyp_tokens = re.findall(r'\b\w+\b', text.lower())
+        ref_tokens = re.findall(r'\b\w+\b', ref.lower())
 
-        shift_logits = logits[:, :-1].contiguous()
-        shift_labels = input_ids[:, 1:].contiguous()
-        shift_mask = attention_mask[:, 1:].contiguous().float()
+        if len(hyp_tokens) < max_n or len(ref_tokens) < max_n:
+            results.append(0.0)
+            continue
 
-        token_loss = _gpt2_loss_fct(
-            shift_logits.view(-1, shift_logits.size(-1)),
-            shift_labels.view(-1),
-        ).view(shift_labels.shape)
+        # Modified precision for each n-gram order
+        precisions = []
+        for n in range(1, max_n + 1):
+            hyp_ngrams = Counter(_ngrams(hyp_tokens, n))
+            ref_ngrams = Counter(_ngrams(ref_tokens, n))
+            if not hyp_ngrams:
+                precisions.append(0.0)
+                continue
+            clipped = sum(min(count, ref_ngrams.get(ng, 0)) for ng, count in hyp_ngrams.items())
+            precisions.append(clipped / sum(hyp_ngrams.values()))
 
-        sample_loss = (token_loss * shift_mask).sum(dim=1) / shift_mask.sum(dim=1).clamp(min=1)
-        ppl_values.extend(torch.exp(sample_loss.clamp(max=20)).cpu().tolist())
-
-    for i, orig_i in enumerate(valid_indices):
-        results[orig_i] = ppl_values[i]
+        # Geometric mean of precisions
+        log_avg = 0.0
+        valid = 0
+        for p in precisions:
+            if p > 0:
+                log_avg += np.log(p)
+                valid += 1
+        if valid == 0:
+            results.append(0.0)
+        else:
+            log_avg /= max_n  # uniform weights
+            # Brevity penalty
+            bp = min(1.0, np.exp(1 - len(ref_tokens) / len(hyp_tokens))) if len(hyp_tokens) > 0 else 0.0
+            results.append(bp * np.exp(log_avg))
 
     return results
 
@@ -284,7 +260,7 @@ class PersonaEvaluator:
     # Main compute method
     # -------------------------------------------------------------------------
     
-    def compute_metrics(self, text: str, spacy_result: dict = None, perplexity: float = 0.0) -> PersonaMetrics:
+    def compute_metrics(self, text: str, spacy_result: dict = None, bleu: float = 0.0) -> PersonaMetrics:
         """Compute all metrics for a single response (hybrid approach)"""
         
         if pd.isna(text) or not str(text).strip():
@@ -397,7 +373,8 @@ class PersonaEvaluator:
             # domain_vocab_lemmatized_rate=domain_vocab_lemmatized_rate,
             ai_phrase_rate=ai_phrase_count / word_count * 100,
             role_consistency_score=role_consistency_score,
-            gpt2_perplexity=perplexity,
+            bleu=bleu,
+            compression_ratio=_compute_compression_ratio(text),
             used_spacy=used_spacy
         )
     
@@ -467,8 +444,10 @@ def compute_method_summary(metrics_list: List[PersonaMetrics]) -> MethodSummary:
         # domain_vocab_lemmatized_rate_mean=np.mean([m.domain_vocab_lemmatized_rate for m in metrics_list]),
         ai_phrase_rate_mean=np.mean([m.ai_phrase_rate for m in metrics_list]),
         role_consistency_mean=np.mean([m.role_consistency_score for m in metrics_list]),
-        gpt2_perplexity_mean=np.mean([m.gpt2_perplexity for m in metrics_list]),
-        gpt2_perplexity_std=np.std([m.gpt2_perplexity for m in metrics_list]),
+        bleu_mean=np.mean([m.bleu for m in metrics_list]),
+        bleu_std=np.std([m.bleu for m in metrics_list]),
+        compression_ratio_mean=np.mean([m.compression_ratio for m in metrics_list]),
+        compression_ratio_std=np.std([m.compression_ratio for m in metrics_list]),
     )
  
  
@@ -560,12 +539,18 @@ def _compute_group_metrics(
                         ),
                     }
         clean_texts = [str(t) if not pd.isna(t) else '' for t in texts]
-        if GPT2_AVAILABLE:
-            tqdm.write(f"{prefix}{col}: running perplexity on {len(clean_texts)} texts")
-        perplexity_batch = _compute_perplexity_batch(clean_texts, label=f"{label}/{col}" if label else col)
+        if col == 'baseline':
+            bleu_batch = [1.0] * len(clean_texts)
+        else:
+            if 'baseline' in df.columns:
+                ref_texts = [str(t) if not pd.isna(t) else '' for t in df['baseline'].tolist()]
+                tqdm.write(f"{prefix}{col}: computing BLEU against baseline on {len(clean_texts)} texts")
+                bleu_batch = _compute_bleu_against_reference(clean_texts, ref_texts)
+            else:
+                bleu_batch = [0.0] * len(clean_texts)
         metrics_list = [
-            evaluator.compute_metrics(text, spacy_result=sr, perplexity=ppl)
-            for text, sr, ppl in zip(texts, spacy_batch, perplexity_batch)
+            evaluator.compute_metrics(text, spacy_result=sr, bleu=sb)
+            for text, sr, sb in zip(texts, spacy_batch, bleu_batch)
         ]
         all_metrics[col] = metrics_list
         summaries[col] = compute_method_summary(metrics_list)
@@ -687,7 +672,7 @@ def _metric_fields() -> frozenset:
     return frozenset(f.name for f in dc_fields(PersonaMetrics) if f.name not in excluded)
 
 
-def _load_role_cache(cache_path: Path, current_fields: frozenset, filters_key: str) -> Optional[Dict]:
+def _load_role_cache(cache_path: Path, current_fields: frozenset, filters_key: str, columns: List[str] = None) -> Optional[Dict]:
     if not cache_path.exists():
         return None
     with open(cache_path) as f:
@@ -702,12 +687,19 @@ def _load_role_cache(cache_path: Path, current_fields: frozenset, filters_key: s
     if missing:
         print(f"  Cache outdated for {cache_path.stem}: missing {missing}, recomputing")
         return None
+    if columns is not None:
+        cached_columns = sorted(cached.get('_cached_columns', []))
+        if cached_columns != sorted(columns):
+            print(f"  Cache columns changed for {cache_path.stem}, recomputing")
+            return None
     return cached
 
 
-def _save_role_cache(cache_path: Path, result: Dict, current_fields: frozenset, filters_key: str):
+def _save_role_cache(cache_path: Path, result: Dict, current_fields: frozenset, filters_key: str, columns: List[str] = None):
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     to_save = {**result, '_cached_fields': sorted(current_fields), '_cached_filters': filters_key}
+    if columns is not None:
+        to_save['_cached_columns'] = sorted(columns)
     with open(cache_path, 'w') as f:
         json.dump(to_save, f, indent=2, default=str)
 
@@ -744,7 +736,7 @@ def analyze_folder(
     for fp in files:
         role = extract_role_from_filename(str(fp))
         if cache_dir is not None:
-            hit = _load_role_cache(cache_dir / f"{role}.json", current_fields, filters_key)
+            hit = _load_role_cache(cache_dir / f"{role}.json", current_fields, filters_key, columns)
             if hit is not None:
                 cached_roles.append((role, hit))
                 continue
@@ -770,13 +762,10 @@ def analyze_folder(
             for m in metrics:
                 aggregated_metrics[col].append(m)
         if cache_dir is not None:
-            _save_role_cache(cache_dir / f"{role}.json", result, current_fields, filters_key)
+            _save_role_cache(cache_dir / f"{role}.json", result, current_fields, filters_key, columns)
         return total_original_local, total_filtered_local
 
     n_workers = max(1, min(workers, len(uncached_files))) if uncached_files else 1
-    if GPT2_AVAILABLE and n_workers > 1:
-        print("  GPT-2 is active: forcing sequential processing (workers=1) to keep model on single process")
-        n_workers = 1
 
     if n_workers > 1 and uncached_files:
         work_args = [
@@ -900,7 +889,8 @@ def generate_markdown_report(results: Dict, is_folder: bool = False) -> str:
         ('modal_verb_rate_mean', 'Modal Verb Rate (%)', '.2f'),
         ('question_rate_mean', 'Questions/Response', '.2f'),
         ('ai_phrase_rate_mean', 'AI Phrase Leakage', '.3f'),
-        ('gpt2_perplexity_mean', 'GPT-2 Perplexity', '.1f'),
+        ('bleu_mean', 'BLEU', '.3f'),
+        ('compression_ratio_mean', 'Compression Ratio', '.3f'),
     ]
     
     for key, label, fmt in metrics_to_show:
@@ -1026,123 +1016,6 @@ def generate_per_alpha_report(results: Dict, is_folder: bool = False) -> str:
 
 
 # =============================================================================
-# VISUALIZATION
-# =============================================================================
- 
-def generate_visualizations(results: Dict, output_dir: str, is_folder: bool = False, boxplot: bool = False):
-    """Generate per-alpha visualizations as bar charts (default) or box-and-whisker plots."""
-    try:
-        import matplotlib.pyplot as plt
-        import matplotlib
-        matplotlib.use('Agg')
-        import matplotlib.patches as mpatches
-    except ImportError:
-        print("Warning: matplotlib not available, skipping visualizations")
-        return
-
-    viz_dir = Path(output_dir) / "visualizations"
-    viz_dir.mkdir(parents=True, exist_ok=True)
-
-    # Collect raw per-alpha metrics
-    per_alpha_raw = defaultdict(lambda: defaultdict(list))
-    if is_folder:
-        for role_result in results.get('per_role_results', {}).values():
-            for alpha_str, alpha_data in role_result.get('per_alpha', {}).items():
-                for col, metrics in alpha_data['raw_metrics'].items():
-                    per_alpha_raw[float(alpha_str)][col].extend(metrics)
-    else:
-        for alpha_str, alpha_data in results.get('per_alpha', {}).items():
-            for col, metrics in alpha_data['raw_metrics'].items():
-                per_alpha_raw[float(alpha_str)][col].extend(metrics)
-
-    if not per_alpha_raw:
-        print("  No per-alpha data available for visualization")
-        return
-
-    alphas = sorted(per_alpha_raw.keys())
-    methods = list(next(iter(per_alpha_raw.values())).keys())
-    colors = {'assistant_axis': '#e74c3c', 'baseline': '#2ecc71', 'steered': '#3498db'}
-
-    metrics_to_plot = [
-        ('first_person_rate', 'First-Person Rate (%)'),
-        ('unique_bigram_ratio', 'Unique Bigram Ratio'),
-        ('word_count', 'Word Count'),
-        ('modal_verb_rate', 'Modal Verb Rate (%)'),
-        ('hedge_rate', 'Hedge Rate (%)'),
-        ('question_rate', 'Question Rate (%)'),
-        ('gpt2_perplexity', 'GPT-2 Perplexity'),
-    ]
-
-    n_methods = len(methods)
-    n_alphas = len(alphas)
-    group_width = 0.7 / n_methods
-
-    n_cols = 3
-    n_rows = int(np.ceil(len(metrics_to_plot) / n_cols))
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(18, n_rows * 5))
-
-    for ax in axes.flat[len(metrics_to_plot):]:
-        ax.set_visible(False)
-
-    for idx, (attr, label) in enumerate(metrics_to_plot):
-        ax = axes[idx // n_cols, idx % n_cols]
-
-        for m_idx, method in enumerate(methods):
-            color = colors.get(method, '#888888')
-            offset = (m_idx - n_methods / 2 + 0.5) * group_width
-
-            if boxplot:
-                positions = []
-                data = []
-                for a_idx, alpha in enumerate(alphas):
-                    raw = per_alpha_raw[alpha].get(method, [])
-                    values = [m[attr] for m in raw if attr in m]
-                    if values:
-                        data.append(values)
-                        positions.append(a_idx + offset)
-                if data:
-                    bp = ax.boxplot(
-                        data, positions=positions, widths=group_width * 0.85,
-                        patch_artist=True, showfliers=False,
-                        medianprops={'color': 'black', 'linewidth': 1.2},
-                    )
-                    for patch in bp['boxes']:
-                        patch.set_facecolor(color)
-                        patch.set_alpha(0.7)
-            else:
-                means = []
-                for alpha in alphas:
-                    raw = per_alpha_raw[alpha].get(method, [])
-                    values = [m[attr] for m in raw if attr in m]
-                    means.append(np.mean(values) if values else 0)
-                x = np.arange(n_alphas) + offset
-                bars = ax.bar(x, means, group_width, color=color, alpha=0.8)
-                for bar, val in zip(bars, means):
-                    if val != 0:
-                        ax.text(
-                            bar.get_x() + bar.get_width() / 2, bar.get_height(),
-                            f'{val:.1f}', ha='center', va='bottom', fontsize=6,
-                        )
-
-        ax.set_title(label, fontsize=10)
-        ax.set_xticks(range(n_alphas))
-        ax.set_xticklabels([f'{a:.1f}' for a in alphas], fontsize=8)
-        ax.set_xlabel('alpha', fontsize=8)
-
-    legend_patches = [
-        mpatches.Patch(color=colors.get(m, '#888888'), alpha=0.7, label=m)
-        for m in methods
-    ]
-    fig.legend(handles=legend_patches, loc='lower center', ncol=n_methods, fontsize=9)
-    plt.suptitle('Persona Steering by Alpha', fontsize=14, fontweight='bold')
-    plt.tight_layout(rect=[0, 0.05, 1, 0.96])
-    plt.savefig(viz_dir / "method_comparison.png", dpi=150, bbox_inches='tight')
-    plt.close()
-
-    print(f"  Saved: {viz_dir / 'method_comparison.png'}")
- 
-
-# =============================================================================
 # MAIN
 # =============================================================================
  
@@ -1189,8 +1062,6 @@ Examples:
                        help='Use box-and-whisker plots instead of bar charts')
     parser.add_argument('--no-spacy', action='store_true',
                        help='Disable spaCy (use regex fallback)')
-    parser.add_argument('--no-gpt2', action='store_true',
-                       help='Disable GPT-2 perplexity scoring')
     parser.add_argument('--spacy-model', type=str, default='en_core_web_sm',
                        help='spaCy model to use')
     parser.add_argument('--workers', '-w', type=int, default=8,
@@ -1227,11 +1098,6 @@ Examples:
         init_spacy(args.spacy_model)
         use_spacy = SPACY_AVAILABLE
 
-    if args.no_gpt2:
-        print("GPT-2 disabled by --no-gpt2 flag")
-    else:
-        init_gpt2()
-    
     input_path = Path(args.input)
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)

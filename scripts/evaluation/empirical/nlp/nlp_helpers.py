@@ -59,8 +59,9 @@ class PersonaMetrics:
     # Consistency
     role_consistency_score: float = 1.0
 
-    # Language model
-    gpt2_perplexity: float = 0.0
+    # Diversity / compression
+    bleu: float = 0.0
+    compression_ratio: float = 0.0
 
     # Meta
     used_spacy: bool = False
@@ -101,8 +102,10 @@ class MethodSummary:
     # domain_vocab_lemmatized_rate_mean: float = 0.0
     ai_phrase_rate_mean: float = 0.0
     role_consistency_mean: float = 0.0
-    gpt2_perplexity_mean: float = 0.0
-    gpt2_perplexity_std: float = 0.0
+    bleu_mean: float = 0.0
+    bleu_std: float = 0.0
+    compression_ratio_mean: float = 0.0
+    compression_ratio_std: float = 0.0
  
  
 @dataclass 

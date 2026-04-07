@@ -10,22 +10,23 @@
 
 | Metric | assistant_axis | baseline | steered |
 |--------|--------|--------|--------|
-| First-Person Rate (%) | 0.78 | 3.57 | 2.74 |
-| Avg Word Count | 852.2 | 38.5 | 370.4 |
+| First-Person Rate (%) | 0.78 | 3.59 | 2.74 |
+| Avg Word Count | 852.2 | 38.6 | 370.4 |
 | Unique Bigram Ratio | 0.667 | 0.995 | 0.909 |
 | Repetitive (%) | 38.7 | 0.0 | 0.0 |
 | Degenerate Length (%) | 43.9 | 0.0 | 18.3 |
-| Modal Verb Rate (%) | 3.40 | 1.02 | 1.53 |
+| Modal Verb Rate (%) | 3.40 | 1.03 | 1.53 |
 | Questions/Response | 0.42 | 0.22 | 0.71 |
 | AI Phrase Leakage | 0.028 | 0.003 | 0.025 |
-| GPT-2 Perplexity | 15.5 | 83.3 | 21.8 |
+| BLEU | 0.096 | 1.000 | 0.124 |
+| Compression Ratio | 0.344 | 0.739 | 0.515 |
 
 ## Statistical Comparisons
 
 ### assistant_axis vs baseline: first_person_rate
-- Means: 0.779 vs 3.575
+- Means: 0.779 vs 3.591
 - p-value: 0.0000 ***
-- Cohen's d: -0.730 (medium)
+- Cohen's d: -0.734 (medium)
 
 ### assistant_axis vs baseline: unique_bigram_ratio
 - Means: 0.667 vs 0.995
@@ -33,9 +34,9 @@
 - Cohen's d: -1.111 (large)
 
 ### assistant_axis vs baseline: modal_verb_rate
-- Means: 3.399 vs 1.023
+- Means: 3.399 vs 1.025
 - p-value: 0.0000 ***
-- Cohen's d: 0.996 (large)
+- Cohen's d: 0.995 (large)
 
 ### assistant_axis vs steered: first_person_rate
 - Means: 0.779 vs 2.743
@@ -53,9 +54,9 @@
 - Cohen's d: 0.947 (large)
 
 ### baseline vs steered: first_person_rate
-- Means: 3.575 vs 2.743
+- Means: 3.591 vs 2.743
 - p-value: 0.0000 ***
-- Cohen's d: 0.210 (small)
+- Cohen's d: 0.215 (small)
 
 ### baseline vs steered: unique_bigram_ratio
 - Means: 0.995 vs 0.909
@@ -63,14 +64,14 @@
 - Cohen's d: 1.707 (large)
 
 ### baseline vs steered: modal_verb_rate
-- Means: 1.023 vs 1.533
+- Means: 1.025 vs 1.533
 - p-value: 0.0000 ***
-- Cohen's d: -0.280 (small)
+- Cohen's d: -0.279 (small)
 
 
 ## Key Findings
 
-- **First-Person Rate**: baseline leads with 3.57
+- **First-Person Rate**: baseline leads with 3.59
 - **Unique Bigram Ratio**: baseline leads with 1.00
 - **Repetitive %**: baseline leads with 0.00
 - **Modal Verb Rate**: assistant_axis leads with 3.40
@@ -89,10 +90,10 @@
 
 | Alpha | 1P Rate % | Words | Bigram Ratio | Repet. % | Degen. % |
 |-------|--------|--------|--------|--------|--------|
-| 1.0 | 3.57 | 39 | 0.995 | 0.0 | 0.0 |
-| 1.5 | 3.57 | 39 | 0.995 | 0.0 | 0.0 |
-| 2.0 | 3.57 | 39 | 0.995 | 0.0 | 0.0 |
-| 2.5 | 3.58 | 39 | 0.995 | 0.0 | 0.0 |
+| 1.0 | 3.59 | 39 | 0.995 | 0.0 | 0.0 |
+| 1.5 | 3.59 | 39 | 0.995 | 0.0 | 0.0 |
+| 2.0 | 3.59 | 39 | 0.995 | 0.0 | 0.0 |
+| 2.5 | 3.59 | 39 | 0.995 | 0.0 | 0.0 |
 
 ### steered
 
@@ -233,7 +234,7 @@
 | interpreter | baseline | baseline | None |
 | interviewer | baseline | baseline | None |
 | jester | steered | baseline | None |
-| journalist | steered | baseline | None |
+| journalist | baseline | baseline | None |
 | judge | baseline | baseline | None |
 | lawyer | baseline | baseline | None |
 | leviathan | baseline | baseline | None |
@@ -250,7 +251,7 @@
 | mentor | steered | baseline | None |
 | merchant | baseline | baseline | None |
 | minimalist | baseline | baseline | None |
-| moderator | steered | baseline | None |
+| moderator | baseline | baseline | None |
 | musician | baseline | baseline | None |
 | mycorrhizal | baseline | baseline | None |
 | mystic | baseline | baseline | None |
@@ -322,7 +323,7 @@
 | scheduler | baseline | baseline | None |
 | scholar | baseline | baseline | None |
 | scientist | baseline | baseline | None |
-| scout | steered | baseline | None |
+| scout | baseline | baseline | None |
 | screener | baseline | baseline | None |
 | secretary | baseline | baseline | None |
 | shaman | baseline | baseline | None |
