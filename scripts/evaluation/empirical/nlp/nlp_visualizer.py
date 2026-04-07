@@ -110,8 +110,8 @@ def generate_visualizations(
     coherence_metrics = [
         ('unique_bigram_ratio', 'Unique Bigram Ratio'),
         ('word_count', 'Word Count'),
-        ('bleu', 'BLEU vs Reference'),
         ('compression_ratio', 'Compression Ratio'),
+        ('bleu', 'BLEU vs Reference'),
     ]
 
     style_metrics = [
