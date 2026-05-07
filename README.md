@@ -35,11 +35,6 @@ persona-vectors/
 ├── scripts/
 │   ├── helpers.py
 │   ├── prefetch.py
-│   ├── analysis/                         # Analysis scripts
-│   ├── evaluation/
-│   │   ├── empirical/                    # Empirical evaluation (NLP, judge-gold-standard)
-│   │   ├── geometry/                     # Geometric analysis (combination, full)
-│   │   └── old_psycho/                   # Legacy psychometric evaluation
 │   ├── patch_scripts/                    # Data repair / backfill scripts
 │   └── cluster/
 │       ├── slurm/                        # SLURM batch job scripts (.sh, .sbatch)
@@ -77,16 +72,27 @@ persona-vectors/
 │   ├── trait_datasets/
 │   └── trait_inits/
 │
-├── analysis/                             # Analysis results & figures
-│   ├── empirical/                        # Empirical results and figures
-│   │   ├── comparison_plots/
-│   │   ├── gold_prompt_role_graphs/
-│   │   ├── nlp_experiments/
-│   │   ├── pairwise_graphs/
-│   │   └── paper_figures/
-│   ├── geometry/                         # Geometry results and figures
-│   │   └── figures/
-│   └── psycho_graphs/                    # Legacy
+├── analysis/                             # Analysis scripts, results & figures
+│   ├── empirical/                        # Empirical evaluation scripts and outputs
+│   │   ├── calibrate_judge.py
+│   │   ├── evaluate_role_vectors.py
+│   │   ├── steer_role_vectors.py
+│   │   ├── correlation/                  # judge x NLP correlation (script + figures/)
+│   │   ├── judge/                        # judge plotting scripts (+ figures/)
+│   │   ├── nlp_experiments/              # NLP evaluator/visualizer (+ figures/)
+│   │   ├── plot_geometry/                # geometry plotting (+ figures/)
+│   │   └── deprecated/                   # Legacy interview-style judge code
+│   ├── geometry/                         # Geometric analysis scripts + figures/
+│   │   ├── full_analysis.py
+│   │   ├── full_analysis_sans_mythical.py
+│   │   ├── density_sans_mythical.py
+│   │   ├── sparsity_sans_mythical.py
+│   │   ├── combination_experiments.py
+│   │   ├── christina_analysis.py
+│   │   ├── figures/
+│   │   └── figures_sans_mythical/
+│   ├── old_psycho/                       # Legacy psychometric evaluation scripts
+│   └── psycho_graphs/                    # Legacy psychometric figures
 │
 ├── tests/                                # Currently unused
 │   ├── unit/
