@@ -153,9 +153,11 @@ def fig4_diversity_panel(div: pd.DataFrame) -> None:
     s = div[div["method"] == "steered"].set_index("alpha")
     a = div[div["method"] == "assistant_axis"].set_index("alpha")
 
+    raw_l2 = "mean_pairwise_l2_raw" if "mean_pairwise_l2_raw" in div.columns else "mean_pairwise_l2"
     metrics = [
-        ("effective_rank", "Effective rank", "Higher = more behavioral dimensions"),
-        ("mean_pairwise_l2", "Mean pairwise L2", "Higher = more inter-role spread"),
+        ("effective_rank_raw" if "effective_rank_raw" in div.columns else "effective_rank",
+         "Effective rank (raw)", "Higher = more behavioral dimensions"),
+        (raw_l2, "Mean pairwise L2 (raw)", "Higher = more inter-role spread"),
         ("score_std", "Score std across roles", "Higher = roles more distinct"),
     ]
 
