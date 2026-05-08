@@ -64,19 +64,29 @@ def fig1_effective_rank(div: pd.DataFrame) -> None:
     s = div[div["method"] == "steered"].set_index("alpha")
     a = div[div["method"] == "assistant_axis"].set_index("alpha")
 
-    fig, ax = plt.subplots(figsize=(7, 4.5))
-    ax.plot(s.index, s["effective_rank"], "-o", color=STEERED_COLOR,
-            linewidth=2, markersize=7, label="Steered (proposed)")
-    ax.plot(a.index, a["effective_rank"], "--s", color=AXIS_COLOR,
-            linewidth=2, markersize=7, label="Assistant axis")
-    ax.set_xlabel(r"Steering strength ($\alpha$)")
-    ax.set_ylabel("Effective rank of behavioral matrix")
-    ax.set_xticks(ALPHAS)
-    ax.set_title(
-        "Behavioral diversity: effective rank of the 275-role behavioral matrix\n"
-        r"(higher = roles more diverse in behavior space)"
-    )
-    ax.legend()
+    has_raw = "effective_rank_raw" in div.columns
+    fig, axes = plt.subplots(1, 2 if has_raw else 1,
+                             figsize=(13 if has_raw else 7, 4.5), sharey=False)
+    if not has_raw:
+        axes = [axes]
+
+    for ax, col, subtitle in zip(
+        axes,
+        ["effective_rank", "effective_rank_raw"] if has_raw else ["effective_rank"],
+        ["z-scored (can inflate when variance collapses)", "raw / mean-centred (correct signal)"] if has_raw else ["z-scored"],
+    ):
+        ax.plot(s.index, s[col], "-o", color=STEERED_COLOR,
+                linewidth=2, markersize=7, label="Steered (proposed)")
+        ax.plot(a.index, a[col], "--s", color=AXIS_COLOR,
+                linewidth=2, markersize=7, label="Assistant axis")
+        ax.set_xlabel(r"Steering strength ($\alpha$)")
+        ax.set_ylabel("Effective rank")
+        ax.set_xticks(ALPHAS)
+        ax.set_title(f"Effective rank — {subtitle}", fontsize=10)
+        ax.legend(fontsize=8)
+
+    fig.suptitle("Behavioral diversity: effective rank of the 275-role behavioral matrix\n"
+                 "(higher = roles more diverse in behavior space)", y=1.02)
     plt.tight_layout()
     _save(fig, "fig1_effective_rank_vs_alpha.pdf")
 
@@ -87,19 +97,29 @@ def fig2_mean_pairwise_l2(div: pd.DataFrame) -> None:
     s = div[div["method"] == "steered"].set_index("alpha")
     a = div[div["method"] == "assistant_axis"].set_index("alpha")
 
-    fig, ax = plt.subplots(figsize=(7, 4.5))
-    ax.plot(s.index, s["mean_pairwise_l2"], "-o", color=STEERED_COLOR,
-            linewidth=2, markersize=7, label="Steered (proposed)")
-    ax.plot(a.index, a["mean_pairwise_l2"], "--s", color=AXIS_COLOR,
-            linewidth=2, markersize=7, label="Assistant axis")
-    ax.set_xlabel(r"Steering strength ($\alpha$)")
-    ax.set_ylabel("Mean pairwise L2 distance between role profiles")
-    ax.set_xticks(ALPHAS)
-    ax.set_title(
-        "Inter-role behavioral diversity: mean pairwise distance\n"
-        "(z-scored per feature; higher = roles more spread out)"
-    )
-    ax.legend()
+    has_raw = "mean_pairwise_l2_raw" in div.columns
+    fig, axes = plt.subplots(1, 2 if has_raw else 1,
+                             figsize=(13 if has_raw else 7, 4.5), sharey=False)
+    if not has_raw:
+        axes = [axes]
+
+    for ax, col, subtitle in zip(
+        axes,
+        ["mean_pairwise_l2", "mean_pairwise_l2_raw"] if has_raw else ["mean_pairwise_l2"],
+        ["z-scored (can inflate when variance collapses)", "raw / mean-centred (correct signal)"] if has_raw else ["z-scored"],
+    ):
+        ax.plot(s.index, s[col], "-o", color=STEERED_COLOR,
+                linewidth=2, markersize=7, label="Steered (proposed)")
+        ax.plot(a.index, a[col], "--s", color=AXIS_COLOR,
+                linewidth=2, markersize=7, label="Assistant axis")
+        ax.set_xlabel(r"Steering strength ($\alpha$)")
+        ax.set_ylabel("Mean pairwise L2")
+        ax.set_xticks(ALPHAS)
+        ax.set_title(f"Mean pairwise L2 — {subtitle}", fontsize=10)
+        ax.legend(fontsize=8)
+
+    fig.suptitle("Inter-role behavioral diversity: mean pairwise distance\n"
+                 "(higher = roles more spread out)", y=1.02)
     plt.tight_layout()
     _save(fig, "fig2_mean_pairwise_l2_vs_alpha.pdf")
 

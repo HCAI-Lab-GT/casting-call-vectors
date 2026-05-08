@@ -196,14 +196,20 @@ def compute_diversity(df: pd.DataFrame, features: list[str],
             continue
         # Z-score per feature before computing L2 diversity
         mat_z = (mat - mat.mean(axis=0)) / (mat.std(axis=0) + 1e-12)
+        # effective_rank on raw (mean-centred) matrix avoids the artifact where
+        # z-scoring amplifies noise when variance collapses (e.g. AA at high α),
+        # making a collapsed distribution falsely appear high-dimensional.
+        mat_c = mat - mat.mean(axis=0)
         rows.append(dict(
             method=method_name,
             alpha=a,
             n_roles=mat.shape[0],
             effective_rank=effective_rank(mat_z),
+            effective_rank_raw=effective_rank(mat_c),
             participation_ratio=participation_ratio(mat_z),
             mean_pairwise_l2=mean_pairwise_l2(mat_z),
-            score_var=float(mat[:, 0].var()),  # variance of the overall score across roles
+            mean_pairwise_l2_raw=mean_pairwise_l2(mat_c),
+            score_var=float(mat[:, 0].var()),
             score_std=float(mat[:, 0].std()),
         ))
     return pd.DataFrame(rows)
