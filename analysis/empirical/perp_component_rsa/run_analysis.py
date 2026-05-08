@@ -2,22 +2,31 @@
 Perp-component RSA: does the role-specific residual drive behavioral specificity?
 
 Each proposed role vector is decomposed as v_i = v_∥ + v_⊥ where:
-  v_∥ = (v_i · d_aa) * d_aa   — captured by the assistant axis
+  v_∥ = (v_i · d_aa) * d_aa   — captured by the assistant axis (all ≈ same direction)
   v_⊥ = v_i − v_∥              — role-specific residual the AA discards
 
-We build pairwise cosine-distance RDMs from both components and ask:
-  RSA(perp_rdm,  beh_steered)  vs  RSA(perp_rdm,  beh_aa)
-  RSA(parallel_rdm, beh_aa)   vs  RSA(parallel_rdm, beh_steered)
+The parallel component of ALL proposed vectors points in roughly the same direction
+(anti-d_aa), so a pairwise RDM built from v_∥ is degenerate. Instead we use the
+AA vectors themselves as the "assistant axis representation": the AA method steers
+along each role's AA vector, so the structure of those vectors should predict AA
+behavioral structure.
+
+RSA comparisons:
+  RSA(perp_rdm,   beh_steered)  vs  RSA(perp_rdm,   beh_aa)
+  RSA(aa_vec_rdm, beh_aa)       vs  RSA(aa_vec_rdm, beh_steered)
+  RSA(perp_rdm,   aa_vec_rdm)   — how orthogonal are the two geometric spaces?
 
 Expected result if our method is geometrically motivated:
-  • perp_rdm  better predicts steered behavior (our method uses v_⊥)
-  • parallel_rdm better predicts AA behavior (AA only captures v_∥)
-  • Together this shows the two methods are sensitive to different geometric subspaces
+  • perp_rdm  better predicts steered behavior  (our method encodes v_⊥)
+  • aa_vec_rdm better predicts AA behavior      (AA steers along AA vectors)
 
 Outputs (data/):
-  perp_rdm.npy          275×275 cosine-distance RDM of role-specific residuals
-  parallel_rdm.npy      275×275 cosine-distance RDM of assistant-axis projections
-  rsa_perp_components.csv  RSA results with Mantel p-values
+  perp_rdm.npy              cosine-distance RDM of v_⊥ components
+  aa_vec_rdm.npy            cosine-distance RDM of AA vectors
+  beh_steered_rdm.npy       sliced steered behavioral RDM (aligned to common role order)
+  beh_aa_rdm.npy            sliced AA behavioral RDM (aligned to common role order)
+  repr_rdm.npy              sliced repr_cos RDM (aligned to common role order)
+  rsa_perp_components.csv   RSA results with Mantel p-values
 """
 from __future__ import annotations
 
@@ -28,7 +37,6 @@ import numpy as np
 import pandas as pd
 import torch
 from scipy import stats
-from scipy.spatial.distance import pdist, squareform
 
 REPO = Path(__file__).resolve().parents[3]
 PT_VECTORS_DIR = REPO / "persona_data" / "pt_vectors"
@@ -90,26 +98,22 @@ def compute_d_aa(aa_vectors: dict[str, np.ndarray]) -> np.ndarray:
     return mean_dir / (np.linalg.norm(mean_dir) + 1e-12)
 
 
-def decompose_vectors(vectors: dict[str, np.ndarray],
-                      d_aa: np.ndarray,
-                      role_order: list[str]) -> tuple[np.ndarray, np.ndarray]:
-    """Return (perp_matrix, parallel_matrix), each shape (n_roles, dim)."""
-    perps, pars = [], []
+def compute_perp_matrix(vectors: dict[str, np.ndarray],
+                        d_aa: np.ndarray,
+                        role_order: list[str]) -> np.ndarray:
+    """v_⊥ = v_i − (v_i · d_aa) * d_aa  for each role. Returns (n_roles, dim)."""
+    perps = []
     for role in role_order:
         v = vectors[role]
-        dot = float(np.dot(v, d_aa))   # d_aa is unit, so this is the scalar projection
-        v_par = dot * d_aa
-        v_perp = v - v_par
-        perps.append(v_perp)
-        pars.append(v_par)
-    return np.stack(perps), np.stack(pars)
+        v_par = np.dot(v, d_aa) * d_aa   # d_aa is unit vector
+        perps.append(v - v_par)
+    return np.stack(perps)
 
 
 def cos_rdm(mat: np.ndarray) -> np.ndarray:
-    """Pairwise cosine-distance RDM. Rows with near-zero norm get distance 1 to all others."""
+    """Pairwise cosine-distance RDM. Zero-norm rows get distance 1 to all others."""
     norms = np.linalg.norm(mat, axis=1, keepdims=True)
-    safe = norms > 1e-12
-    mat_n = np.where(safe, mat / (norms + 1e-12), 0.0)
+    mat_n = np.where(norms > 1e-12, mat / (norms + 1e-12), 0.0)
     sim = np.clip(mat_n @ mat_n.T, -1.0, 1.0)
     return 1.0 - sim
 
@@ -137,60 +141,74 @@ def mantel_test(rdm_a: np.ndarray, rdm_b: np.ndarray,
 # ── main ───────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    # Load role order
     with open(RSA_DATA_DIR / "role_order.json") as f:
         role_order = json.load(f)
     print(f"Role order: {len(role_order)} roles")
 
-    # Load vectors
-    print(f"Loading proposed vectors from {PT_VECTORS_DIR} ...")
+    print(f"Loading proposed vectors ...")
     proposed = load_vectors(PT_VECTORS_DIR)
     print(f"  loaded {len(proposed)}")
 
-    print(f"Loading AA vectors from {AA_VECTORS_DIR} ...")
+    print(f"Loading AA vectors ...")
     aa_vecs = load_vectors(AA_VECTORS_DIR)
     print(f"  loaded {len(aa_vecs)}")
 
     common = [r for r in role_order if r in proposed and r in aa_vecs]
     print(f"  common roles in role_order: {len(common)}")
 
-    # Compute d_aa and decompose
+    # Compute d_aa and perp components of proposed vectors
     d_aa = compute_d_aa({r: aa_vecs[r] for r in common})
-    perp_mat, par_mat = decompose_vectors(proposed, d_aa, common)
-    print(f"  perp_mat shape: {perp_mat.shape}  par_mat shape: {par_mat.shape}")
+    perp_mat = compute_perp_matrix(proposed, d_aa, common)
+    print(f"  perp_mat: {perp_mat.shape}  "
+          f"mean perp_norm={np.linalg.norm(perp_mat, axis=1).mean():.3f}")
 
-    # Build component RDMs
-    print("Building component RDMs ...")
+    # AA vector matrix (in role order)
+    aa_mat = np.stack([aa_vecs[r] for r in common])
+    print(f"  aa_mat:   {aa_mat.shape}")
+
+    # Build RDMs
+    print("Building RDMs ...")
     perp_rdm = cos_rdm(perp_mat)
-    par_rdm = cos_rdm(par_mat)
+    aa_vec_rdm = cos_rdm(aa_mat)
+    print(f"  perp_rdm variance: {rdm_vec(perp_rdm).var():.4f}")
+    print(f"  aa_vec_rdm variance: {rdm_vec(aa_vec_rdm).var():.4f}")
+
     np.save(DATA_DIR / "perp_rdm.npy", perp_rdm)
-    np.save(DATA_DIR / "parallel_rdm.npy", par_rdm)
-    print(f"  perp_rdm: min={perp_rdm[perp_rdm > 0].min():.3f}  max={perp_rdm.max():.3f}")
+    np.save(DATA_DIR / "aa_vec_rdm.npy", aa_vec_rdm)
 
-    # Load behavioral and repr RDMs (aligned to role_order.json)
-    full_repr_rdm = np.load(RSA_DATA_DIR / "rdm_repr_cos.npy")
-    full_beh_s_rdm = np.load(RSA_DATA_DIR / "rdm_beh_corr.npy")  # steered, corr-dist
-    full_beh_aa_rdm = np.load(BEH_DIV_DIR / "rdm_beh_aa_corr.npy")
-
-    # Slice to common roles (role_order is the index for full RDMs)
+    # Load and slice behavioral + repr RDMs to common role order
     full_role_to_idx = {r: i for i, r in enumerate(role_order)}
     common_idx = np.array([full_role_to_idx[r] for r in common], dtype=int)
 
-    repr_rdm = full_repr_rdm[np.ix_(common_idx, common_idx)]
-    beh_s_rdm = full_beh_s_rdm[np.ix_(common_idx, common_idx)]
+    full_repr_rdm   = np.load(RSA_DATA_DIR / "rdm_repr_cos.npy")
+    full_beh_s_rdm  = np.load(RSA_DATA_DIR / "rdm_beh_corr.npy")
+    full_beh_aa_rdm = np.load(BEH_DIV_DIR  / "rdm_beh_aa_corr.npy")
+
+    repr_rdm   = full_repr_rdm[np.ix_(common_idx, common_idx)]
+    beh_s_rdm  = full_beh_s_rdm[np.ix_(common_idx, common_idx)]
     beh_aa_rdm = full_beh_aa_rdm[np.ix_(common_idx, common_idx)]
-    print(f"  Sliced all RDMs to {len(common)}×{len(common)}")
+
+    # Save sliced RDMs so make_figures.py can load them directly (same ordering)
+    np.save(DATA_DIR / "beh_steered_rdm.npy", beh_s_rdm)
+    np.save(DATA_DIR / "beh_aa_rdm.npy", beh_aa_rdm)
+    np.save(DATA_DIR / "repr_rdm.npy", repr_rdm)
+    print(f"  All RDMs sliced and saved: {len(common)}×{len(common)}")
 
     # ── RSA comparisons ────────────────────────────────────────────────────────
     comparisons = [
-        ("perp_cos",     perp_rdm, "beh_steered_corr", beh_s_rdm),
-        ("perp_cos",     perp_rdm, "beh_aa_corr",      beh_aa_rdm),
-        ("perp_cos",     perp_rdm, "repr_cos",          repr_rdm),
-        ("parallel_cos", par_rdm,  "beh_steered_corr", beh_s_rdm),
-        ("parallel_cos", par_rdm,  "beh_aa_corr",      beh_aa_rdm),
-        ("parallel_cos", par_rdm,  "repr_cos",          repr_rdm),
-        ("repr_cos",     repr_rdm, "beh_steered_corr", beh_s_rdm),  # reference
-        ("repr_cos",     repr_rdm, "beh_aa_corr",      beh_aa_rdm),  # reference
+        # Core question: does perp predict steered better than AA?
+        ("perp_cos",    perp_rdm,   "beh_steered_corr", beh_s_rdm),
+        ("perp_cos",    perp_rdm,   "beh_aa_corr",      beh_aa_rdm),
+        # Core question: does AA vector structure predict AA behavior better?
+        ("aa_vec_cos",  aa_vec_rdm, "beh_aa_corr",      beh_aa_rdm),
+        ("aa_vec_cos",  aa_vec_rdm, "beh_steered_corr", beh_s_rdm),
+        # Cross-space: how related are perp and AA vector spaces?
+        ("perp_cos",    perp_rdm,   "aa_vec_cos",       aa_vec_rdm),
+        # Reference: full repr vs behavioral (already known, reproduced here)
+        ("perp_cos",    perp_rdm,   "repr_cos",         repr_rdm),
+        ("aa_vec_cos",  aa_vec_rdm, "repr_cos",         repr_rdm),
+        ("repr_cos",    repr_rdm,   "beh_steered_corr", beh_s_rdm),
+        ("repr_cos",    repr_rdm,   "beh_aa_corr",      beh_aa_rdm),
     ]
 
     print(f"\nRunning Mantel tests (n_perm={N_PERM}) ...")
@@ -202,25 +220,24 @@ def main() -> None:
             comparison=f"{rdm_a_name}_vs_{rdm_b_name}",
             rsa_spearman=obs, mantel_p=p, n_roles=len(common),
         ))
-        print(f"  {rdm_a_name:14s} vs {rdm_b_name:20s}: r={obs:+.4f}  p={p:.2e}")
+        print(f"  {rdm_a_name:12s} vs {rdm_b_name:20s}: r={obs:+.4f}  p={p:.2e}")
 
     out = pd.DataFrame(rows)
     out.to_csv(DATA_DIR / "rsa_perp_components.csv", index=False)
     print(f"\nSaved: {DATA_DIR / 'rsa_perp_components.csv'}")
 
-    # Summary
     perp_s = out[out["comparison"] == "perp_cos_vs_beh_steered_corr"]["rsa_spearman"].iloc[0]
     perp_a = out[out["comparison"] == "perp_cos_vs_beh_aa_corr"]["rsa_spearman"].iloc[0]
-    par_s  = out[out["comparison"] == "parallel_cos_vs_beh_steered_corr"]["rsa_spearman"].iloc[0]
-    par_a  = out[out["comparison"] == "parallel_cos_vs_beh_aa_corr"]["rsa_spearman"].iloc[0]
+    aa_a   = out[out["comparison"] == "aa_vec_cos_vs_beh_aa_corr"]["rsa_spearman"].iloc[0]
+    aa_s   = out[out["comparison"] == "aa_vec_cos_vs_beh_steered_corr"]["rsa_spearman"].iloc[0]
 
     print(f"\nKey result:")
-    print(f"  RSA(perp,    beh_steered) = {perp_s:+.4f}  "
-          f"RSA(perp,    beh_aa) = {perp_a:+.4f}  "
-          f"→ perp favours {'steered' if perp_s > perp_a else 'AA'}")
-    print(f"  RSA(parallel, beh_steered) = {par_s:+.4f}  "
-          f"RSA(parallel, beh_aa) = {par_a:+.4f}  "
-          f"→ parallel favours {'steered' if par_s > par_a else 'AA'}")
+    print(f"  RSA(perp,   beh_steered) = {perp_s:+.4f}  "
+          f"RSA(perp,   beh_aa) = {perp_a:+.4f}  "
+          f"→ perp favours {'steered ✓' if perp_s > perp_a else 'AA (unexpected)'}")
+    print(f"  RSA(aa_vec, beh_aa)      = {aa_a:+.4f}  "
+          f"RSA(aa_vec, beh_steered) = {aa_s:+.4f}  "
+          f"→ aa_vec favours {'AA ✓' if aa_a > aa_s else 'steered (unexpected)'}")
 
     print("\nDone.")
 
