@@ -83,15 +83,17 @@ def _save(fig, name: str) -> None:
 def fig1_cos_distribution(df: pd.DataFrame, consistency: pd.DataFrame) -> None:
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
 
-    # Left: cos(proposed_v_i, d_aa)
+    # Left: |cos(proposed_v_i, d_aa)| — use absolute value because proposed vectors
+    # are contrastive (role − base) while d_aa points toward assistant, so the sign
+    # is a direction-convention artifact; the magnitude is what reflects alignment.
     ax = axes[0]
-    cos_vals = df["cos_with_daa"].dropna()
+    cos_vals = df["cos_with_daa"].dropna().abs()
     ax.hist(cos_vals, bins=30, color=STEERED_COLOR, edgecolor="white", alpha=0.85)
     ax.axvline(cos_vals.mean(), color="darkgreen", linewidth=1.8, linestyle="--",
                label=f"Mean = {cos_vals.mean():.3f}")
-    ax.set_xlabel("cos(v_i, d_aa)  [proposed vector vs assistant axis direction]")
+    ax.set_xlabel("|cos(v_i, d_aa)|  [proposed vector vs assistant axis direction]")
     ax.set_ylabel("Number of roles")
-    ax.set_title("Alignment of proposed vectors with d_aa")
+    ax.set_title("Alignment of proposed vectors with d_aa\n(near 0 = nearly orthogonal to assistant axis)")
     ax.legend()
 
     # Right: cos(v_aa_i, d_aa) — internal consistency check
@@ -107,8 +109,8 @@ def fig1_cos_distribution(df: pd.DataFrame, consistency: pd.DataFrame) -> None:
 
     fig.suptitle(
         "Cosine similarity distributions\n"
-        "Left: proposed vectors vs global assistant axis direction  |  "
-        "Right: per-role AA vectors vs d_aa (sanity check)",
+        "Left: |cos(v_i, d_aa)| for proposed vectors — small = mostly orthogonal to assistant axis  |  "
+        "Right: cos(v_aa_i, d_aa) for AA vectors (sanity check)",
         y=1.02, fontsize=11,
     )
     plt.tight_layout()

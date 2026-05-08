@@ -385,6 +385,10 @@ def main() -> None:
     print(f"Saved: {DATA_DIR / 'rsa_cross_method.csv'}")
 
     # ── Per-alpha RSA breakdown ────────────────────────────────────────────────
+    # Re-index to final common_roles (may have shrunk after NaN drop + role_to_idx filter)
+    s_idx = steered_df.set_index("role").loc[common_roles]
+    a_idx = aa_df.set_index("role").loc[common_roles]
+
     print("\nPer-alpha RSA (repr_cos vs each method's behavioral RDM) ...")
     per_alpha_rows = []
     for a in ALPHAS:

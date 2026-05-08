@@ -163,20 +163,42 @@ def fig4_diversity_panel(div: pd.DataFrame) -> None:
 # ── Figure 5: Cross-method RSA grouped bar ────────────────────────────────────
 
 def fig5_rsa_comparison(rsa_df: pd.DataFrame) -> None:
-    # Pick the corr-distance variants for clarity
-    target_rows = rsa_df[rsa_df["comparison"].str.contains("corr")].copy()
+    # Select same-metric pairs only (corr vs corr, l2 vs l2) to avoid
+    # mixing distance metrics across the two axes of the comparison.
+    SAME_METRIC_PAIRS = [
+        "beh_steered_corr_vs_beh_aa_corr",
+        "beh_steered_l2_vs_beh_aa_l2",
+        "repr_cos_vs_beh_steered_corr",
+        "repr_cos_vs_beh_aa_corr",
+        "repr_cos_vs_beh_steered_l2",
+        "repr_cos_vs_beh_aa_l2",
+    ]
+    target_rows = rsa_df[rsa_df["comparison"].isin(SAME_METRIC_PAIRS)].copy()
+    # Preserve display order
+    target_rows = target_rows.set_index("comparison").loc[
+        [p for p in SAME_METRIC_PAIRS if p in target_rows["comparison"].values]
+    ].reset_index()
+
+    LABEL_MAP = {
+        "beh_steered_corr_vs_beh_aa_corr": "beh_steered\nvs\nbeh_aa\n(corr)",
+        "beh_steered_l2_vs_beh_aa_l2":     "beh_steered\nvs\nbeh_aa\n(L2)",
+        "repr_cos_vs_beh_steered_corr":     "repr_cos\nvs\nbeh_steered\n(corr)",
+        "repr_cos_vs_beh_aa_corr":          "repr_cos\nvs\nbeh_aa\n(corr)",
+        "repr_cos_vs_beh_steered_l2":       "repr_cos\nvs\nbeh_steered\n(L2)",
+        "repr_cos_vs_beh_aa_l2":            "repr_cos\nvs\nbeh_aa\n(L2)",
+    }
 
     labels, rs, ps = [], [], []
     for _, row in target_rows.iterrows():
-        labels.append(row["comparison"].replace("_vs_", "\nvs\n").replace("_corr", ""))
+        labels.append(LABEL_MAP.get(row["comparison"], row["comparison"]))
         rs.append(row["rsa_spearman"])
         ps.append(row["mantel_p"])
 
     colors = []
-    for lbl in labels:
-        if "steered" in lbl and "repr" in lbl:
+    for comp in target_rows["comparison"]:
+        if "repr_cos" in comp and "steered" in comp:
             colors.append(STEERED_COLOR)
-        elif "aa" in lbl and "repr" in lbl:
+        elif "repr_cos" in comp and "beh_aa" in comp:
             colors.append(AXIS_COLOR)
         else:
             colors.append(REPR_COLOR)
