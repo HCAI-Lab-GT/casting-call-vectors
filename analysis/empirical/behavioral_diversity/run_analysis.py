@@ -28,7 +28,6 @@ Outputs (data/):
 """
 from __future__ import annotations
 
-import glob
 import json
 import re
 from pathlib import Path
@@ -348,11 +347,22 @@ def main() -> None:
         full_roles = existing_roles  # role_order.json order
         role_to_idx = {r: i for i, r in enumerate(full_roles)}
         # common_roles may have shrunk after NaN drop above
+        pre_filter_roles = list(common_roles)
         common_idx = np.array([role_to_idx[r] for r in common_roles
                                 if r in role_to_idx], dtype=int)
         common_roles = [r for r in common_roles if r in role_to_idx]
         repr_rdm = full_repr_rdm[np.ix_(common_idx, common_idx)]
         print(f"  repr_cos RDM sliced to {repr_rdm.shape[0]}×{repr_rdm.shape[1]}")
+        # Re-slice behavioral RDMs to match final common_roles (role_to_idx may have
+        # dropped roles not present in role_order.json, causing a size mismatch).
+        if len(common_roles) < len(pre_filter_roles):
+            beh_keep = np.array([i for i, r in enumerate(pre_filter_roles)
+                                  if r in set(common_roles)])
+            rdm_beh_s_corr  = rdm_beh_s_corr[np.ix_(beh_keep, beh_keep)]
+            rdm_beh_s_l2    = rdm_beh_s_l2[np.ix_(beh_keep, beh_keep)]
+            rdm_beh_aa_corr = rdm_beh_aa_corr[np.ix_(beh_keep, beh_keep)]
+            rdm_beh_aa_l2   = rdm_beh_aa_l2[np.ix_(beh_keep, beh_keep)]
+            print(f"  Re-sliced behavioral RDMs to {len(common_roles)} roles")
 
     # ── Cross-method comparisons ───────────────────────────────────────────────
     print(f"\nRunning Mantel tests (n_perm={N_PERM}) ...")

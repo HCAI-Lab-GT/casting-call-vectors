@@ -269,17 +269,22 @@ def fig7_score_distributions(aa_profiles: pd.DataFrame, steered_profiles: pd.Dat
             else:
                 data_per_alpha.append(np.array([]))
 
-        bp = ax.boxplot(
-            [d for d in data_per_alpha if len(d) > 0],
-            positions=[a for a, d in zip(ALPHAS, data_per_alpha) if len(d) > 0],
-            widths=0.2,
-            patch_artist=True,
-            boxprops=dict(facecolor=color, alpha=0.6),
-            medianprops=dict(color="black", linewidth=1.5),
-            whiskerprops=dict(linewidth=1),
-            capprops=dict(linewidth=1),
-            flierprops=dict(marker=".", markersize=3, alpha=0.3),
-        )
+        nonempty = [(a, d) for a, d in zip(ALPHAS, data_per_alpha) if len(d) > 0]
+        if not nonempty:
+            ax.text(0.5, 0.5, "No data", transform=ax.transAxes, ha="center", va="center")
+        else:
+            pos_plot, data_plot = zip(*nonempty)
+            ax.boxplot(
+                list(data_plot),
+                positions=list(pos_plot),
+                widths=0.2,
+                patch_artist=True,
+                boxprops=dict(facecolor=color, alpha=0.6),
+                medianprops=dict(color="black", linewidth=1.5),
+                whiskerprops=dict(linewidth=1),
+                capprops=dict(linewidth=1),
+                flierprops=dict(marker=".", markersize=3, alpha=0.3),
+            )
         ax.set_xlabel(r"Steering strength ($\alpha$)")
         ax.set_ylabel("Role alignment score (0–100)")
         ax.set_title(f"{method}\n(distribution across 275 roles)")

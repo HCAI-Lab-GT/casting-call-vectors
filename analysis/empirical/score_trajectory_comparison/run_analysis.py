@@ -49,7 +49,7 @@ def _auc(scores: np.ndarray) -> float:
     mask = np.isfinite(scores)
     if mask.sum() < 2:
         return float("nan")
-    return float(np.trapz(scores[mask], ALPHAS[mask]) / ALPHA_RANGE)
+    return float(np.trapezoid(scores[mask], ALPHAS[mask]) / ALPHA_RANGE)
 
 
 def _slope(scores: np.ndarray) -> float:
