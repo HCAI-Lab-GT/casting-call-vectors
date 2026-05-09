@@ -58,7 +58,7 @@ def apply_style() -> None:
 
 
 def legend_above(ax, ncol: int | None = None, **kwargs) -> None:
-    """Place legend centered above axes, no frame."""
+    """Place legend centered above axes (below title), no frame."""
     handles, labels = ax.get_legend_handles_labels()
     if not handles:
         return
@@ -72,6 +72,9 @@ def legend_above(ax, ncol: int | None = None, **kwargs) -> None:
         frameon=False,
         **kwargs,
     )
+    # Push the axes title above the out-of-axes legend (legend ~20–25 pt tall).
+    if ax.get_title():
+        ax.set_title(ax.get_title(), pad=32)
 
 
 def save_fig(fig, out_dir: Path, stem: str) -> None:
