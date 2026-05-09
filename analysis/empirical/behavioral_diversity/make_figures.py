@@ -14,6 +14,8 @@ Usage:
 from __future__ import annotations
 
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import matplotlib
 matplotlib.use("Agg")
@@ -22,40 +24,24 @@ import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 
-matplotlib.rcParams.update({
-    "font.family": "serif",
-    "font.size": 11,
-    "axes.titlesize": 12,
-    "axes.labelsize": 11,
-    "xtick.labelsize": 9,
-    "ytick.labelsize": 9,
-    "legend.fontsize": 9,
-    "axes.spines.top": False,
-    "axes.spines.right": False,
-    "axes.grid": True,
-    "grid.alpha": 0.3,
-    "grid.linestyle": "--",
-    "grid.linewidth": 0.5,
-    "savefig.bbox": "tight",
-    "savefig.dpi": 300,
-})
+import plot_style
+plot_style.apply_style()
+
+from plot_style import STEERED, AA, BASELINE, WIN, ACCENT, REPR, ALPHA_COLORS
+STEERED_COLOR = STEERED
+AXIS_COLOR = AA
+REPR_COLOR = REPR
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 OUT_DIR = Path(__file__).resolve().parent / "figures"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 ALPHAS = [1.0, 1.5, 2.0, 2.5]
-STEERED_COLOR = "#2ecc71"
-AXIS_COLOR = "#3498db"
-REPR_COLOR = "#e67e22"
 
 
 def _save(fig, name: str) -> None:
-    path = OUT_DIR / name
-    fig.savefig(path)
-    fig.savefig(str(path).replace(".pdf", ".png"))
-    plt.close(fig)
-    print(f"Saved: {path}")
+    stem = name.replace(".pdf", "").replace(".png", "")
+    plot_style.save_fig(fig, OUT_DIR, stem)
 
 
 # ── Figure 1: Effective rank vs alpha ─────────────────────────────────────────
@@ -73,7 +59,7 @@ def fig1_effective_rank(div: pd.DataFrame) -> None:
     for ax, col, subtitle in zip(
         axes,
         ["effective_rank", "effective_rank_raw"] if has_raw else ["effective_rank"],
-        ["z-scored (can inflate when variance collapses)", "raw / mean-centred (correct signal)"] if has_raw else ["z-scored"],
+        ["z-scored", "raw / mean-centred"] if has_raw else ["z-scored"],
     ):
         ax.plot(s.index, s[col], "-o", color=STEERED_COLOR,
                 linewidth=2, markersize=7, label="Steered (proposed)")
@@ -82,11 +68,11 @@ def fig1_effective_rank(div: pd.DataFrame) -> None:
         ax.set_xlabel(r"Steering strength ($\alpha$)")
         ax.set_ylabel("Effective rank")
         ax.set_xticks(ALPHAS)
-        ax.set_title(f"Effective rank — {subtitle}", fontsize=10)
-        ax.legend(fontsize=8)
+        ax.set_title(f"Effective rank — {subtitle}")
+        plot_style.legend_above(ax, ncol=2)
 
-    fig.suptitle("Behavioral diversity: effective rank of the 275-role behavioral matrix\n"
-                 "(higher = roles more diverse in behavior space)", y=1.02)
+    fig.suptitle("Behavioral diversity: effective rank of the 275-role behavioral matrix",
+                 y=1.02)
     plt.tight_layout()
     _save(fig, "fig1_effective_rank_vs_alpha.pdf")
 
@@ -106,7 +92,7 @@ def fig2_mean_pairwise_l2(div: pd.DataFrame) -> None:
     for ax, col, subtitle in zip(
         axes,
         ["mean_pairwise_l2", "mean_pairwise_l2_raw"] if has_raw else ["mean_pairwise_l2"],
-        ["z-scored (can inflate when variance collapses)", "raw / mean-centred (correct signal)"] if has_raw else ["z-scored"],
+        ["z-scored", "raw / mean-centred"] if has_raw else ["z-scored"],
     ):
         ax.plot(s.index, s[col], "-o", color=STEERED_COLOR,
                 linewidth=2, markersize=7, label="Steered (proposed)")
@@ -115,11 +101,10 @@ def fig2_mean_pairwise_l2(div: pd.DataFrame) -> None:
         ax.set_xlabel(r"Steering strength ($\alpha$)")
         ax.set_ylabel("Mean pairwise L2")
         ax.set_xticks(ALPHAS)
-        ax.set_title(f"Mean pairwise L2 — {subtitle}", fontsize=10)
-        ax.legend(fontsize=8)
+        ax.set_title(f"Mean pairwise L2 — {subtitle}")
+        plot_style.legend_above(ax, ncol=2)
 
-    fig.suptitle("Inter-role behavioral diversity: mean pairwise distance\n"
-                 "(higher = roles more spread out)", y=1.02)
+    fig.suptitle("Inter-role behavioral diversity: mean pairwise distance", y=1.02)
     plt.tight_layout()
     _save(fig, "fig2_mean_pairwise_l2_vs_alpha.pdf")
 
@@ -138,11 +123,8 @@ def fig3_score_std(div: pd.DataFrame) -> None:
     ax.set_xlabel(r"Steering strength ($\alpha$)")
     ax.set_ylabel("Std of role alignment score across roles (0–100)")
     ax.set_xticks(ALPHAS)
-    ax.set_title(
-        "Inter-role score variance: std of role alignment scores across 275 roles\n"
-        "(lower = roles converging; higher = roles preserving distinct signatures)"
-    )
-    ax.legend()
+    ax.set_title("Inter-role score variance across 275 roles")
+    plot_style.legend_above(ax, ncol=2)
     plt.tight_layout()
     _save(fig, "fig3_score_std_vs_alpha.pdf")
 
@@ -173,8 +155,8 @@ def fig4_diversity_panel(div: pd.DataFrame) -> None:
         ax.set_xlabel(r"$\alpha$")
         ax.set_ylabel(ylabel)
         ax.set_xticks(ALPHAS)
-        ax.set_title(f"{ylabel}\n{subtitle}", fontsize=10)
-        ax.legend(fontsize=8)
+        ax.set_title(ylabel)
+        plot_style.legend_above(ax, ncol=2)
 
     fig.suptitle("Behavioral diversity: steered vs. assistant axis across steering strengths",
                  y=1.02)
@@ -236,8 +218,7 @@ def fig5_rsa_comparison(rsa_df: pd.DataFrame) -> None:
     ax.set_xticks(range(len(labels)))
     ax.set_xticklabels(labels, fontsize=8)
     ax.set_ylabel("Mantel RSA (Spearman r)")
-    ax.set_title("Cross-method behavioral RSA\n"
-                 "(* p<0.05, ** p<0.01, *** p<0.001, Mantel permutation)")
+    ax.set_title("Cross-method behavioral RSA (* p<0.05, ** p<0.01, *** p<0.001)")
     plt.tight_layout()
     _save(fig, "fig5_rsa_comparison_bar.pdf")
 
@@ -265,11 +246,8 @@ def fig6_per_alpha_rsa(per_alpha_df: pd.DataFrame) -> None:
     ax.set_xlabel(r"Steering strength ($\alpha$)")
     ax.set_ylabel("Mantel RSA (Spearman r)")
     ax.set_xticks(ALPHAS)
-    ax.set_title(
-        "Geometry–behavior link per alpha: steered vs assistant axis\n"
-        r"RSA(repr_cos, beh_$\cdot$) — higher = geometry better predicts behavior"
-    )
-    ax.legend()
+    ax.set_title(r"Geometry–behavior link per $\alpha$: steered vs assistant axis")
+    plot_style.legend_above(ax, ncol=2)
     plt.tight_layout()
     _save(fig, "fig6_per_alpha_rsa_comparison.pdf")
 
@@ -309,7 +287,7 @@ def fig7_score_distributions(aa_profiles: pd.DataFrame, steered_profiles: pd.Dat
             )
         ax.set_xlabel(r"Steering strength ($\alpha$)")
         ax.set_ylabel("Role alignment score (0–100)")
-        ax.set_title(f"{method}\n(distribution across 275 roles)")
+        ax.set_title(f"{method}")
         ax.set_xticks(ALPHAS)
 
     fig.suptitle("Score distribution across roles: does spread collapse at high α?",

@@ -13,6 +13,8 @@ Usage:
 from __future__ import annotations
 
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import matplotlib
 matplotlib.use("Agg")
@@ -20,39 +22,23 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-matplotlib.rcParams.update({
-    "font.family": "serif",
-    "font.size": 11,
-    "axes.titlesize": 12,
-    "axes.labelsize": 11,
-    "xtick.labelsize": 9,
-    "ytick.labelsize": 9,
-    "legend.fontsize": 9,
-    "axes.spines.top": False,
-    "axes.spines.right": False,
-    "axes.grid": True,
-    "grid.alpha": 0.3,
-    "grid.linestyle": "--",
-    "grid.linewidth": 0.5,
-    "savefig.bbox": "tight",
-    "savefig.dpi": 300,
-})
+import plot_style
+plot_style.apply_style()
+
+from plot_style import STEERED, AA, BASELINE, WIN, ACCENT, REPR, ALPHA_COLORS
+STEERED_COLOR = STEERED
+AXIS_COLOR = AA
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 OUT_DIR = Path(__file__).resolve().parent / "figures"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 ALPHAS = [1.0, 1.5, 2.0, 2.5]
-STEERED_COLOR = "#2ecc71"
-AXIS_COLOR = "#3498db"
 
 
 def _save(fig, name: str) -> None:
-    path = OUT_DIR / name
-    fig.savefig(path)
-    fig.savefig(str(path).replace(".pdf", ".png"))
-    plt.close(fig)
-    print(f"Saved: {path}")
+    stem = name.replace(".pdf", "").replace(".png", "")
+    plot_style.save_fig(fig, OUT_DIR, stem)
 
 
 # ── Figure 1: AUC distribution ─────────────────────────────────────────────────
@@ -68,13 +54,12 @@ def fig1_auc_distribution(traj: pd.DataFrame) -> None:
             label=f"Steered  (mean={traj['steered_auc'].mean():.1f})", edgecolor="white")
     ax.hist(traj["aa_auc"], bins=bins, color=AXIS_COLOR, alpha=0.6,
             label=f"Assistant axis  (mean={traj['aa_auc'].mean():.1f})", edgecolor="white")
-    ax.axvline(traj["steered_auc"].mean(), color="darkgreen", linewidth=2, linestyle="--")
-    ax.axvline(traj["aa_auc"].mean(), color="darkblue", linewidth=2, linestyle="--")
+    ax.axvline(traj["steered_auc"].mean(), color=STEERED_COLOR, linewidth=2, linestyle="--")
+    ax.axvline(traj["aa_auc"].mean(), color=AXIS_COLOR, linewidth=2, linestyle="--")
     ax.set_xlabel("AUC of score vs alpha curve (normalised by alpha range)")
     ax.set_ylabel("Number of roles")
-    ax.set_title("Score trajectory AUC distribution across 275 roles\n"
-                 "(higher AUC = consistently high scores across alpha range)")
-    ax.legend()
+    ax.set_title("Score trajectory AUC distribution across 275 roles")
+    plot_style.legend_above(ax, ncol=2)
     plt.tight_layout()
     _save(fig, "fig1_auc_distribution.pdf")
 
@@ -95,7 +80,7 @@ def fig2_monotonicity_and_peak(traj: pd.DataFrame) -> None:
                 f"{rate:.1%}", ha="center", va="bottom", fontsize=11, fontweight="bold")
     ax.axhline(0.5, color="gray", linewidth=1, linestyle="--")
     ax.set_ylabel("Fraction of roles with monotonically increasing score")
-    ax.set_title("Monotonic improvement rate\n(score non-decreasing at every α step)")
+    ax.set_title("Monotonic improvement rate")
     ax.set_ylim(0, 1)
 
     # Right: peak alpha distribution stacked bar
@@ -113,8 +98,8 @@ def fig2_monotonicity_and_peak(traj: pd.DataFrame) -> None:
     ax.set_xticks(x)
     ax.set_xticklabels([f"α={a}" for a in ALPHAS])
     ax.set_ylabel("Fraction of roles")
-    ax.set_title("Peak alpha distribution\n(at which α does each role score highest?)")
-    ax.legend()
+    ax.set_title("Peak alpha distribution")
+    plot_style.legend_above(ax, ncol=2)
 
     fig.suptitle("Score trajectory shape: steered vs assistant axis", y=1.02)
     plt.tight_layout()
@@ -153,10 +138,10 @@ def fig3_mean_curves_by_peak(traj: pd.DataFrame, curves: pd.DataFrame) -> None:
         ax.set_ylabel("Mean role alignment score (0–100)")
         ax.set_title(label)
         ax.set_xticks(ALPHAS)
-        ax.legend(fontsize=8)
+        plot_style.legend_above(ax, ncol=2)
 
-    fig.suptitle("Mean score trajectories grouped by AA peak-alpha behaviour\n"
-                 "(shading = ±1 SEM)", y=1.02)
+    fig.suptitle("Mean score trajectories grouped by AA peak-alpha behaviour (shading = ±1 SEM)",
+                 y=1.02)
     plt.tight_layout()
     _save(fig, "fig3_mean_curves_by_peak_category.pdf")
 
@@ -174,14 +159,13 @@ def fig4_score_gain(traj: pd.DataFrame) -> None:
             label=f"Steered  (mean={traj['steered_gain'].mean():+.1f})", edgecolor="white")
     ax.hist(traj["aa_gain"], bins=bins, color=AXIS_COLOR, alpha=0.6,
             label=f"Assistant axis  (mean={traj['aa_gain'].mean():+.1f})", edgecolor="white")
-    ax.axvline(traj["steered_gain"].mean(), color="darkgreen", linewidth=2, linestyle="--")
-    ax.axvline(traj["aa_gain"].mean(), color="darkblue", linewidth=2, linestyle="--")
+    ax.axvline(traj["steered_gain"].mean(), color=STEERED_COLOR, linewidth=2, linestyle="--")
+    ax.axvline(traj["aa_gain"].mean(), color=AXIS_COLOR, linewidth=2, linestyle="--")
     ax.axvline(0, color="black", linewidth=1)
     ax.set_xlabel("Score gain: score(α=2.5) − score(α=1.0)")
     ax.set_ylabel("Number of roles")
-    ax.set_title("Score gain from low to high alpha: steered vs assistant axis\n"
-                 "(positive = improves with steering; negative = collapses)")
-    ax.legend()
+    ax.set_title("Score gain from low to high alpha: steered vs assistant axis")
+    plot_style.legend_above(ax, ncol=2)
     plt.tight_layout()
     _save(fig, "fig4_score_gain_distribution.pdf")
 
@@ -207,9 +191,8 @@ def fig5_slope_comparison(traj: pd.DataFrame) -> None:
     ax.axvline(0, color="black", linewidth=0.7)
     ax.set_xlabel("AA score slope (Δscore / Δα)")
     ax.set_ylabel("Steered score slope (Δscore / Δα)")
-    ax.set_title("Per-role score slope: steered vs assistant axis\n"
-                 "(above diagonal = steered has steeper positive slope)")
-    ax.legend(fontsize=8)
+    ax.set_title("Per-role score slope: steered vs assistant axis")
+    plot_style.legend_above(ax, ncol=1)
     pct_above = float((traj["steered_slope"] > traj["aa_slope"]).mean())
     ax.text(0.05, 0.95, f"{pct_above:.1%} of roles:\nsteered slope > AA slope",
             transform=ax.transAxes, fontsize=9, va="top",

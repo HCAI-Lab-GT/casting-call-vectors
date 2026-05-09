@@ -12,6 +12,8 @@ Usage:
 from __future__ import annotations
 
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import matplotlib
 matplotlib.use("Agg")
@@ -19,41 +21,25 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-matplotlib.rcParams.update({
-    "font.family": "serif",
-    "font.size": 11,
-    "axes.titlesize": 12,
-    "axes.labelsize": 11,
-    "xtick.labelsize": 9,
-    "ytick.labelsize": 9,
-    "legend.fontsize": 9,
-    "axes.spines.top": False,
-    "axes.spines.right": False,
-    "axes.grid": True,
-    "grid.alpha": 0.3,
-    "grid.linestyle": "--",
-    "grid.linewidth": 0.5,
-    "savefig.bbox": "tight",
-    "savefig.dpi": 300,
-})
+import plot_style
+plot_style.apply_style()
+
+from plot_style import STEERED, AA, BASELINE, WIN, ACCENT, REPR, ALPHA_COLORS
+STEERED_COLOR = STEERED
+AXIS_COLOR = AA
+BASELINE_COLOR = BASELINE
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 FIG_DIR = Path(__file__).resolve().parent / "figures"
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 ALPHAS = [1.0, 1.5, 2.0, 2.5]
-BASELINE = 89.0
-STEERED_COLOR = "#2ecc71"
-AXIS_COLOR = "#3498db"
-BASELINE_COLOR = "#e74c3c"
+BASELINE_SCORE = 89.0
 
 
 def _save(fig, name: str) -> None:
-    path = FIG_DIR / name
-    fig.savefig(path)
-    fig.savefig(str(path).replace(".pdf", ".png"))
-    plt.close(fig)
-    print(f"Saved: {path}")
+    stem = name.replace(".pdf", "").replace(".png", "")
+    plot_style.save_fig(fig, FIG_DIR, stem)
 
 
 def fig1_mean_gap_closed(summary: pd.DataFrame) -> None:
@@ -78,10 +64,9 @@ def fig1_mean_gap_closed(summary: pd.DataFrame) -> None:
 
     ax.set_xlabel(r"Steering strength ($\alpha$)")
     ax.set_ylabel("Mean fraction of gap to baseline closed")
-    ax.set_title("Gap-closing trajectory: how much of the gap to\n"
-                 "gold-standard performance does each method close?")
+    ax.set_title("Gap-closing trajectory: fraction of gap to gold-standard closed")
     ax.set_xticks(ALPHAS)
-    ax.legend()
+    plot_style.legend_above(ax, ncol=2)
     plt.tight_layout()
     _save(fig, "fig1_mean_gap_closed.pdf")
 
@@ -108,10 +93,9 @@ def fig2_distribution_at_peak(gap_df: pd.DataFrame) -> None:
         ax.set_title(label)
         ax.set_xlabel("Fraction of gap to baseline closed")
         ax.set_ylabel("Number of roles")
-        ax.legend(fontsize=8)
+        plot_style.legend_above(ax, ncol=3)
 
-    fig.suptitle("Gap-closing distribution at α=2.5 across 275 roles\n"
-                 "(0 = no progress, 1 = reached baseline, negative = moved away)",
+    fig.suptitle("Gap-closing distribution at α=2.5 across 275 roles",
                  y=1.02)
     plt.tight_layout()
     _save(fig, "fig2_gap_distribution_at_peak.pdf")
@@ -137,16 +121,15 @@ def fig3_absolute_score_trajectory(gap_df: pd.DataFrame) -> None:
                         sub["mean"] + sub["sem"],
                         color=color, alpha=0.15)
 
-    ax.axhline(BASELINE, color=BASELINE_COLOR, linewidth=2, linestyle="--",
-               label=f"Baseline (gold standard) = {BASELINE:.0f}")
+    ax.axhline(BASELINE_SCORE, color=BASELINE_COLOR, linewidth=2, linestyle="--",
+               label=f"Gold standard = {BASELINE_SCORE:.0f}")
 
     ax.set_xlabel(r"Steering strength ($\alpha$)")
     ax.set_ylabel("Mean role alignment score (0–100)")
-    ax.set_title("Score trajectory relative to gold-standard baseline\n"
-                 "(shading = ±1 SEM; 275 roles)")
+    ax.set_title("Score trajectory relative to gold-standard baseline (shading = ±1 SEM)")
     ax.set_xticks(ALPHAS)
     ax.set_ylim(0, 100)
-    ax.legend()
+    plot_style.legend_above(ax, ncol=3)
     plt.tight_layout()
     _save(fig, "fig3_absolute_score_vs_baseline.pdf")
 
@@ -182,8 +165,7 @@ def fig4_per_role_heatmap(gap_df: pd.DataFrame) -> None:
         fig.colorbar(im, ax=ax, shrink=0.5,
                      label="Gap-closed fraction\n(1=baseline, 0=no change, <0=worse)")
 
-    fig.suptitle("Per-role gap-closing fraction across all alphas\n"
-                 "(green = closing gap toward baseline; red = moving away)",
+    fig.suptitle("Per-role gap-closing fraction across all alphas",
                  y=1.01)
     plt.tight_layout()
     _save(fig, "fig4_per_role_heatmap.pdf")

@@ -11,6 +11,8 @@ Usage:
 from __future__ import annotations
 
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import matplotlib
 matplotlib.use("Agg")
@@ -18,41 +20,24 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-matplotlib.rcParams.update({
-    "font.family": "serif",
-    "font.size": 11,
-    "axes.titlesize": 12,
-    "axes.labelsize": 11,
-    "xtick.labelsize": 9,
-    "ytick.labelsize": 9,
-    "legend.fontsize": 9,
-    "axes.spines.top": False,
-    "axes.spines.right": False,
-    "axes.grid": True,
-    "grid.alpha": 0.3,
-    "grid.linestyle": "--",
-    "grid.linewidth": 0.5,
-    "savefig.bbox": "tight",
-    "savefig.dpi": 300,
-})
+import plot_style
+plot_style.apply_style()
+
+from plot_style import STEERED, AA, BASELINE, WIN, ACCENT, REPR, ALPHA_COLORS
+STEERED_COLOR = STEERED
+AXIS_COLOR = AA
+PERP_COLOR = REPR
+AA_VEC_COLOR = ACCENT
+REPR_COLOR = BASELINE
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 OUT_DIR = Path(__file__).resolve().parent / "figures"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-STEERED_COLOR = "#2ecc71"
-AXIS_COLOR = "#3498db"
-PERP_COLOR = "#9b59b6"
-AA_VEC_COLOR = "#e67e22"
-REPR_COLOR = "#95a5a6"
-
 
 def _save(fig, name: str) -> None:
-    path = OUT_DIR / name
-    fig.savefig(path)
-    fig.savefig(str(path).replace(".pdf", ".png"))
-    plt.close(fig)
-    print(f"Saved: {path}")
+    stem = name.replace(".pdf", "").replace(".png", "")
+    plot_style.save_fig(fig, OUT_DIR, stem)
 
 
 def _get(rsa_df: pd.DataFrame, rdm_a: str, rdm_b: str) -> tuple[float, float]:
@@ -108,8 +93,8 @@ def fig1_rsa_bars(rsa_df: pd.DataFrame) -> None:
     ax.set_xticks(range(len(labels)))
     ax.set_xticklabels(labels, fontsize=8)
     ax.set_ylabel("Mantel RSA (Spearman r)")
-    ax.set_title("RSA between geometric components and behavioral / representational RDMs\n"
-                 "(* p<0.05, ** p<0.01, *** p<0.001, Mantel permutation)")
+    ax.set_title("RSA between geometric components and behavioral / representational RDMs"
+                 " (* p<0.05, ** p<0.01, *** p<0.001)")
 
     ylim = ax.get_ylim()
     ax.text(1,   ylim[1] * 0.96, "v_⊥ (role-specific)", ha="center",
@@ -154,8 +139,7 @@ def fig2_differential_rsa(rsa_df: pd.DataFrame) -> None:
     ax.set_xticks(range(len(labels)))
     ax.set_xticklabels(labels, fontsize=9)
     ax.set_ylabel("ΔRSA (Spearman r)")
-    ax.set_title("Geometric subspace selectivity:\n"
-                 "does each component predict its method's behavior better?")
+    ax.set_title("Geometric subspace selectivity: does each component predict its method's behavior better?")
     plt.tight_layout()
     _save(fig, "fig2_differential_rsa.pdf")
 
@@ -197,8 +181,8 @@ def fig3_perp_vs_behavioral() -> None:
         ax.set_ylabel(beh_name)
         ax.set_title(f"v_⊥ RDM vs {beh_name.split()[0].lower()} behavioral RDM")
 
-    fig.suptitle("Do roles with similar role-specific residuals (v_⊥) behave similarly?\n"
-                 f"({min(5_000, len(perp_vec)):,} sampled role pairs)",
+    fig.suptitle(f"Do roles with similar role-specific residuals (v_⊥) behave similarly?"
+                 f"  ({min(5_000, len(perp_vec)):,} sampled role pairs)",
                  y=1.02)
     plt.tight_layout()
     _save(fig, "fig3_perp_vs_behavioral_scatter.pdf")

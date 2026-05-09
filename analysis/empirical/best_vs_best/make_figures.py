@@ -11,6 +11,8 @@ Usage:
 from __future__ import annotations
 
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import matplotlib
 matplotlib.use("Agg")
@@ -18,39 +20,22 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-matplotlib.rcParams.update({
-    "font.family": "serif",
-    "font.size": 11,
-    "axes.titlesize": 12,
-    "axes.labelsize": 11,
-    "xtick.labelsize": 9,
-    "ytick.labelsize": 9,
-    "legend.fontsize": 9,
-    "axes.spines.top": False,
-    "axes.spines.right": False,
-    "axes.grid": True,
-    "grid.alpha": 0.3,
-    "grid.linestyle": "--",
-    "grid.linewidth": 0.5,
-    "savefig.bbox": "tight",
-    "savefig.dpi": 300,
-})
+import plot_style
+plot_style.apply_style()
+
+from plot_style import STEERED, AA, BASELINE, WIN, ACCENT, REPR, ALPHA_COLORS
+STEERED_COLOR = STEERED
+AXIS_COLOR = AA
+ADV_COLOR = ACCENT
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 FIG_DIR = Path(__file__).resolve().parent / "figures"
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 
-STEERED_COLOR = "#2ecc71"
-AXIS_COLOR = "#3498db"
-ADV_COLOR = "#e67e22"
-
 
 def _save(fig, name: str) -> None:
-    path = FIG_DIR / name
-    fig.savefig(path)
-    fig.savefig(str(path).replace(".pdf", ".png"))
-    plt.close(fig)
-    print(f"Saved: {path}")
+    stem = name.replace(".pdf", "").replace(".png", "")
+    plot_style.save_fig(fig, FIG_DIR, stem)
 
 
 def fig1_peak_scatter(bvb: pd.DataFrame, stats: pd.DataFrame) -> None:
@@ -79,9 +64,8 @@ def fig1_peak_scatter(bvb: pd.DataFrame, stats: pd.DataFrame) -> None:
 
     ax.set_xlabel("AA peak score (best α for AA, 0–100)")
     ax.set_ylabel("Steered peak score (best α for steered, 0–100)")
-    ax.set_title("Best-vs-best: each method at its natural peak alpha\n"
-                 "(AA free to use α=1.5 if that's when it peaks)")
-    ax.legend()
+    ax.set_title("Best-vs-best: each method at its natural peak alpha")
+    plot_style.legend_above(ax, ncol=3)
     plt.tight_layout()
     _save(fig, "fig1_peak_scatter.pdf")
 
@@ -93,7 +77,7 @@ def fig2_advantage_histogram(bvb: pd.DataFrame) -> None:
     bins = np.linspace(adv.min() - 1, adv.max() + 1, 35)
     ax.hist(adv, bins=bins, color=ADV_COLOR, alpha=0.8, edgecolor="white")
     ax.axvline(0, color="black", linewidth=1.5, linestyle="--", label="No advantage")
-    ax.axvline(adv.mean(), color="darkred", linewidth=2,
+    ax.axvline(adv.mean(), color=BASELINE, linewidth=2,
                label=f"Mean = {adv.mean():+.1f}")
 
     win_pct = (adv > 0).mean()
@@ -103,9 +87,8 @@ def fig2_advantage_histogram(bvb: pd.DataFrame) -> None:
 
     ax.set_xlabel("Advantage: steered peak score − AA peak score")
     ax.set_ylabel("Number of roles")
-    ax.set_title("Distribution of best-vs-best advantage across 275 roles\n"
-                 "(both methods using their optimal alpha)")
-    ax.legend()
+    ax.set_title("Best-vs-best advantage across 275 roles")
+    plot_style.legend_above(ax, ncol=2)
     plt.tight_layout()
     _save(fig, "fig2_advantage_histogram.pdf")
 

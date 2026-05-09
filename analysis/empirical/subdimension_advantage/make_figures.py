@@ -12,6 +12,8 @@ Usage:
 from __future__ import annotations
 
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import matplotlib
 matplotlib.use("Agg")
@@ -21,31 +23,18 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-matplotlib.rcParams.update({
-    "font.family": "serif",
-    "font.size": 11,
-    "axes.titlesize": 12,
-    "axes.labelsize": 11,
-    "xtick.labelsize": 9,
-    "ytick.labelsize": 9,
-    "legend.fontsize": 9,
-    "axes.spines.top": False,
-    "axes.spines.right": False,
-    "axes.grid": True,
-    "grid.alpha": 0.3,
-    "grid.linestyle": "--",
-    "grid.linewidth": 0.5,
-    "savefig.bbox": "tight",
-    "savefig.dpi": 300,
-})
+import plot_style
+plot_style.apply_style()
+
+from plot_style import STEERED, AA, BASELINE, WIN, ACCENT, REPR, ALPHA_COLORS
+STEERED_COLOR = STEERED
+AXIS_COLOR = AA
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 OUT_DIR = Path(__file__).resolve().parent / "figures"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 ALPHAS = [1.0, 1.5, 2.0, 2.5]
-STEERED_COLOR = "#2ecc71"
-AXIS_COLOR = "#3498db"
 
 SUBDIM_LABELS = {
     "emotional_register":  "Emotional\nRegister",
@@ -58,11 +47,8 @@ SUBDIM_ORDER = list(SUBDIM_LABELS.keys())
 
 
 def _save(fig, name: str) -> None:
-    path = OUT_DIR / name
-    fig.savefig(path)
-    fig.savefig(str(path).replace(".pdf", ".png"))
-    plt.close(fig)
-    print(f"Saved: {path}")
+    stem = name.replace(".pdf", "").replace(".png", "")
+    plot_style.save_fig(fig, OUT_DIR, stem)
 
 
 # ── Figure 1: Grouped bar — steered vs AA mean score per subdim at α=2.5 ──────
@@ -82,11 +68,10 @@ def fig1_mean_scores_at_peak(summary: pd.DataFrame) -> None:
         ax.set_xticklabels([SUBDIM_LABELS[s] for s in SUBDIM_ORDER], fontsize=9)
         ax.set_ylabel("Mean judge score (0–100)")
         ax.set_title(f"α = {alpha}")
-        ax.legend(fontsize=8)
+        plot_style.legend_above(ax, ncol=2)
         ax.set_ylim(0, 80)
 
-    fig.suptitle("Mean sub-dimension scores: steered vs assistant axis\n"
-                 "Left: α=1.0 (low steering)  |  Right: α=2.5 (high steering)",
+    fig.suptitle("Mean sub-dimension scores: steered vs assistant axis",
                  y=1.02)
     plt.tight_layout()
     _save(fig, "fig1_mean_scores_per_subdim.pdf")
@@ -109,8 +94,7 @@ def fig2_advantage_heatmap(summary: pd.DataFrame) -> None:
     ax.set_xticklabels([SUBDIM_LABELS[s] for s in SUBDIM_ORDER], fontsize=9)
     ax.set_yticks(range(len(ALPHAS)))
     ax.set_yticklabels([f"α={a}" for a in ALPHAS])
-    ax.set_title("Sub-dimension advantage heatmap: steered − assistant axis\n"
-                 "(green = steered wins, red = AA wins)")
+    ax.set_title("Sub-dimension advantage heatmap: steered − assistant axis")
 
     for i, a in enumerate(ALPHAS):
         for j, sd in enumerate(SUBDIM_ORDER):
@@ -137,13 +121,12 @@ def fig3_variance_collapse(summary: pd.DataFrame) -> None:
                 "--s", color=AXIS_COLOR, linewidth=2, markersize=6, label="AA")
         ax.set_xticks(ALPHAS)
         ax.set_xlabel(r"$\alpha$")
-        ax.set_title(SUBDIM_LABELS[subdim], fontsize=10)
+        ax.set_title(SUBDIM_LABELS[subdim])
         if ax is axes[0]:
             ax.set_ylabel("Std across roles")
-            ax.legend(fontsize=7)
+            plot_style.legend_above(ax, ncol=2)
 
-    fig.suptitle("Sub-dimension score variance across roles: steered vs assistant axis\n"
-                 "(lower std = roles converging; higher std = roles staying distinct)",
+    fig.suptitle("Sub-dimension score variance across roles: steered vs assistant axis",
                  y=1.02)
     plt.tight_layout()
     _save(fig, "fig3_variance_collapse_per_subdim.pdf")
@@ -182,12 +165,11 @@ def fig4_geo_vs_subdim_advantage(long_df: pd.DataFrame, geo_corr: pd.DataFrame,
                     bbox=dict(boxstyle="round,pad=0.2", fc="white", alpha=0.7))
 
         ax.set_xlabel("perp_frac")
-        ax.set_title(SUBDIM_LABELS[subdim], fontsize=10)
+        ax.set_title(SUBDIM_LABELS[subdim])
         if ax is axes[0]:
             ax.set_ylabel("Advantage (steered − AA)")
 
-    fig.suptitle(f"Geometric role-specificity vs sub-dimension advantage at α={alpha}\n"
-                 "(perp_frac = fraction of role vector orthogonal to assistant axis)",
+    fig.suptitle(f"Geometric role-specificity vs sub-dimension advantage at α={alpha}",
                  y=1.02)
     plt.tight_layout()
     _save(fig, "fig4_geo_vs_subdim_advantage.pdf")
@@ -200,7 +182,6 @@ def fig5_win_rate(long_df: pd.DataFrame) -> None:
     x = np.arange(len(SUBDIM_ORDER))
     width = 0.18
     offsets = np.linspace(-(len(ALPHAS) - 1) / 2, (len(ALPHAS) - 1) / 2, len(ALPHAS)) * width
-    alpha_colors = {1.0: "#aed6f1", 1.5: "#5dade2", 2.0: "#2e86c1", 2.5: "#1a5276"}
 
     for i, alpha in enumerate(ALPHAS):
         rates = []
@@ -211,7 +192,7 @@ def fig5_win_rate(long_df: pd.DataFrame) -> None:
             else:
                 rates.append(float((sub["advantage"] > 0).mean()))
         ax.bar(x + offsets[i], rates, width * 0.9, label=f"α={alpha}",
-               color=alpha_colors[alpha], edgecolor="white", alpha=0.9)
+               color=ALPHA_COLORS[alpha], edgecolor="white", alpha=0.9)
 
     ax.axhline(0.5, color="black", linewidth=1, linestyle="--", label="50% (tie)")
     ax.set_xticks(x)
@@ -219,7 +200,7 @@ def fig5_win_rate(long_df: pd.DataFrame) -> None:
     ax.set_ylabel("Fraction of roles where steered > AA")
     ax.set_ylim(0, 1)
     ax.set_title("Win rate per sub-dimension: fraction of roles where steered beats AA")
-    ax.legend(fontsize=8)
+    plot_style.legend_above(ax, ncol=5)
     plt.tight_layout()
     _save(fig, "fig5_win_rate_per_subdim.pdf")
 

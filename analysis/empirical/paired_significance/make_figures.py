@@ -12,6 +12,8 @@ Usage:
 from __future__ import annotations
 
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import matplotlib
 matplotlib.use("Agg")
@@ -19,40 +21,24 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-matplotlib.rcParams.update({
-    "font.family": "serif",
-    "font.size": 11,
-    "axes.titlesize": 12,
-    "axes.labelsize": 11,
-    "xtick.labelsize": 9,
-    "ytick.labelsize": 9,
-    "legend.fontsize": 9,
-    "axes.spines.top": False,
-    "axes.spines.right": False,
-    "axes.grid": True,
-    "grid.alpha": 0.3,
-    "grid.linestyle": "--",
-    "grid.linewidth": 0.5,
-    "savefig.bbox": "tight",
-    "savefig.dpi": 300,
-})
+import plot_style
+plot_style.apply_style()
+
+from plot_style import STEERED, AA, BASELINE, WIN, ACCENT, REPR, ALPHA_COLORS
+STEERED_COLOR = STEERED
+AXIS_COLOR = AA
+ADV_COLOR = ACCENT
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 FIG_DIR = Path(__file__).resolve().parent / "figures"
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 ALPHAS = [1.0, 1.5, 2.0, 2.5]
-STEERED_COLOR = "#2ecc71"
-AXIS_COLOR = "#3498db"
-ADV_COLOR = "#e67e22"
 
 
 def _save(fig, name: str) -> None:
-    path = FIG_DIR / name
-    fig.savefig(path)
-    fig.savefig(str(path).replace(".pdf", ".png"))
-    plt.close(fig)
-    print(f"Saved: {path}")
+    stem = name.replace(".pdf", "").replace(".png", "")
+    plot_style.save_fig(fig, FIG_DIR, stem)
 
 
 def fig1_bootstrap_ci(boot: pd.DataFrame, tests: pd.DataFrame) -> None:
@@ -70,15 +56,14 @@ def fig1_bootstrap_ci(boot: pd.DataFrame, tests: pd.DataFrame) -> None:
                 fmt="none", color="black", capsize=6, linewidth=2, zorder=4)
 
     for alpha, lo, hi, mean in zip(alphas, los, his, means):
-        color = "darkgreen" if lo > 0 else "darkred"
+        color = WIN if lo > 0 else "#B2182B"
         ax.text(alpha, hi + 1.5, f"[{lo:+.1f}, {hi:+.1f}]",
                 ha="center", va="bottom", fontsize=8, color=color)
 
     ax.axhline(0, color="black", linewidth=1.2)
     ax.set_xlabel(r"Steering strength ($\alpha$)")
     ax.set_ylabel("Mean advantage (steered − AA score)")
-    ax.set_title("Bootstrap 95% CI on mean steered − AA advantage\n"
-                 "(n=275 roles, 10,000 bootstrap resamples per alpha)")
+    ax.set_title("Bootstrap 95% CI on mean steered − AA advantage (n=275 roles)")
     ax.set_xticks(alphas)
     ax.set_xticklabels([f"α={a}" for a in alphas])
 
@@ -118,8 +103,7 @@ def fig2_advantage_distributions(per_role: pd.DataFrame) -> None:
     ax.axhline(0, color="black", linewidth=1.2, linestyle="--")
     ax.set_xlabel(r"Steering strength ($\alpha$)")
     ax.set_ylabel("Advantage (steered − AA score, 0–100)")
-    ax.set_title("Per-role advantage distribution at each alpha\n"
-                 "(275 roles; positive = steered wins)")
+    ax.set_title("Per-role advantage distribution at each alpha (275 roles)")
     ax.set_xticks(ALPHAS)
     ax.set_xticklabels([f"α={a}" for a in ALPHAS])
     plt.tight_layout()
@@ -132,7 +116,7 @@ def fig3_win_rate(tests: pd.DataFrame) -> None:
     alphas = tests["alpha"].tolist()
     win_rates = tests["win_rate"].tolist()
 
-    bars = ax.bar(alphas, win_rates, width=0.3, color=STEERED_COLOR,
+    bars = ax.bar(alphas, win_rates, width=0.3, color=WIN,
                   alpha=0.85, edgecolor="white")
     for bar, rate in zip(bars, win_rates):
         ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,
@@ -141,11 +125,11 @@ def fig3_win_rate(tests: pd.DataFrame) -> None:
     ax.axhline(0.5, color="gray", linewidth=1.2, linestyle="--", label="50% (chance)")
     ax.set_xlabel(r"Steering strength ($\alpha$)")
     ax.set_ylabel("Fraction of roles where steered > AA")
-    ax.set_title("Win rate: fraction of 275 roles where steered beats AA\nat each alpha")
+    ax.set_title("Win rate: fraction of 275 roles where steered beats AA")
     ax.set_xticks(alphas)
     ax.set_xticklabels([f"α={a}" for a in alphas])
     ax.set_ylim(0, 1.1)
-    ax.legend()
+    plot_style.legend_above(ax, ncol=1)
     plt.tight_layout()
     _save(fig, "fig3_win_rate.pdf")
 
@@ -159,7 +143,7 @@ def fig4_effect_size(tests: pd.DataFrame) -> None:
 
     bars = ax.bar(alphas, rs, width=0.3, color=ADV_COLOR, alpha=0.85, edgecolor="white")
 
-    thresholds = [(0.5, "large", "darkgreen"), (0.3, "medium", "olive"), (0.1, "small", "gray")]
+    thresholds = [(0.5, "large", WIN), (0.3, "medium", "olive"), (0.1, "small", "gray")]
     for thresh, label, color in thresholds:
         ax.axhline(thresh, color=color, linewidth=1, linestyle="--",
                    label=f"r={thresh} ({label} effect)")
@@ -171,12 +155,11 @@ def fig4_effect_size(tests: pd.DataFrame) -> None:
 
     ax.set_xlabel(r"Steering strength ($\alpha$)")
     ax.set_ylabel("Effect size r (Wilcoxon signed-rank)")
-    ax.set_title("Effect size of steered > AA advantage at each alpha\n"
-                 "(r = Z / √N, n=275 roles)")
+    ax.set_title("Effect size of steered > AA advantage per alpha (n=275 roles)")
     ax.set_xticks(alphas)
     ax.set_xticklabels([f"α={a}" for a in alphas])
     ax.set_ylim(0, max(rs) * 1.35)
-    ax.legend(fontsize=8)
+    plot_style.legend_above(ax, ncol=3)
     plt.tight_layout()
     _save(fig, "fig4_effect_size.pdf")
 

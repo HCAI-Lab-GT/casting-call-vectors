@@ -12,6 +12,8 @@ Usage:
 from __future__ import annotations
 
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import matplotlib
 matplotlib.use("Agg")
@@ -19,23 +21,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-matplotlib.rcParams.update({
-    "font.family": "serif",
-    "font.size": 11,
-    "axes.titlesize": 12,
-    "axes.labelsize": 11,
-    "xtick.labelsize": 9,
-    "ytick.labelsize": 9,
-    "legend.fontsize": 9,
-    "axes.spines.top": False,
-    "axes.spines.right": False,
-    "axes.grid": True,
-    "grid.alpha": 0.3,
-    "grid.linestyle": "--",
-    "grid.linewidth": 0.5,
-    "savefig.bbox": "tight",
-    "savefig.dpi": 300,
-})
+import plot_style
+plot_style.apply_style()
+
+from plot_style import STEERED, AA, BASELINE, WIN, ACCENT, REPR, ALPHA_COLORS
+STEERED_COLOR = STEERED
+AXIS_COLOR = AA
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 FIG_DIR = Path(__file__).resolve().parent / "figures"
@@ -46,16 +37,11 @@ SUBDIMS = ["emotional_register", "vocab_choice", "social_dynamic",
            "motivation", "worldview_alignment"]
 SUBDIM_LABELS = ["Emotional\nRegister", "Vocab\nChoice", "Social\nDynamic",
                  "Motivation", "Worldview\nAlignment"]
-STEERED_COLOR = "#2ecc71"
-AXIS_COLOR = "#3498db"
 
 
 def _save(fig, name: str) -> None:
-    path = FIG_DIR / name
-    fig.savefig(path)
-    fig.savefig(str(path).replace(".pdf", ".png"))
-    plt.close(fig)
-    print(f"Saved: {path}")
+    stem = name.replace(".pdf", "").replace(".png", "")
+    plot_style.save_fig(fig, FIG_DIR, stem)
 
 
 def fig1_mean_intercorr(mean_df: pd.DataFrame) -> None:
@@ -75,11 +61,10 @@ def fig1_mean_intercorr(mean_df: pd.DataFrame) -> None:
 
     ax.set_xlabel(r"Steering strength ($\alpha$)")
     ax.set_ylabel("Mean |Spearman r| between subdimensions")
-    ax.set_title("Subdimension inter-correlation vs steering strength\n"
-                 "(higher = behavioural dimensions collapsing toward one)")
+    ax.set_title("Subdimension inter-correlation vs steering strength")
     ax.set_xticks(ALPHAS)
     ax.set_ylim(0, 1.05)
-    ax.legend()
+    plot_style.legend_above(ax, ncol=2)
     plt.tight_layout()
     _save(fig, "fig1_mean_intercorrelation.pdf")
 
@@ -102,11 +87,10 @@ def fig2_pc1_variance(mean_df: pd.DataFrame) -> None:
     ax.axhline(1.0, color="gray", linewidth=1, linestyle=":", label="Total collapse (PC1=100%)")
     ax.set_xlabel(r"Steering strength ($\alpha$)")
     ax.set_ylabel("Fraction of variance in PC1")
-    ax.set_title("PC1 variance fraction: how much is behavioural space 1-dimensional?\n"
-                 "(1.0 = all subdimensions collapsed to a single axis)")
+    ax.set_title("PC1 variance fraction: how 1-dimensional is the behavioral space?")
     ax.set_xticks(ALPHAS)
     ax.set_ylim(0, 1.1)
-    ax.legend()
+    plot_style.legend_above(ax, ncol=3)
     plt.tight_layout()
     _save(fig, "fig2_pc1_variance.pdf")
 
@@ -132,7 +116,7 @@ def fig3_corr_matrices(corr_df: pd.DataFrame) -> None:
         ax.set_yticks(range(5))
         ax.set_xticklabels(SUBDIM_LABELS, fontsize=8)
         ax.set_yticklabels(SUBDIM_LABELS, fontsize=8)
-        ax.set_title(title, fontsize=11)
+        ax.set_title(title)
 
         for i in range(5):
             for j in range(5):
@@ -142,8 +126,7 @@ def fig3_corr_matrices(corr_df: pd.DataFrame) -> None:
 
         fig.colorbar(im, ax=ax, shrink=0.8)
 
-    fig.suptitle("Subdimension Spearman correlation matrices across 275 roles\n"
-                 "(green = positively correlated; collapse = all cells turn dark green)",
+    fig.suptitle("Subdimension Spearman correlation matrices across 275 roles",
                  y=1.01)
     plt.tight_layout()
     _save(fig, "fig3_corr_matrices.pdf")
@@ -170,9 +153,9 @@ def fig4_summary_panel(mean_df: pd.DataFrame) -> None:
 
         ax.set_xlabel(r"Steering strength ($\alpha$)")
         ax.set_ylabel(ylabel)
-        ax.set_title(f"{title_suffix}\nvs steering strength (275 roles)")
+        ax.set_title(title_suffix)
         ax.set_xticks(ALPHAS)
-        ax.legend()
+        plot_style.legend_above(ax, ncol=2)
 
     fig.suptitle("Subdimension correlation collapse: does AA's behavioural space "
                  "fuse into a single dimension?", y=1.02)

@@ -14,6 +14,8 @@ Usage:
 from __future__ import annotations
 
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import matplotlib
 matplotlib.use("Agg")
@@ -23,32 +25,18 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-matplotlib.rcParams.update({
-    "font.family": "serif",
-    "font.size": 11,
-    "axes.titlesize": 12,
-    "axes.labelsize": 11,
-    "xtick.labelsize": 9,
-    "ytick.labelsize": 9,
-    "legend.fontsize": 9,
-    "axes.spines.top": False,
-    "axes.spines.right": False,
-    "axes.grid": True,
-    "grid.alpha": 0.3,
-    "grid.linestyle": "--",
-    "grid.linewidth": 0.5,
-    "savefig.bbox": "tight",
-    "savefig.dpi": 300,
-})
+import plot_style
+plot_style.apply_style()
+
+from plot_style import STEERED, AA, BASELINE, WIN, ACCENT, REPR, ALPHA_COLORS
+STEERED_COLOR = STEERED
+AXIS_COLOR = AA
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 OUT_DIR = Path(__file__).resolve().parent / "figures"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 ALPHAS = [1.0, 1.5, 2.0, 2.5]
-ALPHA_COLORS = {1.0: "#aed6f1", 1.5: "#5dade2", 2.0: "#2e86c1", 2.5: "#1a5276"}
-STEERED_COLOR = "#2ecc71"
-AXIS_COLOR = "#3498db"
 
 GEO_FEATURE_LABELS = {
     "angle_deg": "Angle between v_i and d_aa (°)",
@@ -71,11 +59,8 @@ def _annotate_r(ax, x, y, fontsize=9):
 
 
 def _save(fig, name: str) -> None:
-    path = OUT_DIR / name
-    fig.savefig(path)
-    fig.savefig(str(path).replace(".pdf", ".png"))
-    plt.close(fig)
-    print(f"Saved: {path}")
+    stem = name.replace(".pdf", "").replace(".png", "")
+    plot_style.save_fig(fig, OUT_DIR, stem)
 
 
 # ── Figure 1: cos(v_i, d_aa) distribution ─────────────────────────────────────
@@ -89,29 +74,27 @@ def fig1_cos_distribution(df: pd.DataFrame, consistency: pd.DataFrame) -> None:
     ax = axes[0]
     cos_vals = df["cos_with_daa"].dropna().abs()
     ax.hist(cos_vals, bins=30, color=STEERED_COLOR, edgecolor="white", alpha=0.85)
-    ax.axvline(cos_vals.mean(), color="darkgreen", linewidth=1.8, linestyle="--",
+    ax.axvline(cos_vals.mean(), color=BASELINE, linewidth=1.8, linestyle="--",
                label=f"Mean = {cos_vals.mean():.3f}")
     ax.set_xlabel("|cos(v_i, d_aa)|  [proposed vector vs assistant axis direction]")
     ax.set_ylabel("Number of roles")
-    ax.set_title("Alignment of proposed vectors with d_aa\n(near 0 = nearly orthogonal to assistant axis)")
-    ax.legend()
+    ax.set_title("Alignment of proposed vectors with d_aa")
+    plot_style.legend_above(ax, ncol=1)
 
     # Right: cos(v_aa_i, d_aa) — internal consistency check
     ax = axes[1]
     cos_aa = consistency["cos_with_daa"].dropna()
     ax.hist(cos_aa, bins=30, color=AXIS_COLOR, edgecolor="white", alpha=0.85)
-    ax.axvline(cos_aa.mean(), color="darkblue", linewidth=1.8, linestyle="--",
+    ax.axvline(cos_aa.mean(), color=BASELINE, linewidth=1.8, linestyle="--",
                label=f"Mean = {cos_aa.mean():.3f}")
     ax.set_xlabel("cos(v_aa_i, d_aa)  [per-role AA vector vs d_aa direction]")
     ax.set_ylabel("Number of roles")
     ax.set_title("AA vector consistency with global d_aa")
-    ax.legend()
+    plot_style.legend_above(ax, ncol=1)
 
     fig.suptitle(
-        "Cosine similarity distributions\n"
-        "Left: |cos(v_i, d_aa)| for proposed vectors — small = mostly orthogonal to assistant axis  |  "
-        "Right: cos(v_aa_i, d_aa) for AA vectors (sanity check)",
-        y=1.02, fontsize=11,
+        "Cosine similarity distributions: proposed vectors vs assistant axis",
+        y=1.02,
     )
     plt.tight_layout()
     _save(fig, "fig1_cos_distribution.pdf")
@@ -145,7 +128,7 @@ def _scatter_vs_advantage(df: pd.DataFrame, feature: str, feat_label: str,
         ax.set_xlabel(feat_label)
         ax.set_ylabel("Score advantage\n(steered − assistant axis)")
 
-    fig.suptitle(f"{title_prefix}\nScore advantage = steered_score − assistant_axis_score", y=1.01)
+    fig.suptitle(title_prefix, y=1.01)
     plt.tight_layout()
     _save(fig, fname)
 
@@ -194,7 +177,7 @@ def fig4_decomp_scatter(df: pd.DataFrame) -> None:
 
     ax.set_xlabel("Parallel component ‖v_∥‖  (along d_aa, captured by assistant axis)")
     ax.set_ylabel("Perpendicular component ‖v_⊥‖  (role-specific, discarded by assistant axis)")
-    ax.set_title("Decomposition of role vectors: v_i = v_∥ + v_⊥\nColored by score advantage at α=2.5")
+    ax.set_title("Decomposition of role vectors: v_i = v_∥ + v_⊥")
     ax.set_xlim(0, max_norm)
     ax.set_ylim(0, max_norm)
     plt.tight_layout()
@@ -229,10 +212,9 @@ def fig5_correlation_summary(corr_df: pd.DataFrame) -> None:
         ax.set_title(f"{ylabel} of geometric features vs score advantage")
         ax.set_ylim(-0.5, 0.7)
         if ax is axes[0]:
-            ax.legend(fontsize=8, loc="upper left")
+            plot_style.legend_above(ax, ncol=2)
 
-    fig.suptitle("Geometric decomposition correlates with score advantage\n"
-                 "(steered − assistant axis, per-role means)", y=1.02)
+    fig.suptitle("Geometric decomposition correlates with score advantage", y=1.02)
     plt.tight_layout()
     _save(fig, "fig5_correlation_summary.pdf")
 
@@ -243,17 +225,14 @@ def fig6_perpfrac_distribution(df: pd.DataFrame) -> None:
     fig, ax = plt.subplots(figsize=(7, 4.5))
     vals = df["perp_frac"].dropna()
     ax.hist(vals, bins=30, color=STEERED_COLOR, edgecolor="white", alpha=0.85)
-    ax.axvline(vals.mean(), color="darkgreen", linewidth=1.8, linestyle="--",
+    ax.axvline(vals.mean(), color=BASELINE, linewidth=1.8, linestyle="--",
                label=f"Mean = {vals.mean():.3f}")
-    ax.axvline(vals.median(), color="green", linewidth=1.2, linestyle=":",
+    ax.axvline(vals.median(), color=BASELINE, linewidth=1.2, linestyle=":",
                label=f"Median = {vals.median():.3f}")
     ax.set_xlabel("Perpendicular fraction ‖v_⊥‖ / ‖v_i‖")
     ax.set_ylabel("Number of roles")
-    ax.set_title(
-        "Role-specific fraction of each proposed vector\n"
-        "(fraction the assistant axis cannot replicate)"
-    )
-    ax.legend()
+    ax.set_title("Role-specific fraction of each proposed vector")
+    plot_style.legend_above(ax, ncol=2)
     plt.tight_layout()
     _save(fig, "fig6_perpfrac_distribution.pdf")
 
