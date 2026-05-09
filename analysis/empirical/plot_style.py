@@ -15,23 +15,11 @@ REPR     = "#762A83"   # purple     — representational geometry
 ALPHA_COLORS = {1.0: "#C6DBEF", 1.5: "#6BAED6", 2.0: "#2171B5", 2.5: "#08306B"}
 
 _STYLE = {
-    # True LaTeX rendering via pdflatex → Computer Modern fonts
-    "text.usetex":          True,
-    "text.latex.preamble": (
-        r"\usepackage{amsmath}"
-        r"\usepackage{amssymb}"
-        r"\usepackage[utf8]{inputenc}"
-        r"\DeclareUnicodeCharacter{00B1}{\ensuremath{\pm}}"       # ±
-        r"\DeclareUnicodeCharacter{2016}{\ensuremath{\Vert}}"     # ‖
-        r"\DeclareUnicodeCharacter{27C2}{\ensuremath{\perp}}"     # ⊥
-        r"\DeclareUnicodeCharacter{2225}{\ensuremath{\parallel}}" # ∥
-        r"\DeclareUnicodeCharacter{2013}{--}"                     # en dash –
-        r"\DeclareUnicodeCharacter{2212}{\ensuremath{-}}"         # minus −
-        r"\DeclareUnicodeCharacter{03B1}{\ensuremath{\alpha}}"    # α
-        r"\DeclareUnicodeCharacter{03C1}{\ensuremath{\rho}}"      # ρ
-        r"\DeclareUnicodeCharacter{00D7}{\ensuremath{\times}}"    # ×
-    ),
+    # Computer Modern math via matplotlib's built-in mathtext engine
+    # (no LaTeX install required; looks identical to usetex for math symbols)
+    "mathtext.fontset":     "cm",
     "font.family":          "serif",
+    "font.serif":           ["DejaVu Serif"],
     "font.size":            10,
     "axes.titlesize":       11,
     "axes.labelsize":       10,
@@ -40,7 +28,7 @@ _STYLE = {
     "legend.fontsize":      9,
     "legend.frameon":       False,
     "legend.borderaxespad": 0.0,
-    "figure.dpi":           100,
+    "figure.dpi":           150,
     "savefig.dpi":          300,
     "savefig.bbox":         "tight",
     "savefig.pad_inches":   0.05,
