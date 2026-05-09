@@ -22,12 +22,20 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy import stats
 from sklearn.decomposition import PCA
+
+import plot_style
+plot_style.apply_style()
+from plot_style import STEERED, AA, BASELINE, WIN, ACCENT, REPR, ALPHA_COLORS
 
 OUT_DIR = Path(__file__).resolve().parent
 DATA_DIR = OUT_DIR / "data"
@@ -36,18 +44,10 @@ FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 ALPHAS = [1.0, 1.5, 2.0, 2.5]
 
-plt.rcParams.update(
-    {
-        "figure.dpi": 130,
-        "savefig.dpi": 160,
-        "savefig.bbox": "tight",
-        "font.size": 10,
-        "axes.titlesize": 11,
-        "axes.labelsize": 10,
-        "axes.spines.top": False,
-        "axes.spines.right": False,
-    }
-)
+
+def _save(fig, name: str) -> None:
+    stem = name.replace(".pdf", "").replace(".png", "")
+    plot_style.save_fig(fig, FIG_DIR, stem)
 
 
 def upper_tri(rdm: np.ndarray) -> np.ndarray:
@@ -96,8 +96,7 @@ def fig1_rdms_side_by_side() -> None:
         "Shared block structure -> the geometry predicts behavior.",
         fontsize=11,
     )
-    fig.savefig(FIG_DIR / "fig1_rdms_side_by_side.png")
-    plt.close(fig)
+    _save(fig, "fig1_rdms_side_by_side")
 
 
 def fig2_pairwise_scatter() -> None:
@@ -123,8 +122,7 @@ def fig2_pairwise_scatter() -> None:
     ax.set_ylabel("pairwise behavioral distance (1 - corr on 24-d profile)")
     ax.set_title(f"All {len(x):,} role pairs   |   Spearman r = {rho:+.3f}")
     ax.legend(loc="upper left", frameon=False)
-    fig.savefig(FIG_DIR / "fig2_pairwise_distance_scatter.png")
-    plt.close(fig)
+    _save(fig, "fig2_pairwise_distance_scatter")
 
 
 def fig3_mantel_null() -> None:
@@ -152,33 +150,36 @@ def fig3_mantel_null() -> None:
     axes[0].set_ylabel("count of permutations")
     fig.suptitle("Mantel null distributions — bigger gap = stronger geometry-behavior link",
                  fontsize=11)
-    fig.savefig(FIG_DIR / "fig3_mantel_null.png")
-    plt.close(fig)
+    _save(fig, "fig3_mantel_null")
 
 
 def fig4_rsa_per_alpha() -> None:
     df = pd.read_csv(DATA_DIR / "rsa_per_alpha.csv")
-    fig, ax = plt.subplots(figsize=(7, 4.5))
+    fig, ax = plt.subplots(figsize=(8, 5))
     width = 0.35
     xs = np.arange(len(ALPHAS))
-    for i, beh in enumerate(["beh_corr", "beh_l2"]):
+    colors = [STEERED, ACCENT]
+    behs = ["beh_corr", "beh_l2"]
+    # Stagger annotation heights: corr labels sit just above bar,
+    # l2 labels sit higher to prevent overlap between adjacent bars.
+    offsets = [0.005, 0.025]
+    for i, (beh, color, voff) in enumerate(zip(behs, colors, offsets)):
         sub = df[df["beh_distance"] == beh].sort_values("alpha")
         ax.bar(xs + (i - 0.5) * width, sub["rsa_spearman"].values,
-               width=width, label=beh,
-               color=["#3b82f6", "#f59e0b"][i], edgecolor="white")
+               width=width, label=beh, color=color, edgecolor="white", alpha=0.9)
         for x, r, p in zip(xs + (i - 0.5) * width,
-                           sub["rsa_spearman"].values,
-                           sub["mantel_p"].values):
-            ax.text(x, r + 0.005, f"{r:+.3f}\np={p:.0e}",
-                    ha="center", va="bottom", fontsize=7)
+                            sub["rsa_spearman"].values,
+                            sub["mantel_p"].values):
+            sig = "***" if p < 0.001 else ("**" if p < 0.01 else "*")
+            ax.text(x, r + voff, f"{r:+.3f} {sig}",
+                    ha="center", va="bottom", fontsize=8)
     ax.axhline(0, color="k", lw=0.5)
     ax.set_xticks(xs)
-    ax.set_xticklabels([f"alpha={a}" for a in ALPHAS])
-    ax.set_ylabel("RSA Spearman r  (vs RDM_repr_cos)")
-    ax.set_title("Per-alpha behavioral RSA — does the link strengthen as you steer harder?")
-    ax.legend(frameon=False)
-    fig.savefig(FIG_DIR / "fig4_rsa_per_alpha.png")
-    plt.close(fig)
+    ax.set_xticklabels([fr"$\alpha={a}$" for a in ALPHAS])
+    ax.set_ylabel(r"RSA Spearman $r$ (vs.\ repr$_{\cos}$ RDM)")
+    ax.set_title("Per-alpha behavioral RSA")
+    plot_style.legend_above(ax, ncol=2)
+    _save(fig, "fig4_rsa_per_alpha")
 
 
 def fig5_distance_grid() -> None:
@@ -200,8 +201,7 @@ def fig5_distance_grid() -> None:
                     ha="center", va="center", color="black", fontsize=9)
     ax.set_title("RSA across distance choices")
     fig.colorbar(im, ax=ax, shrink=0.7, label="Spearman r")
-    fig.savefig(FIG_DIR / "fig5_rsa_distance_grid.png")
-    plt.close(fig)
+    _save(fig, "fig5_rsa_distance_grid")
 
 
 def fig6_partial_rsa() -> None:
@@ -223,8 +223,7 @@ def fig6_partial_rsa() -> None:
     ax.set_title("Does the geometry-behavior link survive controlling for vector norm?")
     ax.legend(frameon=False)
     ax.axhline(0, color="k", lw=0.5)
-    fig.savefig(FIG_DIR / "fig6_partial_rsa.png")
-    plt.close(fig)
+    _save(fig, "fig6_partial_rsa")
 
 
 def fig7_summary_panel() -> None:
@@ -310,8 +309,7 @@ def fig7_summary_panel() -> None:
     fig.colorbar(im, ax=ax, shrink=0.7)
 
     fig.suptitle("Representational vs Behavioral RSA on 275 roles", fontsize=13)
-    fig.savefig(FIG_DIR / "fig7_summary_panel.png")
-    plt.close(fig)
+    _save(fig, "fig7_summary_panel")
 
 
 def main() -> None:
