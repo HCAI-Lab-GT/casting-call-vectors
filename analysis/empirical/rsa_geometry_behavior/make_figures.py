@@ -155,12 +155,12 @@ def fig3_mantel_null() -> None:
 
 def fig4_rsa_per_alpha() -> None:
     df = pd.read_csv(DATA_DIR / "rsa_per_alpha.csv")
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(8, 5.5))
     width = 0.35
     xs = np.arange(len(ALPHAS))
     colors = [STEERED, ACCENT]
     behs = ["beh_corr", "beh_l2"]
-    voff = 0.004
+    voff = 0.004  # same gap above bar top for both series
     for i, (beh, color) in enumerate(zip(behs, colors)):
         sub = df[df["beh_distance"] == beh].sort_values("alpha")
         ax.bar(xs + (i - 0.5) * width, sub["rsa_spearman"].values,
@@ -169,20 +169,24 @@ def fig4_rsa_per_alpha() -> None:
                             sub["rsa_spearman"].values,
                             sub["mantel_p"].values):
             sig = "***" if p < 0.001 else ("**" if p < 0.01 else ("*" if p < 0.05 else ""))
-            # r value on one line, sig stars on the next — stays within bar width
             label = f"{r:+.3f}\n{sig}" if sig else f"{r:+.3f}"
             ax.text(x, r + voff, label,
                     ha="center", va="bottom", fontsize=7, linespacing=1.1)
+    # give enough headroom above tallest bar so text isn't clipped
+    ymax = df["rsa_spearman"].max()
+    ax.set_ylim(bottom=0, top=ymax * 1.30)
     ax.axhline(0, color="k", lw=0.5)
     ax.set_xticks(xs)
     ax.set_xticklabels([fr"$\alpha={a}$" for a in ALPHAS])
     ax.set_ylabel(r"RSA Spearman $r$ (vs.\ repr$_{\cos}$ RDM)")
     ax.set_title("Per-alpha behavioral RSA")
     plot_style.legend_above(ax, ncol=2)
-    # Significance key at bottom-left
-    ax.text(0.01, 0.01,
-            r"$^{*}p<0.05$   $^{**}p<0.01$   $^{***}p<0.001$ (Mantel test)",
-            transform=ax.transAxes, fontsize=7, va="bottom", color="#555555")
+    # Significance key — placed inside axes so it survives tight_layout
+    ax.text(0.02, 0.97,
+            "* $p<0.05$    ** $p<0.01$    *** $p<0.001$\n(Mantel permutation test)",
+            transform=ax.transAxes, fontsize=7.5, va="top", color="#333333",
+            bbox=dict(boxstyle="round,pad=0.3", fc="white", alpha=0.7, lw=0))
+    plt.tight_layout()
     _save(fig, "fig4_rsa_per_alpha")
 
 
