@@ -160,25 +160,29 @@ def fig4_rsa_per_alpha() -> None:
     xs = np.arange(len(ALPHAS))
     colors = [STEERED, ACCENT]
     behs = ["beh_corr", "beh_l2"]
-    # Stagger annotation heights: corr labels sit just above bar,
-    # l2 labels sit higher to prevent overlap between adjacent bars.
-    offsets = [0.005, 0.025]
-    for i, (beh, color, voff) in enumerate(zip(behs, colors, offsets)):
+    voff = 0.004
+    for i, (beh, color) in enumerate(zip(behs, colors)):
         sub = df[df["beh_distance"] == beh].sort_values("alpha")
         ax.bar(xs + (i - 0.5) * width, sub["rsa_spearman"].values,
                width=width, label=beh, color=color, edgecolor="white", alpha=0.9)
         for x, r, p in zip(xs + (i - 0.5) * width,
                             sub["rsa_spearman"].values,
                             sub["mantel_p"].values):
-            sig = "***" if p < 0.001 else ("**" if p < 0.01 else "*")
-            ax.text(x, r + voff, f"{r:+.3f} {sig}",
-                    ha="center", va="bottom", fontsize=8)
+            sig = "***" if p < 0.001 else ("**" if p < 0.01 else ("*" if p < 0.05 else ""))
+            # r value on one line, sig stars on the next — stays within bar width
+            label = f"{r:+.3f}\n{sig}" if sig else f"{r:+.3f}"
+            ax.text(x, r + voff, label,
+                    ha="center", va="bottom", fontsize=7, linespacing=1.1)
     ax.axhline(0, color="k", lw=0.5)
     ax.set_xticks(xs)
     ax.set_xticklabels([fr"$\alpha={a}$" for a in ALPHAS])
     ax.set_ylabel(r"RSA Spearman $r$ (vs.\ repr$_{\cos}$ RDM)")
     ax.set_title("Per-alpha behavioral RSA")
     plot_style.legend_above(ax, ncol=2)
+    # Significance key at bottom-left
+    ax.text(0.01, 0.01,
+            r"$^{*}p<0.05$   $^{**}p<0.01$   $^{***}p<0.001$ (Mantel test)",
+            transform=ax.transAxes, fontsize=7, va="bottom", color="#555555")
     _save(fig, "fig4_rsa_per_alpha")
 
 
