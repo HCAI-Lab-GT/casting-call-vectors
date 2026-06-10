@@ -30,7 +30,8 @@ import matplotlib.pyplot as plt
 
 import pvx_fig_style as style
 
-DATA = Path("/Users/glenn/dev/personality-vectors/experiment_data/pairwise_judge_experiments_gpt")
+REPO = Path(__file__).resolve().parents[2]
+DATA = REPO / "experiment_data" / "pairwise_judge_experiments_gpt"
 OUT = Path(__file__).resolve().parent / "out"
 OUT.mkdir(exist_ok=True)
 
