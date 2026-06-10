@@ -21,7 +21,6 @@ NOTE: these figures describe Judge 3. Its gold-anchoring description in
 Appendix I is pending a team decision and is NOT touched here.
 """
 
-import glob
 from pathlib import Path
 
 import numpy as np

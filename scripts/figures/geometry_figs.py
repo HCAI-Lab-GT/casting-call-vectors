@@ -6,16 +6,19 @@ via `git show origin/empirical-geometry:<path>` fallback, so this script
 works on any checkout either way.
 
 Figures (added one at a time, each behind its verification gate):
-  out/fig_rsa_grid.pdf  -> fig:rsa-per-alpha (right panel)
+  out/fig_rsa_grid.pdf            -> fig:rsa-per-alpha (right panel)
+  out/fig_effective_rank.pdf      -> fig:noise-floor (left panel)
+  out/fig_noise_corrected_rsa.pdf -> fig:noise-floor (right panel)
+  out/fig_norm_alpha_curves.pdf   -> fig:norm-slope
 
 Conventions / corrections discovered here:
   - run_analysis.py builds 275x275 RDMs (assistant INCLUDED); the paper's
     Sec 5.3 said "274x274" -- prose corrected to 275 in the same commit,
     since the published RSA values (0.137; 0.085->0.179) reproduce only
     from the 275-role matrices.
-  - rsa_partial.csv: the Sec 4.1 "Delta-rho = -0.015" is the (repr_cos,
-    beh_l2) cell; the convention-consistent (repr_cos, beh_corr) cell is
-    -0.005. Pending Glenn's call on which to cite.
+  - rsa_partial.csv: the originally published Sec 4.1 "Delta-rho = -0.015"
+    is the (repr_cos, beh_l2) cell; the paper now cites the convention-
+    consistent (repr_cos, beh_corr) cell, -0.005 (decided 2026-06-10).
 """
 
 import io
