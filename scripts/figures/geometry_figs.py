@@ -10,6 +10,7 @@ Figures (added one at a time, each behind its verification gate):
   out/fig_effective_rank.pdf      -> fig:noise-floor (left panel)
   out/fig_noise_corrected_rsa.pdf -> fig:noise-floor (right panel)
   out/fig_norm_alpha_curves.pdf   -> fig:norm-slope
+  out/fig_distance_summary.pdf    -> fig:distance-summary (4 panels)
 
 Conventions / corrections discovered here:
   - run_analysis.py builds 275x275 RDMs (assistant INCLUDED); the paper's
@@ -35,6 +36,8 @@ REPO = Path(__file__).resolve().parents[2]
 BRANCH = "origin/empirical-geometry"
 OUT = Path(__file__).resolve().parent / "out"
 OUT.mkdir(exist_ok=True)
+
+ALPHAS = [1.0, 1.5, 2.0, 2.5]
 
 
 def read_branch_csv(rel_path: str) -> pd.DataFrame:
@@ -169,6 +172,173 @@ def fig_norm_curves():
     return stab, peak_early
 
 
+def load_role_vectors():
+    """275 pipeline role vectors (persona_data/pt_vectors), incl. assistant."""
+    import torch
+    vec_dir = REPO / "persona_data" / "pt_vectors"
+    vecs = {fp.stem: torch.load(fp, map_location="cpu",
+                                weights_only=True).squeeze(0).float().numpy()
+            for fp in sorted(vec_dir.glob("*.pt"))}
+    assert len(vecs) == 275, f"expected 275 .pt vectors, got {len(vecs)}"
+    return vecs
+
+
+def pearson(x, y):
+    x, y = np.asarray(x, float), np.asarray(y, float)
+    xc, yc = x - x.mean(), y - y.mean()
+    return float((xc @ yc) / np.sqrt((xc ** 2).sum() * (yc ** 2).sum()))
+
+
+def ols_r2(X, y):
+    """R^2 of OLS with intercept; X is (n, k)."""
+    A = np.column_stack([np.ones(len(y))] + [np.asarray(c, float) for c in X])
+    beta, *_ = np.linalg.lstsq(A, y, rcond=None)
+    resid = y - A @ beta
+    return float(1 - (resid ** 2).sum() / ((y - y.mean()) ** 2).sum())
+
+
+def fig_distance_summary():
+    """4-panel distance-to-assistant figure (fig:distance-summary).
+
+    d_r = 1 - cos(v_r, v_assistant), v_assistant = OUR pipeline's 275th
+    role vector (NOT the Lu assistant axis). Delta_r(alpha) = per-cell
+    mean steered_score - mean baseline_score (dedup convention via
+    controllability_figs.load). n = 274 (assistant excluded).
+    """
+    from controllability_figs import load as load_gold
+
+    vecs = load_role_vectors()
+    va = vecs.pop("assistant")
+    roles = sorted(vecs)
+    V = np.stack([vecs[r] for r in roles])
+    norms = np.linalg.norm(V, axis=1)
+    d_cos = pd.Series(1 - (V @ va) / (norms * np.linalg.norm(va)), index=roles)
+    d_euc = pd.Series(np.linalg.norm(V - va, axis=1), index=roles)
+    lognorm = pd.Series(np.log(norms), index=roles)
+
+    df = load_gold()
+    cell = {col: df.groupby(["role", "alpha"])[col].mean().unstack()
+            .reindex(columns=ALPHAS)
+            for col in ("steered_score", "baseline_score",
+                        "assistant_axis_score")}
+    common = cell["steered_score"].dropna().index.intersection(d_cos.index)
+    assert len(common) == 274, f"role match n={len(common)}, expected 274"
+    delta = (cell["steered_score"] - cell["baseline_score"]).loc[common]
+    metrics = {
+        "$\\Delta$ (vs. prompted ref.)": delta,
+        "$\\Delta$ (vs. asst.-axis)":
+            (cell["steered_score"] - cell["assistant_axis_score"]).loc[common],
+        "steered mean": cell["steered_score"].loc[common],
+        "asst.-axis mean": cell["assistant_axis_score"].loc[common],
+    }
+    dc, de, ln = d_cos[common], d_euc[common], lognorm[common]
+
+    r_cos = {a: pearson(dc, delta[a]) for a in ALPHAS}
+    r_euc = {a: pearson(de, delta[a]) for a in ALPHAS}
+    r2_1 = {a: r_cos[a] ** 2 for a in ALPHAS}
+    r2_2 = {a: ols_r2([dc, ln], delta[a].to_numpy(float)) for a in ALPHAS}
+    heat = np.array([[pearson(dc, m[a]) for a in ALPHAS]
+                     for m in metrics.values()])
+
+    fig, axes = plt.subplots(2, 2, figsize=(style.COLUMN_W_IN, 2.95))
+    ax = axes[0, 0]   # (a) scatter at alpha=2.5
+    ax.scatter(dc, delta[2.5], s=2.5, color=style.BLUE, alpha=0.55, lw=0)
+    b1, b0 = np.polyfit(dc, delta[2.5], 1)
+    xs = np.linspace(dc.min(), dc.max(), 2)
+    ax.plot(xs, b1 * xs + b0, color="black", lw=0.9)
+    ax.text(0.03, 0.04, f"$r{{=}}{r_cos[2.5]:.3f}$\n$n{{=}}{len(dc)}$",
+            transform=ax.transAxes, fontsize=5.5, va="bottom")
+    ax.set_xlabel("cosine distance", fontsize=6, labelpad=1)
+    ax.set_ylabel(r"$\Delta_r$ at $\alpha{=}2.5$", fontsize=6, labelpad=1)
+
+    ax = axes[0, 1]   # (b) r vs alpha, cos + euclidean
+    ax.plot(ALPHAS, [r_cos[a] for a in ALPHAS], color=style.BLUE,
+            marker="o", ms=2, label="cosine")
+    ax.plot(ALPHAS, [r_euc[a] for a in ALPHAS], color=style.PURPLE,
+            marker="s", ms=2, label="Euclidean")
+    ax.axhline(0, color=style.GREY, lw=0.5, ls=":")
+    ax.set_xticks(ALPHAS)
+    ax.set_xlabel(r"$\alpha$", fontsize=6, labelpad=1)
+    ax.set_ylabel(r"Pearson $r$", fontsize=6, labelpad=1)
+    ax.legend(fontsize=5, loc="upper left", handlelength=1.2)
+
+    ax = axes[1, 0]   # (c) R^2 with / without log-norm covariate
+    x = np.arange(len(ALPHAS))
+    ax.bar(x - 0.18, [r2_1[a] for a in ALPHAS], width=0.36,
+           color=style.BLUE, label="distance only")
+    ax.bar(x + 0.18, [r2_2[a] for a in ALPHAS], width=0.36,
+           color=style.ORANGE, label=r"$+\log\|v\|$")
+    ax.set_xticks(x)
+    ax.set_xticklabels([f"{a}" for a in ALPHAS], fontsize=6)
+    ax.set_xlabel(r"$\alpha$", fontsize=6, labelpad=1)
+    ax.set_ylabel(r"OLS $R^2$", fontsize=6, labelpad=1)
+    ax.legend(fontsize=5, loc="upper right", handlelength=1.0)
+
+    ax = axes[1, 1]   # (d) r heatmap, behavioral metric x alpha
+    ax.imshow(heat, cmap="RdBu_r", vmin=-0.45, vmax=0.45, aspect="auto")
+    for i in range(heat.shape[0]):
+        for j in range(heat.shape[1]):
+            ax.text(j, i, f"{heat[i, j]:+.2f}", ha="center", va="center",
+                    fontsize=4.8)
+    ax.set_xticks(range(len(ALPHAS)))
+    ax.set_xticklabels([f"{a}" for a in ALPHAS], fontsize=5.5)
+    ax.set_yticks(range(len(metrics)))
+    ax.set_yticklabels(list(metrics), fontsize=4.8)
+    ax.set_xlabel(r"$\alpha$", fontsize=6, labelpad=1)
+
+    for letter, ax in zip("abcd", axes.flat):
+        ax.tick_params(labelsize=5.5)
+        ax.text(-0.18, 1.06, f"({letter})", transform=ax.transAxes,
+                fontsize=7, fontweight="bold", va="top")
+    fig.savefig(OUT / "fig_distance_summary.pdf")
+    plt.close(fig)
+    return r_cos, r_euc, r2_1, r2_2, heat, dc, delta
+
+
+def distance_reference_rows():
+    """Recompute tab-distance-references (3 reference-vector definitions).
+
+    Audit-verified constructions (findings JSON, 2026-06-09):
+      row 1: our raw assistant role vector (pt_vectors/assistant.pt)
+      row 2: unit(assistant - mean of the 274 OUR role vectors)
+      row 3: strict Lu axis = unit(default.pt['vector'] - mean of the 275
+             Lu per-role activations) from persona_data/assistant-axis/
+             olmo-3-7b-instruct/vectors/ (chemist.pt stores all 32 layers;
+             its layer-16 row is used, matching the rest of the paper).
+    """
+    import torch
+    vecs = load_role_vectors()
+    va = vecs.pop("assistant")
+    roles = sorted(vecs)
+    V = np.stack([vecs[r] for r in roles])
+
+    aa_dir = REPO / "persona_data" / "assistant-axis" / "olmo-3-7b-instruct" / "vectors"
+    aa, default = [], None
+    for fp in sorted(aa_dir.glob("*.pt")):
+        d = torch.load(fp, map_location="cpu", weights_only=True)
+        v = d["vector"].float().numpy()
+        v = v[16] if v.shape[0] == 32 else v[0]
+        if d.get("type") == "mean" or fp.stem == "default":
+            default = v
+        else:
+            aa.append(v)
+    assert default is not None and len(aa) == 275, \
+        f"assistant-axis artifacts changed: default={default is not None}, n={len(aa)}"
+
+    def unit(x):
+        return x / np.linalg.norm(x)
+
+    refs = {
+        "ours_raw": va,
+        "ours_centered": unit(va - V.mean(axis=0)),
+        "lu_axis": unit(default - np.stack(aa).mean(axis=0)),
+    }
+    cos12 = float(unit(refs["ours_raw"]) @ refs["ours_centered"])
+    cos13 = float(unit(refs["ours_raw"]) @ refs["lu_axis"])
+    cos23 = float(refs["ours_centered"] @ refs["lu_axis"])
+    return refs, (cos12, cos13, cos23), roles, V
+
+
 def main():
     style.apply()
     print("verification gate (RSA):")
@@ -225,6 +395,50 @@ def main():
     for q, want in [("Q1", 0.275), ("Q2", 0.377), ("Q3", 0.221),
                     ("Q4", 0.116)]:
         verify(f"{q} early-peak fraction", float(peak_early[q]), want, 0.005)
+
+    print("verification gate (distance-to-assistant, Table 1):")
+    r_cos, r_euc, r2_1, r2_2, heat, dc, delta = fig_distance_summary()
+    # originally published -0.418/-0.409/-0.351/-0.144 reproduces from RAW
+    # rows; the paper's dedup convention (Glenn 2026-06-10, same call as
+    # anti-38) gives these values -- Table 1 updated in the same commit.
+    for a, want in zip(ALPHAS, [-0.419, -0.409, -0.351, -0.145]):
+        verify(f"cos-distance r @ alpha={a}", r_cos[a], want, 0.001)
+    # Table 1 R^2 row (cos / +log||v||); prose says "0.17 -> 0.22 at 1.0"
+    for a, w1, w2 in zip(ALPHAS, [0.18, 0.17, 0.12, 0.02],
+                         [0.22, 0.20, 0.13, 0.02]):
+        verify(f"R2 distance-only @ {a}", r2_1[a], w1, 0.006)
+        verify(f"R2 +lognorm @ {a}", r2_2[a], w2, 0.006)
+    print(f"  exact R2 @ 1.0: {r2_1[1.0]:.4f} -> {r2_2[1.0]:.4f} "
+          "(table rounds 0.18/0.22, prose says 0.17->0.22)")
+    from scipy import stats
+    for a, p_want in zip(ALPHAS, [5e-13, 2e-12, 2e-9, 1.7e-2]):
+        p = float(stats.pearsonr(dc, delta[a]).pvalue)
+        print(f"  p @ alpha={a}: {p:.2g} (table {p_want:.2g})")
+    print("  euclidean r per alpha:",
+          {a: round(r_euc[a], 3) for a in ALPHAS})
+    print("  heatmap (rows: dPR, dAA, steered, AA):")
+    print(np.round(heat, 3))
+
+    print("verification gate (tab-distance-references):")
+    refs, (c12, c13, c23), roles, V = distance_reference_rows()
+    verify("cos(raw, centered)", c12, 0.17, 0.005)
+    verify("cos(raw, lu)", c13, -0.45, 0.005)
+    verify("cos(centered, lu)", c23, -0.07, 0.005)
+    norms = np.linalg.norm(V, axis=1)
+    want_rows = {  # dedup-convention values (Table updated in same commit)
+        "ours_raw": [-0.419, -0.409, -0.351, -0.145],
+        "ours_centered": [-0.381, -0.352, -0.264, -0.084],
+        "lu_axis": [0.167, 0.162, 0.168, 0.186],
+    }
+    for name, ref in refs.items():
+        d = pd.Series(
+            1 - (V @ ref) / (norms * np.linalg.norm(ref)), index=roles)[dc.index]
+        rs = {a: pearson(d, delta[a]) for a in ALPHAS}
+        for a, want in zip(ALPHAS, want_rows[name]):
+            verify(f"{name} r @ {a}", rs[a], want, 0.001)
+        if name == "lu_axis":
+            print(f"  lu univariate R2 @ 1.0: {rs[1.0] ** 2:.3f} "
+                  "(paper: ~0.03)")
 
     print(f"figures written to {OUT}")
 
