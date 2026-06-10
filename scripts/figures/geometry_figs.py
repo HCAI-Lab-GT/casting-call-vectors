@@ -12,6 +12,7 @@ Figures (added one at a time, each behind its verification gate):
   out/fig_norm_alpha_curves.pdf   -> fig:norm-slope
   out/fig_distance_summary.pdf    -> fig:distance-summary (4 panels)
   out/fig_pc_metric_grid.pdf      -> fig:pc-grid (20 PCs x 6 metrics x 4 alphas)
+  out/fig_trait_metric_heatmap.pdf -> fig:trait-heatmap (14 axes x 6 metrics)
 
 Conventions / corrections discovered here:
   - run_analysis.py builds 275x275 RDMs (assistant INCLUDED); the paper's
@@ -412,6 +413,88 @@ def fig_pc_metric_grid():
     return var, n90, grids, r2_20
 
 
+# The 14 polar axes are defined in no code/config; this list was recovered
+# from the published figure by the 2026-06-09 audit and CONFIRMED by exact
+# reproduction of every heatmap cell and all 24 Table 2 cells. Two pairs
+# reuse 'stoic' and 'methodical'. This is now the canonical list.
+TRAIT_AXES = [
+    ("assertive", "poetic"),
+    ("diplomatic", "dramatic"),
+    ("empathetic", "stoic"),
+    ("enigmatic", "stoic"),
+    ("erudite", "technical"),
+    ("methodical", "chaotic"),
+    ("nurturing", "hostile"),
+    ("optimistic", "cynical"),
+    ("philosophical", "critical"),
+    ("playful", "analytical"),
+    ("practical", "theatrical"),
+    ("serene", "evil"),
+    ("sycophantic", "manipulative"),
+    ("whimsical", "methodical"),
+]
+
+
+def load_trait_vector(trait):
+    """Layer-16 prompt_persona_vector (the audit-confirmed choice; the
+    response vectors give materially different numbers)."""
+    import json
+    fp = (REPO / "persona_data" / "trait_inits"
+          / f"{trait}_persona_initialization"
+          / "allenai__Olmo-3-7B-Instruct_layer16_count40.json")
+    return np.asarray(json.load(open(fp))["prompt_persona_vector"],
+                      dtype=float).squeeze()
+
+
+def fig_trait_metric_heatmap():
+    """Trait-axis projection x metric heatmap at alpha=2.5 + Table 2 R^2.
+
+    Axis = v_pos - v_neg from trait_inits; projection = role-vector dot
+    axis; n=274 (assistant excluded, per the audit's exact reproduction).
+    Returns the per-alpha r tensors and the joint-OLS R^2 table.
+    """
+    vecs = load_role_vectors()
+    vecs.pop("assistant")
+    roles = sorted(vecs)
+    V = np.stack([vecs[r] for r in roles])
+    axes_v = {f"{p}-{n}": load_trait_vector(p) - load_trait_vector(n)
+              for p, n in TRAIT_AXES}
+    proj = {name: V @ ax for name, ax in axes_v.items()}
+
+    bp = read_branch_csv(
+        "analysis/empirical/rsa_geometry_behavior/data/behavioral_profiles.csv"
+    ).set_index("role").reindex(roles)
+    assert bp.notna().all().all(), "behavioral profile/role mismatch"
+
+    heat = {a: np.array([[pearson(proj[name], bp[f"{col}__alpha_{a}"])
+                          for col, _ in PC_METRICS]
+                         for name in axes_v]) for a in ALPHAS}
+    r2 = {a: {lab: ols_r2(list(proj.values()),
+                          bp[f"{col}__alpha_{a}"].to_numpy(float))
+              for col, lab in PC_METRICS} for a in ALPHAS}
+
+    # rendered at alpha=1.0: the published figure said alpha=2.5 but its
+    # caption quoted alpha=1.0 values (methodical x vocab is -0.02 at 2.5
+    # vs +0.245 at 1.0) -- audit flag; the prose's axis-correspondence
+    # claims are direction-regime (low-alpha) facts.
+    h10 = heat[1.0]
+    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 2.5))
+    ax.imshow(h10, cmap="RdBu_r", vmin=-0.35, vmax=0.35, aspect="auto",
+              interpolation="nearest")
+    for i in range(h10.shape[0]):
+        for j in range(h10.shape[1]):
+            ax.text(j, i, f"{h10[i, j]:+.2f}", ha="center", va="center",
+                    fontsize=4.2)
+    ax.set_xticks(range(len(PC_METRICS)))
+    ax.set_xticklabels([lab for _, lab in PC_METRICS], fontsize=5,
+                       rotation=30, ha="right")
+    ax.set_yticks(range(len(axes_v)))
+    ax.set_yticklabels([n.replace("-", "–") for n in axes_v], fontsize=4.6)
+    fig.savefig(OUT / "fig_trait_metric_heatmap.pdf")
+    plt.close(fig)
+    return list(axes_v), heat, r2
+
+
 def main():
     style.apply()
     print("verification gate (RSA):")
@@ -541,6 +624,39 @@ def main():
     for a in ALPHAS:
         print(f"    alpha={a}: " + ", ".join(
             f"{lab} {v:.2f}" for lab, v in r2_20[a].items()))
+
+    print("verification gate (trait axes, Table 2):")
+    axis_names, theat, tr2 = fig_trait_metric_heatmap()
+    want_r2 = {  # Table 2, all 24 cells (audit recompute: exact match)
+        "emot. reg.": [0.41, 0.39, 0.31, 0.14],
+        "social dyn.": [0.39, 0.35, 0.26, 0.11],
+        "vocab": [0.38, 0.34, 0.23, 0.06],
+        "worldview": [0.36, 0.34, 0.27, 0.13],
+        "motivation": [0.34, 0.32, 0.27, 0.13],
+        "overall": [0.28, 0.24, 0.16, 0.14],
+    }
+    for lab, wants in want_r2.items():
+        for a, want in zip(ALPHAS, wants):
+            verify(f"trait joint R2 {lab} @ {a}", tr2[a][lab], want, 0.005)
+    # audit fingerprint cells of the published alpha=2.5 heatmap
+    cols = [lab for _, lab in PC_METRICS]
+    h25 = theat[2.5]
+    fp_cells = [("assertive-poetic", "overall", -0.24),
+                ("empathetic-stoic", "emot. reg.", 0.25),
+                ("methodical-chaotic", "overall", -0.20)]
+    for axis, lab, want in fp_cells:
+        got = float(h25[axis_names.index(axis), cols.index(lab)])
+        verify(f"heatmap {axis} x {lab} @ 2.5", got, want, 0.005)
+    # new caption cells (figure now rendered at alpha=1.0; the old caption
+    # attributed these values to alpha=2.5 where they do not hold)
+    h10 = theat[1.0]
+    for axis, lab, want in [("methodical-chaotic", "vocab", 0.245),
+                            ("diplomatic-dramatic", "social dyn.", 0.167),
+                            ("empathetic-stoic", "emot. reg.", 0.296),
+                            ("nurturing-hostile", "emot. reg.", 0.296),
+                            ("serene-evil", "emot. reg.", 0.253)]:
+        got = float(h10[axis_names.index(axis), cols.index(lab)])
+        verify(f"caption cell {axis} x {lab} @ 1.0", got, want, 0.005)
 
     print(f"figures written to {OUT}")
 
