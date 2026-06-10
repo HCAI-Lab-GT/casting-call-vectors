@@ -138,6 +138,34 @@ def fig_noise_corrected_rsa():
     return nc
 
 
+def fig_norm_curves():
+    stab = read_branch_csv(
+        "analysis/empirical/vector_magnitude_effect_on_stability/data/vector_magnitude_stability.csv")
+    stab["quartile"] = pd.qcut(stab["norm"], 4, labels=["Q1", "Q2", "Q3", "Q4"])
+    alphas = [1.0, 1.5, 2.0, 2.5]
+    cols = [f"score_at_alpha_{str(a).replace('.', '_')}" for a in alphas]
+    palette = {"Q1": style.SKY, "Q2": style.GREEN, "Q3": style.ORANGE,
+               "Q4": style.BLUE}
+    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 1.6))
+    for q, sub in stab.groupby("quartile", observed=True):
+        mean = sub[cols].mean()
+        sem = sub[cols].sem()
+        ax.plot(alphas, mean, color=palette[str(q)], marker="o", ms=2,
+                label=f"{q} (n={len(sub)})")
+        ax.fill_between(alphas, mean - 1.96 * sem, mean + 1.96 * sem,
+                        color=palette[str(q)], alpha=0.15, lw=0)
+    ax.set_xlabel(r"steering coefficient $\alpha$")
+    ax.set_ylabel("mean judge score")
+    ax.set_xticks(alphas)
+    ax.legend(fontsize=5.5, loc="upper left", title="norm quartile",
+              title_fontsize=5.5, handlelength=1.2)
+    fig.savefig(OUT / "fig_norm_alpha_curves.pdf")
+    plt.close(fig)
+    peak_early = (stab["peak_alpha"] < 2.5).groupby(
+        stab["quartile"], observed=True).mean()
+    return stab, peak_early
+
+
 def main():
     style.apply()
     print("verification gate (RSA):")
@@ -176,6 +204,24 @@ def main():
     max_delta = float((nc["rsa_noise_corrected"] - nc["rsa_observed"]).abs().max())
     verify("max noise-correction delta (paper: within 0.02)", max_delta,
            0.005, 0.005)
+
+    print("verification gate (norm-slope):")
+    corr = read_branch_csv(
+        "analysis/empirical/vector_magnitude_effect_on_stability/data/correlations.csv")
+    corr = corr[corr["magnitude_metric"] == "norm"].set_index(
+        "stability_metric")
+    verify("norm x alpha-slope Pearson r",
+           float(corr.loc["score_slope", "pearson_r"]), 0.49, 0.005)
+    verify("norm x (2.5-1.0) delta Pearson r",
+           float(corr.loc["delta_high_minus_low", "pearson_r"]), 0.49, 0.005)
+    stab, peak_early = fig_norm_curves()
+    assert len(stab) == 275
+    # branch README records 28/38/22/12% by quartile; the paper's old
+    # "28-38% of bottom-three-quartile roles" mis-scoped Q3 (22%) --
+    # Sec 5.1 prose corrected to 22-38% in the same commit.
+    for q, want in [("Q1", 0.275), ("Q2", 0.377), ("Q3", 0.221),
+                    ("Q4", 0.116)]:
+        verify(f"{q} early-peak fraction", float(peak_early[q]), want, 0.005)
 
     print(f"figures written to {OUT}")
 
