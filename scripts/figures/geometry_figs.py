@@ -82,6 +82,62 @@ def fig_rsa_grid():
     return grid
 
 
+def fig_effective_rank():
+    curves = read_branch_csv(
+        "analysis/empirical/intrinsic_dimensionality/data/explained_variance_curves.csv")
+    summary = read_branch_csv(
+        "analysis/empirical/intrinsic_dimensionality/data/summary.csv"
+    ).set_index("matrix")
+    series = {
+        "repr_raw": ("raw (ER 3)", style.GREY, "-"),
+        "repr_centered": ("centered (ER 50)", style.BLUE, "-"),
+        "behavioral": ("behavior (ER 2)", style.VERMILLION, "-"),
+        "repr_random_null": ("null (ER 266)", style.GREEN, ":"),
+    }
+    fig, ax = plt.subplots(figsize=(style.HALF_PANEL_W_IN, 1.45))
+    for key, (label, color, ls) in series.items():
+        sub = curves[curves["matrix"] == key]
+        assert len(sub) > 0, f"no curve rows for matrix key {key!r}"
+        ax.plot(sub["rank_index"], sub["cumulative_variance"], color=color,
+                ls=ls, lw=1.1, label=label)
+    ax.axhline(0.9, color="black", lw=0.5, ls="--")
+    ax.set_xscale("log")
+    ax.set_xlabel("rank")
+    ax.set_ylabel("cumul. variance")
+    ax.set_ylim(0, 1.02)
+    ax.legend(fontsize=5, loc="lower right", handlelength=1.0,
+              labelspacing=0.25, borderaxespad=0.2, frameon=True,
+              framealpha=0.95, edgecolor="none", facecolor="white")
+    fig.savefig(OUT / "fig_effective_rank.pdf")
+    plt.close(fig)
+    return summary
+
+
+def fig_noise_corrected_rsa():
+    nc = read_branch_csv(
+        "analysis/empirical/behavioral_noise_floor/data/noise_corrected_rsa.csv")
+    labels = [f"{r.replace('repr_', '').replace('l2', 'L2')}·"
+              f"{c.replace('beh_', '').replace('l2', 'L2')}"
+              for r, c in zip(nc["repr_distance"], nc["beh_distance"])]
+    x = np.arange(len(nc))
+    fig, ax = plt.subplots(figsize=(style.HALF_PANEL_W_IN, 1.45))
+    ax.bar(x - 0.19, nc["rsa_observed"], width=0.36, color=style.BLUE,
+           label="observed")
+    ax.bar(x + 0.19, nc["rsa_noise_corrected"], width=0.36,
+           color=style.SKY, label="noise-corrected")
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=5, rotation=20, ha="right")
+    ax.set_ylabel("RSA (Spearman)")
+    ax.set_ylim(0, 0.32)
+    ax.text(0.03, 0.97, "ceiling 0.97–0.99", transform=ax.transAxes,
+            fontsize=5.5, color=style.GREY, va="top")
+    ax.legend(fontsize=5.5, loc="upper left", bbox_to_anchor=(0.0, 0.88),
+              handlelength=1.0)
+    fig.savefig(OUT / "fig_noise_corrected_rsa.pdf")
+    plt.close(fig)
+    return nc
+
+
 def main():
     style.apply()
     print("verification gate (RSA):")
@@ -99,6 +155,27 @@ def main():
     for a, want in [(1.0, 0.085), (1.5, 0.092), (2.0, 0.121), (2.5, 0.179)]:
         got = float(cc[cc.alpha == a]["rsa_spearman"].iloc[0])
         verify(f"per-alpha RSA cos x corr @ {a}", got, want, 0.001)
+
+    print("verification gate (noise floor / dimensionality):")
+    summary = fig_effective_rank()
+    verify("centered cloud effective rank",
+           float(summary.loc["repr_centered", "effective_rank"]), 49.6, 0.1)
+    verify("centered cloud PR",
+           float(summary.loc["repr_centered", "participation_ratio"]),
+           15.1, 0.05)
+    verify("behavioral effective rank",
+           float(summary.loc["behavioral", "effective_rank"]), 2.0, 0.05)
+    verify("behavioral PR",
+           float(summary.loc["behavioral", "participation_ratio"]), 1.45, 0.05)
+    nf = read_branch_csv(
+        "analysis/empirical/behavioral_noise_floor/data/noise_floor_summary.csv"
+    ).set_index("metric")
+    verify("split-half Spearman-Brown (corr)",
+           float(nf.loc["full_corr_spearmanbrown", "mean"]), 0.97, 0.005)
+    nc = fig_noise_corrected_rsa()
+    max_delta = float((nc["rsa_noise_corrected"] - nc["rsa_observed"]).abs().max())
+    verify("max noise-correction delta (paper: within 0.02)", max_delta,
+           0.005, 0.005)
 
     print(f"figures written to {OUT}")
 
