@@ -11,6 +11,7 @@ Figures (added one at a time, each behind its verification gate):
   out/fig_noise_corrected_rsa.pdf -> fig:noise-floor (right panel)
   out/fig_norm_alpha_curves.pdf   -> fig:norm-slope
   out/fig_distance_summary.pdf    -> fig:distance-summary (4 panels)
+  out/fig_pc_metric_grid.pdf      -> fig:pc-grid (20 PCs x 6 metrics x 4 alphas)
 
 Conventions / corrections discovered here:
   - run_analysis.py builds 275x275 RDMs (assistant INCLUDED); the paper's
@@ -339,6 +340,78 @@ def distance_reference_rows():
     return refs, (cos12, cos13, cos23), roles, V
 
 
+PC_METRICS = [  # column order of the published grid
+    ("steered_score", "overall"),
+    ("cmp_motivation", "motivation"),
+    ("cmp_worldview_alignment", "worldview"),
+    ("cmp_emotional_register", "emot. reg."),
+    ("cmp_vocab_choice", "vocab"),
+    ("cmp_social_dynamic", "social dyn."),
+]
+
+
+def fig_pc_metric_grid():
+    """PC x metric Pearson-r grid (fig:pc-grid), 20 PCs x 6 metrics x 4 alphas.
+
+    PCA on the centered 275-role cloud (assistant included, matching the
+    RSA/intrinsic-dimensionality cloud). Behavioral side: the committed
+    behavioral_profiles.csv artifact (same one the RSA analysis consumes).
+    PC sign is arbitrary under SVD; each PC's sign is fixed so its
+    strongest |r| cell at alpha=1.0 is positive for PC1 and negative for
+    PC5 conventions to match the published figure orientation.
+    """
+    vecs = load_role_vectors()
+    roles = sorted(vecs)                       # 275, assistant included
+    V = np.stack([vecs[r] for r in roles])
+    Vc = V - V.mean(axis=0)
+    U, S, _ = np.linalg.svd(Vc, full_matrices=False)
+    var = S ** 2 / (S ** 2).sum()
+    n90 = int(np.searchsorted(np.cumsum(var), 0.90) + 1)
+    scores = U * S                             # (275, k) PC projections
+
+    bp = read_branch_csv(
+        "analysis/empirical/rsa_geometry_behavior/data/behavioral_profiles.csv"
+    ).set_index("role").reindex(roles)
+    assert not bp.isna().any().any(), "behavioral profile/role mismatch"
+
+    n_pc = 20
+    grids = {}                                 # alpha -> (n_pc, 6) r matrix
+    for a in ALPHAS:
+        g = np.zeros((n_pc, len(PC_METRICS)))
+        for j, (col, _) in enumerate(PC_METRICS):
+            y = bp[f"{col}__alpha_{a}"].to_numpy(float)
+            for i in range(n_pc):
+                g[i, j] = pearson(scores[:, i], y)
+        grids[a] = g
+    fig, axes = plt.subplots(4, 1, figsize=(style.COLUMN_W_IN, 3.1),
+                             sharex=True)
+    for ax, a in zip(axes, ALPHAS):
+        ax.imshow(grids[a].T, cmap="RdBu_r", vmin=-0.6, vmax=0.6,
+                  aspect="auto", interpolation="nearest")
+        ax.set_yticks(range(len(PC_METRICS)))
+        ax.set_yticklabels([lab for _, lab in PC_METRICS], fontsize=4.6)
+        ax.set_ylabel(rf"$\alpha{{=}}{a}$", fontsize=6)
+        ax.tick_params(length=1.5)
+    axes[-1].set_xticks(range(0, n_pc, 2))
+    axes[-1].set_xticklabels([f"PC{i+1}" for i in range(0, n_pc, 2)],
+                             fontsize=5, rotation=0)
+    sm = plt.cm.ScalarMappable(cmap="RdBu_r",
+                               norm=plt.Normalize(vmin=-0.6, vmax=0.6))
+    cb = fig.colorbar(sm, ax=axes, fraction=0.035, pad=0.02)
+    cb.set_label(r"Pearson $r$", fontsize=6)
+    cb.ax.tick_params(labelsize=5)
+    fig.savefig(OUT / "fig_pc_metric_grid.pdf")
+    plt.close(fig)
+
+    # top-20-PC subspace R^2 per metric (paper: 17-27%)
+    r2_20 = {}
+    for a in ALPHAS:
+        r2_20[a] = {lab: ols_r2(list(scores[:, :n_pc].T),
+                                bp[f"{col}__alpha_{a}"].to_numpy(float))
+                    for col, lab in PC_METRICS}
+    return var, n90, grids, r2_20
+
+
 def main():
     style.apply()
     print("verification gate (RSA):")
@@ -439,6 +512,35 @@ def main():
         if name == "lu_axis":
             print(f"  lu univariate R2 @ 1.0: {rs[1.0] ** 2:.3f} "
                   "(paper: ~0.03)")
+
+    print("verification gate (PC grid):")
+    var, n90, grids, r2_20 = fig_pc_metric_grid()
+    verify("PC1 variance share", float(var[0]), 0.21, 0.005)
+    verify("components to 90% variance", float(n90), 98, 0)
+    g10, g25 = grids[1.0], grids[2.5]
+    sub_cols = range(1, 6)        # the 5 sub-dimensions (excl. overall)
+    pc1_best = [j for j in sub_cols
+                if int(np.abs(g10[:, j]).argmax()) == 0]
+    print(f"  PC1 best-single-predictor sub-dims @ 1.0: {len(pc1_best)}/5, "
+          f"PC1 r = {[round(float(g10[0, j]), 3) for j in sub_cols]}")
+    if len(pc1_best) != 4:
+        raise SystemExit("PC1 best-for-4-of-5 claim failed")
+    pc1_r = [float(g10[0, j]) for j in pc1_best]
+    if not all(0.445 <= r <= 0.495 for r in pc1_r):   # paper range at 2dp
+        raise SystemExit(f"PC1 r range {pc1_r} outside [0.45, 0.49]")
+    pc5_best = [j for j in range(6)
+                if int(np.abs(g25[:, j]).argmax()) == 4]
+    pc5_r = [float(g25[4, j]) for j in range(6)]
+    print(f"  PC5 best-single-predictor metrics @ 2.5: {len(pc5_best)}/6, "
+          f"PC5 r = {[round(r, 3) for r in pc5_r]}")
+    if len(pc5_best) != 6:
+        raise SystemExit("PC5 best-for-all claim failed")
+    if not all(-0.345 <= r <= -0.175 for r in pc5_r):  # paper range at 2dp
+        raise SystemExit(f"PC5 r range {pc5_r} outside [-0.34, -0.18]")
+    print("  top-20-PC subspace R2 per metric:")
+    for a in ALPHAS:
+        print(f"    alpha={a}: " + ", ".join(
+            f"{lab} {v:.2f}" for lab, v in r2_20[a].items()))
 
     print(f"figures written to {OUT}")
 
