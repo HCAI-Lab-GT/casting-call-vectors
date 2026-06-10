@@ -1,0 +1,38 @@
+Sparsity: proposed steering vs assistant-axis steering
+========================================================
+
+Scale note: raw total variance and norms are magnitude-dominated;
+the two sets have very different vector norms, so those metrics
+conflate 'bigger' with 'more spread'. The *_unit rows below are
+computed on unit-normalized vectors, so they measure directional
+(angular) spread only — that's the fair comparison for steering.
+
+[full]  n_roles=274
+  mean norm                    proposed=2.730   axis=9.678   ratio=0.28x  (magnitude — not a spread signal)
+  mean pairwise cosine         proposed=0.863   axis=0.962                     (lower => more directional spread)
+  participation ratio (unit)   proposed=14.09   axis=10.44                         (effective # of directions, scale-invariant)
+  top-PC var fraction (unit)   proposed=22.4%   axis=26.1%                    (lower => less collapse onto one axis)
+
+  scale-sensitive (for reference, not the headline):
+    total variance (raw)       proposed=1.11   axis=3.57   ratio=0.31x
+    participation ratio (raw)  proposed=12.62   axis=10.67
+
+[sans_mythical]  n_roles=227
+  mean norm                    proposed=2.673   axis=9.686   ratio=0.28x  (magnitude — not a spread signal)
+  mean pairwise cosine         proposed=0.884   axis=0.966                     (lower => more directional spread)
+  participation ratio (unit)   proposed=25.26   axis=10.26                         (effective # of directions, scale-invariant)
+  top-PC var fraction (unit)   proposed=12.3%   axis=26.6%                    (lower => less collapse onto one axis)
+
+  scale-sensitive (for reference, not the headline):
+    total variance (raw)       proposed=0.89   axis=3.24   ratio=0.28x
+    participation ratio (raw)  proposed=22.26   axis=10.58
+
+Headline (sans mythical)
+--------------------------------------------------------
+Across 227 roles, the proposed steering vectors occupy
+~25.3 effective directions vs ~10.3 for the assistant-axis
+family (2.5x more, on unit-normalized vectors), and their mean
+pairwise cosine is 0.88 vs 0.97 — i.e. the proposed
+vectors are substantially more *directionally* spread out, even though
+the assistant-axis vectors have larger individual norms
+(9.69 vs 2.67).

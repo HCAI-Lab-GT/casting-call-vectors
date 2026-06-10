@@ -22,7 +22,7 @@ module load uv
 source .venv/bin/activate
 uv sync
 
-srun uv run python scripts/evaluation/steer_role_vectors.py \
+srun uv run python analysis/empirical/steer_role_vectors.py \
         --model "$MODEL" \
         --alpha "$ALPHA" \
         --roles "${ROLE_LIST[@]}" 
