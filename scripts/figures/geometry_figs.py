@@ -13,6 +13,7 @@ Figures (added one at a time, each behind its verification gate):
   out/fig_distance_summary.pdf    -> fig:distance-summary (4 panels)
   out/fig_pc_metric_grid.pdf      -> fig:pc-grid (20 PCs x 6 metrics x 4 alphas)
   out/fig_trait_metric_heatmap.pdf -> fig:trait-heatmap (14 axes x 6 metrics)
+  out/fig_two_regime_overlay.pdf   -> fig:two-regime (Sec 5 body overlay)
 
 Conventions / corrections discovered here:
   - run_analysis.py builds 275x275 RDMs (assistant INCLUDED); the paper's
@@ -495,6 +496,44 @@ def fig_trait_metric_heatmap():
     return list(axes_v), heat, r2
 
 
+def fig_two_regime(series):
+    """Sec 5 body overlay: |effect size| vs alpha for the five findings.
+
+    Series constructions (fingerprinted against the published PNG):
+      distance: |r| of cos-distance vs Delta_r (Table 1, dedup)
+      PC1/PC5:  max |r| across the 6 metrics at each alpha
+      trait:    sqrt(mean joint-OLS R^2 across the 6 metrics)
+      RSA:      per-alpha Spearman (cos x corr)
+    """
+    spec = [
+        ("distance to assistant", "distance", style.VERMILLION, "-", "o"),
+        ("PC1 projection", "pc1", style.ORANGE, "-", "s"),
+        ("trait axes (joint)", "trait", style.PURPLE, "-", "^"),
+        ("pairwise RSA", "rsa", style.BLUE, "--", "o"),
+        ("PC5 projection", "pc5", style.SKY, "--", "s"),
+    ]
+    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 1.9))
+    ax.axvspan(0.93, 1.75, color=style.VERMILLION, alpha=0.05, lw=0)
+    ax.axvspan(1.75, 2.57, color=style.BLUE, alpha=0.05, lw=0)
+    ax.text(1.0, 0.715, "direction-dominated", fontsize=5.5,
+            color=style.VERMILLION, va="top")
+    ax.text(2.5, 0.715, "structure-dominated", fontsize=5.5,
+            color=style.BLUE, va="top", ha="right")
+    for label, key, color, ls, marker in spec:
+        ax.plot(ALPHAS, series[key], color=color, ls=ls, marker=marker,
+                ms=2.5, lw=1.1, label=label)
+    ax.set_xlabel(r"steering coefficient $\alpha$")
+    ax.set_ylabel(r"$|$effect size$|$")
+    ax.set_xticks(ALPHAS)
+    ax.set_xlim(0.93, 2.57)
+    ax.set_ylim(0, 0.73)
+    ax.legend(fontsize=5, loc="lower left", bbox_to_anchor=(0.02, 0.17),
+              handlelength=1.6, labelspacing=0.3, frameon=True,
+              framealpha=0.9, edgecolor="none", facecolor="white")
+    fig.savefig(OUT / "fig_two_regime_overlay.pdf")
+    plt.close(fig)
+
+
 def main():
     style.apply()
     print("verification gate (RSA):")
@@ -657,6 +696,29 @@ def main():
                             ("serene-evil", "emot. reg.", 0.253)]:
         got = float(h10[axis_names.index(axis), cols.index(lab)])
         verify(f"caption cell {axis} x {lab} @ 1.0", got, want, 0.005)
+
+    print("verification gate (two-regime overlay):")
+    series = {
+        "distance": [abs(r_cos[a]) for a in ALPHAS],
+        "pc1": [float(np.abs(grids[a][0]).max()) for a in ALPHAS],
+        "pc5": [float(np.abs(grids[a][4]).max()) for a in ALPHAS],
+        "trait": [float(np.sqrt(np.mean(list(tr2[a].values()))))
+                  for a in ALPHAS],
+        "rsa": [float(cc[cc.alpha == a]["rsa_spearman"].iloc[0])
+                for a in ALPHAS],
+    }
+    for key, vals in series.items():
+        print(f"  {key}: " + " ".join(f"{v:.3f}" for v in vals))
+    # the overlay is assembled from already-gated components; gate the
+    # qualitative claims its caption makes
+    for key in ("distance", "pc1", "trait"):
+        if not all(a > b for a, b in zip(series[key], series[key][1:])):
+            raise SystemExit(f"{key} not monotonically declining")
+    if not all(b > a for a, b in zip(series["rsa"], series["rsa"][1:])):
+        raise SystemExit("RSA not monotonically rising")
+    if not series["pc5"][-1] > series["pc1"][-1]:
+        raise SystemExit("PC5 does not overtake PC1 at alpha=2.5")
+    fig_two_regime(series)
 
     print(f"figures written to {OUT}")
 
