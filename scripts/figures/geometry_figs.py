@@ -496,6 +496,47 @@ def fig_trait_metric_heatmap():
     return list(axes_v), heat, r2
 
 
+def pathway_validation():
+    """Trait->PC->metric pathway cross-validation (Appendix D).
+
+    r_pred(axis, metric, alpha) = sum_k cos(axis, PC_k) * r(PC_k, metric)
+    over the top-20 PCs, correlated against the direct trait-axis-to-
+    metric correlations. n = 14 axes x 6 metrics x 4 alphas = 336.
+    No committed artifact ever existed for the published +0.717; this
+    recompute (matching the audit's) is now the source.
+    """
+    vecs = load_role_vectors()
+    roles = sorted(vecs)
+    V = np.stack([vecs[r] for r in roles])
+    Vc = V - V.mean(axis=0)
+    U, S, Vt = np.linalg.svd(Vc, full_matrices=False)
+    scores = U * S
+    bp = read_branch_csv(
+        "analysis/empirical/rsa_geometry_behavior/data/behavioral_profiles.csv"
+    ).set_index("role").reindex(roles)
+    K = 20
+    r_pc = {a: np.array([[pearson(scores[:, k], bp[f"{col}__alpha_{a}"])
+                          for col, _ in PC_METRICS] for k in range(K)])
+            for a in ALPHAS}
+    pcdirs = Vt[:K]
+    pred, direct, alpha_of = [], [], []
+    for p, n in TRAIT_AXES:
+        ax = load_trait_vector(p) - load_trait_vector(n)
+        cosk = pcdirs @ (ax / np.linalg.norm(ax))
+        proj = V @ ax
+        for j, (col, _) in enumerate(PC_METRICS):
+            for a in ALPHAS:
+                pred.append(float(cosk @ r_pc[a][:, j]))
+                direct.append(pearson(proj, bp[f"{col}__alpha_{a}"]))
+                alpha_of.append(a)
+    pred, direct = np.array(pred), np.array(direct)
+    alpha_of = np.array(alpha_of)
+    overall = pearson(pred, direct)
+    per_alpha = {a: pearson(pred[alpha_of == a], direct[alpha_of == a])
+                 for a in ALPHAS}
+    return overall, per_alpha, len(pred)
+
+
 def fig_two_regime(series):
     """Sec 5 body overlay: |effect size| vs alpha for the five findings.
 
@@ -719,6 +760,17 @@ def main():
     if not series["pc5"][-1] > series["pc1"][-1]:
         raise SystemExit("PC5 does not overtake PC1 at alpha=2.5")
     fig_two_regime(series)
+
+    print("verification gate (trait-PC pathway cross-validation):")
+    overall, per_alpha, n = pathway_validation()
+    verify("pathway n", float(n), 336, 0)
+    verify("pathway overall r", overall, 0.720, 0.001)
+    for a, want in zip(ALPHAS, [0.748, 0.594, 0.579, 0.931]):
+        verify(f"pathway r @ {a}", per_alpha[a], want, 0.001)
+    from scipy import stats
+    t = overall * np.sqrt((n - 2) / (1 - overall ** 2))
+    p = 2 * stats.t.sf(abs(t), n - 2)
+    print(f"  pathway p-value: {p:.1e}")
 
     print(f"figures written to {OUT}")
 
