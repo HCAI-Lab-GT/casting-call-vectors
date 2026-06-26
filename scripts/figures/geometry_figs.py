@@ -6,6 +6,7 @@ via `git show origin/empirical-geometry:<path>` fallback, so this script
 works on any checkout either way.
 
 Figures (added one at a time, each behind its verification gate):
+  out/fig4_rsa_per_alpha.pdf     -> fig:rsa-per-alpha (left panel)
   out/fig_rsa_grid.pdf            -> fig:rsa-per-alpha (right panel)
   out/fig_effective_rank.pdf      -> fig:noise-floor (left panel)
   out/fig_noise_corrected_rsa.pdf -> fig:noise-floor (right panel)
@@ -71,7 +72,7 @@ def fig_rsa_grid():
     pvals = main.pivot(index="repr_distance", columns="beh_distance",
                        values="mantel_p").reindex_like(grid)
 
-    fig, ax = plt.subplots(figsize=(style.HALF_PANEL_W_IN, 1.45))
+    fig, ax = plt.subplots(figsize=(style.HALF_PANEL_W_IN, 1.6))
     ax.imshow(grid.to_numpy(), cmap="Blues", vmin=0, vmax=0.3)
     for i in range(2):
         for j in range(2):
@@ -79,16 +80,42 @@ def fig_rsa_grid():
             ax.text(j, i, f"{v:.3f}", ha="center", va="center",
                     fontsize=8, color="white" if v > 0.18 else "black")
     ax.set_xticks([0, 1])
-    ax.set_xticklabels(["corr.", "L2"], fontsize=7)
+    ax.set_xticklabels(["Corr.", "L2"], fontsize=7)
     ax.set_yticks([0, 1])
-    ax.set_yticklabels(["cosine", "L2"], fontsize=7)
-    ax.set_xlabel("behavioral distance", fontsize=7)
-    ax.set_ylabel("repr. distance", fontsize=7)
+    ax.set_yticklabels(["Cosine", "L2"], fontsize=7)
+    ax.set_xlabel("Behavior Distance", fontsize=7)
+    ax.set_ylabel("Representation Distance", fontsize=7)
     fig.savefig(OUT / "fig_rsa_grid.pdf")
     plt.close(fig)
     print("  Mantel p per cell:", {f"{r}x{c}": float(pvals.loc[r, c])
           for r in pvals.index for c in pvals.columns})
     return grid
+
+
+def fig_rsa_per_alpha(per_alpha: pd.DataFrame | None = None):
+    """Per-alpha RSA bars for the left panel of fig:rsa-per-alpha."""
+    if per_alpha is None:
+        per_alpha = read_branch_csv(
+            "analysis/empirical/rsa_geometry_behavior/data/rsa_per_alpha.csv")
+    sub = per_alpha[per_alpha["repr_distance"] == "repr_cos"].copy()
+    corr = sub[sub["beh_distance"] == "beh_corr"].set_index("alpha")
+    l2 = sub[sub["beh_distance"] == "beh_l2"].set_index("alpha")
+    x = np.arange(len(ALPHAS))
+
+    fig, ax = plt.subplots(figsize=(style.HALF_PANEL_W_IN, 1.6))
+    ax.bar(x - 0.17, [corr.loc[a, "rsa_spearman"] for a in ALPHAS],
+           width=0.34, color=style.BLUE, label="Corr.")
+    ax.bar(x + 0.17, [l2.loc[a, "rsa_spearman"] for a in ALPHAS],
+           width=0.34, color=style.SATURATION, label="L2")
+    ax.set_xticks(x)
+    ax.set_xticklabels([f"{a}" for a in ALPHAS], fontsize=7)
+    ax.set_xlabel(r"Steering Coefficient $\alpha$", fontsize=7)
+    ax.set_ylabel("RSA (Spearman)", fontsize=7)
+    ax.set_ylim(0, 0.25)
+    ax.legend(fontsize=6.3, ncol=2, loc="upper left", handlelength=1.1,
+              columnspacing=0.8)
+    fig.savefig(OUT / "fig4_rsa_per_alpha.pdf")
+    plt.close(fig)
 
 
 def fig_effective_rank():
@@ -98,12 +125,12 @@ def fig_effective_rank():
         "analysis/empirical/intrinsic_dimensionality/data/summary.csv"
     ).set_index("matrix")
     series = {
-        "repr_raw": ("raw (ER 3)", style.GREY, "-"),
-        "repr_centered": ("centered (ER 50)", style.BLUE, "-"),
-        "behavioral": ("behavior (ER 2)", style.VERMILLION, "-"),
-        "repr_random_null": ("null (ER 266)", style.GREEN, ":"),
+        "repr_raw": ("Raw (ER=3)", style.GREY, "-"),
+        "repr_centered": ("Centered (ER=50)", style.BLUE, "-"),
+        "behavioral": ("Behavior (ER=2)", style.SATURATION, "-"),
+        "repr_random_null": ("Null (ER=266)", style.GREEN, ":"),
     }
-    fig, ax = plt.subplots(figsize=(style.HALF_PANEL_W_IN, 1.45))
+    fig, ax = plt.subplots(figsize=(style.HALF_PANEL_W_IN, 1.6))
     for key, (label, color, ls) in series.items():
         sub = curves[curves["matrix"] == key]
         assert len(sub) > 0, f"no curve rows for matrix key {key!r}"
@@ -111,10 +138,10 @@ def fig_effective_rank():
                 ls=ls, lw=1.1, label=label)
     ax.axhline(0.9, color="black", lw=0.5, ls="--")
     ax.set_xscale("log")
-    ax.set_xlabel("rank")
-    ax.set_ylabel("cumul. variance")
+    ax.set_xlabel("Rank")
+    ax.set_ylabel("Cumulative Variance")
     ax.set_ylim(0, 1.02)
-    ax.legend(fontsize=5, loc="lower right", handlelength=1.0,
+    ax.legend(fontsize=5.8, loc="lower right", handlelength=1.0,
               labelspacing=0.25, borderaxespad=0.2, frameon=True,
               framealpha=0.95, edgecolor="none", facecolor="white")
     fig.savefig(OUT / "fig_effective_rank.pdf")
@@ -129,18 +156,18 @@ def fig_noise_corrected_rsa():
               f"{c.replace('beh_', '').replace('l2', 'L2')}"
               for r, c in zip(nc["repr_distance"], nc["beh_distance"])]
     x = np.arange(len(nc))
-    fig, ax = plt.subplots(figsize=(style.HALF_PANEL_W_IN, 1.45))
+    fig, ax = plt.subplots(figsize=(style.HALF_PANEL_W_IN, 1.6))
     ax.bar(x - 0.19, nc["rsa_observed"], width=0.36, color=style.BLUE,
-           label="observed")
+           label="Observed")
     ax.bar(x + 0.19, nc["rsa_noise_corrected"], width=0.36,
-           color=style.SKY, label="noise-corrected")
+           color=style.SKY, label="Noise-Corrected")
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=5, rotation=20, ha="right")
+    ax.set_xticklabels(labels, fontsize=5.8, rotation=20, ha="right")
     ax.set_ylabel("RSA (Spearman)")
     ax.set_ylim(0, 0.32)
-    ax.text(0.03, 0.97, "ceiling 0.97–0.99", transform=ax.transAxes,
-            fontsize=5.5, color=style.GREY, va="top")
-    ax.legend(fontsize=5.5, loc="upper left", bbox_to_anchor=(0.0, 0.88),
+    ax.text(0.03, 0.97, "Ceiling: 0.97-0.99", transform=ax.transAxes,
+            fontsize=5.8, color=style.GREY, va="top")
+    ax.legend(fontsize=6.0, loc="upper left", bbox_to_anchor=(0.0, 0.88),
               handlelength=1.0)
     fig.savefig(OUT / "fig_noise_corrected_rsa.pdf")
     plt.close(fig)
@@ -155,7 +182,7 @@ def fig_norm_curves():
     cols = [f"score_at_alpha_{str(a).replace('.', '_')}" for a in alphas]
     palette = {"Q1": style.SKY, "Q2": style.GREEN, "Q3": style.ORANGE,
                "Q4": style.BLUE}
-    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 1.6))
+    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 2.1))
     for q, sub in stab.groupby("quartile", observed=True):
         mean = sub[cols].mean()
         sem = sub[cols].sem()
@@ -163,11 +190,11 @@ def fig_norm_curves():
                 label=f"{q} (n={len(sub)})")
         ax.fill_between(alphas, mean - 1.96 * sem, mean + 1.96 * sem,
                         color=palette[str(q)], alpha=0.15, lw=0)
-    ax.set_xlabel(r"steering coefficient $\alpha$")
-    ax.set_ylabel("mean judge score")
+    ax.set_xlabel(r"Steering Coefficient $\alpha$")
+    ax.set_ylabel("Mean Judge Score")
     ax.set_xticks(alphas)
-    ax.legend(fontsize=5.5, loc="upper left", title="norm quartile",
-              title_fontsize=5.5, handlelength=1.2)
+    ax.legend(fontsize=6.4, loc="upper left", title="Norm Quartile",
+              title_fontsize=6.4, handlelength=1.2)
     fig.savefig(OUT / "fig_norm_alpha_curves.pdf")
     plt.close(fig)
     peak_early = (stab["peak_alpha"] < 2.5).groupby(
@@ -228,11 +255,11 @@ def fig_distance_summary():
     assert len(common) == 274, f"role match n={len(common)}, expected 274"
     delta = (cell["steered_score"] - cell["baseline_score"]).loc[common]
     metrics = {
-        "$\\Delta$ (vs. prompted ref.)": delta,
-        "$\\Delta$ (vs. asst.-axis)":
+        "$\\Delta$ vs. Prompted Ref.": delta,
+        "$\\Delta$ vs. Assistant Axis":
             (cell["steered_score"] - cell["assistant_axis_score"]).loc[common],
-        "steered mean": cell["steered_score"].loc[common],
-        "asst.-axis mean": cell["assistant_axis_score"].loc[common],
+        "Steered Mean": cell["steered_score"].loc[common],
+        "Assistant-Axis Mean": cell["assistant_axis_score"].loc[common],
     }
     dc, de, ln = d_cos[common], d_euc[common], lognorm[common]
 
@@ -243,7 +270,7 @@ def fig_distance_summary():
     heat = np.array([[pearson(dc, m[a]) for a in ALPHAS]
                      for m in metrics.values()])
 
-    fig, axes = plt.subplots(2, 2, figsize=(style.COLUMN_W_IN, 2.95))
+    fig, axes = plt.subplots(2, 2, figsize=(style.COLUMN_W_IN, 3.35))
     ax = axes[0, 0]   # (a) scatter at alpha=2.5
     ax.scatter(dc, delta[2.5], s=2.5, color=style.BLUE, alpha=0.55, lw=0)
     b1, b0 = np.polyfit(dc, delta[2.5], 1)
@@ -251,46 +278,46 @@ def fig_distance_summary():
     ax.plot(xs, b1 * xs + b0, color="black", lw=0.9)
     ax.text(0.03, 0.04, f"$r{{=}}{r_cos[2.5]:.3f}$\n$n{{=}}{len(dc)}$",
             transform=ax.transAxes, fontsize=5.5, va="bottom")
-    ax.set_xlabel("cosine distance", fontsize=6, labelpad=1)
+    ax.set_xlabel("Cosine Distance", fontsize=6.6, labelpad=1)
     ax.set_ylabel(r"$\Delta_r$ at $\alpha{=}2.5$", fontsize=6, labelpad=1)
 
     ax = axes[0, 1]   # (b) r vs alpha, cos + euclidean
     ax.plot(ALPHAS, [r_cos[a] for a in ALPHAS], color=style.BLUE,
-            marker="o", ms=2, label="cosine")
+            marker="o", ms=2, label="Cosine")
     ax.plot(ALPHAS, [r_euc[a] for a in ALPHAS], color=style.PURPLE,
             marker="s", ms=2, label="Euclidean")
     ax.axhline(0, color=style.GREY, lw=0.5, ls=":")
     ax.set_xticks(ALPHAS)
-    ax.set_xlabel(r"$\alpha$", fontsize=6, labelpad=1)
+    ax.set_xlabel(r"Steering Coefficient $\alpha$", fontsize=6.6, labelpad=1)
     ax.set_ylabel(r"Pearson $r$", fontsize=6, labelpad=1)
-    ax.legend(fontsize=5, loc="upper left", handlelength=1.2)
+    ax.legend(fontsize=5.8, loc="upper left", handlelength=1.2)
 
     ax = axes[1, 0]   # (c) R^2 with / without log-norm covariate
     x = np.arange(len(ALPHAS))
     ax.bar(x - 0.18, [r2_1[a] for a in ALPHAS], width=0.36,
-           color=style.BLUE, label="distance only")
+           color=style.BLUE, label="Distance Only")
     ax.bar(x + 0.18, [r2_2[a] for a in ALPHAS], width=0.36,
            color=style.ORANGE, label=r"$+\log\|v\|$")
     ax.set_xticks(x)
     ax.set_xticklabels([f"{a}" for a in ALPHAS], fontsize=6)
-    ax.set_xlabel(r"$\alpha$", fontsize=6, labelpad=1)
+    ax.set_xlabel(r"Steering Coefficient $\alpha$", fontsize=6.6, labelpad=1)
     ax.set_ylabel(r"OLS $R^2$", fontsize=6, labelpad=1)
-    ax.legend(fontsize=5, loc="upper right", handlelength=1.0)
+    ax.legend(fontsize=5.8, loc="upper right", handlelength=1.0)
 
     ax = axes[1, 1]   # (d) r heatmap, behavioral metric x alpha
     ax.imshow(heat, cmap="RdBu_r", vmin=-0.45, vmax=0.45, aspect="auto")
     for i in range(heat.shape[0]):
         for j in range(heat.shape[1]):
             ax.text(j, i, f"{heat[i, j]:+.2f}", ha="center", va="center",
-                    fontsize=4.8)
+                    fontsize=5.2)
     ax.set_xticks(range(len(ALPHAS)))
-    ax.set_xticklabels([f"{a}" for a in ALPHAS], fontsize=5.5)
+    ax.set_xticklabels([f"{a}" for a in ALPHAS], fontsize=6)
     ax.set_yticks(range(len(metrics)))
-    ax.set_yticklabels(list(metrics), fontsize=4.8)
-    ax.set_xlabel(r"$\alpha$", fontsize=6, labelpad=1)
+    ax.set_yticklabels(list(metrics), fontsize=5.5)
+    ax.set_xlabel(r"Steering Coefficient $\alpha$", fontsize=6.6, labelpad=1)
 
     for letter, ax in zip("abcd", axes.flat):
-        ax.tick_params(labelsize=5.5)
+        ax.tick_params(labelsize=6)
         ax.text(-0.18, 1.06, f"({letter})", transform=ax.transAxes,
                 fontsize=7, fontweight="bold", va="top")
     fig.savefig(OUT / "fig_distance_summary.pdf")
@@ -343,12 +370,12 @@ def distance_reference_rows():
 
 
 PC_METRICS = [  # column order of the published grid
-    ("steered_score", "overall"),
-    ("cmp_motivation", "motivation"),
-    ("cmp_worldview_alignment", "worldview"),
-    ("cmp_emotional_register", "emot. reg."),
-    ("cmp_vocab_choice", "vocab"),
-    ("cmp_social_dynamic", "social dyn."),
+    ("steered_score", "Overall"),
+    ("cmp_motivation", "Motivation"),
+    ("cmp_worldview_alignment", "Worldview"),
+    ("cmp_emotional_register", "Emot. Reg."),
+    ("cmp_vocab_choice", "Vocab"),
+    ("cmp_social_dynamic", "Social Dyn."),
 ]
 
 
@@ -385,23 +412,23 @@ def fig_pc_metric_grid():
             for i in range(n_pc):
                 g[i, j] = pearson(scores[:, i], y)
         grids[a] = g
-    fig, axes = plt.subplots(4, 1, figsize=(style.COLUMN_W_IN, 3.1),
+    fig, axes = plt.subplots(4, 1, figsize=(style.COLUMN_W_IN, 3.7),
                              sharex=True)
     for ax, a in zip(axes, ALPHAS):
         ax.imshow(grids[a].T, cmap="RdBu_r", vmin=-0.6, vmax=0.6,
                   aspect="auto", interpolation="nearest")
         ax.set_yticks(range(len(PC_METRICS)))
-        ax.set_yticklabels([lab for _, lab in PC_METRICS], fontsize=4.6)
-        ax.set_ylabel(rf"$\alpha{{=}}{a}$", fontsize=6)
+        ax.set_yticklabels([lab for _, lab in PC_METRICS], fontsize=5.4)
+        ax.set_ylabel(rf"$\alpha{{=}}{a}$", fontsize=6.5)
         ax.tick_params(length=1.5)
     axes[-1].set_xticks(range(0, n_pc, 2))
     axes[-1].set_xticklabels([f"PC{i+1}" for i in range(0, n_pc, 2)],
-                             fontsize=5, rotation=0)
+                             fontsize=6, rotation=0)
     sm = plt.cm.ScalarMappable(cmap="RdBu_r",
                                norm=plt.Normalize(vmin=-0.6, vmax=0.6))
     cb = fig.colorbar(sm, ax=axes, fraction=0.035, pad=0.02)
-    cb.set_label(r"Pearson $r$", fontsize=6)
-    cb.ax.tick_params(labelsize=5)
+    cb.set_label(r"Pearson $r$", fontsize=6.5)
+    cb.ax.tick_params(labelsize=6)
     fig.savefig(OUT / "fig_pc_metric_grid.pdf")
     plt.close(fig)
 
@@ -479,18 +506,19 @@ def fig_trait_metric_heatmap():
     # vs +0.245 at 1.0) -- audit flag; the prose's axis-correspondence
     # claims are direction-regime (low-alpha) facts.
     h10 = heat[1.0]
-    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 2.5))
+    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 3.0))
     ax.imshow(h10, cmap="RdBu_r", vmin=-0.35, vmax=0.35, aspect="auto",
               interpolation="nearest")
     for i in range(h10.shape[0]):
         for j in range(h10.shape[1]):
             ax.text(j, i, f"{h10[i, j]:+.2f}", ha="center", va="center",
-                    fontsize=4.2)
+                    fontsize=5.0)
     ax.set_xticks(range(len(PC_METRICS)))
-    ax.set_xticklabels([lab for _, lab in PC_METRICS], fontsize=5,
+    ax.set_xticklabels([lab for _, lab in PC_METRICS], fontsize=6.2,
                        rotation=30, ha="right")
     ax.set_yticks(range(len(axes_v)))
-    ax.set_yticklabels([n.replace("-", "–") for n in axes_v], fontsize=4.6)
+    ax.set_yticklabels([n.replace("-", "–").title() for n in axes_v],
+                       fontsize=5.3)
     fig.savefig(OUT / "fig_trait_metric_heatmap.pdf")
     plt.close(fig)
     return list(axes_v), heat, r2
@@ -547,28 +575,28 @@ def fig_two_regime(series):
       RSA:      per-alpha Spearman (cos x corr)
     """
     spec = [
-        ("distance to assistant", "distance", style.VERMILLION, "-", "o"),
-        ("PC1 projection", "pc1", style.ORANGE, "-", "s"),
-        ("trait axes (joint)", "trait", style.PURPLE, "-", "^"),
-        ("pairwise RSA", "rsa", style.BLUE, "--", "o"),
-        ("PC5 projection", "pc5", style.SKY, "--", "s"),
+        ("Distance to Assistant", "distance", style.ASSISTANT_AXIS, "-", "o"),
+        ("PC1 Projection", "pc1", style.ORANGE, "-", "s"),
+        ("Trait Axes (Joint)", "trait", style.PURPLE, "-", "^"),
+        ("Pairwise RSA", "rsa", style.BLUE, "--", "o"),
+        ("PC5 Projection", "pc5", style.SKY, "--", "s"),
     ]
-    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 1.9))
-    ax.axvspan(0.93, 1.75, color=style.VERMILLION, alpha=0.05, lw=0)
+    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 2.2))
+    ax.axvspan(0.93, 1.75, color=style.SATURATION, alpha=0.05, lw=0)
     ax.axvspan(1.75, 2.57, color=style.BLUE, alpha=0.05, lw=0)
-    ax.text(1.0, 0.715, "direction-dominated", fontsize=5.5,
-            color=style.VERMILLION, va="top")
-    ax.text(2.5, 0.715, "structure-dominated", fontsize=5.5,
+    ax.text(1.0, 0.715, "Direction-Dominated", fontsize=6.2,
+            color=style.SATURATION, va="top")
+    ax.text(2.5, 0.715, "Structure-Dominated", fontsize=6.2,
             color=style.BLUE, va="top", ha="right")
     for label, key, color, ls, marker in spec:
         ax.plot(ALPHAS, series[key], color=color, ls=ls, marker=marker,
                 ms=2.5, lw=1.1, label=label)
-    ax.set_xlabel(r"steering coefficient $\alpha$")
-    ax.set_ylabel(r"$|$effect size$|$")
+    ax.set_xlabel(r"Steering Coefficient $\alpha$")
+    ax.set_ylabel(r"$|$Effect Size$|$")
     ax.set_xticks(ALPHAS)
     ax.set_xlim(0.93, 2.57)
     ax.set_ylim(0, 0.73)
-    ax.legend(fontsize=5, loc="lower left", bbox_to_anchor=(0.02, 0.17),
+    ax.legend(fontsize=6.0, loc="lower left", bbox_to_anchor=(0.02, 0.17),
               handlelength=1.6, labelspacing=0.3, frameon=True,
               framealpha=0.9, edgecolor="none", facecolor="white")
     fig.savefig(OUT / "fig_two_regime_overlay.pdf")
@@ -587,6 +615,7 @@ def main():
 
     per_alpha = read_branch_csv(
         "analysis/empirical/rsa_geometry_behavior/data/rsa_per_alpha.csv")
+    fig_rsa_per_alpha(per_alpha)
     cc = per_alpha[(per_alpha.repr_distance == "repr_cos")
                    & (per_alpha.beh_distance == "beh_corr")]
     for a, want in [(1.0, 0.085), (1.5, 0.092), (2.0, 0.121), (2.5, 0.179)]:
@@ -708,12 +737,12 @@ def main():
     print("verification gate (trait axes, Table 2):")
     axis_names, theat, tr2 = fig_trait_metric_heatmap()
     want_r2 = {  # Table 2, all 24 cells (audit recompute: exact match)
-        "emot. reg.": [0.41, 0.39, 0.31, 0.14],
-        "social dyn.": [0.39, 0.35, 0.26, 0.11],
-        "vocab": [0.38, 0.34, 0.23, 0.06],
-        "worldview": [0.36, 0.34, 0.27, 0.13],
-        "motivation": [0.34, 0.32, 0.27, 0.13],
-        "overall": [0.28, 0.24, 0.16, 0.14],
+        "Emot. Reg.": [0.41, 0.39, 0.31, 0.14],
+        "Social Dyn.": [0.39, 0.35, 0.26, 0.11],
+        "Vocab": [0.38, 0.34, 0.23, 0.06],
+        "Worldview": [0.36, 0.34, 0.27, 0.13],
+        "Motivation": [0.34, 0.32, 0.27, 0.13],
+        "Overall": [0.28, 0.24, 0.16, 0.14],
     }
     for lab, wants in want_r2.items():
         for a, want in zip(ALPHAS, wants):
@@ -721,20 +750,20 @@ def main():
     # audit fingerprint cells of the published alpha=2.5 heatmap
     cols = [lab for _, lab in PC_METRICS]
     h25 = theat[2.5]
-    fp_cells = [("assertive-poetic", "overall", -0.24),
-                ("empathetic-stoic", "emot. reg.", 0.25),
-                ("methodical-chaotic", "overall", -0.20)]
+    fp_cells = [("assertive-poetic", "Overall", -0.24),
+                ("empathetic-stoic", "Emot. Reg.", 0.25),
+                ("methodical-chaotic", "Overall", -0.20)]
     for axis, lab, want in fp_cells:
         got = float(h25[axis_names.index(axis), cols.index(lab)])
         verify(f"heatmap {axis} x {lab} @ 2.5", got, want, 0.005)
     # new caption cells (figure now rendered at alpha=1.0; the old caption
     # attributed these values to alpha=2.5 where they do not hold)
     h10 = theat[1.0]
-    for axis, lab, want in [("methodical-chaotic", "vocab", 0.245),
-                            ("diplomatic-dramatic", "social dyn.", 0.167),
-                            ("empathetic-stoic", "emot. reg.", 0.296),
-                            ("nurturing-hostile", "emot. reg.", 0.296),
-                            ("serene-evil", "emot. reg.", 0.253)]:
+    for axis, lab, want in [("methodical-chaotic", "Vocab", 0.245),
+                            ("diplomatic-dramatic", "Social Dyn.", 0.167),
+                            ("empathetic-stoic", "Emot. Reg.", 0.296),
+                            ("nurturing-hostile", "Emot. Reg.", 0.296),
+                            ("serene-evil", "Emot. Reg.", 0.253)]:
         got = float(h10[axis_names.index(axis), cols.index(lab)])
         verify(f"caption cell {axis} x {lab} @ 1.0", got, want, 0.005)
 

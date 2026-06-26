@@ -28,7 +28,7 @@ from controllability_figs import (
 )
 
 ALL_DIMS = ["steered_score"] + CMP_DIMS
-ALL_LABELS = {"steered_score": "overall", **DIM_LABELS}
+ALL_LABELS = {"steered_score": "Overall", **DIM_LABELS}
 
 
 def cell_means(df, col):
@@ -47,14 +47,14 @@ def ols_slopes(cell):
 
 def fig_per_role_heatmap(df):
     r = pd.DataFrame({ALL_LABELS[c]: per_role_r(df, c) for c in ALL_DIMS})
-    r = r.dropna().sort_values("overall", ascending=False)
-    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 3.4))
+    r = r.dropna().sort_values("Overall", ascending=False)
+    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 3.8))
     im = ax.imshow(r.to_numpy(), aspect="auto", cmap="RdBu_r",
                    vmin=-1, vmax=1, interpolation="nearest")
     ax.set_xticks(range(len(r.columns)))
-    ax.set_xticklabels(r.columns, rotation=35, ha="right", fontsize=6)
+    ax.set_xticklabels(r.columns, rotation=25, ha="right", fontsize=7)
     ax.set_yticks([])
-    ax.set_ylabel(f"roles (n={len(r)}, sorted by overall $r$)")
+    ax.set_ylabel(f"Roles (n={len(r)}, Sorted by Overall $r$)")
     cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.02)
     cb.set_label(r"Pearson $r$ (score vs. $\alpha$)", fontsize=7)
     cb.ax.tick_params(labelsize=6)
@@ -74,21 +74,22 @@ def fig_monotonicity_bars(df):
             r"$r>0.6$": float((r > 0.6).mean()),
             r"$r>0.8$": float((r > 0.8).mean()),
             r"$r>0.95$": float((r > 0.95).mean()),
-            "monotone": float(mono.mean()),
+            "Monotone": float(mono.mean()),
         }
     m = pd.DataFrame(metrics).T  # axes x thresholds
-    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 1.7))
+    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 2.1))
     x = np.arange(len(m.index))
     w = 0.16
-    colors = [style.BLUE, style.SKY, style.GREEN, style.ORANGE, style.PURPLE]
+    colors = [style.BLUE, style.SKY, style.GREEN, style.SATURATION,
+              style.PURPLE]
     for i, col in enumerate(m.columns):
         ax.bar(x + (i - 2) * w, m[col], width=w, color=colors[i], label=col)
     ax.set_xticks(x)
-    ax.set_xticklabels(m.index, rotation=20, ha="right", fontsize=6)
-    ax.set_ylabel("fraction of roles")
+    ax.set_xticklabels(m.index, rotation=15, ha="right", fontsize=7)
+    ax.set_ylabel("Fraction of Roles")
     ax.set_ylim(0, 1.0)
-    ax.legend(ncol=5, fontsize=5, loc="upper center",
-              bbox_to_anchor=(0.5, 1.14), columnspacing=0.8,
+    ax.legend(ncol=5, fontsize=6.5, loc="upper center",
+              bbox_to_anchor=(0.5, 1.18), columnspacing=0.8,
               handlelength=1.0, handletextpad=0.4)
     fig.savefig(OUT / "fig_monotonicity_bars.pdf")
     plt.close(fig)
@@ -97,8 +98,8 @@ def fig_monotonicity_bars(df):
 
 def fig_alpha_curves(df, anti):
     ctl = df[~df["role"].isin(anti)]
-    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 1.7))
-    palette = [style.BLUE, style.VERMILLION, style.GREEN, style.ORANGE,
+    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 2.15))
+    palette = [style.BLUE, style.SATURATION, style.GREEN, style.ORANGE,
                style.SKY, style.PURPLE]
     n_ctl = None
     for color, col in zip(palette, ALL_DIMS):
@@ -110,11 +111,11 @@ def fig_alpha_curves(df, anti):
                 lw=1.4 if col == "steered_score" else 1.0)
         ax.fill_between(ALPHAS, mean - 1.96 * sem, mean + 1.96 * sem,
                         color=color, alpha=0.15, lw=0)
-    ax.set_xlabel(r"steering coefficient $\alpha$")
-    ax.set_ylabel("mean judge score")
+    ax.set_xlabel(r"Steering Coefficient $\alpha$")
+    ax.set_ylabel("Mean Judge Score")
     ax.set_xticks(ALPHAS)
     ax.set_ylim(28, 76)
-    ax.legend(ncol=3, fontsize=5.5, loc="lower center", handlelength=1.2,
+    ax.legend(ncol=3, fontsize=6.3, loc="lower center", handlelength=1.2,
               columnspacing=0.9)
     fig.savefig(OUT / "fig_alpha_curves_all_metrics.pdf")
     plt.close(fig)
@@ -124,13 +125,13 @@ def fig_alpha_curves(df, anti):
 def fig_individual_curves(df, anti):
     cell = cell_means(df[df["role"].isin(anti)], "steered_score").dropna()
     slopes = ols_slopes(cell)
-    fig, ax = plt.subplots(figsize=(0.62 * style.COLUMN_W_IN, 1.7))
+    fig, ax = plt.subplots(figsize=(0.62 * style.COLUMN_W_IN, 1.9))
     for _, row in cell.iterrows():
-        ax.plot(ALPHAS, row, color=style.VERMILLION, alpha=0.35, lw=0.7)
+        ax.plot(ALPHAS, row, color=style.SATURATION, alpha=0.35, lw=0.7)
     ax.plot(ALPHAS, cell.mean(axis=0), color="black", lw=1.4,
-            label=f"mean (n={len(cell)})")
-    ax.set_xlabel(r"steering coefficient $\alpha$")
-    ax.set_ylabel("judge score")
+            label=f"Mean (n={len(cell)})")
+    ax.set_xlabel(r"Steering Coefficient $\alpha$")
+    ax.set_ylabel("Judge Score")
     ax.set_xticks(ALPHAS)
     ax.legend(fontsize=5.5, loc="lower left")
     fig.savefig(OUT / "fig_individual_curves.pdf")
@@ -144,17 +145,17 @@ def fig_deterioration_dist(df, anti):
     # definition -- caption fixed to alpha=1.0 in the same commit)
     cell = cell_means(df[df["role"].isin(anti)], "steered_score").dropna()
     drop = cell[1.0] - cell[2.5]
-    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 1.5))
-    ax.hist(drop, bins=14, color=style.VERMILLION, alpha=0.85)
+    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 1.9))
+    ax.hist(drop, bins=14, color=style.SATURATION, alpha=0.85)
     ax.axvline(drop.mean(), color="black", lw=0.8, ls="--")
     ax.text(drop.mean() + 0.3, ax.get_ylim()[1] * 0.9,
-            f"mean {drop.mean():.1f}", fontsize=6)
-    ax.annotate(f"supervisor ({drop.max():.1f})",
+            f"Mean {drop.mean():.1f}", fontsize=6.5)
+    ax.annotate(f"Supervisor ({drop.max():.1f})",
                 xy=(drop.max(), 0.4), xytext=(drop.max() - 1.5, 3.2),
-                fontsize=6, ha="right",
+                fontsize=6.5, ha="right",
                 arrowprops=dict(arrowstyle="-", lw=0.6))
-    ax.set_xlabel(r"score drop, $\alpha\,1.0 \to 2.5$")
-    ax.set_ylabel("roles")
+    ax.set_xlabel(r"Score Drop, $\alpha\,1.0 \to 2.5$")
+    ax.set_ylabel("Roles")
     fig.savefig(OUT / "fig_deterioration_dist.pdf")
     plt.close(fig)
     return drop
@@ -166,17 +167,17 @@ def fig_dim_heatmap(df, anti):
         ALL_LABELS[c]: (lambda cell: cell[1.0] - cell[2.5])(
             cell_means(sub, c).dropna())
         for c in ALL_DIMS})
-    drops = drops.sort_values("overall", ascending=False)
-    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 2.6))
+    drops = drops.sort_values("Overall", ascending=False)
+    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 3.1))
     lim = float(np.abs(drops.to_numpy()).max())
     im = ax.imshow(drops.to_numpy(), aspect="auto", cmap="RdBu_r",
                    vmin=-lim, vmax=lim, interpolation="nearest")
     ax.set_xticks(range(len(drops.columns)))
-    ax.set_xticklabels(drops.columns, rotation=35, ha="right", fontsize=6)
+    ax.set_xticklabels(drops.columns, rotation=25, ha="right", fontsize=7)
     ax.set_yticks(range(len(drops)))
-    ax.set_yticklabels(drops.index, fontsize=4.2)
+    ax.set_yticklabels([role.title() for role in drops.index], fontsize=4.2)
     cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.02)
-    cb.set_label(r"score drop, $\alpha\,1.0 \to 2.5$", fontsize=7)
+    cb.set_label(r"Score Drop, $\alpha\,1.0 \to 2.5$", fontsize=7)
     cb.ax.tick_params(labelsize=6)
     fig.savefig(OUT / "fig_dim_deterioration_heatmap.pdf")
     plt.close(fig)
@@ -186,13 +187,13 @@ def fig_baseline_vs_steered(df, anti):
     sub = df[df["role"].isin(anti)]
     ref = sub.groupby("role")["baseline_score"].mean()
     steered25 = cell_means(sub, "steered_score").dropna()[2.5]
-    fig, ax = plt.subplots(figsize=(0.62 * style.COLUMN_W_IN, 1.7))
+    fig, ax = plt.subplots(figsize=(0.62 * style.COLUMN_W_IN, 1.9))
     lo, hi = 55, 100
     ax.plot([lo, hi], [lo, hi], color=style.GREY, lw=0.8, ls="--")
     ax.scatter(ref.reindex(steered25.index), steered25, s=8,
-               color=style.VERMILLION, alpha=0.8, lw=0)
-    ax.set_xlabel("prompted-reference score")
-    ax.set_ylabel(r"steered score at $\alpha{=}2.5$")
+               color=style.SATURATION, alpha=0.8, lw=0)
+    ax.set_xlabel("Prompted-Reference Score")
+    ax.set_ylabel(r"Steered Score at $\alpha{=}2.5$")
     ax.set_xlim(lo, hi)
     ax.set_ylim(lo, hi)
     ax.set_aspect("equal")
@@ -210,10 +211,10 @@ def main():
 
     print("verification gate:")
     m = fig_monotonicity_bars(df)
-    verify("overall r>0", m.loc["overall", r"$r>0$"], 0.82, 0.01)
-    verify("overall r>0.8", m.loc["overall", r"$r>0.8$"], 0.79, 0.01)
-    verify("overall strict monotone", m.loc["overall", "monotone"], 0.74, 0.01)
-    weakest = m.drop(index="overall").idxmin()
+    verify("overall r>0", m.loc["Overall", r"$r>0$"], 0.82, 0.01)
+    verify("overall r>0.8", m.loc["Overall", r"$r>0.8$"], 0.79, 0.01)
+    verify("overall strict monotone", m.loc["Overall", "Monotone"], 0.74, 0.01)
+    weakest = m.drop(index="Overall").idxmin()
     print(f"  weakest axis per metric: {dict(weakest)}")
 
     drop = fig_deterioration_dist(df, anti)

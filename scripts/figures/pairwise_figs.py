@@ -57,11 +57,11 @@ def verify(name, got, want, tol):
 def fig_overall(df):
     shares = df["pw_debiased_winner"].value_counts(normalize=True)
     order = ["steered", "tie", "baseline"]
-    labels = {"steered": "steered wins", "tie": "ties",
-              "baseline": "assistant-axis wins"}
+    labels = {"steered": "Steered Wins", "tie": "Ties",
+              "baseline": "Assistant-Axis Wins"}
     colors = {"steered": style.BLUE, "tie": style.GREY,
               "baseline": style.VERMILLION}
-    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 0.95))
+    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 1.0))
     left = 0.0
     small_above = True
     for k in order:
@@ -81,23 +81,25 @@ def fig_overall(df):
     ax.set_xlim(0, 1)
     ax.set_ylim(-1.05, 0.95)
     ax.set_yticks([])
-    ax.set_xlabel("share of 7,666 judged pairs")
+    ax.set_xlabel("Share of 7,666 Judged Pairs")
     fig.savefig(OUT / "fig_pw_overall_win_rate.pdf")
     plt.close(fig)
     return shares
 
 
 def fig_score_dist(df):
-    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 1.5))
+    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 1.9))
     bins = np.linspace(0, 100, 41)
     ax.hist(df["pw_debiased_steered_score"], bins=bins, color=style.BLUE,
-            alpha=0.8, label=f"steered (mean {df['pw_debiased_steered_score'].mean():.1f})")
+            alpha=0.8, edgecolor="white", linewidth=0.25,
+            label=f"Steered (Mean {df['pw_debiased_steered_score'].mean():.1f})")
     ax.hist(df["pw_debiased_baseline_score"], bins=bins,
             color=style.VERMILLION, alpha=0.6,
-            label=f"assistant axis (mean {df['pw_debiased_baseline_score'].mean():.1f})")
-    ax.set_xlabel("debiased judge score")
-    ax.set_ylabel("pairs")
-    ax.legend(fontsize=6, loc="upper left")
+            edgecolor=style.VERMILLION, linewidth=0.3, hatch="//",
+            label=f"Assistant Axis (Mean {df['pw_debiased_baseline_score'].mean():.1f})")
+    ax.set_xlabel("Debiased Judge Score")
+    ax.set_ylabel("Pairs")
+    ax.legend(loc="upper left")
     fig.savefig(OUT / "fig_pw_score_dist.pdf")
     plt.close(fig)
 
@@ -105,14 +107,20 @@ def fig_score_dist(df):
 def fig_per_role_advantage(df):
     adv = df.groupby("role")["pw_steered_advantage"].mean().sort_values(
         ascending=False)
-    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 1.9))
-    ax.bar(range(len(adv)), adv, color=style.BLUE, width=0.75)
+    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 2.1))
+    colors = [style.SATURATION if r == "absurdist" else style.BLUE
+              for r in adv.index]
+    ax.bar(range(len(adv)), adv, color=colors, width=0.75)
     ax.axhline(adv.mean(), color="black", lw=0.7, ls="--")
-    ax.text(len(adv) - 1, adv.mean() + 1.5, f"mean {adv.mean():.1f}",
-            fontsize=6, ha="right")
-    ax.set_xticks(range(len(adv)))
-    ax.set_xticklabels(adv.index, rotation=90, fontsize=3.8)
-    ax.set_ylabel("mean steered advantage")
+    ax.text(len(adv) - 1, adv.mean() + 1.5, f"Mean {adv.mean():.1f}",
+            fontsize=6.5, ha="right")
+    low_i = len(adv) - 1
+    ax.text(low_i, adv.iloc[-1] + 2.0, "Absurdist", color=style.SATURATION,
+            fontsize=6.5, ha="right", va="bottom", rotation=0)
+    ax.set_xticks([0, len(adv) - 1])
+    ax.set_xticklabels(["Highest", "Lowest"])
+    ax.set_xlabel("Roles Sorted by Mean Advantage")
+    ax.set_ylabel("Mean Steered Advantage")
     ax.set_xlim(-0.6, len(adv) - 0.4)
     fig.savefig(OUT / "fig_pw_per_role_advantage.pdf")
     plt.close(fig)
@@ -122,15 +130,19 @@ def fig_per_role_advantage(df):
 def fig_per_role_win_rate(df):
     win = (df.assign(w=df["pw_debiased_winner"] == "steered")
            .groupby("role")["w"].mean().sort_values(ascending=False))
-    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 1.9))
-    colors = [style.VERMILLION if r == "absurdist" else style.BLUE
+    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 2.1))
+    colors = [style.SATURATION if r == "absurdist" else style.BLUE
               for r in win.index]
     ax.bar(range(len(win)), win, color=colors, width=0.75)
     ax.axhline(0.5, color="black", lw=0.7, ls="--")
-    ax.text(0.4, 0.515, "parity", fontsize=5.5)
-    ax.set_xticks(range(len(win)))
-    ax.set_xticklabels(win.index, rotation=90, fontsize=3.8)
-    ax.set_ylabel("steered win rate")
+    ax.text(0.4, 0.515, "Parity", fontsize=6.5)
+    low_i = len(win) - 1
+    ax.text(low_i, win.iloc[-1] + 0.04, "Absurdist", color=style.SATURATION,
+            fontsize=6.5, ha="right", va="bottom")
+    ax.set_xticks([0, len(win) - 1])
+    ax.set_xticklabels(["Highest", "Lowest"])
+    ax.set_xlabel("Roles Sorted by Win Rate")
+    ax.set_ylabel("Steered Win Rate")
     ax.set_ylim(0, 1.02)
     ax.set_xlim(-0.6, len(win) - 0.4)
     fig.savefig(OUT / "fig_pw_per_role_win_rate.pdf")

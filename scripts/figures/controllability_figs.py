@@ -49,11 +49,11 @@ CMP_DIMS = [
     "cmp_worldview_alignment",
 ]
 DIM_LABELS = {
-    "cmp_vocab_choice": "vocab choice",
-    "cmp_social_dynamic": "social dynamic",
-    "cmp_emotional_register": "emotional register",
-    "cmp_worldview_alignment": "worldview align.",
-    "cmp_motivation": "motivation",
+    "cmp_vocab_choice": "Vocabulary Choice",
+    "cmp_social_dynamic": "Social Dynamic",
+    "cmp_emotional_register": "Emotional Register",
+    "cmp_worldview_alignment": "Worldview Align.",
+    "cmp_motivation": "Motivation",
 }
 ALPHAS = [1.0, 1.5, 2.0, 2.5]
 
@@ -110,15 +110,16 @@ def verify(name, got, want, tol):
 
 
 def fig_histogram(r_steered: pd.Series, r_aa: pd.Series):
-    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 1.6))
+    fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 2.0))
     bins = np.linspace(-1.05, 1.05, 43)
     ax.hist(r_steered, bins=bins, color=style.BLUE, alpha=0.85,
-            label="role vector")
+            edgecolor="white", linewidth=0.25, label="Role Vector")
     ax.hist(r_aa, bins=bins, color=style.VERMILLION, alpha=0.65,
-            label="assistant axis")
+            edgecolor=style.VERMILLION, linewidth=0.3, hatch="//",
+            label="Assistant Axis")
     ax.axvline(0, color="black", lw=0.6, ls="--")
-    ax.set_xlabel(r"per-role Pearson $r$ (score vs. $\alpha$)")
-    ax.set_ylabel("roles")
+    ax.set_xlabel(r"Per-Role Pearson $r$ (Score vs. $\alpha$)")
+    ax.set_ylabel("Roles")
     ax.legend(loc="upper left")
     ax.annotate(f"median ${np.median(r_aa):+.2f}$", xy=(-0.89, 0),
                 xytext=(-0.6, ax.get_ylim()[1] * 0.68),
@@ -133,34 +134,34 @@ def fig_histogram(r_steered: pd.Series, r_aa: pd.Series):
 def fig_trajectory(df: pd.DataFrame, anti: pd.Index):
     is_anti = df["role"].isin(anti)
     groups = {
-        "anti-controllable": (df[is_anti], style.VERMILLION),
-        "controllable": (df[~is_anti], style.BLUE),
+        "anti-controllable": (df[is_anti], style.SATURATION, "--", "s"),
+        "controllable": (df[~is_anti], style.BLUE, "-", "o"),
     }
-    fig, ax = plt.subplots(figsize=(style.HALF_PANEL_W_IN, 1.45))
+    fig, ax = plt.subplots(figsize=(style.HALF_PANEL_W_IN, 1.65))
     curve_means = {}
-    for label, (sub, color) in groups.items():
+    for label, (sub, color, ls, marker) in groups.items():
         per_role = sub.groupby(["role", "alpha"])["steered_score"].mean().unstack()
         per_role = per_role.reindex(columns=ALPHAS)
         mean = per_role.mean(axis=0)
         curve_means[label] = (mean, color, len(per_role))
         sem = per_role.sem(axis=0)
-        ax.plot(ALPHAS, mean, color=color, marker="o", ms=2.5)
+        ax.plot(ALPHAS, mean, color=color, marker=marker, ms=2.5, ls=ls)
         ax.fill_between(ALPHAS, mean - 1.96 * sem, mean + 1.96 * sem,
                         color=color, alpha=0.2, lw=0)
         ref = sub.groupby("role")["baseline_score"].mean().mean()
         ax.axhline(ref, color=color, lw=0.7, ls=":")
     ax.text(1.02, groups["controllable"][0].groupby("role")["baseline_score"]
-            .mean().mean() + 1.2, "prompted reference", fontsize=5.5,
+            .mean().mean() + 1.2, "Prompted Reference", fontsize=6.0,
             color=style.GREY, va="bottom")
     # direct curve labels (legend would collide with the rising blue curve)
     m_anti, c_anti, n_anti = curve_means["anti-controllable"]
-    ax.text(1.72, m_anti[1.5] - 4.5, f"anti-controllable\n(n={n_anti})",
-            color=c_anti, fontsize=5.5, ha="center", va="top")
+    ax.text(1.72, m_anti[1.5] - 4.5, f"Saturated Roles\n(n={n_anti})",
+            color=c_anti, fontsize=6.0, ha="center", va="top")
     m_ctl, c_ctl, n_ctl = curve_means["controllable"]
-    ax.text(2.45, 50.5, f"controllable (n={n_ctl})",
-            color=c_ctl, fontsize=5.5, ha="right", va="bottom")
-    ax.set_xlabel(r"steering coefficient $\alpha$")
-    ax.set_ylabel("mean judge score")
+    ax.text(2.45, 50.5, f"Controllable Roles (n={n_ctl})",
+            color=c_ctl, fontsize=6.0, ha="right", va="bottom")
+    ax.set_xlabel(r"Steering Coefficient $\alpha$")
+    ax.set_ylabel("Mean Judge Score")
     ax.set_xticks(ALPHAS)
     ax.set_ylim(45, 95)
     fig.savefig(OUT / "fig_trajectory_contrast.pdf")
@@ -177,11 +178,11 @@ def fig_dim_bars(df: pd.DataFrame, anti: pd.Index):
         )
     order = sorted(drops, key=drops.get)
     vals = [drops[k] for k in order]
-    fig, ax = plt.subplots(figsize=(style.HALF_PANEL_W_IN, 1.45))
-    ax.barh(order, vals, color=style.VERMILLION, alpha=0.85, height=0.62)
+    fig, ax = plt.subplots(figsize=(style.HALF_PANEL_W_IN, 1.65))
+    ax.barh(order, vals, color=style.SATURATION, alpha=0.85, height=0.62)
     for y, v in enumerate(vals):
         ax.text(v + 0.3, y, f"{v:.1f}", va="center", fontsize=6)
-    ax.set_xlabel("score drop")  # alpha window stated in the caption
+    ax.set_xlabel("Score Drop")  # alpha window stated in the caption
     ax.set_xlim(0, max(vals) * 1.22)
     fig.savefig(OUT / "fig_dim_deterioration_bars.pdf")
     plt.close(fig)

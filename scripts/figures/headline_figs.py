@@ -86,21 +86,21 @@ def verify(name, got, want, tol):
 
 
 def fig_scores(m):
-    fig, ax = plt.subplots(figsize=(style.HALF_PANEL_W_IN, 1.45))
+    fig, ax = plt.subplots(figsize=(style.HALF_PANEL_W_IN, 1.65))
     ref = np.mean([m["b_score"][a] for a in ALPHAS])
     ax.axhline(ref, color=style.GREY, lw=0.9, ls="--")
-    ax.text(1.02, ref - 2.0, "prompted reference", fontsize=5.5,
+    ax.text(1.02, ref - 2.0, "Prompted Reference", fontsize=6.2,
             color=style.GREY, va="top")
     ax.plot(ALPHAS, [m["s_score"][a] for a in ALPHAS], color=style.BLUE,
-            marker="o", ms=2.5)
-    ax.text(1.0, 66, "role vectors (ours)",
-            color=style.BLUE, fontsize=5.5, ha="left", va="bottom")
+            marker="o", ms=2.5, ls="-")
+    ax.text(1.0, 66, "Role Vectors",
+            color=style.BLUE, fontsize=6.2, ha="left", va="bottom")
     ax.plot(ALPHAS, [m["a_score"][a] for a in ALPHAS],
-            color=style.VERMILLION, marker="s", ms=2.5)
-    ax.text(1.62, m["a_score"][1.5] - 4.0, "assistant axis",
-            color=style.VERMILLION, fontsize=5.5, ha="left", va="top")
-    ax.set_xlabel(r"steering coefficient $\alpha$")
-    ax.set_ylabel("mean judge score")
+            color=style.VERMILLION, marker="s", ms=2.5, ls="--")
+    ax.text(1.62, m["a_score"][1.5] - 4.0, "Assistant Axis",
+            color=style.VERMILLION, fontsize=6.2, ha="left", va="top")
+    ax.set_xlabel(r"Steering Coefficient $\alpha$")
+    ax.set_ylabel("Mean Judge Score")
     ax.set_xticks(ALPHAS)
     ax.set_ylim(0, 100)
     fig.savefig(OUT / "fig_headline_scores.pdf")
@@ -108,17 +108,17 @@ def fig_scores(m):
 
 
 def fig_coherence(m):
-    fig, ax = plt.subplots(figsize=(style.HALF_PANEL_W_IN, 1.45))
+    fig, ax = plt.subplots(figsize=(style.HALF_PANEL_W_IN, 1.65))
     ax.plot(ALPHAS, [m["s_coh"][a] for a in ALPHAS], color=style.BLUE,
-            marker="o", ms=2.5)
-    ax.text(2.42, m["s_coh"][2.5] - 0.035, "role vectors (ours)",
-            color=style.BLUE, fontsize=5.5, ha="right", va="top")
+            marker="o", ms=2.5, ls="-")
+    ax.text(2.42, m["s_coh"][2.5] - 0.035, "Role Vectors",
+            color=style.BLUE, fontsize=6.2, ha="right", va="top")
     ax.plot(ALPHAS, [m["a_coh"][a] for a in ALPHAS],
-            color=style.VERMILLION, marker="s", ms=2.5)
-    ax.text(1.0, m["a_coh"][2.0] - 0.04, "assistant axis",
-            color=style.VERMILLION, fontsize=5.5, ha="left", va="top")
-    ax.set_xlabel(r"steering coefficient $\alpha$")
-    ax.set_ylabel("unique-bigram\nratio")
+            color=style.VERMILLION, marker="s", ms=2.5, ls="--")
+    ax.text(1.0, m["a_coh"][2.0] - 0.04, "Assistant Axis",
+            color=style.VERMILLION, fontsize=6.2, ha="left", va="top")
+    ax.set_xlabel(r"Steering Coefficient $\alpha$")
+    ax.set_ylabel("Unique-Bigram\nRatio")
     ax.set_xticks(ALPHAS)
     fig.savefig(OUT / "fig_headline_coherence.pdf")
     plt.close(fig)

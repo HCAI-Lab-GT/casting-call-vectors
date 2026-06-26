@@ -4,13 +4,13 @@ from pathlib import Path
 import matplotlib
 import matplotlib.pyplot as plt
 
-# ── Palette (ColorBrewer + Okabe-Ito, colorblind-safe) ───────────────────────
-STEERED  = "#2166AC"   # deep blue  — proposed method
-AA       = "#B2182B"   # deep red   — assistant axis baseline
-BASELINE = "#4D4D4D"   # dark gray  — gold-standard reference lines
-WIN      = "#1A9850"   # deep green — win-rate / positive bars
-ACCENT   = "#E08214"   # amber      — advantage / residual plots
-REPR     = "#762A83"   # purple     — representational geometry
+# ── Palette (paper/palette.toml, colorblind-conscious) ───────────────────────
+STEERED  = "#2F6FA3"   # role steering / proposed method
+AA       = "#A84F2A"   # assistant-axis baseline
+BASELINE = "#5F6368"   # prompted-reference and neutral lines
+WIN      = "#1C7A6A"   # fidelity/screening / positive bars
+ACCENT   = "#9A6200"   # saturation warnings / residual plots
+REPR     = "#71579B"   # representational geometry
 
 ALPHA_COLORS = {1.0: "#C6DBEF", 1.5: "#6BAED6", 2.0: "#2171B5", 2.5: "#08306B"}
 
@@ -50,7 +50,7 @@ _STYLE = {
     "lines.markersize":     6,
     "patch.linewidth":      0.6,
     "figure.figsize":       (5.5, 4.0),
-    "axes.prop_cycle": matplotlib.cycler("color", ["#2166AC", "#B2182B", "#1A9850", "#E08214", "#762A83"]),
+    "axes.prop_cycle": matplotlib.cycler("color", [STEERED, AA, WIN, ACCENT, REPR]),
 }
 
 
