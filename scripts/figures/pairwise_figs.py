@@ -92,7 +92,7 @@ def fig_score_dist(df):
     bins = np.linspace(0, 100, 41)
     ax.hist(df["pw_debiased_steered_score"], bins=bins, color=style.BLUE,
             alpha=0.8, edgecolor="white", linewidth=0.25,
-            label=f"Steered (Mean {df['pw_debiased_steered_score'].mean():.1f})")
+            label=f"CastVectors (Mean {df['pw_debiased_steered_score'].mean():.1f})")
     ax.hist(df["pw_debiased_baseline_score"], bins=bins,
             color=style.VERMILLION, alpha=0.6,
             edgecolor=style.VERMILLION, linewidth=0.3, hatch="//",

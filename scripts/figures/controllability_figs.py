@@ -113,7 +113,7 @@ def fig_histogram(r_steered: pd.Series, r_aa: pd.Series):
     fig, ax = plt.subplots(figsize=(style.COLUMN_W_IN, 2.0))
     bins = np.linspace(-1.05, 1.05, 43)
     ax.hist(r_steered, bins=bins, color=style.BLUE, alpha=0.85,
-            edgecolor="white", linewidth=0.25, label="Role Vector")
+            edgecolor="white", linewidth=0.25, label="CastVectors")
     ax.hist(r_aa, bins=bins, color=style.VERMILLION, alpha=0.65,
             edgecolor=style.VERMILLION, linewidth=0.3, hatch="//",
             label="Assistant Axis")
