@@ -1,0 +1,39 @@
+{
+  "what": "Full pipeline closed with an OPEN-WEIGHT judge (no external API key, no egress) — GT PACE ICE",
+  "slurm_job": 5378804, "state": "COMPLETED", "elapsed_s": 660, "gpus": "2x A100-80GB (gen on GPU0, judge server on GPU1)",
+  "judge": {
+    "model": "Qwen2.5-7B-Instruct (public, ungated)",
+    "serving": "local vLLM OpenAI-compatible server (python -m vllm.entrypoints.openai.api_server --served-model-name judge), ready in ~135 s",
+    "wiring": "repo's OpenAiJudge pointed at it via OPENAI_BASE_URL=http://127.0.0.1:8000/v1 + OPENAI_API_KEY=sk-local-dummy + JUDGE_PROVIDER=openai",
+    "code_change": "ONE small env-gated patch in source/judge.py (JUDGE_NUMERIC_TEXT=1): open models tokenize numbers per-digit, so the single-token logprob trick collapses 0-100->0-9; the patch generates a few tokens and parses the integer instead. OpenAI logprob path unchanged by default."
+  },
+  "model_under_test": "allenai/Olmo-3-1025-7B @ stage1-step5000 (local snapshot path)",
+  "trait": "humorous_character_neutral_q",
+  "stages_now_unblocked": {
+    "judge_filtering": "DONE (Qwen judge scored all generations)",
+    "vector_file": "DONE — vector_source=open-judge-built (NOT the committed GPT-judged one); 10 effective pos/neg pairs passed threshold=50 filtering out of 1000 each",
+    "baseline_eval": "DONE (judged, 100 gens)",
+    "steered_eval": "DONE (judged, 100 gens, vector l=20 c=0.3)",
+    "delta_tau": "DONE"
+  },
+  "judge_score_sanity": {
+    "extract_pos_humor_mean": 23.91, "extract_neg_humor_mean": 18.43,
+    "note": "pos-persona scored MORE humorous than neg-persona (23.9 > 18.4) and scores are graded 0-100 (std ~15-17), confirming the numeric-text judge works and is not degenerate"
+  },
+  "delta_tau_result": {
+    "baseline_trait_mean": 14.85, "baseline_coherence_mean": 52.07,
+    "steered_trait_mean": 16.05, "steered_coherence_mean": 56.03,
+    "delta_tau": 1.2, "n_baseline": 100, "n_steered": 100
+  },
+  "interpretation": "Small positive Δτ (+1.2). Honest for THIS configuration: very early checkpoint (5k steps, near the emergence boundary), only 10 effective samples in the vector, coef 0.3, and a 7B judge noisier than the paper's GPT-4.1-mini. This VALIDATES the machinery (judge->filter->vector->steer->Δτ all run, key-free) — it is NOT a faithful reproduction of the paper's magnitudes.",
+  "caveats": [
+    "Methodological substitution: Qwen2.5-7B-Instruct != paper's gpt-4.1-mini; numeric-text scoring != logprob aggregation. Do not compare Δτ to the paper.",
+    "Early checkpoint + n=5 eval / 10-sample vector => high variance.",
+    "For fidelity: use gpt-4.1-mini (or validate the open judge against it), a later checkpoint or larger n, and the logprob path."
+  ],
+  "cost_implication": "On ICE the judge runs on a 2nd FREE GPU, so the judge-API cost (~$40 modeled for RQ1 with gpt-4.1-mini) -> ~$0 out-of-pocket. Full RQ1 grid on ICE is feasible at ~$0 cash (free instructional GPUs), bounded only by wall-clock + the 16-GPU-h/job cap.",
+  "artifacts_local": ["ice_artifacts/humorous_character_neutral_q_response_avg_diff.pt ([33,4096], open-judge-built)",
+                      "ice_artifacts/baseline_humorous_character_neutral_q.csv (judged)",
+                      "ice_artifacts/steered_humorous_character_neutral_q_l20_c0p3.csv (judged)"],
+  "logs": ["logs/ice_judged_5378804.out", "logs/judge_server_5378804.log", "logs/ice_judged_smoke.sbatch"]
+}

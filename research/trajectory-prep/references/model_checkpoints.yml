@@ -1,0 +1,75 @@
+# Checkpoint manifest for persona trajectory experiments.
+# Token counts are taken from the paper appendix and tables.
+# Verify branch/revision names with Hugging Face before running.
+
+olmo3_7b:
+  model_id: allenai/Olmo-3-1025-7B
+  same_checkpoint_smoke_default:
+    - revision: stage1-step5000
+      tokens: 21.0B
+      stage: pretraining
+    - revision: main
+      tokens: 6.08T
+      stage: final_base_or_midtraining_endpoint
+  paper_grid:
+    - {revision: stage1-step1000, tokens: 4.19B, note: early; often incoherent/no persona in paper}
+    - {revision: stage1-step2000, tokens: 8.39B, note: early; often incoherent/no persona in paper}
+    - {revision: stage1-step3000, tokens: 12.6B}
+    - {revision: stage1-step5000, tokens: 21.0B}
+    - {revision: stage1-step7000, tokens: 29.4B}
+    - {revision: stage1-step9000, tokens: 37.7B}
+    - {revision: stage1-step10000, tokens: 41.9B}
+    - {revision: stage1-step15000, tokens: 62.9B}
+    - {revision: stage1-step20000, tokens: 83.9B}
+    - {revision: stage1-step30000, tokens: 126B}
+    - {revision: stage1-step50000, tokens: 210B}
+    - {revision: stage1-step99000, tokens: 415B}
+    - {revision: stage1-step297000, tokens: 1.25T}
+    - {revision: stage1-step707000, tokens: 2.97T}
+    - {revision: stage1-step1413814, tokens: 5.93T}
+    - {revision: stage2-step47684, tokens: 6.03T, stage: midtraining}
+    - {revision: main, tokens: 6.08T, stage: final_base_or_main}
+  post_training_targets:
+    - {model_id: allenai/Olmo-3-7B-Instruct-SFT, stage: SFT}
+    - {model_id: allenai/Olmo-3-7B-Instruct-DPO, stage: DPO}
+    - {model_id: allenai/Olmo-3-7B-Instruct, stage: final_RLVR_or_Instruct}
+  paper_hyperparameters:
+    emergence:
+      evil: {layer: 16, coefficient: 0.5}
+      sycophantic: {layer: 16, coefficient: 0.5}
+      impolite: {layer: 16, coefficient: 0.5}
+      humorous: {layer: 20, coefficient: 0.3}
+    transfer_to_instruct:
+      evil: {layer: 16, coefficient: 0.55}
+      sycophantic: {layer: 16, coefficient: 0.5}
+      impolite: {layer: 20, coefficient: 0.75}
+      humorous: {layer: 20, coefficient: 0.3}
+
+apertus_8b:
+  model_id: swiss-ai/Apertus-8B-2509
+  instruct_model_id: swiss-ai/Apertus-8B-Instruct-2509
+  paper_grid:
+    - {revision: step50000-tokens210B, tokens: 210B}
+    - {revision: step100000-tokens420B, tokens: 420B}
+    - {revision: step150000-tokens630B, tokens: 630B}
+    - {revision: step200000-tokens840B, tokens: 840B}
+    - {revision: step250000-tokens1050B, tokens: 1.05T}
+    - {revision: step300000-tokens1260B, tokens: 1.26T}
+    - {revision: step400000-tokens1680B, tokens: 1.68T}
+    - {revision: step500000-tokens2100B, tokens: 2.10T}
+    - {revision: step700000-tokens2940B, tokens: 2.94T}
+    - {revision: step1000000-tokens4200B, tokens: 4.20T}
+    - {revision: step1432000-tokens6014B, tokens: 6.01T}
+    - {revision: step1750000-tokens7652B, tokens: 7.65T}
+    - {revision: step2100000-tokens10592B, tokens: 10.6T}
+    - {revision: step2400000-tokens13112B, tokens: 13.1T}
+    - {revision: step2627139-tokens15T, tokens: 15.0T}
+  paper_hyperparameters:
+    emergence:
+      evil: {layer: 16, coefficient_early_le_4_2T: 0.2, coefficient_late_gt_4_2T: 0.5}
+      sycophantic: {layer: 16, coefficient: 0.2}
+      impolite: {layer: 20, coefficient: 0.15}
+    transfer_to_instruct:
+      evil: {layer: 16, coefficient: 0.3}
+      sycophantic: {layer: 16, coefficient: 0.5}
+      impolite: {layer: 20, coefficient: 0.7}

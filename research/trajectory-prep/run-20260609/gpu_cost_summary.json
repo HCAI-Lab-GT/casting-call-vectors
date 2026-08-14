@@ -1,0 +1,102 @@
+{
+  "run_id": "persona_trajectory_20260609T052641Z",
+  "generated_utc": "2026-06-09",
+  "status": "Grid numbers are MODELED (repo-exact workload + verified prices/throughput). A 1-ckpt smoke was MEASURED on a GT PACE ICE A100 (see measured_on_ice_a100) and validates the throughput assumptions.",
+  "confidence": "order-of-magnitude; workload counts VERIFIED EXACTLY against scripts; GPU-hours +/- ~40%, judge $ +/- ~30%",
+  "verified_by": "5-agent adversarial workflow wf_4efb3a83-f68 (verdict: minor_corrections); see cost_verification.md",
+
+  "this_host": {
+    "type": "Apple M1 Max laptop (MPS, no CUDA)",
+    "measured_gpu_hours": null,
+    "reason_null": "no NVIDIA GPU; nvidia-smi absent; peak VRAM undefined on unified-memory Apple Silicon",
+    "smoke_done_on_mps": "generation-only; ~7-8 tok/s decode (7B fp16, bs=8); see run_meta.json"
+  },
+
+  "measured_on_ice_a100": {
+    "note": "REAL measurements from GT PACE ICE A100-80GB (job 5378587); see ice_run_meta.json + gpu_samples.csv (now real telemetry, 95 samples)",
+    "elapsed_walltime": "00:04:50", "gpu_hours": 0.0806,
+    "scope": "1 ckpt x 1 trait: extract pos(500)+neg(500) via vLLM, baseline(100) via vLLM, steered(100) via transformers; n_per_question=5; all rc=0",
+    "vllm_decode_tok_per_s_measured": "~1000-1100 (enforce_eager, ~45% util on small batches -> conservative)",
+    "transformers_steered_tok_per_s_measured": "~200",
+    "model_weights_vram_gb": 14.2,
+    "vllm_reserved_vram_gb": 67.4,
+    "vllm_reserved_note": "0.85 x 80 GB KV-cache pool; NOT model size -> 7B steering fits a 24 GB GPU (README's '24GB sufficient' claim CONFIRMED for transformers path)",
+    "peak_power_w": 194,
+    "validates": "vLLM ~1250 / transformers ~300 tok/s assumptions are sound; initial 3500 vLLM guess refuted; load/init dominates short-batch wall time as predicted"
+  },
+
+  "pricing_assumptions_june_2026": {
+    "a100_80gb_usd_per_hr": {"low": 0.78, "mid": 1.65, "high": 5.07,
+      "note": "low/mid = discount providers (ThunderCompute 0.78, TensorDock 0.90, Hyperstack 1.35, RunPod 1.39, JarvisLabs 1.49); high = hyperscalers (AWS 3.43, Azure 3.67, GCP 5.07)",
+      "sources": ["thundercompute.com/blog/nvidia-a100-pricing","runpod.io/pricing","getdeploying.com/gpus/nvidia-a100"]},
+    "h100_80gb_usd_per_hr": {"low": 1.38, "mid": 2.89, "high": 11.06,
+      "note": "A100 ~= 50% of H100 across providers; H100 ~1.5-2x throughput so similar $/run on discount providers"},
+    "judge_gpt_4_1_mini_usd_per_1m": {"input": 0.40, "output": 1.60,
+      "caveat": "from prior WebSearch (pricepertoken/pecollective/openrouter) and is the repo's hard-coded default judge 'gpt-4.1-mini-2025-04-14'; one verifier agent could not independently re-locate the model name — treat the absolute $ as +/- a model-version's pricing"},
+    "batch_api_note": "The repo does NOT use the OpenAI Batch API. judge.py uses live AsyncOpenAI under Semaphore(8). The -50% batch figure is only achievable by rewriting the judge; treat on-demand as the expected cost."
+  },
+
+  "workload_VERIFIED_exact": {
+    "source": "epfl-dlab/pretraining_persona @ c793393 (counts cross-checked by 2 independent agents)",
+    "olmo3_checkpoint_grid_count": 16,
+    "olmo3_traits": 4,
+    "extract_questions": 20, "instruction_pairs": 5, "extract_objects_per_polarity": 100,
+    "eval_questions": 20, "n_per_question_paper_default": 10, "max_new_tokens": 64,
+    "generations_per_ckpt_trait_at_n10": {"extract_pos": 1000, "extract_neg": 1000, "baseline": 200, "steered": 200, "total": 2400},
+    "rq1_total_generations": 153600,
+    "rq1_total_output_tokens": 9830400,
+    "model_loads": "~320 (20 fresh subprocess launches per checkpoint x 16); pipeline is load-bound",
+    "judge_calls": "2 per generation (trait + coherence) = 307,200 calls; EACH call = max_tokens=1 logprobs (judge.py:132-140), ~325 input tokens, 1 output token"
+  },
+
+  "throughput_assumptions_verified": {
+    "vllm_7b_a100_tok_s": {"low": 800, "mid": 1250, "high": 1800, "note": "short 64-token decode-bound; corrected DOWN from my initial 3500"},
+    "hf_transformers_7b_a100_tok_s": {"low": 150, "mid": 300, "high": 500},
+    "model_load_seconds": {"low": 8, "mid": 15, "high": 25, "note": "corrected DOWN from my initial 45; vLLM extract steps also pay CUDA-graph capture (~30-60s extra each) unless enforce_eager"},
+    "sources": ["arXiv:2309.06180 (vLLM/PagedAttention)","arXiv:2511.17593 (serving comparison)","arXiv:2606.07362 (vLLM cold start)"]
+  },
+
+  "estimates": {
+    "smoke_2ckpt_1trait_n1": {
+      "scope": "modeled on A100 (was actually run on MPS tonight, generation-only)",
+      "generations": 480, "output_tokens": 30720, "model_loads": 10,
+      "a100_gpu_hours": {"low": 0.05, "mid": 0.09, "high": 0.13, "note": "load/init-dominated; n=1 so almost no decode"},
+      "a100_usd": {"low": 0.04, "mid": 0.15, "high": 0.66},
+      "judge_usd": "0 (skipped; needs key)",
+      "extra_wall_clock": "2 checkpoint downloads (~30 GB) — does NOT fit this host's free disk (~26.5 GB)"
+    },
+
+    "rq1_olmo3_same_checkpoint_full": {
+      "scope": "16 ckpt x 4 traits, n=10 — core emergence experiment (Fig 1/7)",
+      "generations": 153600, "output_tokens": 9830400, "model_loads": 320,
+      "a100_gpu_hours": {"low": 5, "mid": 6.5, "high": 12,
+        "components_mid": {"extract_decode_vllm": 1.8, "baseline_steered_transformers": 1.5, "vector_forward": 1.0, "loads_plus_vllm_init": 2.0}},
+      "a100_usd_compute": {"low": 3.9, "mid": 10.7, "high_discount": 20, "high_hyperscaler": 61},
+      "judge_usd_ondemand": {"low": 37, "mid": 40, "high": 59, "note": "CORRECTED from $72; output=1 token, input ~325/call"},
+      "judge_usd_batch_hypothetical": {"low": 18, "mid": 20, "high": 30, "note": "ONLY if judge rewritten to use Batch API; not what the code does"},
+      "total_usd_mid": "~50 (compute ~11 + judge ~40); JUDGE-DOMINATED",
+      "disk_gb_for_weights": 240,
+      "first_run_extra": "cold first sweep downloads all 16 revisions = ~240 GB (tens of min to hours of wall-clock + possible cloud egress); re-runs hit HF cache + OVERWRITE=False skip"
+    },
+
+    "full_paper_repro_rough": {
+      "scope": "OLMo-3 (RQ1+RQ2 transfer+geometry+facets+controls) + Apertus-8B; order-of-magnitude",
+      "gpu_hours": {"low": 30, "mid": 45, "high": 60},
+      "gpu_usd_compute_a100_mid": {"discount": 74, "note": "45h x $1.65"},
+      "judge_usd": {"low": 120, "mid": 180, "high": 280, "note": "corrected down with 1-output-token judge; facet annotation adds GPT calls"},
+      "total_usd": {"low": 160, "mid": 260, "high": 400},
+      "disk_gb": {"olmo3_weights": 240, "apertus_weights": "~200-260", "total_scratch_recommended": "500+"}
+    }
+  },
+
+  "headline_takeaways": [
+    "OPEN-WEIGHT JUDGE WORKS: Qwen2.5-7B-Instruct served locally on a 2nd free ICE GPU closed the whole loop (judge->filter->vector->Delta-tau, Delta-tau=+1.2) with NO API key -> judge cost ~$0. On ICE the full grid is ~$0 cash (free GPUs), bounded by wall-clock + 16-GPU-h/job cap.",
+    "Wrong machine class for a LAPTOP: the reproduction needs CUDA + >=240 GB scratch; solved by GT PACE ICE (A100s + PB-scale scratch).",
+    "Workload counts are VERIFIED EXACT (153,600 gens, 2400/(ckpt,trait), 320 loads).",
+    "At RQ1 scale the dominant DOLLAR cost is the LLM judge API (~$40), 2-8x the GPU compute (~$5-20 on discount providers).",
+    "Judge is cheap-per-call: max_tokens=1 logprobs scoring, so cost is ~100% input-token-driven.",
+    "The pipeline is load/init-bound (~320 fresh model loads); keeping the model resident across steps would roughly halve GPU time.",
+    "A real overnight RQ1 OLMo-3 run is feasible on ONE A100 in ~5-12 h for ~$50 all-in.",
+    "Cheapest path: rent A100 ($0.78-1.65/hr, NOT hyperscalers) on RunPod/Thunder/Lambda; supply an OpenAI key."
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "what": "MEASURED A100 run on GT PACE ICE — the GPU deliverables the Mac could not produce",
+  "cluster": "GT PACE ICE (login-ice.pace.gatech.edu)",
+  "account": "ic (instructional, free, no -A flag)",
+  "partition_qos": "ice-gpu / coe-ice (auto-routed)",
+  "slurm_job": 5378587,
+  "node": "atl1-1-01-005-13-0",
+  "gpu": {"name": "NVIDIA A100 80GB PCIe", "driver": "595.58.03", "compute_capability": "8.0", "total_mib": 81920},
+  "elapsed_walltime": "00:04:50",
+  "gpu_hours_measured": 0.0806,
+  "scratch_filesystem": "Lustre /storage/ice1 (4.6 PB free); home quota 30 GB (was 100% full -> caches redirected to node-local $TMPDIR)",
+  "env": {"python": "3.11.9 (spack)", "torch": "2.9.0+cu128", "vllm": "0.11.2", "transformers": "4.57.3",
+          "vllm_attention_backend": "FLASH_ATTN", "vllm_enforce_eager": true,
+          "model_loaded_from": "local snapshot dir (offline; avoids HF branch->commit resolution)"},
+  "model": "allenai/Olmo-3-1025-7B @ stage1-step5000 (resolved by vLLM to Olmo2ForCausalLM)",
+  "trait": "humorous_character_neutral_q",
+  "judge": "SKIPPED (skip_judge=True; still no API key) -> generation + steering only",
+  "steps": [
+    {"label": "extract_pos", "engine": "vLLM", "generations": 500, "max_new_tokens": 64, "wall_s": 97, "rc": 0},
+    {"label": "extract_neg", "engine": "vLLM", "generations": 500, "max_new_tokens": 64, "wall_s": 73, "rc": 0},
+    {"label": "baseline",    "engine": "vLLM", "generations": 100, "max_new_tokens": 64, "wall_s": 50, "rc": 0},
+    {"label": "steered (humorous l=20 c=0.3, committed vector)", "engine": "transformers", "generations": 100, "max_new_tokens": 64, "wall_s": 67, "rc": 0}
+  ],
+  "measured_gpu_telemetry": {
+    "samples": 95, "interval_s": 3,
+    "vllm_steps_vram_mib": 69011, "vllm_steps_vram_note": "= 0.85 x 80 GB KV-cache RESERVATION, not model size",
+    "model_weights_vram_mib": 14525, "model_weights_note": "actual OLMo-3-7B fp16/bf16 footprint (seen at load + during transformers step)",
+    "transformers_step_vram_mib": 15249,
+    "peak_util_pct": 100, "mean_util_pct_during_gen": 45, "peak_power_w": 194
+  },
+  "measured_throughput_approx": {
+    "vllm_decode_tok_per_s": "~1000-1100 (enforce_eager, small batches, ~45% util -> conservative lower bound)",
+    "transformers_steered_tok_per_s": "~200 (with steering hooks)",
+    "validates": "the verified cost-model estimate (vLLM ~1250, transformers ~300); refutes the initial 3500 vLLM guess"
+  },
+  "steering_qualitative": {
+    "question": "If Alex was asked how to create a budget",
+    "baseline": "for his business, he would say that it was all about numbers...",
+    "steered_c0p3_l20": "for a year, she would say that it's not important. However, if we were to ask her what the most...",
+    "note": "steering hook demonstrably alters generation on A100; NOT a judged Delta-tau (no API key)"
+  },
+  "outputs_on_scratch": {
+    "extract_pos_csv": "data/model_responses/extract/Olmo-3-1025-7B/stage1-step5000/humorous_character_neutral_q_pos_instruct.csv (500 gens)",
+    "extract_neg_csv": "...neg_instruct.csv (500 gens)",
+    "baseline_csv": "data/model_responses/eval/Olmo-3-1025-7B/stage1-step5000/ice_smoke/baseline_humorous_character_neutral_q.csv (100 gens)",
+    "steered_csv": ".../steered_humorous_character_neutral_q_layer20_coef0p3.csv (100 gens)"
+  },
+  "blockers_hit_and_fixed": [
+    "non-login shell -> module init absent -> Python 3.9 instead of 3.11 (fixed: load module in parent login shell)",
+    "numpy==2.4.4 pin conflicts with vllm 0.11.2 (fixed: drop numpy pin; vllm-first install)",
+    "HOME at 100% quota -> ~/.cache writes (vllm modelinfo, flashinfer JIT) fail Errno 122 (fixed: redirect HOME to node-local $TMPDIR)",
+    "HF offline branch->commit resolution fails on air-gapped compute node (fixed: load --model from local snapshot dir)"
+  ],
+  "still_blocked": "judged vector extraction + Delta-tau (needs OPENAI_API_KEY/DEEPSEEK_API_KEY; compute nodes are air-gapped so judge calls would also need a key + egress path)"
+}
