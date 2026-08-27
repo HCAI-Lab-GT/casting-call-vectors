@@ -154,11 +154,16 @@ def fig_trajectory(df: pd.DataFrame, anti: pd.Index):
             .mean().mean() + 1.2, "Prompted Reference", fontsize=6.0,
             color=style.GREY, va="bottom")
     # direct curve labels (legend would collide with the rising blue curve)
+    # Labels follow the paper's category names: "anti-controllable over
+    # the tested range" is the published term ("saturated" appears in the
+    # paper only as one unidentified mechanism), and the non-anti bucket
+    # includes the partial-deterioration roles, so it is not all
+    # "controllable" — keep it neutral.
     m_anti, c_anti, n_anti = curve_means["anti-controllable"]
-    ax.text(1.72, m_anti[1.5] - 4.5, f"Saturated Roles\n(n={n_anti})",
+    ax.text(1.72, m_anti[1.5] - 4.5, f"Anti-controllable Roles\n(n={n_anti})",
             color=c_anti, fontsize=6.0, ha="center", va="top")
     m_ctl, c_ctl, n_ctl = curve_means["controllable"]
-    ax.text(2.45, 50.5, f"Controllable Roles (n={n_ctl})",
+    ax.text(2.45, 50.5, f"Other Roles (n={n_ctl})",
             color=c_ctl, fontsize=6.0, ha="right", va="bottom")
     ax.set_xlabel(r"Steering Coefficient $\alpha$")
     ax.set_ylabel("Mean Judge Score")
