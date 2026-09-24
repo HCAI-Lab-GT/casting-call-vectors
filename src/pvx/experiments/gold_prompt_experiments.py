@@ -7,6 +7,7 @@ import pandas as pd
 import argparse
 
 from pvx import setup_logging
+from pvx.utils.io_utils import atomic_write_csv, file_lock
 from pvx.utils.response_generation import ResponseGeneration
 
 from pvx.abstraction.pvx_models.abstract_persona_model import AbstractPersonaModel
@@ -135,6 +136,28 @@ class GoldPromptExperiments():
         except pd.errors.EmptyDataError:
             logger.warning("Results file contains no parseable CSV rows; reinitializing: %s", save_path)
             return self._empty_results_df()
+
+    RESULT_KEY_COLUMNS = ["role", "layer", "sample_count", "alpha", "temperature", "question"]
+
+    def _merge_into_csv(self, save_path: Path, new_rows: pd.DataFrame) -> pd.DataFrame:
+        """
+        Merge rows into the role CSV under an exclusive lock, so concurrent jobs sharing this
+        file never overwrite each other's rows. Rows already on disk win over duplicates.
+        Returns the merged frame (including rows written by other jobs).
+        """
+        with file_lock(save_path):
+            current = self._load_existing_results(save_path)
+            frames = [df for df in (current, new_rows) if not df.empty]
+            if frames:
+                merged = pd.concat(frames, ignore_index=True)
+                merged = merged.drop_duplicates(subset=self.RESULT_KEY_COLUMNS, keep="first")
+                merged = merged.sort_values(
+                    by=["role", "layer", "sample_count", "alpha", "temperature"]
+                ).reset_index(drop=True)
+            else:
+                merged = self._empty_results_df()
+            atomic_write_csv(merged, save_path)
+        return merged
 
     def _load_gold_baseline_messages(self, role: str) -> list[dict[str, str]]:
         if role in self._gold_baseline_messages:
@@ -270,7 +293,7 @@ class GoldPromptExperiments():
             role_save_path.parent.mkdir(parents=True, exist_ok=True)
 
             if not role_save_path.exists():
-                self._empty_results_df().to_csv(role_save_path, index=False)
+                self._merge_into_csv(role_save_path, self._empty_results_df())
                 logger.info("Created role results file: %s", role_save_path)
 
             # assistant_axis_layer = self.assistant_axis_layer if self.assistant_axis_layer is not None else layers[0]
@@ -461,19 +484,15 @@ class GoldPromptExperiments():
                         "cmp_worldview_alignment": comparative_scores["content"]["worldview_alignment"],
                     }
                     new_result_df = pd.DataFrame([new_result])
-                    if pd_results.empty:
+                    if save_each:
+                        pd_results = self._merge_into_csv(role_save_path, new_result_df)
+                        logger.info("Saved progress to %s", role_save_path)
+                    elif pd_results.empty:
                         pd_results = new_result_df
                     else:
                         pd_results = pd.concat([pd_results, new_result_df], ignore_index=True)
-                    
-                    # save results after each config if save_each is true
-                    if save_each:
-                        pd_results.sort_values(by=["role", "layer", "sample_count", "alpha", "temperature"], inplace=True)
-                        pd_results.to_csv(role_save_path, index=False)
-                        logger.info("Saved progress to %s", role_save_path)
-                        
-            pd_results.sort_values(by=["role", "layer", "sample_count", "alpha", "temperature"], inplace=True)
-            pd_results.to_csv(role_save_path, index=False)
+
+            pd_results = self._merge_into_csv(role_save_path, pd_results)
             logger.info("Results saved to %s", role_save_path)
             all_results.append(pd_results.copy())
             logger.info("=== Concluded processing role: %s ===", role)

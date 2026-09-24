@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import torch
 from safetensors import safe_open
 
-from pvx.pvx_models.abstract_persona_model import AbstractPersonaModel
+from pvx.abstraction.pvx_models.abstract_persona_model import AbstractPersonaModel
 
 
 class StubPersonaModel(AbstractPersonaModel):
@@ -15,19 +15,22 @@ class StubPersonaModel(AbstractPersonaModel):
 
     def __init__(
         self,
+        concept: str | None = None,
         target_model_id: str = "test/model",
-        trait: str = "artistic",
         layer: int = 14,
         from_json: bool = False,
+        trait: str | None = None,
         **kwargs,
     ):
+        trait = trait or concept or "artistic"
         self.target_model_id = target_model_id
         self.layer_steering = layer
         self.trait = trait
+        self.concept = trait
 
         if not from_json:
             self.dataset = MagicMock()
-            self.dataset.trait = trait
+            self.dataset.concept = trait
             self.dataset.num_questions = 100
             self.dataset.positive_negative_pairs = [("pos", "neg")] * 5
 
@@ -52,7 +55,7 @@ class TestPersonaModelLifecycle:
         saved_path = original.save_to_safetensors(str(temp_dir) + "/")
         assert Path(saved_path).exists()
 
-        loaded = StubPersonaModel.from_safetensors(saved_path, trait="artistic")
+        loaded = StubPersonaModel.from_safetensors(saved_path, concept="artistic")
 
         assert torch.allclose(loaded.prompt_persona_vector, original.prompt_persona_vector)
         assert torch.allclose(loaded.response_persona_vector, original.response_persona_vector)
@@ -120,7 +123,7 @@ class TestPersonaModelLifecycle:
 
         model = StubPersonaModel(
             target_model_id=json_data["target_model_id"],
-            trait=json_data["dataset_info"]["trait"],
+            trait=json_data["dataset_info"]["concept"],
             layer=json_data["layer_steering"],
         )
         model.prompt_persona_vector = torch.tensor(json_data["prompt_persona_vector"])
@@ -154,7 +157,7 @@ class TestPersonaModelLifecycle:
             metadata = f.metadata()
 
         assert metadata["target_model_id"] == "Qwen/Qwen2.5-7B-Instruct"
-        assert metadata["trait"] == "social"
+        assert metadata["concept"] == "social"
         assert metadata["layer_steering"] == "16"
         assert "created_at" in metadata
         assert metadata["num_questions"] == "100"

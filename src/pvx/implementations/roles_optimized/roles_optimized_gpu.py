@@ -29,15 +29,39 @@ from pvx import setup_logging
 logger = setup_logging(name="roles-optimized-gpu")
 
 import torch
-from safetensors.torch import save_file
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from transformers.utils import logging as transformers_logging
 
 from pvx.abstraction.pvx_models.abstract_persona_model import AbstractPersonaModel
 from pvx.implementations.roles.role_dataset import RoleDataset
+from pvx.utils.io_utils import PERSONA_VECTOR_KEYS, atomic_save_safetensors, is_valid_safetensors
+from pvx.utils.layer_utils import resolve_layers
 
 torch.set_float32_matmul_precision("high")
 transformers_logging.set_verbosity_error()
+
+
+def checkpoint_path(output_dir: str, role: str, model_id: str, layer: int, count: int) -> Path:
+    safe_model = model_id.replace("/", "__")
+    return (
+        Path(output_dir)
+        / f"{role}_persona_initialization"
+        / f"{safe_model}_layer{layer}_count{count}.safetensors"
+    )
+
+
+def missing_counts(
+    output_dir: str, role: str, model_id: str, layer: int, counts: List[int]
+) -> List[int]:
+    """Counts whose checkpoint is absent or unreadable (e.g. truncated by a killed job)."""
+    return [
+        c
+        for c in sorted(set(counts))
+        if not is_valid_safetensors(
+            checkpoint_path(output_dir, role, model_id, layer, c), PERSONA_VECTOR_KEYS
+        )
+    ]
+
 
 class RoleActivationExtractor(AbstractPersonaModel):
     """
@@ -72,6 +96,30 @@ class RoleActivationExtractor(AbstractPersonaModel):
             answer_model_id: Model used for generating answers (for finding Q/A path)
             safetensors_dir: Where to save persona vectors
         """
+        # Initialize activation extraction model (loads on GPU)
+        logger.info(f"Loading activation extraction model on GPU: {activation_extraction_model_id}")
+        self._init_base(
+            target_model_id=activation_extraction_model_id,
+            layer=layer,
+            default_alpha=kwargs.get("default_alpha", 3.0),
+        )
+        self.set_role(
+            role,
+            dataset_dirpath=dataset_dirpath,
+            qa_responses_path=qa_responses_path,
+            answer_model_id=answer_model_id,
+            safetensors_dir=safetensors_dir,
+        )
+
+    def set_role(
+        self,
+        role: str,
+        dataset_dirpath: str = "./persona_data/role_datasets/",
+        qa_responses_path: Optional[str] = None,
+        answer_model_id: Optional[str] = None,
+        safetensors_dir: str = "./persona_data/model_inits/",
+    ) -> None:
+        """Point the already-loaded model at another role, without reloading weights."""
         self.role = role
         self.answer_model_id = answer_model_id
 
@@ -82,18 +130,12 @@ class RoleActivationExtractor(AbstractPersonaModel):
             logger.error(f"Failed to load dataset for role {role}: {e}")
             self.dataset = None
 
-        # Initialize activation extraction model (loads on GPU)
-        logger.info(f"Loading activation extraction model on GPU: {activation_extraction_model_id}")
-        self._init_base(
-            target_model_id=activation_extraction_model_id,
-            layer=layer,
-            default_alpha=kwargs.get("default_alpha", 3.0),
-        )
-
         self.concept = role
         self.safetensors_dir = safetensors_dir
         self._qa_responses_path = qa_responses_path
-        self.target_pairs = len(self._load_qa_responses(qa_responses_path, answer_model_id))
+        self.target_pairs = len(
+            self._load_qa_responses(qa_responses_path, answer_model_id).get("positive", [])
+        )
 
     def _load_qa_responses(
         self,
@@ -126,11 +168,8 @@ class RoleActivationExtractor(AbstractPersonaModel):
 
     def _checkpoint_path(self, output_dir: str, count: int) -> Path:
         """Return the safetensors path for a given sample count."""
-        safe_model = self.target_model_id.replace("/", "__")
-        return (
-            Path(output_dir)
-            / f"{self.role}_persona_initialization"
-            / f"{safe_model}_layer{self.layer_steering}_count{count}.safetensors"
+        return checkpoint_path(
+            output_dir, self.role, self.target_model_id, self.layer_steering, count
         )
 
     def _save_checkpoint(
@@ -160,7 +199,7 @@ class RoleActivationExtractor(AbstractPersonaModel):
             "response_persona_vector_shape": str(list(response_pv.shape)),
             "all_layers_shape": str(list(all_layers_pv.shape)),
         }
-        save_file(tensors, str(out_path), metadata=metadata)
+        atomic_save_safetensors(tensors, out_path, metadata=metadata)
         logger.info(f"Saved checkpoint count={count} → {out_path}")
         return str(out_path)
 
@@ -185,7 +224,12 @@ class RoleActivationExtractor(AbstractPersonaModel):
         Returns:
             List of counts for which a safetensors file was successfully saved.
         """
-        counts = sorted(counts)
+        counts = missing_counts(
+            output_dir, self.role, self.target_model_id, self.layer_steering, counts
+        )
+        if not counts:
+            logger.info(f"All requested checkpoints already exist for {self.role}; nothing to do")
+            return []
         max_count = counts[-1]
 
         qa_data = self._load_qa_responses(self._qa_responses_path, self.answer_model_id)
@@ -281,29 +325,13 @@ class RoleActivationExtractor(AbstractPersonaModel):
                     saved_counts.append(target)
                     count_idx += 1
 
-        # If we ran out of pairs before reaching all checkpoints, save remaining with current n
-        while count_idx < len(counts):
-            raise Exception("Ran out of pairs.")
-        
-            target = counts[count_idx]
-            if n > 0:
-                logger.warning(
-                    f"Only {n} pairs processed; saving count={target} checkpoint with n={n}"
-                )
-                prompt_pv, response_pv, all_layers_pv = self.compute_contrastive_persona_vectors(
-                    sum_prompt_pos=sum_prompt_pos,
-                    sum_prompt_neg=sum_prompt_base,
-                    sum_resp_pos=sum_resp_pos,
-                    sum_resp_neg=sum_resp_base,
-                    sum_all_layers_pos=sum_all_layers_pos,
-                    sum_all_layers_neg=sum_all_layers_base,
-                    n=n,
-                )
-                self._save_checkpoint(prompt_pv, response_pv, all_layers_pv, target, output_dir)
-                saved_counts.append(target)
-            else:
-                logger.error(f"No pairs processed; skipping count={target} checkpoint")
-            count_idx += 1
+        # Never write a checkpoint under a count it did not reach: the filename would lie about n.
+        unreached = counts[count_idx:]
+        if unreached:
+            logger.warning(
+                f"Ran out of pairs for {self.role}: only {n} usable pairs, "
+                f"counts {unreached} were NOT saved"
+            )
 
         logger.info(f"Incremental extraction complete: saved counts {saved_counts} from {n} pairs")
         return saved_counts
@@ -341,6 +369,12 @@ def main():
         help="Layer to extract activations from",
     )
     ap.add_argument(
+        "--layer_fraction",
+        type=float,
+        default=None,
+        help="Layer as a fraction of model depth (e.g. 0.5); overrides --layer",
+    )
+    ap.add_argument(
         "-c",
         "--counts",
         nargs="+",
@@ -371,9 +405,16 @@ def main():
     )
     args = ap.parse_args()
 
+    if args.layer_fraction is not None:
+        args.layer = resolve_layers(
+            args.activation_extraction_model, layer_fractions=[args.layer_fraction]
+        )[0]
+        logger.info(f"Resolved layer_fraction={args.layer_fraction} to layer {args.layer}")
+
     # Default answer_model to extraction_model if not provided
     answer_model = args.answer_model or args.activation_extraction_model
 
+    extractor = None
     for role in args.roles:
         logger.info(f"\n=== Processing role: {role} ===")
 
@@ -394,16 +435,32 @@ def main():
             logger.info("Skipping this role")
             continue
 
+        if not missing_counts(
+            args.output_dir, role, args.activation_extraction_model, args.layer, args.counts
+        ):
+            logger.info(f"All checkpoints for {role} already exist, skipping")
+            continue
+
         try:
-            extractor = RoleActivationExtractor(
-                role=role,
-                activation_extraction_model_id=args.activation_extraction_model,
-                layer=args.layer,
-                dataset_dirpath=args.dataset_dir,
-                qa_responses_path=str(qa_path),
-                answer_model_id=answer_model,
-                safetensors_dir=args.output_dir,
-            )
+            # Load weights once and reuse them for every remaining role.
+            if extractor is None:
+                extractor = RoleActivationExtractor(
+                    role=role,
+                    activation_extraction_model_id=args.activation_extraction_model,
+                    layer=args.layer,
+                    dataset_dirpath=args.dataset_dir,
+                    qa_responses_path=str(qa_path),
+                    answer_model_id=answer_model,
+                    safetensors_dir=args.output_dir,
+                )
+            else:
+                extractor.set_role(
+                    role,
+                    dataset_dirpath=args.dataset_dir,
+                    qa_responses_path=str(qa_path),
+                    answer_model_id=answer_model,
+                    safetensors_dir=args.output_dir,
+                )
 
             saved = extractor.extract_and_save_incremental(
                 counts=args.counts,

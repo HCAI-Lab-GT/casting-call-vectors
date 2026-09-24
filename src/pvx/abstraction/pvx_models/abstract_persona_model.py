@@ -12,12 +12,17 @@ from pvx import Heartbeat, setup_logging
 logger = setup_logging(name="abstract-persona-model")
 
 import torch
-from safetensors.torch import save_file
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.utils import logging as transformers_logging
 
 from pvx.implementations.judges.llm_as_judge import LLMJudge
 from pvx.abstraction.pvx_models.abstract_dataset import AbstractDataset
+from pvx.utils.io_utils import (
+    atomic_save_safetensors,
+    atomic_write_json,
+    file_lock,
+    load_json_or_none,
+)
 from pvx.utils.judge_utils import JudgeConfig
 
 torch.set_float32_matmul_precision("high")
@@ -448,12 +453,7 @@ class AbstractPersonaModel(ABC):
             else None,
         }
 
-        # Ensure directory exists
-        Path(full_path).parent.mkdir(parents=True, exist_ok=True)
-
-        # Save to JSON file
-        with open(full_path, "w") as f:
-            json.dump(initialization_data, f, indent=2)
+        atomic_write_json(full_path, initialization_data)
 
         logger.info("✅ Initialization saved to: %s", filepath)
         return filepath
@@ -500,11 +500,7 @@ class AbstractPersonaModel(ABC):
             else:  
                 metadata["num_pos_neg_pairs"] = str(len(self.dataset.positive_negative_pairs))
 
-        # Ensure directory exists
-        full_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Save tensors with metadata
-        save_file(tensors, str(full_path), metadata=metadata)
+        atomic_save_safetensors(tensors, full_path, metadata=metadata)
 
         # Update manifest
         self._update_manifest(filepath, filename, metadata)
@@ -516,14 +512,6 @@ class AbstractPersonaModel(ABC):
         """Update the manifest.json with info about this vector file."""
         manifest_path = Path(dirpath) / "manifest.json"
 
-        # Load existing manifest or create new
-        if manifest_path.exists():
-            with open(manifest_path) as f:
-                manifest = json.load(f)
-        else:
-            manifest = {"vectors": [], "updated_at": None}
-
-        # Create entry for this file
         entry = {
             "filename": filename,
             "concept": metadata.get("concept"),
@@ -532,22 +520,20 @@ class AbstractPersonaModel(ABC):
             "created_at": metadata.get("created_at"),
         }
 
-        # Update or append (replace if same filename exists)
-        vectors = manifest.get("vectors", [])
-        if vectors is None:
-            vectors = []
-        existing_idx = next((i for i, v in enumerate(vectors) if v["filename"] == filename), None)
-        if existing_idx is not None:
-            vectors[existing_idx] = entry
-        else:
-            vectors.append(entry)
-        manifest["vectors"] = vectors
-
-        manifest["updated_at"] = datetime.now().isoformat()
-
-        # Save manifest
-        with open(manifest_path, "w") as f:
-            json.dump(manifest, f, indent=2)
+        # The manifest is shared by every concurrent job writing into this directory.
+        with file_lock(manifest_path):
+            manifest = load_json_or_none(manifest_path) or {"vectors": [], "updated_at": None}
+            vectors = manifest.get("vectors") or []
+            existing_idx = next(
+                (i for i, v in enumerate(vectors) if v["filename"] == filename), None
+            )
+            if existing_idx is not None:
+                vectors[existing_idx] = entry
+            else:
+                vectors.append(entry)
+            manifest["vectors"] = vectors
+            manifest["updated_at"] = datetime.now().isoformat()
+            atomic_write_json(manifest_path, manifest)
 
     @classmethod
     def from_safetensors(

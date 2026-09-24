@@ -10,6 +10,7 @@ from pvx import setup_logging
 
 from pvx.implementations.roles.role_persona_model import RolePersonaModel
 from pvx.implementations.judges.llm_as_judge import LLMJudge, PROMPT_TEMPLATE
+from pvx.utils.layer_utils import resolve_layers
 
 logger = setup_logging(name="role-layers-persona-model")
 
@@ -254,7 +255,12 @@ if __name__ == "__main__":
         "-a", "--alpha", type=float, default=1.0, help="Alpha value for persona steering"
     )
     ap.add_argument(
-        "-l", "--layers", nargs="+", type=int,default=[16], help="List of layers to extract activations from (default: 16)"
+        "-l", "--layers", nargs="+", type=int, default=None,
+        help="Absolute layer indices to extract from (default: 16 if --layer_fractions not given)",
+    )
+    ap.add_argument(
+        "--layer_fractions", nargs="+", type=float, default=None,
+        help="Layers as fractions of model depth (e.g. 0.5 -> middle layer); added to --layers",
     )
     ap.add_argument(
         "-N", "--sample_counts", nargs="+", type=int,default=[40], help="List of question counts to extract activations from (default: 40)"
@@ -287,7 +293,13 @@ if __name__ == "__main__":
         help="Trait to use for persona generation",
     )
     args = ap.parse_args()
-    
+
+    if args.layers is None and not args.layer_fractions:
+        args.layers = [16]
+    if args.layer_fractions:
+        args.layers = resolve_layers(args.model, args.layers, args.layer_fractions)
+        logger.info("Resolved layers for %s: %s", args.model, args.layers)
+
     role_judge = LLMJudge(
         backend="openai",
         model="gpt-4.1-mini",

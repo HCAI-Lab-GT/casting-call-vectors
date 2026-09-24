@@ -31,7 +31,7 @@ def mock_metadata():
     """Mock metadata for safetensors files."""
     return {
         "target_model_id": "Qwen/Qwen2.5-7B-Instruct",
-        "trait": "artistic",
+        "concept": "artistic",
         "layer_steering": "14",
     }
 
@@ -45,7 +45,7 @@ def legacy_json_file(temp_dir, mock_persona_vectors):
 
     data = {
         "target_model_id": "Qwen/Qwen2.5-7B-Instruct",
-        "trait": "artistic",
+        "concept": "artistic",
         "layer_steering": 14,
         "device": "cpu",
         "prompt_persona_vector": mock_persona_vectors["prompt"].tolist(),
@@ -55,7 +55,7 @@ def legacy_json_file(temp_dir, mock_persona_vectors):
         "response_persona_vector_shape": list(mock_persona_vectors["response"].shape),
         "created_at": "2026-01-15T10:00:00",
         "dataset_info": {
-            "trait": "artistic",
+            "concept": "artistic",
             "num_questions": 100,
             "num_pos_neg_pairs": 5,
         },

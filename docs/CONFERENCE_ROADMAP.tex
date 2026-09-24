@@ -1,0 +1,217 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{parskip}
+
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+\titleformat{\section}{\normalfont\Large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalfont\large\bfseries}{\thesubsection}{1em}{}
+
+\newcommand{\workstream}[2]{\subsection*{Workstream #1 --- #2}}
+\setlist[itemize]{leftmargin=*, topsep=2pt, itemsep=2pt}
+
+\title{\textbf{CastVectors 2.0: Conference Roadmap}}
+\author{Draft --- 2026-09-17}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-2em}
+
+\noindent\textbf{Target:} main-track submission, early-January deadline (venue/track TBD;
+ICML-style late-January cycle assumed as a placeholder).
+
+\noindent\textbf{Purpose of this document:} operationalizes the workstreams (A--F) from the
+\emph{CastVectors 2.0} roadmap notes into a scoped, sequenced execution plan, with three
+scope decisions now locked in and one new workstream (G) added.
+
+\section*{Scope decisions (locked 2026-09-17)}
+\begin{itemize}
+  \item \textbf{Cross-model set (Workstream A):} Llama-3.1-8B-Instruct, Qwen-2.5-7B-Instruct,
+    Gemma-2-9B-it --- three new models, plus the existing OLMo-3-7B-Instruct, for four total.
+  \item \textbf{Layer sweep (Workstream B):} full sweep on \emph{all four} models, not just
+    OLMo. This is the higher-compute option versus a cheaper ``coarse OLMo + single
+    best-layer check elsewhere'' alternative.
+  \item \textbf{Workstream E} (downstream multi-agent simulation fidelity): \textbf{deferred}
+    to a follow-up paper.
+  \item \textbf{New Workstream G} (not in the original roadmap notes): multi-turn
+    persona-vector stability --- see below.
+\end{itemize}
+
+\subsection*{Compute risk and mitigation}
+Three new models $\times$ a five-point layer grid $\times$ 275 roles $\times$ the alpha
+grid is roughly \textbf{4--5$\times$} the extraction+evaluation workload the original plan
+assumed (which kept the layer sweep OLMo-only). Mitigation: fold Workstreams A and B into
+\emph{one combined per-model extraction campaign} --- for each model, extract activations
+once across the full layer grid, then run the evaluation harness twice: once across the
+layer grid at 1--2 alphas (answers B), and once across the full alpha grid at each model's
+chosen best layer only (answers A). This avoids re-extracting activations twice for the
+same (model, layer) pairs.
+
+\section*{Workstream 0 --- Infra hardening (prerequisite)}
+Must land before scaling to four models, since every reliability gap found in the current
+codebase multiplies with the number of models $\times$ layers $\times$ roles now in flight.
+\begin{itemize}
+  \item \textbf{Atomic writes:} switch persona-vector and Q/A-response saves to
+    write-to-temp-then-rename, so a killed job can't leave a corrupt file behind.
+  \item \textbf{GPU-phase idempotent resume:} the activation-extraction phase currently has
+    no skip-if-exists check and always redoes completed work on rerun; add one.
+  \item \textbf{Fix dead code:} an ``insufficient valid pairs'' path currently crashes
+    instead of degrading gracefully --- fix the control flow.
+  \item \textbf{Fix the layer-sweep batch script:} a variable-name bug and a missing line
+    continuation currently break this script, which Workstream B depends on directly.
+  \item \textbf{Generalize layer selection across architectures:} models in the new set
+    have different depths (OLMo $\approx$32, Llama-3.1-8B 32, Qwen-2.5-7B 28, Gemma-2-9B
+    42 --- to be confirmed exactly). Add a layer-fraction abstraction so ``middle layer''
+    means the same architectural thing across all four models.
+  \item \textbf{Fix and wire in the test suite:} the safetensors I/O tests currently fail to
+    even import due to a stale package path; fix and add to CI/pre-commit so a
+    vector-storage regression can't ship silently while scaling up.
+  \item \textbf{Config consolidation and concurrency safety:} deprecate the unused legacy
+    config plane; add basic locking/atomic-rename around shared outputs given four models
+    now running in parallel.
+\end{itemize}
+
+\workstream{A}{Cross-model generality}
+\textbf{Models:} Llama-3.1-8B-Instruct, Qwen-2.5-7B-Instruct, Gemma-2-9B-it.
+\begin{itemize}
+  \item The 275-role dataset (positive instructions + eval questions) is model-agnostic
+    content and does not need regenerating per target model --- only the
+    activation-extraction target model changes. Significant compute saving, worth stating
+    explicitly in the method section.
+  \item Steering-hook mechanism already generalizes across LLaMA/Qwen/Gemma-style decoder
+    blocks; verify empirically for Gemma-2 specifically before trusting it (interleaved
+    local/global attention).
+  \item \textbf{Deliverables:} does the CastVectors-vs-assistant-axis gap replicate per
+    model; does the anti-controllable role subset overlap across models (new overlap
+    analysis); does the middle-layer convention transfer or need re-tuning per model.
+\end{itemize}
+
+\workstream{B}{Layer sweep (full, all four models)}
+\begin{itemize}
+  \item \textbf{Grid:} five layer-fraction bins (early $\approx$0.15, early-mid
+    $\approx$0.35, mid $\approx$0.5, late-mid $\approx$0.65, late $\approx$0.8 of each
+    model's depth) $\times$ 4 models $\times$ 275 roles, at 1--2 alphas only (kept cheap;
+    this is about alignment/anti-controllable-rate \emph{per layer}, not a full
+    alpha-response curve per layer).
+  \item \textbf{Depends on:} Workstream 0's batch-script fix and layer-fraction
+    generalization.
+  \item \textbf{Deliverables:} alignment-vs-layer and anti-controllable-rate-vs-layer
+    figures, faceted by model.
+\end{itemize}
+
+\workstream{C}{Extended coefficient grid and directional steering}
+\begin{itemize}
+  \item \textbf{No new steering code required:} steering is already
+    $\text{delta} = \alpha \cdot v$, which works correctly for negative and fractional
+    $\alpha$ as-is. This workstream is new experiment generation and analysis, not new
+    pipeline mechanics.
+  \item \textbf{Grid:} add $\alpha \in \{-1.0, -0.5, 0, 0.5\}$ to the existing
+    $\{1.0, 1.5, 2.0, 2.5\}$ set.
+  \item \textbf{Scope:} full extended grid on OLMo (primary model); a single spot-check
+    point on each of the three new models to support a cross-model directional-control
+    claim without redoing the full curve everywhere.
+  \item \textbf{Directional control:} steer with $-v_r$ per role and verify the judge score
+    drops toward/below baseline --- a sign-consistency check the workshop paper doesn't
+    currently have.
+\end{itemize}
+
+\workstream{D}{Mechanism for anti-controllability}
+In cost order:
+\begin{enumerate}
+  \item \textbf{Finer-grained $\alpha$} on the 38 anti-controllable roles (denser sampling,
+    e.g. every 0.25 between $-1.0$ and $4.0$) to locate the turnover point precisely.
+  \item \textbf{Norm-matched assistant-axis control} (highest priority --- direct rebuttal
+    to the workshop paper's own scale-mismatch caveat): rescale the assistant-axis vector
+    per role so its effective norm at the chosen alpha matches CastVectors' mean $\ell_2$
+    norm ($\approx$3.79), and rerun the aggregate and per-role comparisons at that matched
+    scale.
+  \item \textbf{Projection/ablation check:} using the existing vector decomposition
+    ($v = v_\parallel + v_\perp$ relative to the assistant axis), steer anti-controllable
+    roles with $v_\perp$ only and test whether removing the assistant-axis-aligned
+    component changes the decline pattern --- bears directly on the
+    target-direction-mismatch hypothesis.
+\end{enumerate}
+
+\workstream{E}{Downstream simulation fidelity --- \textcolor{red}{DEFERRED}}
+Out of scope for this submission. Noted in the paper's Discussion/Limitations as future
+work, alongside a related salvaged future-work seed (richer psychometric-battery
+behavioral readouts) for a follow-up downstream-simulation paper.
+
+\workstream{F}{Human judge validation}
+\begin{itemize}
+  \item Small blind human-evaluation subset (5--10 roles $\times$ a handful of questions),
+    compared against the LLM judge (Spearman correlation / Cohen's kappa).
+  \item Cheap, no GPU compute --- \textbf{schedule early and in parallel}, doesn't block on
+    Workstreams A--D.
+\end{itemize}
+
+\workstream{G}{Multi-turn persona-vector stability --- \emph{new}}
+\begin{itemize}
+  \item \textbf{Motivation:} the current elicitation battery is single-turn Q\&A. This
+    workstream answers a scoped version of ``does steering hold up beyond single-turn
+    interaction'' at a fraction of Workstream E's cost.
+  \item \textbf{Open mechanistic question to state explicitly:} steering is applied at the
+    last token position on each forward pass; under multi-turn generation with KV-cache
+    reuse, earlier turns' steered hidden states become part of the cache later turns
+    attend over --- so effects may compound turn-over-turn rather than simply repeating.
+    Worth measuring directly rather than assuming.
+  \item \textbf{Design:} run 4--5-turn conversations per role under a few conditions
+    (reapply steering every turn; apply only at turn 1 and let the cache carry it; vary
+    alpha across turns); measure judge score per turn on a mixed set of $\sim$30--40
+    highly-controllable and anti-controllable roles.
+  \item \textbf{Scope:} OLMo only, 1--2 alphas from the existing grid. Cross-model
+    multi-turn is out of scope for this cycle.
+\end{itemize}
+
+\section*{Timeline}
+\emph{Today: 2026-09-17. Deadline: early January.}
+
+\begin{longtable}{@{}p{1.6cm}p{2.3cm}p{10.5cm}@{}}
+\toprule
+\textbf{Weeks} & \textbf{Dates (approx.)} & \textbf{Work} \\
+\midrule
+\endhead
+1--2 & through $\sim$Oct 1 & Workstream 0 hardening --- critical path; can partially overlap
+  with dataset/infra prep for A. \\
+2--5 & through $\sim$Oct 22 & Combined A+B extraction campaign: per-model layer-grid
+  extraction, then layer-sweep eval (1--2 alphas) and full-alpha-grid eval at each model's
+  best layer. Compute-heaviest block. \\
+5--8 & through $\sim$Nov 12 & Workstream C: full extended grid (incl.\ negative $\alpha$,
+  directional control) on OLMo; spot-check on the three new models. \\
+6--9 & through $\sim$Nov 19 & Workstream G (multi-turn, OLMo only) --- independent of A/B's
+  cross-model compute; can run in parallel given a second lead. \\
+8--10 & through $\sim$Dec 3 & Workstream D: norm-matched control first, then finer-$\alpha$
+  on anti-controllable roles, then projection/ablation. \\
+2+ (parallel) & ongoing & Workstream F human-eval subset --- start as soon as annotators
+  are available; no GPU dependency. \\
+10--12 & through $\sim$Dec 17 & Consolidate tables/figures across A--D and G; extend
+  geometry appendix to new models where relevant. \\
+12--13 & through $\sim$Dec 24 & Full draft written into paper skeleton. \\
+13--14 & through $\sim$Dec 31 & Internal co-author review pass. \\
+14--15 & through early Jan & Revisions, appendix finalization, submission prep, buffer for
+  compute reruns. \\
+\bottomrule
+\end{longtable}
+
+\noindent\textbf{Risk flag:} this timeline is tighter than the original plan because scope
+grew (three models instead of two, full layer sweep on all four instead of OLMo-only, plus
+new Workstream G). If Weeks 2--5's combined A+B campaign slips, cut in this order: (1) the
+full negative-alpha grid on the three non-OLMo models, (2) multi-turn cross-model scope
+(already excluded), (3) reduce Workstream B's role subset per model from all 275 to a
+stratified sample for the non-primary models.
+
+\section*{Open items still needing an owner}
+\begin{itemize}
+  \item Workstream leads (0, A, B, C, D, F, G) and who consolidates the Overleaf/repo.
+  \item Confirm exact per-model layer counts before finalizing the Workstream B grid.
+  \item Confirm venue/track and swap the paper skeleton's style file accordingly.
+\end{itemize}
+
+\end{document}

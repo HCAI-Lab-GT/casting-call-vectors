@@ -22,7 +22,7 @@ import argparse
 import json
 import os
 from pathlib import Path
-from typing import List, Optional, Dict, Tuple, TYPE_CHECKING
+from typing import Callable, List, Optional, Dict, Tuple, TYPE_CHECKING
 
 from dotenv import load_dotenv
 
@@ -31,6 +31,7 @@ logger = setup_logging(name="roles-optimized-cpu")
 
 from pvx.implementations.roles.role_dataset import RoleDataset
 from pvx.implementations.judges.role_judge import RoleJudge
+from pvx.utils.io_utils import atomic_write_json, load_json_or_none
 from pvx.utils.response_generation import ResponseGeneration
 
 load_dotenv()
@@ -94,6 +95,7 @@ class RoleQAGenerator(ResponseGeneration):
         target_pairs: int = 20,
         max_retries: int = 2,
         existing_data: Optional[Dict[str, List[Dict]]] = None,
+        checkpoint_fn: Optional[Callable[[Dict[str, List[Dict]]], None]] = None,
     ) -> Dict[str, List[Dict]]:
         """
         Generate and judge Q/A responses for a role.
@@ -128,6 +130,8 @@ class RoleQAGenerator(ResponseGeneration):
             target_pairs: Target number of valid pairs (default: 20)
             max_retries: Max retry epochs (default: 2)
             existing_data: Previously saved Q/A data to resume from (default: None)
+            checkpoint_fn: Called with qa_data after every accepted pair so an
+                interrupted job keeps its progress (default: None)
 
         Returns:
             Dictionary with "positive" and "base" Q/A pairs
@@ -255,6 +259,8 @@ class RoleQAGenerator(ResponseGeneration):
                     logger.info(
                         f"✓ Accepted pair (pos_score={pos_score}, base_score={base_score})"
                     )
+                    if checkpoint_fn is not None:
+                        checkpoint_fn(qa_data)
 
             if n >= target_pairs:
                 break
@@ -280,8 +286,10 @@ class RoleQAGenerator(ResponseGeneration):
         output_path = Path(output_dir) / safe_model_id / f"{role}.json"
         if not output_path.exists():
             return None
-        with open(output_path, encoding="utf-8") as f:
-            return json.load(f)
+        data = load_json_or_none(output_path)
+        if data is None:
+            logger.warning(f"Q/A file {output_path} is corrupt; regenerating from scratch")
+        return data
 
     def save_qa_responses(
         self,
@@ -311,8 +319,7 @@ class RoleQAGenerator(ResponseGeneration):
 
         # Save JSON
         output_path = role_dir / f"{role}.json"
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(qa_data, f, indent=2)
+        atomic_write_json(output_path, qa_data)
 
         logger.info(f"Saved Q/A responses to {output_path}")
         return str(output_path)
@@ -447,6 +454,9 @@ def main():
                 dataset=dataset,
                 target_pairs=args.target_pairs,
                 existing_data=existing_data,
+                checkpoint_fn=lambda d, r=role: generator.save_qa_responses(
+                    qa_data=d, role=r, output_dir=args.output_dir
+                ),
             )
 
             # Save results

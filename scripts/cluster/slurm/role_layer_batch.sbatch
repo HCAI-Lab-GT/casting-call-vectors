@@ -36,14 +36,12 @@ uv sync
 
 srun uv run python src/pvx/implementations/roles_layers/role_layers_persona_model.py \
         --model "$MODEL" \
-        --roles "${ROLE_LIST[@]}"
+        --roles "${ROLES[@]}" \
         --layers "${LAYERS[@]}"
-        
+
 SLURM_RETURN_CODE=$?
 
 if [ "$SLURM_RETURN_CODE" -ne 0 ]; then
     echo "Error: failed with exit code $SLURM_RETURN_CODE"
-    # Clean up output directory
-    rm -rf "$OUTPUT_DIR"
     exit "$SLURM_RETURN_CODE"
 fi
