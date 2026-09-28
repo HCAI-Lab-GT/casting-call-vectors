@@ -93,7 +93,7 @@ def fig_scores(m):
             color=style.GREY, va="top")
     ax.plot(ALPHAS, [m["s_score"][a] for a in ALPHAS], color=style.BLUE,
             marker="o", ms=2.5, ls="-")
-    ax.text(1.0, 66, "Role Vectors",
+    ax.text(1.0, 66, "CastVectors",
             color=style.BLUE, fontsize=6.2, ha="left", va="bottom")
     ax.plot(ALPHAS, [m["a_score"][a] for a in ALPHAS],
             color=style.VERMILLION, marker="s", ms=2.5, ls="--")
@@ -111,7 +111,7 @@ def fig_coherence(m):
     fig, ax = plt.subplots(figsize=(style.HALF_PANEL_W_IN, 1.65))
     ax.plot(ALPHAS, [m["s_coh"][a] for a in ALPHAS], color=style.BLUE,
             marker="o", ms=2.5, ls="-")
-    ax.text(2.42, m["s_coh"][2.5] - 0.035, "Role Vectors",
+    ax.text(2.42, m["s_coh"][2.5] - 0.035, "CastVectors",
             color=style.BLUE, fontsize=6.2, ha="right", va="top")
     ax.plot(ALPHAS, [m["a_coh"][a] for a in ALPHAS],
             color=style.VERMILLION, marker="s", ms=2.5, ls="--")
