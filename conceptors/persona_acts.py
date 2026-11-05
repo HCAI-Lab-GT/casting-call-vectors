@@ -1,36 +1,43 @@
 #!/usr/bin/env python3
 """
-persona_acts.py — collect real persona activations for the conceptor explainer.
+persona_acts.py — collect persona activations for the conceptor experiments and explainer.
 
 What it does
-  Phase 1 (single turn): for each role x system prompt x question, generate a short
-    answer, then record the residual-stream activation at every saved layer, averaged
-    over the answer tokens (the Persona Vectors / Assistant Axis convention) and at the
-    last prompt token.
-  Phase 2 (multi turn): run scripted 12-turn conversations with a pirate system prompt
-    under four conditions (no steering, add pirate vector, cap, conceptor) and record
-    per-turn activations and texts. Steering settings are derived from Phase 1.
+  Phase 1 (single turn): for each role x system prompt x question x sample, generate an answer,
+    then record the residual-stream activation at every saved hidden state, averaged over the
+    answer tokens (the Persona Vectors / Assistant Axis convention) and at the last prompt token.
+    Optionally save per-token answer activations for a subset (--save_tokens).
+  Phase 2 (multi turn, chat mode with pirate and assistant roles): scripted 12-turn conversations
+    with a pirate system prompt under none / add / cap / conceptor steering.
+  Teacher-forced mode (--teacher_forced): run fixed (prompt, answer) texts through the model and
+    record the same activations without generating, e.g. the Assistant Axis responses or a
+    checkpoint sweep over one frozen text set.
 
-Prompts: role system prompts are copied from the Assistant Axis release
-  (github.com/safety-research/assistant-axis, data/roles/instructions/*.json); questions mix
-  their shared extraction questions with task-typed questions added here. The
-  "pirate_narrated" (assistant describing a pirate) and "pirate_doctor" conditions are new.
+Prompt sources: built-in ROLES / QUESTIONS below (the 4 Nov 2026 Qwen2.5-0.5B pilot), or the
+  Assistant Axis files via --roles_dir / --questions_file (see persona_sources.py, models.yaml).
+Modes: chat (system prompt + chat template) or base (third-person description + hypothetical,
+  plain-text continuation; arXiv 2605.13329).
 
 Usage
-  pip install torch "transformers==4.46.3" accelerate numpy   # version this was tested with
-  python persona_acts.py --model Qwen/Qwen2.5-0.5B-Instruct --out acts_qwen05
-  python persona_acts.py --model Qwen/Qwen2.5-7B-Instruct --out acts_qwen7b   # GPU box
-  python persona_acts.py --quick ...   # 6 questions, 2 conversations: a few-minute smoke test
+  python persona_acts.py --model Qwen/Qwen2.5-0.5B-Instruct --out acts_qwen05 --max_new_tokens 72  # the pilot
+  python persona_acts.py --preset smollm3-3b --out acts_smollm3 \
+      --roles_dir AA/data/roles/instructions --questions_file AA/data/extraction_questions.jsonl \
+      --roles pirate assistant --narrated pirate --n_questions 20 --n_samples 2 --skip_phase2
+  python persona_acts.py --preset olmo3-7b-instruct --teacher_forced AA_responses/pirate.jsonl --out tf_olmo
 
-Output (in --out): acts.npz (float16 activations + metadata), texts.jsonl (all prompts and
-  answers), manifest.json (settings). Send acts.npz, texts.jsonl and manifest.json back.
+Output (in --out): acts.npz (float16 activations + metadata), texts.jsonl (prompts and answers),
+  manifest.json (settings). Hidden index i = output of decoder layer i-1; index 0 = embeddings.
 """
-import argparse, json, math, os, re, time
+import argparse, json, os, re, time
+from pathlib import Path
+
 import numpy as np
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# ----------------------------------------------------------------------------- prompts
+import persona_sources as src
+
+# ----------------------------------------------------------------------------- built-in prompts (pilot)
 ROLES = {
     # default assistant (Assistant Axis "assistant" role prompts)
     "assistant": [
@@ -68,10 +75,6 @@ ROLES = {
         "Be a pirate who is the healer of the crew, speaking in the language of the sea while giving medical care.",
     ],
 }
-# new hard negative: the assistant writes ABOUT a pirate (costume words, no change of identity)
-NARRATED_SYSTEM = "You are an assistant dedicated to helping users with their various tasks and queries."
-NARRATED_TEMPLATE = "In two or three sentences, describe how a pirate captain would answer this question, writing about the pirate in the third person: {q}"
-# roles that get 3 system prompts; others get 1 (keeps run time down)
 
 # Shared questions (subset of the Assistant Axis extraction questions) + task-typed questions
 QUESTIONS = [
@@ -152,6 +155,14 @@ treasures ship ships sea seas sail sails sailing sailed captain crew scallywag s
 doubloon doubloons rum deck decks mast buccaneer buccaneers cutlass voyage voyages starboard port galleon
 jolly roger seven parley grog hearty hearties shiver timbers bilge lass lad lads loot pillage swab""".split())
 AI_BREAK = re.compile(r"\b(as an ai|ai assistant|language model|i am an ai|i'm an ai|i am qwen|i'm qwen|alibaba|artificial intelligence)\b", re.I)
+THINK_RE = re.compile(r"</?think>")
+
+LAYER_PATHS = ("model.layers", "model.model.layers", "model.language_model.layers", "language_model.model.layers",
+               "transformer.h", "gpt_neox.layers", "base_model.model.model.layers")
+PRESET_KEYS = ("model", "revision", "mode", "dtype", "trust_remote_code", "chat_template_kwargs",
+               "max_new_tokens", "temperature", "top_p", "repetition_penalty")
+DEFAULTS = dict(model="Qwen/Qwen2.5-0.5B-Instruct", revision=None, mode="chat", dtype="auto", trust_remote_code=False,
+                chat_template_kwargs={}, max_new_tokens=256, temperature=0.7, top_p=0.9, repetition_penalty=1.0)
 
 
 def pirate_score(text):
@@ -172,66 +183,85 @@ def pick_device(arg):
     return "cpu"
 
 
-def build_messages(system, turns, tok):
+def apply_template(tok, msgs, template_kwargs):
+    return tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True, **template_kwargs)
+
+
+def build_messages(system, turns, tok, template_kwargs=None):
     """turns: list of (user, assistant_or_None). Returns chat-template text with generation prompt."""
+    template_kwargs = template_kwargs or {}
     msgs = [{"role": "system", "content": system}] if system else []
     for u, a in turns:
         msgs.append({"role": "user", "content": u})
         if a is not None:
             msgs.append({"role": "assistant", "content": a})
     try:
-        return tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
+        return apply_template(tok, msgs, template_kwargs)
     except Exception:
         # templates without a system role (e.g. Gemma): fold the system prompt into the first user turn
         if system:
             msgs = msgs[1:]
             msgs[0] = {"role": "user", "content": system + "\n\n" + msgs[0]["content"]}
-        return tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
+        return apply_template(tok, msgs, template_kwargs)
 
 
-def layer_modules(model):
-    for path in ("model.layers", "model.language_model.layers", "transformer.h", "gpt_neox.layers"):
+def find_layers(model):
+    """(dotted path, ModuleList of decoder layers) for the common HF architectures."""
+    for path in LAYER_PATHS:
         cur = model
-        ok = True
         for part in path.split("."):
-            if not hasattr(cur, part):
-                ok = False
+            cur = getattr(cur, part, None)
+            if cur is None:
                 break
-            cur = getattr(cur, part)
-        if ok:
-            return cur
+        if cur is not None:
+            return path, cur
     raise RuntimeError("could not find decoder layers on this model")
 
 
+def layer_modules(model):
+    return find_layers(model)[1]
+
+
+def encode(tok, text, add_special):
+    return tok(text, add_special_tokens=add_special)["input_ids"]
+
+
 @torch.no_grad()
-def generate_batch(model, tok, prompts, max_new_tokens, temperature, top_p, device):
+def generate_batch(model, tok, prompts, max_new_tokens, temperature, top_p, device,
+                   add_special=False, repetition_penalty=1.0):
     tok.padding_side = "left"
-    enc = tok(prompts, return_tensors="pt", padding=True, add_special_tokens=False).to(device)
+    enc = tok(prompts, return_tensors="pt", padding=True, add_special_tokens=add_special).to(device)
     gen_kw = dict(max_new_tokens=max_new_tokens, do_sample=temperature > 0,
                   temperature=temperature if temperature > 0 else None, top_p=top_p if temperature > 0 else None,
                   pad_token_id=tok.pad_token_id, remove_invalid_values=True)
+    if repetition_penalty != 1.0:
+        gen_kw["repetition_penalty"] = repetition_penalty
     try:
-        out = model.generate(**enc, **gen_kw)
+        out = model.generate(input_ids=enc["input_ids"], attention_mask=enc["attention_mask"], **gen_kw)
     except RuntimeError as e:
         if "probability tensor" not in str(e) or len(prompts) == 1:
             raise
         # fall back to one prompt at a time (no padding) if a padded batch still produced NaNs
-        return sum((generate_batch(model, tok, [p], max_new_tokens, temperature, top_p, device) for p in prompts), [])
+        return sum((generate_batch(model, tok, [p], max_new_tokens, temperature, top_p, device,
+                                   add_special, repetition_penalty) for p in prompts), [])
     new = out[:, enc["input_ids"].shape[1]:]
     return [tok.decode(r, skip_special_tokens=True).strip() for r in new]
 
 
 @torch.no_grad()
-def record_activations(model, tok, prompts, answers, layers, device, batch_size):
+def record_activations(model, tok, prompts, answers, layers, device, batch_size,
+                       add_special=False, token_jobs=(), token_layers=()):
     """Mean over answer tokens and last prompt token, for hidden_states indices in `layers`.
-    hidden_states[0] = embeddings, hidden_states[i] = output of decoder layer i-1 (the last index is after the final norm)."""
-    resp, last = [], []
+    hidden_states[0] = embeddings, hidden_states[i] = output of decoder layer i-1 (the last index is after the final norm).
+    For job indices in `token_jobs`, also return per-token answer activations at `token_layers`."""
+    resp, last, tokens = [], [], {}
+    token_jobs = set(token_jobs)
     for s in range(0, len(prompts), batch_size):
         P, A = prompts[s:s + batch_size], answers[s:s + batch_size]
         ids, plen, alen = [], [], []
         for p, a in zip(P, A):
-            pi = tok(p, add_special_tokens=False)["input_ids"]
-            ai = tok(a, add_special_tokens=False)["input_ids"] or [tok.eos_token_id]
+            pi = encode(tok, p, add_special)
+            ai = encode(tok, a, False) or [tok.eos_token_id]
             ids.append(pi + ai); plen.append(len(pi)); alen.append(len(ai))
         L = max(map(len, ids))
         pad = tok.pad_token_id
@@ -241,10 +271,24 @@ def record_activations(model, tok, prompts, answers, layers, device, batch_size)
             x[i, :len(seq)] = torch.tensor(seq); m[i, :len(seq)] = 1
         hs = model(input_ids=x.to(device), attention_mask=m.to(device), output_hidden_states=True).hidden_states
         for i in range(len(ids)):
-            r = torch.stack([hs[l][i, plen[i]:plen[i] + alen[i]].float().mean(0) for l in layers])
+            span = slice(plen[i], plen[i] + alen[i])
+            r = torch.stack([hs[l][i, span].float().mean(0) for l in layers])
             t = torch.stack([hs[l][i, plen[i] - 1].float() for l in layers])
             resp.append(r.cpu().numpy().astype(np.float16)); last.append(t.cpu().numpy().astype(np.float16))
-    return np.stack(resp), np.stack(last)
+            if s + i in token_jobs:
+                tt = torch.stack([hs[l][i, span].float() for l in token_layers], dim=1)  # (alen, n_token_layers, d)
+                tokens[s + i] = tt.cpu().numpy().astype(np.float16)
+    return np.stack(resp), np.stack(last), tokens
+
+
+def pack_tokens(tokens):
+    """dict job -> (alen, n_layers, d) into one array + offsets, ordered by job index."""
+    jobs = sorted(tokens)
+    if not jobs:
+        return {}
+    arrs = [tokens[j] for j in jobs]
+    offsets = np.cumsum([0] + [a.shape[0] for a in arrs])
+    return dict(p1_tok_acts=np.concatenate(arrs), p1_tok_offsets=offsets, p1_tok_job=np.array(jobs))
 
 
 class Steer:
@@ -295,119 +339,261 @@ def conceptor_from(X, alpha_rule="median"):
     return C, keep, a
 
 
-# ----------------------------------------------------------------------------- main
-def main():
+# ----------------------------------------------------------------------------- config
+def parse_args(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="Qwen/Qwen2.5-0.5B-Instruct")
+    # model and run config (None = take from --preset, then DEFAULTS)
+    ap.add_argument("--preset", default=None, help="name in models.yaml")
+    ap.add_argument("--models_yaml", default=str(Path(__file__).with_name("models.yaml")))
+    ap.add_argument("--model", default=None)
+    ap.add_argument("--revision", default=None, help="HF revision, e.g. a pretraining checkpoint branch")
+    ap.add_argument("--mode", choices=["chat", "base"], default=None)
+    ap.add_argument("--dtype", default=None, help="auto | float32 | bfloat16 | float16")
+    ap.add_argument("--trust_remote_code", action="store_true", default=None)
+    ap.add_argument("--chat_template_kwargs", default=None, help='JSON, e.g. \'{"enable_thinking": false}\'')
+    ap.add_argument("--max_new_tokens", type=int, default=None)
+    ap.add_argument("--temperature", type=float, default=None)
+    ap.add_argument("--top_p", type=float, default=None)
+    ap.add_argument("--repetition_penalty", type=float, default=None)
     ap.add_argument("--out", default="acts_out")
     ap.add_argument("--device", default="auto")
-    ap.add_argument("--dtype", default="auto", help="auto | float32 | bfloat16 | float16")
-    ap.add_argument("--max_new_tokens", type=int, default=72)
-    ap.add_argument("--temperature", type=float, default=0.7)
-    ap.add_argument("--top_p", type=float, default=0.9)
     ap.add_argument("--batch_size", type=int, default=12)
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--max_mb", type=float, default=250.0, help="cap on saved Phase-1 activation size; layers are thinned to fit")
+    # prompt sources
+    ap.add_argument("--roles_dir", default=None, help="Assistant Axis data/roles/instructions")
+    ap.add_argument("--roles", nargs="+", default=None, help="role names (default: all built-in roles)")
+    ap.add_argument("--n_prompts", type=int, default=5, help="system prompts per role from --roles_dir")
+    ap.add_argument("--questions_file", default=None, help="JSONL with a 'question' field")
+    ap.add_argument("--n_questions", type=int, default=None)
+    ap.add_argument("--n_samples", type=int, default=1, help="answers per (prompt, question)")
+    ap.add_argument("--narrated", nargs="*", default=None, help="roles to build '<role>_narrated' hard negatives for (default: pirate)")
+    ap.add_argument("--base_name", default="Alex", help="character name in base-mode prompts")
+    # outputs
+    ap.add_argument("--save_tokens", type=int, default=0, help="save per-token answer activations for the first N jobs")
+    ap.add_argument("--token_layers", default="0.5,0.75", help="fractions of n_layers (hidden indices) for --save_tokens")
+    # modes
+    ap.add_argument("--teacher_forced", nargs="+", default=None, help="JSONL file(s) of fixed answers; record only")
+    ap.add_argument("--tf_limit", type=int, default=None, help="rows per teacher-forced file")
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--skip_phase2", action="store_true")
     ap.add_argument("--steer_layer", type=int, default=-1, help="decoder layer index for steering (default: middle)")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
-    os.makedirs(args.out, exist_ok=True)
-    torch.manual_seed(args.seed); np.random.seed(args.seed)
-    device = pick_device(args.device)
+    preset = {}
+    if args.preset:
+        import yaml
+        presets = yaml.safe_load(Path(args.models_yaml).read_text())["presets"]
+        preset = presets[args.preset]
+    for key in PRESET_KEYS:
+        if getattr(args, key) is None:
+            setattr(args, key, preset.get(key, DEFAULTS[key]))
+    if isinstance(args.chat_template_kwargs, str):
+        args.chat_template_kwargs = json.loads(args.chat_template_kwargs)
+    return args
+
+
+def load_model(args, device):
     if args.dtype == "auto":
         dtype = torch.bfloat16 if device == "cuda" else torch.float32
     else:
         dtype = getattr(torch, args.dtype)
-    t0 = time.time()
-    tok = AutoTokenizer.from_pretrained(args.model)
+    hub = dict(revision=args.revision, trust_remote_code=args.trust_remote_code)
+    tok = AutoTokenizer.from_pretrained(args.model, **hub)
     if tok.pad_token_id is None:
         tok.pad_token = tok.eos_token
     # On Apple MPS, SDPA attention with left-padded batches can produce NaN probabilities
     # ("probability tensor contains inf/nan") -> use eager attention there.
-    attn = "eager" if device == "mps" else None
-    kw = {"attn_implementation": attn} if attn else {}
+    kw = {"attn_implementation": "eager"} if device == "mps" else {}
     try:
-        model = AutoModelForCausalLM.from_pretrained(args.model, dtype=dtype, **kw)
+        model = AutoModelForCausalLM.from_pretrained(args.model, dtype=dtype, **hub, **kw)
     except TypeError:  # older transformers use torch_dtype
-        model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=dtype, **kw)
-    model = model.to(device).eval()
-    n_layers = model.config.num_hidden_layers
-    d = model.config.hidden_size
-    print(f"[load] {args.model} on {device} ({dtype}), {n_layers} layers, d={d}, {time.time()-t0:.0f}s", flush=True)
+        model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=dtype, **hub, **kw)
+    return tok, model.to(device).eval(), dtype
 
-    questions = QUESTIONS[:QUICK_N_QUESTIONS] if args.quick else QUESTIONS
-    convs = dict(list(CONVERSATIONS.items())[:2]) if args.quick else CONVERSATIONS
 
-    # ---- Phase 1 jobs
-    jobs = []
-    for role, sps in ROLES.items():
-        for si, sp in enumerate(sps):
-            for qi, (tt, q) in enumerate(questions):
-                jobs.append(dict(role=role, sp_idx=si, q_idx=qi, task=tt, system=sp, user=q))
-    for qi, (tt, q) in enumerate(questions):
-        jobs.append(dict(role="pirate_narrated", sp_idx=0, q_idx=qi, task=tt, system=NARRATED_SYSTEM,
-                         user=NARRATED_TEMPLATE.format(q=q)))
-    for j in jobs:
-        j["prompt"] = build_messages(j["system"], [(j["user"], None)], tok)
-
-    # which hidden-state indices to save: all 0..n_layers unless that exceeds --max_mb
+def select_hidden(n_layers, d, n_rows, max_mb, steer_module):
+    """Hidden indices to save: all 0..n_layers unless that exceeds max_mb, plus the steering neighbourhood."""
     all_idx = list(range(n_layers + 1))
-    est_mb = len(jobs) * len(all_idx) * d * 2 * 2 / 1e6
-    if est_mb > args.max_mb:
-        keep_n = max(4, int(len(all_idx) * args.max_mb / est_mb))
+    est_mb = n_rows * len(all_idx) * d * 2 * 2 / 1e6
+    if est_mb > max_mb:
+        keep_n = max(4, int(len(all_idx) * max_mb / est_mb))
         save_idx = sorted(set(np.linspace(0, n_layers, keep_n).round().astype(int).tolist()))
     else:
         save_idx = all_idx
-    steer_module = args.steer_layer if args.steer_layer >= 0 else n_layers // 2
-    # make sure the hidden-state indices needed for steering (output of modules steer-2..steer+2) are saved
     need = {m + 1 for m in range(max(0, steer_module - 2), min(n_layers - 1, steer_module + 2) + 1)}
-    save_idx = sorted(set(save_idx) | need)
-    print(f"[phase1] {len(jobs)} generations, saving hidden-state indices {save_idx}", flush=True)
+    return sorted(set(save_idx) | need)
 
-    answers = []
-    for s in range(0, len(jobs), args.batch_size):
-        batch = jobs[s:s + args.batch_size]
-        answers += generate_batch(model, tok, [j["prompt"] for j in batch], args.max_new_tokens,
-                                  args.temperature, args.top_p, device)
-        if (s // args.batch_size) % 10 == 0:
-            print(f"  generated {len(answers)}/{len(jobs)}  ({time.time()-t0:.0f}s)", flush=True)
-    for j, a in zip(jobs, answers):
-        j["answer"] = a
-        j["pirate_score"] = pirate_score(a)
-        j["ai_break"] = bool(AI_BREAK.search(a))
-    resp, last = record_activations(model, tok, [j["prompt"] for j in jobs], answers, save_idx, device, args.batch_size)
-    print(f"[phase1] activations {resp.shape}  ({time.time()-t0:.0f}s)", flush=True)
 
+def token_hidden(spec, n_layers):
+    return sorted({min(n_layers, max(0, round(float(f) * n_layers))) for f in spec.split(",") if f.strip()})
+
+
+# ----------------------------------------------------------------------------- jobs
+def build_jobs(args, tok):
+    """Phase-1 jobs from built-in or file sources, in chat or base mode."""
+    if args.roles_dir:
+        names = args.roles or ["assistant", "pirate"]
+        roles = src.load_role_prompts(Path(args.roles_dir), names, args.n_prompts)
+    else:
+        roles = {r: ROLES[r] for r in (args.roles or ROLES)}
+    if args.questions_file:
+        questions = src.load_questions(Path(args.questions_file), args.n_questions)
+    else:
+        questions = QUESTIONS[:QUICK_N_QUESTIONS] if args.quick else QUESTIONS
+        questions = questions[:args.n_questions] if args.n_questions else questions
+    narrated = ["pirate"] if args.narrated is None else args.narrated
+
+    jobs = []
+    for sample in range(args.n_samples):
+        for role, sps in roles.items():
+            for si, sp in enumerate(sps):
+                for qi, (tt, q) in enumerate(questions):
+                    jobs.append(dict(role=role, sp_idx=si, q_idx=qi, task=tt, system=sp, user=q, sample_idx=sample))
+        for role in narrated:
+            for qi, (tt, q) in enumerate(questions):
+                system, user = src.narrated_job(role, q)
+                jobs.append(dict(role=f"{role}_narrated", sp_idx=0, q_idx=qi, task=tt, system=system, user=user,
+                                 sample_idx=sample))
+    for j in jobs:
+        if args.mode == "base":
+            j["prompt"] = src.base_prompt(j["system"], j["user"], args.base_name)
+        else:
+            j["prompt"] = build_messages(j["system"], [(j["user"], None)], tok, args.chat_template_kwargs)
+    return jobs, roles
+
+
+def load_teacher_forced(args, tok):
+    """Rows from Assistant Axis response files ('conversation') or our texts.jsonl ('system'/'user'/'answer')."""
+    jobs = []
+    for path in map(Path, args.teacher_forced):
+        lines = [ln for ln in path.read_text().splitlines() if ln.strip()]
+        rows = [json.loads(ln) for ln in lines]
+        rows = [r for r in rows if r.get("phase", 1) == 1][:args.tf_limit]
+        for r in rows:
+            if "conversation" in r:  # Assistant Axis format: render exactly as stored (a missing system message stays missing)
+                conv = r["conversation"]
+                answer = conv[-1]["content"]
+                prompt = apply_template(tok, conv[:-1], args.chat_template_kwargs)
+                job = dict(role=r.get("role", path.stem), sp_idx=r.get("prompt_index", 0), q_idx=r.get("question_index", 0),
+                           task=r.get("task", "aa"), system=r.get("system_prompt", ""), user=r.get("question", conv[-2]["content"]))
+            else:
+                answer = r["answer"]
+                if "prompt" in r:
+                    prompt = r["prompt"]
+                elif args.mode == "base":
+                    prompt = src.base_prompt(r.get("system", ""), r["user"], args.base_name)
+                else:
+                    prompt = build_messages(r.get("system", ""), [(r["user"], None)], tok, args.chat_template_kwargs)
+                job = {k: r.get(k, d) for k, d in (("role", path.stem), ("sp_idx", 0), ("q_idx", 0), ("task", ""),
+                                                    ("system", ""), ("user", ""))}
+            job.update(prompt=prompt, answer=answer, sample_idx=r.get("sample_idx", 0), source=str(path))
+            jobs.append(job)
+    return jobs
+
+
+def annotate(j):
+    a = j["answer"]
+    j["pirate_score"] = pirate_score(a)
+    j["ai_break"] = bool(AI_BREAK.search(a))
+    j["has_think"] = bool(THINK_RE.search(a))
+
+
+def phase1_arrays(jobs, resp, last, save_idx, tokens):
     out = dict(
         p1_resp_avg=resp, p1_prompt_last=last, saved_hidden_idx=np.array(save_idx),
         p1_role=np.array([j["role"] for j in jobs]), p1_sp_idx=np.array([j["sp_idx"] for j in jobs]),
         p1_q_idx=np.array([j["q_idx"] for j in jobs]), p1_task=np.array([j["task"] for j in jobs]),
+        p1_sample_idx=np.array([j["sample_idx"] for j in jobs]),
         p1_pirate_score=np.array([j["pirate_score"] for j in jobs], dtype=np.float32),
         p1_ai_break=np.array([j["ai_break"] for j in jobs]),
     )
+    out.update(pack_tokens(tokens))
+    return out
+
+
+TEXT_KEYS = ("role", "sp_idx", "q_idx", "task", "system", "user", "answer", "pirate_score", "ai_break",
+             "sample_idx", "has_think")
+
+
+# ----------------------------------------------------------------------------- main
+def main(argv=None):
+    args = parse_args(argv)
+    os.makedirs(args.out, exist_ok=True)
+    torch.manual_seed(args.seed); np.random.seed(args.seed)
+    device = pick_device(args.device)
+    t0 = time.time()
+    tok, model, dtype = load_model(args, device)
+    layer_path, _ = find_layers(model)
+    n_layers = model.config.num_hidden_layers
+    d = model.config.hidden_size
+    add_special = args.mode == "base"  # chat templates already carry BOS; raw base prompts need it
+    print(f"[load] {args.model}@{args.revision or 'main'} on {device} ({dtype}), {n_layers} layers, d={d}, "
+          f"mode={args.mode}, {time.time()-t0:.0f}s", flush=True)
+
+    if args.teacher_forced:
+        jobs, roles = load_teacher_forced(args, tok), {}
+    else:
+        jobs, roles = build_jobs(args, tok)
+    steer_module = args.steer_layer if args.steer_layer >= 0 else n_layers // 2
+    save_idx = select_hidden(n_layers, d, len(jobs), args.max_mb, steer_module)
+    tok_idx = token_hidden(args.token_layers, n_layers) if args.save_tokens else []
+    token_jobs = range(min(args.save_tokens, len(jobs)))
+    print(f"[phase1] {len(jobs)} {'teacher-forced rows' if args.teacher_forced else 'generations'}, "
+          f"saving hidden-state indices {save_idx}", flush=True)
+
+    if not args.teacher_forced:
+        answers = []
+        for s in range(0, len(jobs), args.batch_size):
+            batch = jobs[s:s + args.batch_size]
+            answers += generate_batch(model, tok, [j["prompt"] for j in batch], args.max_new_tokens, args.temperature,
+                                      args.top_p, device, add_special, args.repetition_penalty)
+            if (s // args.batch_size) % 10 == 0:
+                print(f"  generated {len(answers)}/{len(jobs)}  ({time.time()-t0:.0f}s)", flush=True)
+        for j, a in zip(jobs, answers):
+            j["answer"] = a
+    for j in jobs:
+        annotate(j)
+    resp, last, tokens = record_activations(model, tok, [j["prompt"] for j in jobs], [j["answer"] for j in jobs],
+                                            save_idx, device, args.batch_size, add_special, token_jobs, tok_idx)
+    print(f"[phase1] activations {resp.shape}, per-token rows {sum(t.shape[0] for t in tokens.values())}  "
+          f"({time.time()-t0:.0f}s)", flush=True)
+
+    out = phase1_arrays(jobs, resp, last, save_idx, tokens)
     with open(os.path.join(args.out, "texts.jsonl"), "w") as f:
         for j in jobs:
-            f.write(json.dumps({k: j[k] for k in ("role", "sp_idx", "q_idx", "task", "system", "user", "answer",
-                                                   "pirate_score", "ai_break")}) + "\n")
+            # the rendered prompt can differ by run date (SmolLM3's template stamps today's date), so keep it
+            f.write(json.dumps({**{k: j[k] for k in TEXT_KEYS}, "prompt": j["prompt"]}) + "\n")
 
-    manifest = dict(model=args.model, device=device, dtype=str(dtype), n_layers=n_layers, d=d,
-                    saved_hidden_idx=save_idx, max_new_tokens=args.max_new_tokens, temperature=args.temperature,
-                    top_p=args.top_p, seed=args.seed, n_phase1=len(jobs), quick=args.quick,
+    n_think = sum(j["has_think"] for j in jobs)
+    manifest = dict(model=args.model, revision=args.revision, mode=args.mode, preset=args.preset, device=device,
+                    dtype=str(dtype), n_layers=n_layers, d=d, layer_path=layer_path, saved_hidden_idx=save_idx,
+                    token_hidden_idx=tok_idx, n_token_jobs=len(tokens), max_new_tokens=args.max_new_tokens,
+                    temperature=args.temperature, top_p=args.top_p, repetition_penalty=args.repetition_penalty,
+                    chat_template_kwargs=args.chat_template_kwargs, seed=args.seed, n_phase1=len(jobs),
+                    n_samples=args.n_samples, n_answers_with_think_tags=n_think, quick=args.quick,
+                    roles_dir=args.roles_dir, questions_file=args.questions_file,
+                    teacher_forced=args.teacher_forced, base_name=args.base_name if args.mode == "base" else None,
                     note="hidden_states[i] = output of decoder layer i-1; index 0 = embeddings; last index is after the final norm")
+    if n_think:
+        print(f"[warn] {n_think}/{len(jobs)} answers contain <think> tags: reasoning is not off", flush=True)
 
     # ---- Phase 2: multi-turn with steering derived from Phase 1
-    if not args.skip_phase2:
+    run_phase2 = (not args.skip_phase2 and not args.teacher_forced and args.mode == "chat"
+                  and "pirate" in roles and "assistant" in roles)
+    if not args.skip_phase2 and not run_phase2:
+        print("[phase2] skipped: needs chat mode with pirate and assistant roles", flush=True)
+    if run_phase2:
+        convs = dict(list(CONVERSATIONS.items())[:2]) if args.quick else CONVERSATIONS
         idx_of = {h: k for k, h in enumerate(save_idx)}
-        roles = out["p1_role"]
+        role_arr = out["p1_role"]
         specs_by_cond = {"none": []}
         mods = list(range(max(0, steer_module - 2), min(n_layers - 1, steer_module + 2) + 1))
         cap_specs, add_specs, con_specs, steer_info = [], [], [], {}
         for m in mods:
             k = idx_of[m + 1]
-            P = resp[roles == "pirate", k].astype(np.float64)
-            A = resp[roles == "assistant", k].astype(np.float64)
+            P = resp[role_arr == "pirate", k].astype(np.float64)
+            A = resp[role_arr == "assistant", k].astype(np.float64)
             v = P.mean(0) - A.mean(0)
             vhat = v / (np.linalg.norm(v) + 1e-8)
             tau = float(np.percentile(P @ vhat, 25))  # floor at the 25th percentile of in-character projections
@@ -425,18 +611,19 @@ def main():
                 out["steer_v"] = v.astype(np.float32); out["steer_mu"] = mu.astype(np.float32)
                 out["steer_keep"] = keep.astype(np.float32)
         specs_by_cond.update(add=add_specs, cap=cap_specs, conceptor=con_specs)
-        manifest["phase2"] = dict(system=ROLES["pirate"][0], steer_module=steer_module, cap_modules=mods, **steer_info)
+        system = roles["pirate"][0]
+        manifest["phase2"] = dict(system=system, steer_module=steer_module, cap_modules=mods, **steer_info)
 
         p2_rows, p2_resp = [], []
-        system = ROLES["pirate"][0]
         for cond, specs in specs_by_cond.items():
             for cname, user_turns in convs.items():
                 history = []
                 with Steer(model, specs):
                     for ti, u in enumerate(user_turns):
-                        prompt = build_messages(system, history + [(u, None)], tok)
-                        a = generate_batch(model, tok, [prompt], args.max_new_tokens, args.temperature, args.top_p, device)[0]
-                        r, _ = record_activations(model, tok, [prompt], [a], save_idx, device, 1)
+                        prompt = build_messages(system, history + [(u, None)], tok, args.chat_template_kwargs)
+                        a = generate_batch(model, tok, [prompt], args.max_new_tokens, args.temperature, args.top_p,
+                                           device, False, args.repetition_penalty)[0]
+                        r, _, _ = record_activations(model, tok, [prompt], [a], save_idx, device, 1)
                         p2_resp.append(r[0])
                         p2_rows.append(dict(cond=cond, conv=cname, turn=ti, user=u, answer=a,
                                             pirate_score=pirate_score(a), ai_break=bool(AI_BREAK.search(a))))

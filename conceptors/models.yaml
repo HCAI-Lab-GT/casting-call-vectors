@@ -1,0 +1,52 @@
+# Presets for persona_acts.py --preset NAME. Any CLI flag given explicitly overrides the preset.
+# Keys: model, revision, mode (chat|base), dtype, trust_remote_code, chat_template_kwargs,
+#       max_new_tokens, temperature, top_p, repetition_penalty.
+
+assistant_axis:
+  repo: https://github.com/safety-research/assistant-axis
+  commit: a98961956072224eaf244eb289d6c01700b63795   # roles/instructions and extraction_questions.jsonl
+
+presets:
+  qwen2.5-0.5b:            # the 4 Nov 2026 pilot (float16 NaNs on MPS, so float32 there)
+    model: Qwen/Qwen2.5-0.5B-Instruct
+    mode: chat
+    dtype: float32
+  smollm3-3b:
+    model: HuggingFaceTB/SmolLM3-3B
+    mode: chat
+    dtype: bfloat16
+    chat_template_kwargs: {enable_thinking: false}
+  smollm3-3b-base:
+    model: HuggingFaceTB/SmolLM3-3B-Base
+    mode: base
+    dtype: bfloat16
+    max_new_tokens: 64       # 2605.13329 settings for base models
+    temperature: 0.5
+    repetition_penalty: 1.1
+  llama3.2-3b:
+    model: meta-llama/Llama-3.2-3B-Instruct
+    mode: chat
+    dtype: bfloat16
+  olmo3-7b-instruct:
+    model: allenai/Olmo-3-7B-Instruct
+    mode: chat
+    dtype: bfloat16
+  olmo3-7b-sft:
+    model: allenai/Olmo-3-7B-Instruct-SFT
+    mode: chat
+    dtype: bfloat16
+  olmo3-7b-dpo:
+    model: allenai/Olmo-3-7B-Instruct-DPO
+    mode: chat
+    dtype: bfloat16
+  olmo3-7b-base:           # pass --revision stage1-stepNNNN for pretraining checkpoints
+    model: allenai/Olmo-3-1025-7B
+    mode: base
+    dtype: bfloat16
+    max_new_tokens: 64
+    temperature: 0.5
+    repetition_penalty: 1.1
+  qwen2.5-7b:
+    model: Qwen/Qwen2.5-7B-Instruct
+    mode: chat
+    dtype: bfloat16
