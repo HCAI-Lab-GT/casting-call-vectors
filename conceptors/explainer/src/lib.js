@@ -283,7 +283,7 @@ function LineChart(id,o){
     (o.refs?o.refs():[]).forEach(r=>{
       const y=Math.round(Y(r.y))+.5;c.setLineDash([4,4]);c.strokeStyle=COL.muted;c.lineWidth=1;c.globalAlpha=.85;
       c.beginPath();c.moveTo(M.l,y);c.lineTo(w-M.r,y);c.stroke();c.setLineDash([]);c.globalAlpha=1;
-      if(r.label)text(c,r.label,M.l+5,y-8,{size:10});
+      if(r.label)text(c,r.label,r.align==='right'?w-M.r-5:M.l+5,y-8,{size:10,align:r.align||'left'});
     });
     if(o.selected){const si=o.selected();if(si!=null&&si>=0){const x=Math.round(X(xs[si]))+.5;c.strokeStyle=COL.ink;c.lineWidth=1;c.setLineDash([2,3]);c.beginPath();c.moveTo(x,M.t);c.lineTo(x,h-M.b);c.stroke();c.setLineDash([]);}}
     S.forEach(s=>{

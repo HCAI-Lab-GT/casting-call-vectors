@@ -130,12 +130,38 @@ def persona_data(spec: dict) -> dict:
     return out
 
 
+def drop_missing(personas: dict) -> dict:
+    """Keep only the run folders analyze_steer has written (for builds while judges are still landing), saying what
+    was left out. A persona with no sweep and no hold left is dropped."""
+    def keep(paths):
+        return [p for p in paths if (pathlib.Path(p) / "steer_derived.json").exists()]
+    out, gone = {}, []
+    for name, spec in personas.items():
+        sweep = keep(spec.get("sweep", []))
+        hold = {j: keep(ps) for j, ps in spec.get("hold", {}).items()}
+        gone += [p for p in spec.get("sweep", []) if p not in sweep]
+        gone += [p for j, ps in spec.get("hold", {}).items() for p in ps if p not in hold[j]]
+        hold = {j: ps for j, ps in hold.items() if ps}
+        if sweep or hold:
+            out[name] = dict(spec, sweep=sweep, hold=hold)
+        else:
+            gone.append(f"(persona {name})")
+    if gone:
+        print(f"--allow-missing: left out {len(gone)} not-yet-analyzed runs: "
+              + ", ".join(pathlib.Path(p).name for p in gone), file=sys.stderr)
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", type=pathlib.Path, required=True)
     ap.add_argument("--out", type=pathlib.Path, default=None, help="overrides the config's out")
+    ap.add_argument("--allow-missing", action="store_true",
+                    help="build from the runs that exist so far instead of stopping at the first missing one")
     a = ap.parse_args()
     cfg = json.loads(a.config.read_text())
+    if a.allow_missing:
+        cfg["personas"] = drop_missing(cfg["personas"])
     out_path = a.out or pathlib.Path(cfg.get("out", HERE / "lab_deck.html"))
 
     gd = pathlib.Path(cfg["guide_data"])
@@ -147,7 +173,8 @@ def main():
             row.pop("md_auc", None)
 
     personas = {p: persona_data(spec) for p, spec in cfg["personas"].items()}
-    results = dict(personas=personas, default_persona=cfg.get("default_persona", next(iter(personas))),
+    default = cfg.get("default_persona")
+    results = dict(personas=personas, default_persona=default if default in personas else next(iter(personas)),
                    calib={j: calib_for(pathlib.Path(p)) for j, p in cfg.get("calib", {}).items()})
     if cfg.get("mechanism") and pathlib.Path(cfg["mechanism"]).exists():  # conceptor_spectrum.py output
         results["mechanism"] = json.loads(pathlib.Path(cfg["mechanism"]).read_text())

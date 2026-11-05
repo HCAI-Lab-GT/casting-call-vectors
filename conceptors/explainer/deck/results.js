@@ -218,6 +218,7 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
           (e.identity?' · '+(e.identity==='ai'?'admits AI':'no AI claim'):'')+'</span>'+esc(e.a.slice(0,320))+(e.a.length>320?' …':'')+'</div>';}).join('');
   }
   function note(){
+    if(!JUDGES().length){$(id+'n').textContent=PNAME(PERS)+': the 20-turn hold runs aren\'t judged yet, so there is nothing to plot.';$(id+'pn').textContent='';return;}
     const parts=methodsIn(st.ctx).filter(m=>st.on.has(m)).map(m=>{
       const v=st.judge==='mean'?mean(JUDGES().map(j=>{const h=holdRow(j,st.ctx,m);return h&&h.ordinary[st.measure];})):(holdRow(st.judge,st.ctx,m)||{ordinary:{}}).ordinary[st.measure];
       return METH[m][1]+' '+fmtM(st.measure,v);});
@@ -241,8 +242,10 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
 /* ---------- trajectory slide: where each method puts the activations, tied to the outputs ---------- */
 (function(){
   if(!$('stc'))return;
-  const st={ctx:'prompt',turn:8,on:new Set(['none','add','cap','add_cap','conceptor_tok','add_ctok']),view:'mean'};
+  const st={ctx:'prompt',turn:8,on:new Set(['none','add','cap','cap_aa','add_cap','conceptor_tok','add_ctok']),view:'mean',layer:'steer'};
   const hasTraj=()=>JUDGES().some(j=>(PD().hold[j]||[]).some(h=>h.per_turn.some(t=>t.x_pre!=null)));
+  /* the Assistant Axis cap acts downstream (modules 25-30 on SmolLM3), so it shows only at the read layer */
+  const readLayer=()=>st.layer==='read'&&hasTraj();
   const J=()=>{const js=JUDGES();return js.includes('llama')?'llama':js[js.length-1];};
   /* mean over conversations, or conversation 1 alone (the paper's figure follows one conversation) */
   const val=(m,t,key)=>{if(st.view==='mean')return turnVal(J(),st.ctx,m,t,key);
@@ -251,25 +254,30 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
   $('stp').innerHTML=personaSeg('stps');
   $('stcw').innerHTML=segHTML('stcs',[['prompt','Prompt + steering'],['steer_only','Steering only']],st.ctx);
   $('stvw').innerHTML=segHTML('stvs',[['mean','Mean of conversations'],['conv','Conversation 1']],st.view);
+  $('stlw').innerHTML=segHTML('stls',[['steer','Steering layer'],['read','Read layer']],st.layer);
   const tog=$('stt');
   function togs(){tog.innerHTML=methodsIn(st.ctx).map(m=>'<button type="button" data-m="'+m+'" aria-pressed="'+st.on.has(m)+'">'+swatchI(m)+esc(METH[m][0])+'</button>').join('');}
-  const key=()=>hasTraj()?'x_post':'readout';
-  const line=LineChart('stc',{aspect:.34,ml:64,mr:24,direct:false,xs:XS,yRange:()=>{
-      const vals=ms().flatMap(m=>XS().flatMap(t=>[val(m,t,key()),hasTraj()?val(m,t,'x_pre'):null])).filter(v=>v!=null);
+  const key=()=>readLayer()?'read_steered':(hasTraj()?'x_post':'readout');
+  /* a "before" line only for methods that edit the steering layer (the AA cap and no steering never do) */
+  const edits=m=>!readLayer()&&hasTraj()&&XS().some(t=>{const a=val(m,t,'x_pre'),b=val(m,t,'x_post');return a!=null&&b!=null&&Math.abs(a-b)>1e-4;});
+  /* two charts and a note share the right column: cap each so the slide fits a 16:9 screen without scrolling */
+  const fitH={get maxH(){return Math.round(innerHeight*.27);}};
+  const line=LineChart('stc',{aspect:.34,ml:64,mr:24,direct:false,canvasOpt:fitH,xs:XS,yRange:()=>{
+      const vals=ms().flatMap(m=>XS().flatMap(t=>[val(m,t,key()),edits(m)?val(m,t,'x_pre'):null])).filter(v=>v!=null);
       return [Math.min(-.25,Math.floor((Math.min(...vals,0))*4)/4),Math.max(1.25,Math.ceil((Math.max(...vals,1))*4)/4)];},
     yFmt:v=>(+v).toFixed(2),xFmt:String,xTicks:()=>XS().filter(t=>NT()<=12||t===1||t%5===0||probesNow().includes(t)),bands:probeBands,selected:()=>st.turn-1,
-    refs:()=>[{y:0,label:'assistant'},{y:1,label:ROLE(PERS)},...(hasTraj()?Object.entries(PD().floors||{}).filter(([m])=>st.on.has(m)).map(([m,v])=>({y:v,label:METH[m][1]+' floor'})):[])],
+    refs:()=>[{y:0,label:'assistant'},{y:1,label:ROLE(PERS)},...(hasTraj()&&!readLayer()?Object.entries(PD().floors||{}).filter(([m])=>st.on.has(m)).map(([m,v])=>({y:v,label:METH[m][1]+' floor',align:'right'})):[])],
     tipTitle:i=>'turn '+(i+1)+(probesNow().includes(i+1)?' · '+(PROBE_KIND[i+1]||'probe'):''),vFmt:v=>(+v).toFixed(2),
     series:()=>ms().flatMap(m=>{const c=COL[METH[m][2]],d=METH[m][3]||undefined;
-      const post={name:METH[m][0]+(hasTraj()?', after':''),color:c,dash:d,width:2.4,values:XS().map(t=>val(m,t,key()))};
-      return hasTraj()&&m!=='none'?[{name:METH[m][0]+', before',color:rgba(c,.35),dash:[2,3],width:1.4,values:XS().map(t=>val(m,t,'x_pre'))},post]:[post];}),
+      const post={name:METH[m][0]+(edits(m)?', after':''),color:c,dash:d,width:2.4,values:XS().map(t=>val(m,t,key()))};
+      return edits(m)?[{name:METH[m][0]+', before',color:rgba(c,.35),dash:[2,3],width:1.4,values:XS().map(t=>val(m,t,'x_pre'))},post]:[post];}),
     onPick:i=>{st.turn=i+1;redraw();}});
   /* activation space at one turn: persona-axis position against off-axis spread, before -> after each method */
   let hits=[];
-  const plane=Canvas('stm',.34,(c,w,h)=>{
+  const plane=Canvas('stm',.34,(c,w,h)=>{  // fitH (its last argument) caps the height as for the turn chart
     const M={l:56,r:16,t:14,b:36};hits=[];
     if(!hasTraj()){c.font='12px '+MONO;c.fillStyle=COL.muted;c.textAlign='center';c.textBaseline='middle';
-      c.fillText('Before/after positions arrive with the 20-turn runs.',w/2,h/2);return;}
+      c.fillText(JUDGES().length?'Before/after positions arrive with the 20-turn runs.':'The 20-turn hold runs for this persona aren\'t judged yet.',w/2,h/2);return;}
     const P=ms().filter(m=>val(m,st.turn,'off_pre')!=null);
     const xs=P.flatMap(m=>[val(m,st.turn,'x_pre'),val(m,st.turn,'x_post')]).concat([0,1]);
     const ys=P.flatMap(m=>[val(m,st.turn,'off_pre'),val(m,st.turn,'off_post')]).concat([1]);
@@ -290,9 +298,10 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
         const ang=Math.atan2(Y(b[1])-Y(a[1]),X(b[0])-X(a[0]));c.fillStyle=col;c.beginPath();c.moveTo(X(b[0]),Y(b[1]));
         c.lineTo(X(b[0])-10*Math.cos(ang-.4),Y(b[1])-10*Math.sin(ang-.4));c.lineTo(X(b[0])-10*Math.cos(ang+.4),Y(b[1])-10*Math.sin(ang+.4));c.fill();}
       mark(c,X(b[0]),Y(b[1]),'o',4.5,col,false,true);
-      text(c,METH[m][1],X(b[0])+8,Y(b[1])-9,{size:10,color:COL.ink});
+      c.font='500 10px '+MONO;const fits=X(b[0])+8+c.measureText(METH[m][1]).width<=w-M.r;  /* keep labels inside the plot */
+      text(c,METH[m][1],fits?X(b[0])+8:X(b[0])-8,Y(b[1])-9,{size:10,color:COL.ink,align:fits?'left':'right'});
       hits.push({x:X(b[0]),y:Y(b[1]),m,a,b});});
-  });
+  },fitH);
   hoverable($('stm'),(px,py,e)=>{let best=null,bd=20*20;hits.forEach(p=>{const d=(p.x-px)**2+(p.y-py)**2;if(d<bd){bd=d;best=p;}});
     if(!best){hideTip();return;}
     showTip('<div class="tv">'+esc(METH[best.m][0])+' · turn '+st.turn+'</div><div class="row"><span class="tl">axis position</span>&nbsp;<b>'+best.a[0].toFixed(2)+' → '+best.b[0].toFixed(2)+'</b></div>'+
@@ -305,13 +314,17 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
         const pos=e.x_pre!=null?' · axis '+e.x_pre.toFixed(2)+' → '+e.x_post.toFixed(2):'';
         return '<div class="msg bot" style="border-left-color:'+COL[METH[m][2]]+'"><span class="who">'+esc(METH[m][0])+pos+' · '+JSHORT[j]+': '+esc(e.label||'–')+
           (e.identity?' · '+(e.identity==='ai'?'admits AI':'no AI claim'):'')+'</span>'+esc(e.a.slice(0,260))+(e.a.length>260?' …':'')+'</div>';}).join('');
-    $('stn').textContent=(st.view==='conv'?'Conversation 1 only. ':'')+(hasTraj()?MODEL(PERS)+'. Turn chart: each method\'s position on the '+ROLE(PERS)+' axis at the steering layer, 0 = assistant, 1 = '+ROLE(PERS)+
-      '; faint dashed = before the method\'s edit at that layer, solid = after. ':'Turn chart: unsteered read-out of each answer (0 = assistant, 1 = persona). ')+
+    const F=PD().fits||{},band=(F.cap_aa_modules||[]).length?' (modules '+F.cap_aa_modules[0]+'–'+F.cap_aa_modules[F.cap_aa_modules.length-1]+')':'';
+    const where=readLayer()?'at the read layer (hidden '+(F.read_hidden??'?')+'), downstream of the steering layer and where the Assistant Axis cap'+band+' acts; the activation-space panel stays at the steering layer'
+      :'at the steering layer'+(F.module!=null?' (module '+F.module+')':'')+'; faint dashed = before the method\'s edit there, solid = after (the Assistant Axis cap acts later: switch to the read layer)';
+    $('stn').textContent=(st.view==='conv'?'Conversation 1 only. ':'')+(hasTraj()?MODEL(PERS)+'. Turn chart: each method\'s position on the '+ROLE(PERS)+' axis '+where+', 0 = assistant, 1 = '+ROLE(PERS)+'. '
+      :'Turn chart: unsteered read-out of each answer (0 = assistant, 1 = persona). ')+
       'Click a turn to see that turn in activation space and read conversation 1. Labels: '+JNAME[j]+'.';
   }
   function redraw(){line.f.draw();plane.draw();chat();}
   $('stcw').addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(!b)return;st.ctx=b.dataset.v;setSeg('stcs',st.ctx);togs();redraw();});
   $('stvw').addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(!b)return;st.view=b.dataset.v;setSeg('stvs',st.view);redraw();});
+  $('stlw').addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(!b)return;st.layer=b.dataset.v;setSeg('stls',st.layer);redraw();});
   tog.addEventListener('click',e=>{const b=e.target.closest('button[data-m]');if(!b)return;const m=b.dataset.m;
     st.on.has(m)?st.on.delete(m):st.on.add(m);b.setAttribute('aria-pressed',String(st.on.has(m)));redraw();});
   personaHooks.push(()=>{st.turn=Math.min(st.turn,NT());togs();redraw();});
