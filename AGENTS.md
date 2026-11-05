@@ -31,6 +31,8 @@ The other places a job touches:
   handles.
 - **Secrets** (the HF token, SSH keys): home only, at `~/.cache/huggingface/token` with mode 600. They never go on
   the course volume, because its top level is world-writable and `staff/` is readable by other users.
+- **The base Python interpreter:** uv's managed CPython 3.12 sits in home under `~/.local/share/uv/python/`, and
+  the venv links to it. It's small and private, so it stays there; deleting it breaks the venv.
 - **Your laptop:** code and small copies of results for the deck. `*.npz` activation dumps stay out of git.
 
 How the scripts keep to this:
