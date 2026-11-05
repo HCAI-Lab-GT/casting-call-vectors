@@ -1,0 +1,370 @@
+<title>Persona Steering Bench</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* Layout: a lab notebook bench. Summary table first, then two instrument panels (setup sweep, ten-turn hold),
+   each a chart with its controls above and an answer drawer below. Tokens follow the Persona Steering Field Guide. */
+:root{
+  --paper:#F1F4F7; --panel:#FAFBFC; --ink:#16202B; --muted:#5A6676; --hair:#D3DAE2; --grid:#E4E9EF;
+  --accent-ink:#00695f; --probe:#BE1858; --probe-wash:rgba(190,24,88,.07);
+  --m-conceptor:#008f82; --m-cap:#2a78d6; --m-add:#eb6834; --m-lowrank:#7a4fc4; --m-meanshift:#b8860b; --m-none:#6b7684;
+  --f-display:"STIX Two Text",Georgia,"Times New Roman",serif;
+  --f-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0F141A; --panel:#141B23; --ink:#E3E8EE; --muted:#97A3B2; --hair:#2B3542; --grid:#1B242E;
+    --accent-ink:#4fd1c5; --probe:#F36AA2; --probe-wash:rgba(243,106,162,.09);
+    --m-conceptor:#0f9b90; --m-cap:#3987e5; --m-add:#d95926; --m-lowrank:#9b74e0; --m-meanshift:#ad7f12; --m-none:#8d98a6;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0F141A; --panel:#141B23; --ink:#E3E8EE; --muted:#97A3B2; --hair:#2B3542; --grid:#1B242E;
+  --accent-ink:#4fd1c5; --probe:#F36AA2; --probe-wash:rgba(243,106,162,.09);
+  --m-conceptor:#0f9b90; --m-cap:#3987e5; --m-add:#d95926; --m-lowrank:#9b74e0; --m-meanshift:#ad7f12; --m-none:#8d98a6;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.55;margin:0}
+.wrap{max-width:1120px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 64px;display:grid;gap:34px}
+.eyebrow{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:var(--f-display);font-weight:400;font-size:clamp(2.1rem,5vw,3.2rem);line-height:1.05;margin:4px 0 10px;letter-spacing:-.01em;text-wrap:balance}
+h2{font-family:var(--f-display);font-weight:600;font-size:1.45rem;margin:0;text-wrap:balance}
+.lede{max-width:68ch;margin:0;font-size:1.06rem}
+p{max-width:70ch;margin:0}
+.muted{color:var(--muted)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+section{display:grid;gap:14px}
+.panel{background:var(--panel);border:1px solid var(--hair);border-radius:6px;padding:16px;display:grid;gap:12px;min-width:0}
+.ctl{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;font-size:.86rem}
+.seg{display:inline-flex;border:1px solid var(--hair);border-radius:999px;overflow:hidden}
+.seg button{font:500 .8rem/1 var(--f-body);padding:7px 12px;border:0;background:transparent;color:var(--muted);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.82rem}
+.legend button{display:inline-flex;align-items:center;gap:6px;border:0;background:none;color:var(--ink);font:inherit;cursor:pointer;padding:2px 0}
+.legend button[aria-pressed="false"]{opacity:.38}
+.sw{width:18px;height:0;border-top:2.5px solid currentColor}
+.sw.dash{border-top-style:dashed}
+.chart{position:relative;width:100%;min-width:0}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
+.chart .gridl{stroke:var(--grid);stroke-width:1}
+.chart .axis{stroke:var(--hair);stroke-width:1}
+.chart .probeband{fill:var(--probe-wash)}
+.chart .probelab{fill:var(--probe)}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--hair);border-radius:4px;padding:8px 10px;font-size:.78rem;line-height:1.4;box-shadow:0 2px 8px rgba(0,0,0,.12);min-width:180px;max-width:280px;z-index:2}
+.tip b{font-weight:700}
+.tip .row{display:flex;justify-content:space-between;gap:12px}
+table{border-collapse:collapse;width:100%;font-size:.86rem}
+.tablewrap{overflow-x:auto;border:1px solid var(--hair);border-radius:6px;background:var(--panel)}
+th,td{padding:8px 10px;border-bottom:1px solid var(--grid);text-align:left;white-space:nowrap}
+thead th{font-family:var(--f-mono);font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500}
+td.num,th.num{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+tbody tr:last-child td{border-bottom:0}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:0}
+.answers{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+.ans{border:1px solid var(--hair);border-radius:6px;padding:10px 12px;font-size:.88rem;display:grid;gap:6px;min-width:0;background:var(--paper)}
+.ans .meta{font-family:var(--f-mono);font-size:.7rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 10px}
+.ans .q{color:var(--muted);font-style:italic}
+.ans .a{white-space:pre-wrap;overflow-wrap:anywhere}
+.pill{font-family:var(--f-mono);font-size:.68rem;padding:1px 7px;border-radius:999px;border:1px solid var(--hair)}
+.pill.fully{border-color:var(--m-conceptor);color:var(--accent-ink)}
+.pill.not{border-color:var(--probe);color:var(--probe)}
+.hint{font-size:.8rem;color:var(--muted)}
+details summary{cursor:pointer;font-size:.86rem;color:var(--muted)}
+.foot{font-size:.8rem;color:var(--muted);max-width:none}
+button:focus-visible{outline:2px solid var(--probe);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow" id="eyebrow">Persona steering · conceptor experiments</div>
+    <h1>Persona Steering Bench</h1>
+    <p class="lede" id="lede">Each method tries to make the model answer as a pirate with no system prompt, then to keep it in character over ten turns.</p>
+  </header>
+
+  <section aria-labelledby="sumh">
+    <h2 id="sumh">Methods at their matched strength</h2>
+    <p class="muted" id="sumnote"></p>
+    <div class="tablewrap"><table id="summary"></table></div>
+  </section>
+
+  <section aria-labelledby="sweeph">
+    <h2 id="sweeph">Setup: steering alone, no system prompt</h2>
+    <p class="muted">Each line walks one method through its strengths. Up is more in character, right is more coherent. A method that works climbs without sliding left. The ringed point is the matched strength used in the hold test.</p>
+    <div class="panel">
+      <div class="ctl"><span class="muted">Vertical axis</span>
+        <div class="seg" id="sweepMetric" role="group" aria-label="Sweep metric"></div></div>
+      <div class="legend" id="sweepLegend"></div>
+      <div class="chart" id="sweepChart"></div>
+      <div class="hint">Click a point to read its answers.</div>
+      <div class="answers" id="sweepAnswers"></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="holdh" id="holdSection">
+    <h2 id="holdh">Hold: ten turns with drift and attack probes</h2>
+    <p class="muted">Every method runs at its matched strength. Shaded turns are probes that ask the model to drop the act or admit it is an AI.</p>
+    <div class="panel">
+      <div class="ctl"><span class="muted">Context</span><div class="seg" id="holdCtx" role="group" aria-label="Context"></div>
+        <span class="muted">Measure</span><div class="seg" id="holdMetric" role="group" aria-label="Hold metric"></div></div>
+      <div class="legend" id="holdLegend"></div>
+      <div class="chart" id="holdChart"></div>
+      <div class="hint">Click a turn to read conversation 1 at that turn, method by method.</div>
+      <div class="answers" id="holdAnswers"></div>
+    </div>
+  </section>
+
+  <details><summary>All numbers as tables</summary><div class="tablewrap" style="margin-top:10px"><table id="allTable"></table></div></details>
+  <p class="foot" id="foot"></p>
+</div>
+
+<script type="application/json" id="bench-data">/*BENCH_DATA*/</script>
+<script>
+(function(){
+"use strict";
+const D = JSON.parse(document.getElementById('bench-data').textContent);
+const METHODS = ['conceptor','cap','add','lowrank','meanshift','none'];
+const NAMES = {conceptor:'Conceptor', cap:'Activation cap', add:'Steering vector', lowrank:'Low-rank conceptor', meanshift:'Mean-shift control', none:'No steering'};
+const PARAM = {conceptor:'β', lowrank:'β', meanshift:'β', add:'c', cap:'pct', none:''};
+const DASHED = {meanshift:true, none:true};
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const col = m => css('--m-' + m);
+const fmtPct = v => v == null ? '–' : Math.round(v * 100) + '%';
+const fmt = (v, d = 2) => v == null ? '–' : (+v).toFixed(d);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+
+const sweep = D.sweep, hold = D.hold;
+const fits = (sweep || hold).meta.fits;
+const judged = (sweep || hold).meta.judged;
+const modelName = fits.source_model.startsWith('/') ? fits.source_model.split('/').pop() : fits.source_model;
+$('eyebrow').textContent = `${modelName} · steered at layer ${fits.module} · read-out at hidden ${fits.read_hidden}`;
+$('lede').textContent = `Each method tries to make ${modelName.split('/').pop()} answer as a ${fits.persona} with no system prompt, then to keep it in character over ten turns. Fits use ${fits.n_persona} in-character ${fits.persona} answers and ${fits.n_default} ${fits.default} answers.`;
+
+// ---------------------------------------------------------------- summary table
+const holdRow = (ctx, m) => hold ? hold.hold.find(h => h.context === ctx && h.method === m) : null;
+const sweepRow = (m, s) => sweep ? sweep.sweep.find(r => r.method === m && r.strength === s) : null;
+const present = METHODS.filter(m => (sweep && sweep.sweep.some(r => r.method === m)) || (hold && hold.hold.some(h => h.method === m)));
+{
+  const sel = sweep ? sweep.selected : {};
+  const head = `<thead><tr><th>Method</th><th class="num">Matched strength</th><th class="num">Setup: in character</th><th class="num">Setup: coherence</th><th class="num">Setup: read-out</th>` +
+    (hold ? `<th class="num">Hold T10, steering only</th><th class="num">Drift</th><th class="num">Hold T10, with prompt</th><th class="num">Drift</th>` : '') + `</tr></thead>`;
+  const rows = present.map(m => {
+    const s = m === 'none' ? {strength: 0} : (sel[m] || null);
+    const r = s ? sweepRow(m, s.strength) : null;
+    const h1 = holdRow('steer_only', m), h2 = holdRow('prompt', m);
+    const t = h => h ? `<td class="num">${fmtPct(h.summary.fully_rate.T10)}</td><td class="num">${h.summary.fully_rate.drift == null ? '–' : (h.summary.fully_rate.drift > 0 ? '+' : '') + Math.round(h.summary.fully_rate.drift * 100)}</td>` : '<td class="num">–</td><td class="num">–</td>';
+    return `<tr><td><span class="dot" style="background:${col(m)}"></span>${NAMES[m]}</td>` +
+      `<td class="num">${s ? (m === 'none' ? '–' : `${PARAM[m]} ${s.strength}`) : 'none reached'}</td>` +
+      `<td class="num">${fmtPct(r && r.fully_rate)}</td><td class="num">${fmt(r && r.coherence, 0)}</td><td class="num">${fmt(r && r.readout)}</td>` +
+      (hold ? t(h1) + t(h2) : '') + `</tr>`;
+  }).join('');
+  $('summary').innerHTML = head + `<tbody>${rows}</tbody>`;
+  $('sumnote').textContent = judged
+    ? 'Matched strength: the smallest strength that puts at least 80% of answers fully in character with coherence of 60 or more. In character and coherence come from the judge; read-out is the unsteered model\'s persona score at a later layer (assistant 0, pirate 1).'
+    : 'No judge scores yet: strengths are matched on the read-out (unsteered persona score, assistant 0, pirate 1).';
+}
+
+// ---------------------------------------------------------------- shared chart helpers
+function segmented(host, options, value, onChange){
+  host.innerHTML = '';
+  for (const [v, label] of options){
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.setAttribute('aria-pressed', v === value);
+    b.addEventListener('click', () => { for (const x of host.children) x.setAttribute('aria-pressed', x === b); onChange(v); });
+    host.appendChild(b);
+  }
+}
+function legend(host, methods, shown, onToggle){
+  host.innerHTML = '';
+  for (const m of methods){
+    const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-pressed', shown.has(m)); b.style.color = col(m);
+    b.innerHTML = `<span class="sw${DASHED[m] ? ' dash' : ''}"></span><span style="color:var(--ink)">${NAMES[m]}</span>`;
+    b.addEventListener('click', () => { shown.has(m) ? shown.delete(m) : shown.add(m); b.setAttribute('aria-pressed', shown.has(m)); onToggle(); });
+    host.appendChild(b);
+  }
+}
+function frame(host, W, H, pad){
+  host.innerHTML = '';
+  const svg = el('svg', {viewBox: `0 0 ${W} ${H}`, role: 'img'}, host);
+  const tip = document.createElement('div'); tip.className = 'tip'; tip.hidden = true; host.appendChild(tip);
+  return {svg, tip, X0: pad.l, X1: W - pad.r, Y0: H - pad.b, Y1: pad.t};
+}
+function yAxis(f, lo, hi, ticks, label, fmtTick){
+  const Y = v => f.Y0 - (v - lo) / (hi - lo) * (f.Y0 - f.Y1);
+  for (const t of ticks){ el('line', {x1: f.X0, x2: f.X1, y1: Y(t), y2: Y(t), class: 'gridl'}, f.svg);
+    const tx = el('text', {x: f.X0 - 8, y: Y(t) + 4, 'text-anchor': 'end'}, f.svg); tx.textContent = fmtTick(t); }
+  const lab = el('text', {x: f.X0, y: f.Y1 - 10}, f.svg); lab.textContent = label;
+  return Y;
+}
+function width(host){ return Math.max(320, Math.min(1080, host.clientWidth || 900)); }
+const METRIC_RANGE = {fully_rate: [0, 1], voice_as_rate: [0, 1], coherence: [0, 100]};
+function readoutRange(vals){ const lo = Math.min(-0.25, ...vals), hi = Math.max(1.25, ...vals); return [Math.floor(lo * 4) / 4, Math.ceil(hi * 4) / 4]; }
+function ticksFor(lo, hi, n){ const st = (hi - lo) / n; return Array.from({length: n + 1}, (_, i) => +(lo + i * st).toFixed(4)); }
+const fmtMetric = (k, v) => k === 'coherence' ? Math.round(v) : (k === 'readout' ? (+v).toFixed(2) : Math.round(v * 100) + '%');
+
+function answerCard(m, title, ex){
+  const lab = ex.label ? `<span class="pill ${ex.label === 'fully' ? 'fully' : ex.label === 'not' ? 'not' : ''}">${esc(ex.label)}</span>` : '';
+  const voice = ex.voice ? `<span class="pill">voice: ${esc(ex.voice)}</span>` : '';
+  return `<div class="ans" style="border-left:3px solid ${col(m)}"><div class="meta"><b style="color:var(--ink)">${esc(title)}</b>${lab}${voice}` +
+    `<span>coherence ${ex.coh == null ? '–' : Math.round(ex.coh)}</span><span>read-out ${fmt(ex.readout)}</span></div>` +
+    `<div class="q">${esc(ex.q)}</div><div class="a">${esc(ex.a)}</div></div>`;
+}
+
+// ---------------------------------------------------------------- setup sweep
+if (sweep){
+  const metrics = [['fully_rate', 'In character'], ['readout', 'Read-out']];
+  if (sweep.sweep.some(r => r.voice_as_rate != null)) metrics.push(['voice_as_rate', 'Speaks as the role']);
+  let metric = judged ? 'fully_rate' : 'readout';
+  if (!judged) metrics.splice(0, 1);
+  const methods = METHODS.filter(m => sweep.sweep.some(r => r.method === m));
+  const shown = new Set(methods);
+  const xKey = judged ? 'coherence' : 'readout_q25';
+  function draw(){
+    const host = $('sweepChart'), W = width(host), H = Math.round(Math.min(460, Math.max(300, W * 0.52)));
+    const f = frame(host, W, H, {l: 54, r: 22, t: 30, b: 42});
+    const rows = sweep.sweep.filter(r => shown.has(r.method));
+    const [ylo, yhi] = metric === 'readout' ? readoutRange(sweep.sweep.map(r => r.readout)) : METRIC_RANGE[metric];
+    const Y = yAxis(f, ylo, yhi, ticksFor(ylo, yhi, 4), metrics.find(x => x[0] === metric)[1], t => fmtMetric(metric, t));
+    const xlo = judged ? 0 : Math.min(...sweep.sweep.map(r => r[xKey])), xhi = judged ? 100 : Math.max(...sweep.sweep.map(r => r[xKey]));
+    const X = v => f.X0 + (v - xlo) / ((xhi - xlo) || 1) * (f.X1 - f.X0);
+    for (const t of ticksFor(xlo, xhi, 5)){ const tx = el('text', {x: X(t), y: f.Y0 + 18, 'text-anchor': 'middle'}, f.svg); tx.textContent = judged ? Math.round(t) : t.toFixed(2); }
+    const xl = el('text', {x: f.X1, y: f.Y0 + 34, 'text-anchor': 'end'}, f.svg); xl.textContent = judged ? 'Coherence (judge, 0–100) →' : 'Read-out, 25th percentile →';
+    el('line', {x1: f.X0, x2: f.X1, y1: f.Y0, y2: f.Y0, class: 'axis'}, f.svg);
+    const pts = [];
+    for (const m of methods){
+      if (!shown.has(m)) continue;
+      const rs = sweep.sweep.filter(r => r.method === m && r[metric] != null && r[xKey] != null).sort((a, b) => a.strength - b.strength);
+      if (!rs.length) continue;
+      if (rs.length > 1) el('polyline', {points: rs.map(r => `${X(r[xKey])},${Y(r[metric])}`).join(' '), fill: 'none', stroke: col(m), 'stroke-width': 2,
+        'stroke-dasharray': DASHED[m] ? '5 4' : '', 'stroke-linejoin': 'round'}, f.svg);
+      const matched = sweep.selected && sweep.selected[m] ? sweep.selected[m].strength : null;
+      rs.forEach(r => {
+        const x = X(r[xKey]), y = Y(r[metric]);
+        if (r.strength === matched){  // ring and label only the matched strength, so labels stay sparse
+          el('circle', {cx: x, cy: y, r: 9, fill: 'none', stroke: col(m), 'stroke-width': 1.5}, f.svg);
+          const t = el('text', {x: x + 12, y: y - 10}, f.svg); t.textContent = `${PARAM[m]} ${r.strength}`;
+        }
+        const c = el('circle', {cx: x, cy: y, r: 5, fill: col(m), stroke: css('--panel'), 'stroke-width': 2}, f.svg);
+        pts.push({x, y, r, m, c});
+      });
+    }
+    const svg = f.svg, tip = f.tip;
+    const near = ev => { const b = svg.getBoundingClientRect(), s = W / b.width; const x = (ev.clientX - b.left) * s, y = (ev.clientY - b.top) * s;
+      let best = null, bd = 1e9; for (const p of pts){ const d = Math.hypot(p.x - x, p.y - y); if (d < bd){ bd = d; best = p; } } return bd < 28 ? best : null; };
+    svg.addEventListener('mousemove', ev => { const p = near(ev); if (!p){ tip.hidden = true; return; }
+      const r = p.r; tip.hidden = false;
+      tip.innerHTML = `<b>${NAMES[p.m]}</b> · ${PARAM[p.m]} ${r.strength}<div class="row"><span>In character</span><span class="mono">${fmtPct(r.fully_rate)}</span></div>` +
+        `<div class="row"><span>Coherence</span><span class="mono">${fmt(r.coherence, 0)}</span></div><div class="row"><span>Read-out</span><span class="mono">${fmt(r.readout)}</span></div>` +
+        (r.voice_as_rate != null ? `<div class="row"><span>Speaks as the role</span><span class="mono">${fmtPct(r.voice_as_rate)}</span></div>` : '') +
+        `<div class="row"><span>Answers</span><span class="mono">${r.n}</span></div>`;
+      const b = svg.getBoundingClientRect(); const left = p.x * b.width / W, top = p.y * b.height / H;
+      tip.style.left = Math.min(left + 14, b.width - 200) + 'px'; tip.style.top = Math.max(0, top - 70) + 'px'; });
+    svg.addEventListener('mouseleave', () => { tip.hidden = true; });
+    svg.addEventListener('click', ev => { const p = near(ev); if (p) showSweep(p.m, p.r); });
+  }
+  function showSweep(m, r){
+    $('sweepAnswers').innerHTML = (r.examples || []).map((ex, i) => answerCard(m, `${NAMES[m]} · ${PARAM[m]} ${r.strength} · answer ${i + 1}`, ex)).join('');
+  }
+  segmented($('sweepMetric'), metrics, metric, v => { metric = v; draw(); });
+  legend($('sweepLegend'), methods, shown, draw);
+  draw();
+  const first = sweep.selected && Object.entries(sweep.selected).find(([, v]) => v);
+  if (first){ const r = sweepRow(first[0], first[1].strength); if (r) showSweep(first[0], r); }
+  window.addEventListener('resize', () => draw());
+}
+
+// ---------------------------------------------------------------- hold
+if (hold){
+  const ctxs = [['steer_only', 'Steering only'], ['prompt', 'Prompt + steering']];
+  const metrics = [['fully_rate', 'In character'], ['coherence', 'Coherence'], ['readout', 'Read-out']];
+  if (hold.hold.some(h => h.per_turn.some(t => t.voice_as_rate != null))) metrics.push(['voice_as_rate', 'Speaks as the role']);
+  let ctx = 'steer_only', metric = hold.meta.judged ? 'fully_rate' : 'readout';
+  const methods = METHODS.filter(m => hold.hold.some(h => h.method === m));
+  const shown = new Set(methods);
+  let turnSel = 0;
+  function draw(){
+    const host = $('holdChart'), W = width(host), H = Math.round(Math.min(420, Math.max(280, W * 0.46)));
+    const f = frame(host, W, H, {l: 54, r: 22, t: 30, b: 42});
+    const series = hold.hold.filter(h => h.context === ctx && shown.has(h.method));
+    const turns = hold.hold[0].per_turn.map(t => t.turn);
+    const allVals = hold.hold.flatMap(h => h.per_turn.map(t => t[metric])).filter(v => v != null);
+    const [ylo, yhi] = metric === 'readout' ? readoutRange(allVals) : METRIC_RANGE[metric];
+    const X = t => f.X0 + (t - turns[0]) / ((turns[turns.length - 1] - turns[0]) || 1) * (f.X1 - f.X0);
+    const probeTurns = hold.hold[0].per_turn.filter(t => t.probe).map(t => t.turn);
+    const half = (f.X1 - f.X0) / Math.max(1, turns.length - 1) / 2;
+    for (const t of probeTurns){ el('rect', {x: X(t) - half, y: f.Y1, width: 2 * half, height: f.Y0 - f.Y1, class: 'probeband'}, f.svg);
+      const tl = el('text', {x: X(t), y: f.Y1 - 2, 'text-anchor': 'middle', class: 'probelab'}, f.svg); tl.textContent = 'probe'; }
+    const Y = yAxis(f, ylo, yhi, ticksFor(ylo, yhi, 4), metrics.find(x => x[0] === metric)[1], t => fmtMetric(metric, t));
+    for (const t of turns){ const tx = el('text', {x: X(t), y: f.Y0 + 18, 'text-anchor': 'middle'}, f.svg); tx.textContent = t + 1; }
+    const xl = el('text', {x: f.X1, y: f.Y0 + 34, 'text-anchor': 'end'}, f.svg); xl.textContent = 'Turn →';
+    el('line', {x1: f.X0, x2: f.X1, y1: f.Y0, y2: f.Y0, class: 'axis'}, f.svg);
+    const cross = el('line', {x1: 0, x2: 0, y1: f.Y1, y2: f.Y0, stroke: css('--muted'), 'stroke-width': 1, 'stroke-dasharray': '3 3', visibility: 'hidden'}, f.svg);
+    for (const h of series){
+      const pts = h.per_turn.filter(t => t[metric] != null);
+      el('polyline', {points: pts.map(t => `${X(t.turn)},${Y(t[metric])}`).join(' '), fill: 'none', stroke: col(h.method), 'stroke-width': 2,
+        'stroke-dasharray': DASHED[h.method] ? '5 4' : '', 'stroke-linejoin': 'round'}, f.svg);
+      const last = pts[pts.length - 1];
+      if (last) el('circle', {cx: X(last.turn), cy: Y(last[metric]), r: 4.5, fill: col(h.method), stroke: css('--panel'), 'stroke-width': 2}, f.svg);
+    }
+    const svg = f.svg, tip = f.tip;
+    const turnAt = ev => { const b = svg.getBoundingClientRect(), s = W / b.width; const x = (ev.clientX - b.left) * s;
+      let best = turns[0]; for (const t of turns) if (Math.abs(X(t) - x) < Math.abs(X(best) - x)) best = t; return best; };
+    svg.addEventListener('mousemove', ev => {
+      const t = turnAt(ev); cross.setAttribute('x1', X(t)); cross.setAttribute('x2', X(t)); cross.setAttribute('visibility', 'visible');
+      const rows = series.map(h => { const pt = h.per_turn.find(p => p.turn === t); return {m: h.method, v: pt ? pt[metric] : null}; })
+        .sort((a, b) => (b.v ?? -1e9) - (a.v ?? -1e9));
+      const probe = hold.hold[0].per_turn.find(p => p.turn === t)?.probe;
+      tip.hidden = false;
+      tip.innerHTML = `<b>Turn ${t + 1}</b>${probe ? ' · probe' : ''}` + rows.map(r => `<div class="row"><span><span class="dot" style="background:${col(r.m)}"></span>${NAMES[r.m]}</span><span class="mono">${r.v == null ? '–' : fmtMetric(metric, r.v)}</span></div>`).join('');
+      const b = svg.getBoundingClientRect(); const left = X(t) * b.width / W;
+      tip.style.left = (left > b.width / 2 ? left - 250 : left + 14) + 'px'; tip.style.top = '30px'; });
+    svg.addEventListener('mouseleave', () => { tip.hidden = true; cross.setAttribute('visibility', 'hidden'); });
+    svg.addEventListener('click', ev => { turnSel = turnAt(ev); showTurn(); });
+  }
+  function showTurn(){
+    const cards = methods.filter(m => shown.has(m)).map(m => {
+      const h = hold.hold.find(x => x.context === ctx && x.method === m); const ex = h && h.examples[turnSel];
+      return ex ? answerCard(m, `${NAMES[m]} · turn ${turnSel + 1}`, ex) : '';
+    });
+    $('holdAnswers').innerHTML = cards.join('');
+  }
+  segmented($('holdCtx'), ctxs, ctx, v => { ctx = v; draw(); showTurn(); });
+  segmented($('holdMetric'), metrics, metric, v => { metric = v; draw(); });
+  legend($('holdLegend'), methods, shown, () => { draw(); showTurn(); });
+  draw(); turnSel = hold.hold[0].per_turn.find(t => t.probe)?.turn ?? 0; showTurn();
+  window.addEventListener('resize', () => draw());
+} else {
+  $('holdSection').hidden = true;
+}
+
+// ---------------------------------------------------------------- tables (accessible view of every number)
+{
+  let html = '';
+  if (sweep){
+    html += `<thead><tr><th>Setup sweep</th><th class="num">Strength</th><th class="num">n</th><th class="num">In character</th><th class="num">Somewhat</th><th class="num">Coherence</th><th class="num">Read-out</th><th class="num">IQR</th><th class="num">Speaks as</th><th class="num">AI break</th></tr></thead><tbody>`;
+    for (const r of [...sweep.sweep].sort((a, b) => METHODS.indexOf(a.method) - METHODS.indexOf(b.method) || a.strength - b.strength))
+      html += `<tr><td>${NAMES[r.method]}</td><td class="num">${r.method === 'none' ? '–' : PARAM[r.method] + ' ' + r.strength}</td><td class="num">${r.n}</td><td class="num">${fmtPct(r.fully_rate)}</td><td class="num">${fmtPct(r.somewhat_rate)}</td><td class="num">${fmt(r.coherence, 0)}</td><td class="num">${fmt(r.readout)}</td><td class="num">${fmt(r.readout_q25)} – ${fmt(r.readout_q75)}</td><td class="num">${fmtPct(r.voice_as_rate)}</td><td class="num">${fmtPct(r.ai_break_rate)}</td></tr>`;
+    html += '</tbody>';
+  }
+  if (hold){
+    html += `<thead><tr><th>Hold</th><th>Context</th><th class="num">In character T1</th><th class="num">T5</th><th class="num">T10</th><th class="num">Coherence T1</th><th class="num">T10</th><th class="num">Read-out T1</th><th class="num">T10</th><th class="num">Probe turns in character</th></tr></thead><tbody>`;
+    for (const h of hold.hold){ const s = h.summary;
+      html += `<tr><td>${NAMES[h.method]}</td><td>${h.context === 'prompt' ? 'prompt + steering' : 'steering only'}</td><td class="num">${fmtPct(s.fully_rate.T1)}</td><td class="num">${fmtPct(s.fully_rate.T5)}</td><td class="num">${fmtPct(s.fully_rate.T10)}</td><td class="num">${fmt(s.coherence.T1, 0)}</td><td class="num">${fmt(s.coherence.T10, 0)}</td><td class="num">${fmt(s.readout.T1)}</td><td class="num">${fmt(s.readout.T10)}</td><td class="num">${h.probes ? fmtPct(h.probes.fully_rate) : '–'}</td></tr>`; }
+    html += '</tbody>';
+  }
+  $('allTable').innerHTML = html;
+}
+const b = D.built || {};
+$('foot').textContent = `Fits from ${fits.source.split('/').slice(-1)[0]} (${fits.n_persona} ${fits.persona} answers judged fully in character, ${fits.n_default} ${fits.default} answers; conceptor rank ${fits.conceptor_rank}, low-rank k ${fits.lowrank_k}). ` +
+  `Judge: local model, Assistant Axis role rubric and Persona Vectors coherence rubric. Built ${b.date || ''} from commit ${b.commit || ''}.`;
+})();
+</script>
