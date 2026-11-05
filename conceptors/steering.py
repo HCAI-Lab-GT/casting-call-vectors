@@ -16,8 +16,10 @@ Methods and their strength parameter:
                 sets the persona and the per-token conceptor pulls everything else back to the persona cloud; strength c
   add_cap       add at c, then a cap on the same module with its floor at the CAP_HOLD_PCT percentile: the vector sets the
                 persona and the cap holds it along the persona axis only; strength c (the cap counterpart of add_ctok)
-  cap_aa        the Assistant Axis paper's capping, mirrored to hold a persona: a floor on each layer's own persona axis
-                at every module in [0.4 n, 0.6 n), each floor at this percentile of the persona's projections there
+  cap_aa        the Assistant Axis paper's capping (Lu et al. 2026, Section 5), mirrored to hold a persona: a floor on
+                each layer's own persona axis at every module in [0.70 n, 0.85 n), the late-middle band the paper caps
+                (Qwen3-32B layers 46-53 of 64, Llama-3.3-70B 56-71 of 80), each floor at this percentile of the persona's
+                projections at that layer; the paper's own cap is the 25th percentile
   none          no intervention
 
 Read-out: a persona score from an unsteered teacher-forced pass, projected on the persona axis at the read layer
@@ -50,10 +52,14 @@ CAP_HOLD_PCT = 25  # add_cap's floor: the Assistant Axis paper caps at the 25th 
 TOKEN_METHODS = ("conceptor_tok", "meanshift_tok", "add_ctok")
 
 
-def cap_modules(n_layers: int) -> list[int]:
-    """Modules the Assistant-Axis-style cap acts on: the middle fifth of the network, [0.4 n, 0.6 n), at least one."""
-    lo = round(0.4 * n_layers)
-    return list(range(lo, max(lo + 1, round(0.6 * n_layers))))
+CAP_AA_BAND = (0.70, 0.85)
+
+
+def cap_modules(n_layers: int, band: tuple = CAP_AA_BAND) -> list[int]:
+    """Modules the Assistant-Axis-style cap acts on: [band[0] n, band[1] n) of the network, at least one.
+    The default band matches the paper's choices (about 70-88% of depth)."""
+    lo = round(band[0] * n_layers)
+    return list(range(lo, max(lo + 1, round(band[1] * n_layers))))
 
 
 def fit(run_dir: Path, persona: str = "pirate", default: str = "assistant", module: int | None = None,

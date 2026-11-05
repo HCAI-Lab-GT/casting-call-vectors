@@ -313,12 +313,13 @@ def test_cap_variants_and_default_run(tmp: Path, model: Path):
 
     import steering
 
-    assert steering.cap_modules(36) == list(range(14, 22)) and steering.cap_modules(32) == list(range(13, 19))
-    assert steering.cap_modules(4) == [2]  # at least one layer
+    assert steering.cap_modules(36) == list(range(25, 31)) and steering.cap_modules(32) == list(range(22, 27))
+    assert steering.cap_modules(64) == list(range(45, 54))  # the paper's Qwen3-32B band is layers 46-53
+    assert steering.cap_modules(4) == [3]  # at least one layer
     run_dir, _ = synthetic_judged_run(tmp, model, "fitrun_caps")
     fits = steering.fit(run_dir)
     aa = steering.specs(fits, "cap_aa", 50)
-    assert [s["module"] for s in aa] == [2] and all(s["mode"] == "cap" for s in aa)
+    assert [s["module"] for s in aa] == [3] and all(s["mode"] == "cap" for s in aa)
     assert abs(aa[0]["tau"] - float(np.percentile(fits["ml_proj"][0], 50))) < 1e-9
     vc = steering.specs(fits, "add_cap", 1.5)
     assert [s["mode"] for s in vc] == ["add", "cap"] and vc[0]["coef"] == 1.5
