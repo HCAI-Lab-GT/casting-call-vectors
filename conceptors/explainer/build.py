@@ -3,6 +3,7 @@
 
   python explainer/build.py                       # repo layout: reads ../acts_qwen05/derived.json
   python build.py --data derived.json --out page.html
+  python build.py --data ../acts_smollm3_full     # a run folder: reads its derived.json
 
 Parts: src/head.html (title, fonts, CSS), src/body.html (markup), derived.json (inlined as JSON),
 src/lib.js + src/toy.js + src/real.js (wrapped in one function). Needs only the standard library."""
@@ -23,6 +24,8 @@ def main():
     ap.add_argument('--data', type=pathlib.Path, default=default_data())
     ap.add_argument('--out', type=pathlib.Path, default=HERE / 'persona_steering_field_guide.html')
     a = ap.parse_args()
+    if a.data.is_dir():                             # a run folder: use its derived.json
+        a.data = a.data / 'derived.json'
     head = (HERE / 'src/head.html').read_text()
     body = (HERE / 'src/body.html').read_text()
     js = '\n'.join((HERE / 'src' / f).read_text() for f in ['lib.js', 'toy.js', 'real.js'])
