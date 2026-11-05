@@ -12,7 +12,7 @@
 </nav>
 
 <header class="hero" id="top">
-  <div class="eyebrow">A field guide for persona and trait steering · toy 2D figures plus real Qwen2.5-0.5B activations</div>
+  <div class="eyebrow">A field guide for persona and trait steering · toy 2D figures plus real SmolLM3-3B activations</div>
   <h1>Persona steering, <i>shown</i></h1>
   <p class="lede">Every steering method answers two questions. What shape does a persona take inside the model? And when do you touch the activation? The grid below places each method on those two axes. Click any method to see it work on the same toy space in Part 3. Parts 1 and 2 build the pieces: how persona data is collected, and what a conceptor is. Part 4 follows a conversation turn by turn.</p>
   <div class="grid-wrap">
@@ -53,7 +53,7 @@
 <section class="part" id="data">
   <div class="eyebrow">Part 1</div>
   <h2>Where the points come from</h2>
-  <p>Every method here is fitted to a pile of activations, and how that pile is collected decides what the method learns. We ran the standard recipe on Qwen2.5-0.5B-Instruct (24 layers, 896 dimensions) on a laptop: 9 roles plus one hard negative, 24 questions and 384 answers, in about 19 minutes. All Part 1 figures use that run.</p>
+  <p>Every method here is fitted to a pile of activations, and how that pile is collected decides what the method learns. We ran the standard recipe on SmolLM3-3B (36 layers, 2,048 dimensions) on one H100: 9 roles plus one hard negative, the Assistant Axis's 240 questions, three samples each, 12,960 answers in about 50 minutes, then a local LLM judge in 8 more. All Part 1 figures use that run.</p>
 </section>
 
 <section class="plate wide" id="recipe-steps">
@@ -66,22 +66,22 @@
     <div class="rail">
       <div class="step"><h4>Write the roles</h4><p>System prompts that ask for the persona, with several wordings so no single phrasing dominates.</p>
         <p class="src">Assistant Axis: 275 roles × 5 prompts. Persona Vectors: 5 contrastive prompt pairs, generated from a trait description.</p>
-        <p class="ours">Ours: 3 pirate and 3 assistant prompts, 1 each for doctor, teacher, bard, robot, consultant and ghost, plus 3 for a pirate ship's doctor.</p></div>
+        <p class="ours">Ours: 5 pirate and 5 assistant prompts and 1 each for doctor, teacher, bard, robot, consultant and ghost, all from the Assistant Axis release, plus 1 of our own for a pirate ship's doctor.</p></div>
       <div class="step"><h4>Pick shared questions</h4><p>Ask every role the same questions, so differences come from the role and not the topic.</p>
         <p class="src">Assistant Axis: 240 shared questions. Persona Vectors: 40 per trait, half for extraction and half for evaluation.</p>
-        <p class="ours">Ours: 24 questions across 10 task types: math, code, facts, comfort, negotiation, advice, opinion and more.</p></div>
+        <p class="ours">Ours: the Assistant Axis's 240 extraction questions, from paper airplanes to grief. They are one set with no task labels, so nothing here splits by task type.</p></div>
       <div class="step"><h4>Generate answers</h4><p>Sample answers with the persona prompt in place. Add hard negatives: text that has the costume but not the identity.</p>
         <p class="src">Both papers sample several rollouts per question.</p>
-        <p class="ours">Ours: one answer each, temperature 0.7, up to 72 new tokens. Hard negative: the assistant describing how a pirate would answer, in the third person.</p></div>
+        <p class="ours">Ours: three answers per prompt and question, temperature 0.7, top-p 0.9, up to 256 new tokens, thinking mode off. Hard negative: the assistant describing how a pirate would answer, in the third person.</p></div>
       <div class="step"><h4>Judge and filter</h4><p>A judge model scores whether each answer is actually in character, and weak ones are dropped.</p>
         <p class="src">Assistant Axis: an LLM judge labels each answer fully, somewhat or not role-playing, and the axis uses the fully role-playing answers. Persona Vectors: keeps trait ≥ 50 for positive prompts and &lt; 50 for negative ones, coherence ≥ 50.</p>
-        <p class="ours">Ours: no LLM judge. A pirate-word counter stands in for one, with obvious limits (Plate 1.3).</p></div>
+        <p class="ours">Ours: a local Qwen3-30B-A3B judge with the Assistant Axis role-play rubric, the Persona Vectors coherence rubric and a point-of-view rubric of our own. Persona fits use only fully in-character answers. A pirate-word counter runs alongside for comparison (Plate 1.3).</p></div>
       <div class="step"><h4>Read activations</h4><p>Run prompt + answer through the model and read the residual stream at every layer. Pool the token positions into one vector.</p>
         <p class="src">Both papers average over the answer's tokens. Persona Vectors also tried prompt tokens and found answer tokens steer better.</p>
-        <p class="ours">Ours: answer average and last prompt token, all 25 hidden states (Plates 1.4–1.6).</p></div>
+        <p class="ours">Ours: answer average and last prompt token at all 37 hidden states (Plates 1.4–1.6), plus every token's state at layers 18 and 27 for 600 answers.</p></div>
       <div class="step"><h4>Fit</h4><p>The same pile feeds every method: a mean difference gives a steering vector, the spread gives a conceptor, a probe gives LiSeCo, and per-question differences give a MAGS-style subspace.</p>
         <p class="src">Layer is chosen by sweeping, usually around the middle of the network.</p>
-        <p class="ours">Ours: steering layer 12 (of 24). Part 2 fits conceptors on these exact activations.</p></div>
+        <p class="ours">Ours: steering at decoder layer 18 of 36, whose output is hidden state 19. Part 2 fits conceptors on these exact activations.</p></div>
     </div>
   </div>
   <div class="panel"></div>
@@ -91,9 +91,9 @@
   <div class="intro">
     <div class="eyebrow">Plate 1.2</div>
     <h3>Read what the model actually wrote</h3>
-    <p>Pick a question. On most task questions, the 0.5B "pirate" answers like the assistant. The persona shows up mainly when the question is about itself: asked to describe itself in three words, the pirate says "Seafarer."</p>
-    <p>The hard negative is the surprise. Asked to describe how a pirate would answer, the plain assistant uses <em>more</em> pirate words than the pirate does.</p>
-    <p class="try"><b>Try</b>Pick "How would you describe yourself in three words?", then "What is 15% of 240?".</p>
+    <p>Pick a question. SmolLM3's pirate stays in character on every one, practical or personal: the judge rates all 3,600 pirate answers fully in character. The ship's doctor sounds much like the pirate, and the assistant answers in its usual numbered lists.</p>
+    <p>The hard negative is the interesting card. Asked how a pirate would answer, the assistant narrates in the third person ("A pirate captain, known for...") and still borrows the vocabulary: 4.5% of its words are pirate words, against 7.5% for the pirate and almost none for the plain assistant.</p>
+    <p class="try"><b>Try</b>Pick "How do you make a paper airplane?", then "What makes you feel most insecure about yourself?".</p>
   </div>
   <div class="panel">
     <div class="ctl"><label for="qsel">Question</label><select id="qsel"></select></div>
@@ -101,28 +101,28 @@
     <p class="note">Badges: share of words that are pirate vocabulary, and whether the answer says it is an AI. The first answer from each role's first prompt wording is shown.</p>
   </div>
   <figure class="fig"><div class="answers" id="answers"></div>
-    <figcaption>Real answers from Qwen2.5-0.5B-Instruct, truncated to 260 characters.</figcaption></figure>
+    <figcaption>Real answers from SmolLM3-3B, truncated to 260 characters.</figcaption></figure>
 </section>
 
 <section class="plate" id="judge-plate">
   <div class="intro">
     <div class="eyebrow">Plate 1.3</div>
     <h3>The judge decides what "in character" means</h3>
-    <p>Without filtering, the "pirate" cloud mostly records that a pirate system prompt was present. Filtering keeps only answers that sound like a pirate. Here it turns the fitted direction by about 36°.</p>
-    <p>A word-count judge rewards vocabulary, and the hard negative has plenty of it. That's why the papers judge with a rubric about identity ("does the model take on the role?"), not about words.</p>
+    <p>Without filtering, a persona cloud records that a persona prompt was present, whether or not the model played along. Filtering keeps only answers that are in character. SmolLM3's pirate leaves little to drop: the LLM judge passes all 3,600 pirate answers, the word counter passes all but one, and the fitted direction doesn't move. The filter matters for weaker roles: the judge rates 305 of 720 doctor answers not in character.</p>
+    <p>Both judges let the hard negative through. A word counter rewards vocabulary, and the narrated answers have plenty of it. The Assistant Axis rubric asks about identity, yet it rates 711 of 720 narrated answers fully in character, since it mostly checks that the model doesn't present itself as an AI. Our point-of-view rubric catches them: 1.5% of narrated answers speak as the pirate, against all of the pirate's own.</p>
   </div>
   <div class="panel"></div>
   <figure class="fig"><div class="tiles" id="judgeTiles"></div>
-    <figcaption>Keyword judge: an answer passes if any word is pirate vocabulary. It stands in for an LLM judge.</figcaption></figure>
+    <figcaption>Keyword judge: an answer passes if any word is pirate vocabulary. The persona fits on this page use the LLM judge's labels instead.</figcaption></figure>
 </section>
 
 <section class="plate" id="sweep-plate">
   <div class="intro">
     <div class="eyebrow">Plate 1.4</div>
-    <h3>Which token and which layer you read changes everything</h3>
-    <p><strong>At the last prompt token</strong>, the moment just before the model starts writing, pirate and assistant separate perfectly from layer 4 to layer 14, and almost perfectly after that. The model has just read the system prompt.</p>
-    <p><strong>Averaged over the answer</strong>, where the persona has to be <em>expressed</em>, a probe separates them only partly, and the role explains a few percent of the variance.</p>
-    <p class="try"><b>Try</b>Hover a layer to read both values.</p>
+    <h3>Separation is easy; the persona's share depends on where you read</h3>
+    <p><strong>At the last prompt token</strong>, the moment just before the model starts writing, pirate and assistant separate perfectly from layer 1 to the last layer. (Layer 0 sits at chance because every prompt ends on the same token.) The role carries up to 53% of the variance here, at layer 18, since the model has just read the system prompt.</p>
+    <p><strong>Averaged over the answer</strong>, where the persona has to be <em>expressed</em>, the probe separates them just as well, even at the embeddings, because a pirate's words differ from an assistant's. What changes is the share: the role carries 9–32% of the variance, least around layer 11 and most near the output, and the question carries more than the role at every layer.</p>
+    <p class="try"><b>Try</b>Hover a layer to read both values. The probe line is flat, so the variance chart is the one that moves.</p>
   </div>
   <div class="panel">
     <ul class="legend" aria-label="Series">
@@ -136,7 +136,7 @@
       <div><h4 class="chart-title">Pirate vs assistant separability</h4><canvas id="cSweepAuc" role="img" aria-label="Probe AUC by layer for two poolings"></canvas></div>
       <div><h4 class="chart-title">Share of variance from the role</h4><canvas id="cSweepVar" role="img" aria-label="Role share of variance by layer for two poolings"></canvas></div>
     </div>
-    <figcaption>Layer 0 is the embedding layer; 24 is after the final norm. Dimensions are standardized first, because three outlier dimensions carry 60–70% of the raw energy.</figcaption>
+    <figcaption>Layer 0 is the embedding layer; 36 is after the final norm. Dimensions are standardized first, because three outlier dimensions carry 11–65% of the raw energy, depending on the layer.</figcaption>
   </figure>
 </section>
 
@@ -144,9 +144,9 @@
   <div class="intro">
     <div class="eyebrow">Plate 1.5</div>
     <h3>The persona map</h3>
-    <p><strong>"Top-2 variance" view:</strong> the two directions the data varies along most. This view shows the questions, not the personas: points bunch up by what was asked.</p>
+    <p><strong>"Top-2 variance" view:</strong> the two directions the data varies along most. On SmolLM3 they sort answers by role: the first puts the pirate and the ship's doctor on one side and the assistant, doctor, teacher, robot and consultant on the other, and the second lifts bard and ghost. The question carries more variance in total (Plate 1.7), but it spreads that over many directions, while ten roles pack theirs into a few.</p>
     <p><strong>"Persona plane" view:</strong> the x-axis is the pirate-minus-assistant direction, scaled so 0 is the average assistant answer and 1 is the average pirate answer. The y-axis is the biggest leftover variation.</p>
-    <p class="try"><b>Try</b>In the top-2 view, hover a tight cluster: it is one question, asked of every role.</p>
+    <p class="try"><b>Try</b>In the top-2 view, find the orange triangles (the assistant describing a pirate) and move the layer: at layer 20 they sit with the pirates, at layer 36 they drift toward the middle.</p>
   </div>
   <div class="panel">
     <div class="seg" id="mapView" role="group" aria-label="View">
@@ -161,8 +161,8 @@
     <ul class="legend" id="mapLegend" aria-label="Groups"></ul>
     <div class="readout" id="mapRead"></div>
   </div>
-  <figure class="fig"><canvas id="cMap" role="img" aria-label="Scatter of 384 answers in the chosen projection"></canvas>
-    <figcaption>384 real answers. Hover a point to read it. "Assistant describing a pirate" uses the assistant's system prompt.</figcaption></figure>
+  <figure class="fig"><canvas id="cMap" role="img" aria-label="Scatter of real answers in the chosen projection"></canvas>
+    <figcaption><span id="mapN">Real answers</span>. Hover a point to read it. "Assistant describing a pirate" uses the assistant's system prompt.</figcaption></figure>
 </section>
 
 <section class="plate" id="strip-plate">
@@ -170,15 +170,15 @@
     <div class="eyebrow">Plate 1.6</div>
     <h3>Where the hard negative lands</h3>
     <p>Each row places every answer of one group on the persona axis (0 = average assistant, 1 = average pirate).</p>
-    <p>On the answer-average axis, the assistant describing a pirate scores <strong>more pirate than the pirate</strong>. Bard and ghost sit close by. This axis behaves less like "pirate" and more like "storybook character vs assistant". That matches the Assistant Axis finding that the main persona direction separates fantastical roles from the default assistant.</p>
-    <p>At the last prompt token, the hard negative drops to about halfway.</p>
+    <p>On the answer-average axis, the assistant describing a pirate scores <strong>almost as pirate as the pirate</strong> (0.95), level with the ship's doctor (0.94), though it rarely speaks as one (Plate 1.3). Bard (0.78) and ghost (0.72) come next, while doctor, teacher, robot and consultant stay near the assistant. So this axis behaves partly like "storybook character vs assistant", which matches the Assistant Axis finding that the main persona direction separates fantastical roles from the default assistant.</p>
+    <p>At the last prompt token, before a word is written, the hard negative drops to halfway (0.50), and tightly: 80% of its answers fall between 0.49 and 0.51.</p>
   </div>
   <div class="panel">
     <div class="seg" id="stripPool" role="group" aria-label="Pooling">
       <button type="button" data-v="resp" aria-pressed="true">Answer average</button>
       <button type="button" data-v="last" aria-pressed="false">Last prompt token</button>
     </div>
-    <p class="note">Layer 13 hidden state, which is the output of layer 12 and the layer the multi-turn steering uses. Ticks mark each group's mean.</p>
+    <p class="note">Layer 19 hidden state, which is the output of decoder layer 18 and the layer the multi-turn steering uses. Ticks mark each group's mean.</p>
   </div>
   <figure class="fig"><canvas id="cStrip" role="img" aria-label="Strip plot of persona scores per group"></canvas></figure>
 </section>
@@ -187,9 +187,9 @@
   <div class="intro">
     <div class="eyebrow">Plate 1.7</div>
     <h3>The persona is a thin slice of the variance</h3>
-    <p>Anything fitted to the raw cloud (PCA, covariance, a conceptor) mostly learns what was asked. On this model, the role explains a few percent of answer-averaged variance. The question explains most of it.</p>
-    <p>Even inside the pirate cloud alone, the task type (math vs comfort vs code) accounts for about half the spread. A pirate doing arithmetic and a pirate giving comfort are far apart. Part 2 shows what that does to conceptors.</p>
-    <p class="note">For scale: the Assistant Axis paper reports persona components explaining 19–34% of activation variance on chat data for 27–70B models.</p>
+    <p>Anything fitted to the raw cloud (PCA, covariance, a conceptor) mostly learns what was asked. On SmolLM3 at the steering layer, the role explains 11% of answer-averaged variance and the question explains 58%.</p>
+    <p>Even inside the pirate cloud alone, the question accounts for two-thirds of the spread (85% inside the assistant's). A pirate folding a paper airplane and a pirate consoling someone who has lost hope are far apart. Part 2 shows what that does to conceptors.</p>
+    <p class="note">For scale: the Assistant Axis paper reports persona components explaining 19–34% of activation variance on chat data for 27–70B models. SmolLM3's role share runs 9–32% across layers, a similar range, though the two measures are computed differently.</p>
   </div>
   <div class="panel"></div>
   <figure class="fig"><div class="tiles" id="sliceTiles"></div></figure>
@@ -213,10 +213,10 @@
     <div class="ctl"><label for="p1s">Stretch <output for="p1s"></output></label><input id="p1s" type="range" min="0.1" max="0.42" step="0.01" value="0.32"></div>
     <div class="ctl"><label for="p1t">Tilt <output for="p1t"></output></label><input id="p1t" type="range" min="-80" max="80" step="1" value="28"></div>
     <div class="readout" id="r1"></div>
-    <p class="note">The arrow never moves, so everything you just changed is invisible to a steering vector. On the real model the arrow is 896 numbers and the shape is an 896 × 896 table.</p>
+    <p class="note">The arrow never moves, so everything you just changed is invisible to a steering vector. On the real model the arrow is 2,048 numbers and the shape is a 2,048 × 2,048 table.</p>
   </div>
   <figure class="fig"><canvas id="c1" role="img" aria-label="Two clouds with an arrow between their centers and an ellipse around the pirate cloud"></canvas>
-    <figcaption>Toy 2D data from a fixed seed. The rules are the same in 896 dimensions.</figcaption></figure>
+    <figcaption>Toy 2D data from a fixed seed. The rules are the same in 2,048 dimensions.</figcaption></figure>
 </section>
 
 <section class="plate" id="stencil">
@@ -346,23 +346,23 @@
   <div class="intro">
     <div class="eyebrow">Plate 2.7 · real data</div>
     <h3>The rank trap: fewer samples than dimensions</h3>
-    <p>In 2D, any cloud of a few points fills the plane. In 896 dimensions, 72 pirate answers span at most 71 directions. The other 825 directions get a keep-fraction of exactly 0, whatever the aperture.</p>
-    <p>Plain C·h therefore deletes everything outside the span of the training answers. NOT does the reverse: those 825 directions pass untouched, so at gain 2 every one of them is stretched 2×, the regime the October audit flagged. Interpolating with the identity, (1 − β)h + βCh, keeps part of everything.</p>
+    <p>In 2D, any cloud of a few points fills the plane. In 2,048 dimensions, n answers span at most n − 1 directions, and every direction outside that span gets a keep-fraction of exactly 0, whatever the aperture. Our 3,600 pirate answers clear the bar, so the pirate cloud is full rank. A role with one prompt has 720 answers, which span at most 719 directions and leave 1,329 at zero.</p>
+    <p>Below the bar, plain C·h deletes everything outside the span of the training answers. NOT does the reverse: those directions pass untouched, so at gain 2 every one of them is stretched 2×, the regime the October audit flagged. Interpolating with the identity, (1 − β)h + βCh, keeps part of everything. Above the bar nothing is deleted outright, and the full-rank conceptor sits close to the identity: it keeps most of an assistant answer (bars below).</p>
     <p class="try"><b>Try</b>Hover the curve: how many answers until the span holds most of a new pirate answer?</p>
   </div>
   <div class="panel">
     <div class="tiles" id="rankTiles"></div>
     <details class="math"><summary>The math and the fixes</summary>
       <div class="eq">rank R ≤ n − 1 (centered) ⇒ keepᵢ = 0 on at least d − n + 1 directions</div>
-      <span class="eqnote">Fixes, from simplest: interpolate with the identity; center on the persona mean; shrink R to R + εI (Ledoit-Wolf picks ε); add samples by using per-token states instead of one vector per answer; store C = U diag(s) Uᵀ with k ≤ n columns and apply Ch = U(s ⊙ Uᵀh) at O(dk) cost. A dense float32 C costs 4d² bytes: 3.2 MB here, 67 MB at d = 4096.</span>
+      <span class="eqnote">Fixes, from simplest: interpolate with the identity; center on the persona mean; shrink R to R + εI (Ledoit-Wolf picks ε); add samples by using per-token states instead of one vector per answer; store C = U diag(s) Uᵀ with k ≤ n columns and apply Ch = U(s ⊙ Uᵀh) at O(dk) cost. A dense float32 C costs 4d² bytes: 17 MB here, 67 MB at d = 4096.</span>
     </details>
   </div>
   <figure class="fig">
     <h4 class="chart-title">Share of a held-out pirate answer inside the span of n training answers</h4>
-    <p class="chart-sub">Activation measured from the pirate mean, layer 13, averaged over 20 random draws</p>
-    <canvas id="cCover" role="img" aria-label="Line chart: share inside span rises from 13% at n=2 to 83% at n=71"></canvas>
+    <p class="chart-sub">Activation measured from the pirate mean, layer 19, averaged over 20 random draws</p>
+    <canvas id="cCover" role="img" aria-label="Line chart: share inside span rises from 2% at n=2 to 53% at n=64 and 100% at n=3,599"></canvas>
     <h4 class="chart-title" style="margin-top:14px">What each conceptor form keeps of an assistant answer</h4>
-    <p class="chart-sub">Share of the activation's energy (measured from the pirate mean) that survives; fitted on all 72 pirate answers</p>
+    <p class="chart-sub">Share of the activation's energy (measured from the pirate mean) that survives; fitted on all 3,600 pirate answers</p>
     <div class="bars" id="rankBars"></div>
   </figure>
 </section>
@@ -416,8 +416,8 @@
     <div class="eyebrow">Plate 2.10 · real data</div>
     <h3>Does "pirate AND doctor" make a pirate doctor?</h3>
     <p>We fitted a conceptor directly on the "pirate ship's doctor" answers and compared it with combinations of separately fitted ones.</p>
-    <p><strong>Fit on each role's raw cloud</strong>, every conceptor is at least 0.93 similar to every other. They mostly learn the shared questions (Plate 1.7).</p>
-    <p><strong>Fit on per-question differences from the assistant</strong> (what each role changes about the same question), they separate. The model's pirate doctor is basically a pirate. OR comes next, and AND, which keeps only what both share, scores below bard.</p>
+    <p><strong>Fit on each role's raw cloud</strong>, every conceptor scores at least 0.84 against the pirate doctor at layer 19, and the plain assistant (0.94) beats the doctor (0.91). They mostly learn the shared questions (Plate 1.7).</p>
+    <p><strong>Fit on per-question differences from the assistant</strong> (what each role changes about the same question), they separate. The model's pirate doctor is basically a pirate. OR comes next, and AND, which keeps only what both share, scores below bard and ghost. The doctor alone ranks near the bottom, so the "doctor" half of the role leaves little trace.</p>
   </div>
   <div class="panel">
     <div class="seg" id="logicFit" role="group" aria-label="Fit">
@@ -425,9 +425,9 @@
       <button type="button" data-v="raw" aria-pressed="false">Raw clouds</button>
     </div>
     <div class="seg" id="logicLayer" role="group" aria-label="Layer">
-      <button type="button" data-v="13" aria-pressed="true">Layer 13</button>
-      <button type="button" data-v="18" aria-pressed="false">Layer 18</button>
-      <button type="button" data-v="22" aria-pressed="false">Layer 22</button>
+      <button type="button" data-v="19" aria-pressed="true">Layer 19</button>
+      <button type="button" data-v="27" aria-pressed="false">Layer 27</button>
+      <button type="button" data-v="33" aria-pressed="false">Layer 33</button>
     </div>
     <details class="math"><summary>How this was computed</summary>
       <span class="eqnote">Standardized answer-average activations, reduced to 12 principal directions. Aperture α⁻² is set to the median eigenvalue of the pooled correlation matrix. Similarity is Jaeger's generalized squared cosine, tr(C₁C₂) / (‖C₁‖·‖C₂‖), which is 1 for identical stencils. Difference fit: for each question, role(q) − assistant(q), averaged over prompt wordings.</span>
@@ -480,7 +480,7 @@
           <tr><th>MAGS</th><td>error subspace in a few heads</td><td>correct vs failed traces</td><td>subtract BᵀB(a − μ_c)</td><td>triggered</td><td>O(Kkd_h)</td><td>none (reasoning tasks)</td><td>needs contrastive traces</td></tr>
           <tr><th>INLP / LEACE / PaSS</th><td>hard subspace</td><td>labels</td><td>project out or rescale</td><td>always</td><td>O(dk)</td><td>none found</td><td>hard cut also removes shared content</td></tr>
           <tr><th>SEA</th><td>cross-covariance spectrum</td><td>neutral / positive / negative</td><td>spectral projection</td><td>always</td><td>O(d²)</td><td>none found</td><td>hard truncation</td></tr>
-          <tr><th>Conceptor</th><td>ellipsoid</td><td>~100 samples or more</td><td>βCh or interpolation</td><td>always</td><td>O(d²), or O(dk) low-rank</td><td><strong>none measured</strong> (Part 4 has a 3-conversation pilot)</td><td>rank deficiency deletes content</td></tr>
+          <tr><th>Conceptor</th><td>ellipsoid</td><td>~100 samples or more</td><td>βCh or interpolation</td><td>always</td><td>O(d²), or O(dk) low-rank</td><td><strong>ours, SmolLM3-3B:</strong> holds a prompted pirate (0.90 fully in character at turn 10, coherence 90) but does little to set one up alone (4.2)</td><td>rank deficiency deletes content</td></tr>
           <tr><th>Contrastive conceptor</th><td>region minus failure region</td><td>success and failure rollouts</td><td>soft gate (1 − β)I + βC₊∧¬C₋</td><td>always / per step</td><td>O(d²)</td><td>none (robot policies)</td><td>needs failure data</td></tr>
           <tr class="hl"><th>Gated conceptor</th><td>ellipsoid + gate</td><td>persona samples + a gate</td><td>(1 − g)h + g·(m + C(h − m))</td><td>gated</td><td>O(dk) + 2d</td><td><strong>untested</strong></td><td>unknown</td></tr>
           <tr><th>Distribution map (MiMiC, AcT)</th><td>mean + covariance</td><td>unpaired source/target</td><td>Wh + b</td><td>always</td><td>O(d)–O(d²)</td><td>none found</td><td>AcT is per-dimension (cannot rotate)</td></tr>
@@ -533,10 +533,11 @@
 <section class="plate" id="realturns">
   <div class="intro">
     <div class="eyebrow">Plate 4.2 · real data</div>
-    <h3>A 12-turn pilot on Qwen2.5-0.5B</h3>
+    <h3>Twelve scripted turns on SmolLM3-3B</h3>
     <p>There are three scripted conversations under a pirate system prompt. "Switch" asks the model to drop the act at turn 5 and asks "are you an AI?" at turn 9. "Benign" just changes topics. "Replace" tells the model at turn 3 that it is now a kindergarten teacher.</p>
-    <p>Four conditions: prompt only, adding the pirate vector at layer 12, a cap across layers 10–14 at the 25th percentile, and a conceptor at layer 12 (β = 0.3). The y-axis reads the persona score downstream at layer 18 (0 = average assistant answer, 1 = average pirate answer). Rings mark answers that say they are an AI.</p>
-    <p>What to take from it: every condition is high on the intro turn and falls on task turns. Adding the vector raises the meter but not the pirate words, so the meter and the behavior come apart. With one sample per turn, treat differences as anecdotes.</p>
+    <p>Four conditions: prompt only, adding the pirate vector at decoder layer 18, a cap across decoder layers 16–20 at the 25th percentile, and a conceptor at decoder layer 18 (β = 0.3). The y-axis reads the persona score downstream at layer 27 (0 = average assistant answer, 1 = average pirate answer). Rings mark answers that say they are an AI, found by a phrase list that misses some, such as the cap's "I'm just a simple AI" at turn 9.</p>
+    <p>What to take from it: every condition starts above 1 on the intro turn and sags on later ones. In "Switch", prompt only drops to about 0.1 when asked to drop the act and admits being an AI at turns 5, 9 and 12. The conceptor follows prompt only closely and admits it at turns 9 and 12. The cap stays higher on the meter, yet still calls itself "just a simple AI" at turns 9 and 12. Adding the vector keeps the meter near 1 and the voice through every probe (it is "a simple piece o' code"), but 15 of its 36 answers loop on repeated phrases. With one sample per turn, treat differences as anecdotes.</p>
+    <p>A judged ten-turn test with 20 conversations per condition (<span class="mono">steering_bench.html</span>, next to this page) gives the same picture with more weight. Prompted alone, the pirate falls to 0.20 fully in character by turn 10. Add a conceptor fitted on per-token states and it stays at 0.90, at coherence 90. Without the prompt, that conceptor at full strength gets only 28% of answers in character, against 88% for the steering vector: at the median aperture it keeps the persona direction almost whole, so it closes only about 11% of an assistant state's gap along it. It holds a persona; it doesn't set one up.</p>
   </div>
   <div class="panel">
     <div class="seg" id="mtConv" role="group" aria-label="Conversation">
@@ -586,7 +587,7 @@
 <section class="part" id="recipe">
   <div class="eyebrow">Part 5</div>
   <h2>A recipe for semantic conceptors on personas</h2>
-  <p>What the papers and this pilot suggest, in order. Each step names the plate that shows why.</p>
+  <p>What the papers and our SmolLM3 runs suggest, in order. Each step names the plate that shows why.</p>
 </section>
 
 <section class="plate wide">
@@ -595,9 +596,10 @@
       <li><strong>Cross every persona with the same questions, and add hard negatives</strong>: an assistant describing the persona, quoted dialogue, and persona vocabulary without persona commitments. Otherwise you fit the costume (1.2, 1.6).</li>
       <li><strong>Judge identity, not words.</strong> Keep fully in-character answers and drop the ambiguous middle. A word counter rewards the hard negative (1.3).</li>
       <li><strong>Pick the pooling that matches your question.</strong> The last prompt token measures "the persona has been set up". The answer average measures "the persona is being expressed" (1.4).</li>
-      <li><strong>Sweep layers with a probe on held-out questions</strong>, not on held-out samples of the same questions (1.4).</li>
+      <li><strong>Sweep layers with a probe on held-out questions</strong>, not on held-out samples of the same questions. When the probe saturates, as it does on SmolLM3, compare layers by the role's share of the variance instead (1.4).</li>
       <li><strong>Fit on per-question differences, or center on the persona mean.</strong> Never use plain raw βCh: raw clouds mostly encode the questions (1.7, 2.4, 2.10).</li>
       <li><strong>Handle rank.</strong> Use a low-rank C, shrinkage, or per-token samples, and interpolate with the identity so content outside the span survives (2.7).</li>
+      <li><strong>Use the conceptor to hold, not to set up.</strong> At the median aperture it keeps the persona direction, so it barely moves an assistant state toward the persona. Set the persona with the prompt or a vector, and let the conceptor hold it (2.7, 4.2).</li>
       <li><strong>Give it a "when".</strong> Add a gate or a cap so in-character states are left alone. For long conversations, consider injecting in the attention output, not the residual stream (3, 4.1, 4.3).</li>
       <li><strong>Run the controls:</strong> the same center and gain with the matrix removed (2.6), a random subspace with a matched spectrum (COAST), and a cap on the same direction.</li>
       <li><strong>Evaluate per turn</strong>, with identity probes and persona-replacement attacks, and score coherence separately from the trait (4.2).</li>
@@ -640,7 +642,7 @@
     <li><a href="https://arxiv.org/abs/2605.10664">Prompt–Activation Duality (GCAD)</a> <span>· Kang et al., 2026. KV-cache contamination; gated attention-level steering.</span></li>
     <li><a href="https://arxiv.org/abs/2402.10962">Measuring and Controlling Instruction (In)Stability in Language Model Dialogs</a> <span>· Li et al., COLM 2024.</span></li>
   </ol>
-  <p class="foot">Toy figures use seeded synthetic data. Real figures come from one run of persona_acts.py on Qwen2.5-0.5B-Instruct (Apple MPS, float32, seed 7, 4 Nov 2026): 384 single-turn answers and 144 multi-turn answers, one sample each, scored with a keyword judge. Analysis: analyze_acts.py. Both scripts live in casting-call-vectors/conceptors.</p>
+  <p class="foot">Toy figures use seeded synthetic data. Real figures come from one run of persona_acts.py on SmolLM3-3B (one H100, bfloat16, seed 7, 5 Nov 2026): 12,960 single-turn answers (3 samples per prompt and question; answer plots show the first) and 144 multi-turn answers (one sample per turn), judged by a local Qwen3-30B-A3B-Instruct-2507 with the Assistant Axis role-play and Persona Vectors coherence rubrics. Analysis: analyze_acts.py. The ten-turn numbers in Plate 4.2 come from steer_eval.py. All scripts live in casting-call-vectors/conceptors.</p>
 </section>
 
 </div>

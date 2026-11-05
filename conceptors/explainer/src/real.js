@@ -78,6 +78,9 @@ tabSweep.set(['layer','AUC, answer avg','AUC, last token','role share, answer av
 const s15={view:'plane',pool:'resp',li:3,hover:-1};
 const ML=D.meta.map_layers;
 (function(){
+  const n=PT.length.toLocaleString('en-US'),th=D.meta.thinned_samples;  /* build.py --samples thins repeat draws */
+  $('mapN').textContent=n+' real answers'+(th?', the first '+(th===1?'sample':th+' samples')+' per prompt and question':'');
+  $('cMap').setAttribute('aria-label','Scatter of '+n+' answers in the chosen projection');
   const items=[['assistant','Assistant'],['pirate','Pirate'],['pirate_doctor','Pirate ship\'s doctor'],['pirate_narrated','Assistant describing a pirate'],['doctor','Other roles (6)']];
   $('mapLegend').innerHTML=items.map(([r,l])=>'<li>'+keySVG(r)+esc(l)+'</li>').join('');
 })();
@@ -207,7 +210,7 @@ const RK=D.rank;
 function upd27(){
   tiles($('rankTiles'),[
     ['Pirate answers',String(RK.n),'one vector each'],
-    ['Dimensions',String(RK.d),'Qwen2.5-0.5B hidden size'],
+    ['Dimensions',String(RK.d),D.meta.model.split('/').pop()+' hidden size'],
     ['Rank of the spread',String(RK.rank),'at most n − 1'],
     ['Directions with keep = 0',String(RK.d-RK.rank),'deleted by C·h']
   ]);
