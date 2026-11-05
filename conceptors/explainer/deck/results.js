@@ -239,13 +239,16 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
 /* ---------- trajectory slide: where each method puts the activations, tied to the outputs ---------- */
 (function(){
   if(!$('stc'))return;
-  const st={ctx:'prompt',turn:8,on:new Set(['none','add','cap','add_cap','conceptor_tok','add_ctok']),y:'x'};
+  const st={ctx:'prompt',turn:8,on:new Set(['none','add','cap','add_cap','conceptor_tok','add_ctok']),view:'mean'};
   const hasTraj=()=>JUDGES().some(j=>(PD().hold[j]||[]).some(h=>h.per_turn.some(t=>t.x_pre!=null)));
   const J=()=>{const js=JUDGES();return js.includes('llama')?'llama':js[js.length-1];};
-  const val=(m,t,key)=>turnVal(J(),st.ctx,m,t,key);
+  /* mean over conversations, or conversation 1 alone (the paper's figure follows one conversation) */
+  const val=(m,t,key)=>{if(st.view==='mean')return turnVal(J(),st.ctx,m,t,key);
+    const h=holdRow(J(),st.ctx,m),e=h&&h.examples[t-1];return e&&e[key]!=null?e[key]:null;};
   const ms=()=>methodsIn(st.ctx).filter(m=>st.on.has(m));
   $('stp').innerHTML=personaSeg('stps');
   $('stcw').innerHTML=segHTML('stcs',[['prompt','Prompt + steering'],['steer_only','Steering only']],st.ctx);
+  $('stvw').innerHTML=segHTML('stvs',[['mean','Mean of conversations'],['conv','Conversation 1']],st.view);
   const tog=$('stt');
   function togs(){tog.innerHTML=methodsIn(st.ctx).map(m=>'<button type="button" data-m="'+m+'" aria-pressed="'+st.on.has(m)+'">'+swatchI(m)+esc(METH[m][0])+'</button>').join('');}
   const key=()=>hasTraj()?'x_post':'readout';
@@ -300,12 +303,13 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
         const pos=e.x_pre!=null?' · axis '+e.x_pre.toFixed(2)+' → '+e.x_post.toFixed(2):'';
         return '<div class="msg bot" style="border-left-color:'+COL[METH[m][2]]+'"><span class="who">'+esc(METH[m][0])+pos+' · '+JSHORT[j]+': '+esc(e.label||'–')+
           (e.identity?' · '+(e.identity==='ai'?'admits AI':'no AI claim'):'')+'</span>'+esc(e.a.slice(0,260))+(e.a.length>260?' …':'')+'</div>';}).join('');
-    $('stn').textContent=(hasTraj()?'Turn chart: each method\'s mean position on the '+PNAME(PERS).toLowerCase()+' axis at the steering layer, 0 = assistant, 1 = '+PNAME(PERS).toLowerCase()+
+    $('stn').textContent=(st.view==='conv'?'Conversation 1 only. ':'')+(hasTraj()?'Turn chart: each method\'s position on the '+PNAME(PERS).toLowerCase()+' axis at the steering layer, 0 = assistant, 1 = '+PNAME(PERS).toLowerCase()+
       '; faint dashed = before the method\'s edit at that layer, solid = after. ':'Turn chart: unsteered read-out of each answer (0 = assistant, 1 = persona). ')+
       'Click a turn to see that turn in activation space and read conversation 1. Labels: '+JNAME[j]+'.';
   }
   function redraw(){line.f.draw();plane.draw();chat();}
   $('stcw').addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(!b)return;st.ctx=b.dataset.v;setSeg('stcs',st.ctx);togs();redraw();});
+  $('stvw').addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(!b)return;st.view=b.dataset.v;setSeg('stvs',st.view);redraw();});
   tog.addEventListener('click',e=>{const b=e.target.closest('button[data-m]');if(!b)return;const m=b.dataset.m;
     st.on.has(m)?st.on.delete(m):st.on.add(m);b.setAttribute('aria-pressed',String(st.on.has(m)));redraw();});
   personaHooks.push(()=>{st.turn=Math.min(st.turn,NT());togs();redraw();});

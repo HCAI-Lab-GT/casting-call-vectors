@@ -72,8 +72,8 @@ def hold_rows(paths: list[str]) -> list[dict]:
             rows.append(dict(context=h["context"], method=h["method"], strength=h["strength"],
                              per_turn=[pick(t, TURN_KEYS) for t in h["per_turn"]],
                              ordinary=pick(h["ordinary"], SUMMARY_KEYS),
-                             examples=[dict(pick(e, TRAJ), q=e["q"], a=e["a"], label=e.get("label"), coh=e.get("coh"),
-                                            identity=e.get("identity")) for e in h["examples"]]))
+                             examples=[dict(pick(e, TRAJ + ("readout",)), q=e["q"], a=e["a"], label=e.get("label"),
+                                            coh=e.get("coh"), identity=e.get("identity")) for e in h["examples"]]))
     return rows
 
 
