@@ -10,7 +10,7 @@
 :root{
   --paper:#F1F4F7; --panel:#FAFBFC; --ink:#16202B; --muted:#5A6676; --hair:#D3DAE2; --grid:#E4E9EF;
   --accent-ink:#00695f; --probe:#BE1858; --probe-wash:rgba(190,24,88,.07);
-  --m-conceptor:#008f82; --m-cap:#2a78d6; --m-add:#eb6834; --m-lowrank:#7a4fc4; --m-meanshift:#b8860b; --m-none:#6b7684;
+  --m-conceptor:#008f82; --m-cap:#2a78d6; --m-add:#eb6834; --m-none:#6b7684;
   --f-display:"STIX Two Text",Georgia,"Times New Roman",serif;
   --f-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
@@ -19,14 +19,14 @@
   :root:not([data-theme="light"]){
     --paper:#0F141A; --panel:#141B23; --ink:#E3E8EE; --muted:#97A3B2; --hair:#2B3542; --grid:#1B242E;
     --accent-ink:#4fd1c5; --probe:#F36AA2; --probe-wash:rgba(243,106,162,.09);
-    --m-conceptor:#0f9b90; --m-cap:#3987e5; --m-add:#d95926; --m-lowrank:#9b74e0; --m-meanshift:#ad7f12; --m-none:#8d98a6;
+    --m-conceptor:#0f9b90; --m-cap:#3987e5; --m-add:#d95926; --m-none:#8d98a6;
     color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
   --paper:#0F141A; --panel:#141B23; --ink:#E3E8EE; --muted:#97A3B2; --hair:#2B3542; --grid:#1B242E;
   --accent-ink:#4fd1c5; --probe:#F36AA2; --probe-wash:rgba(243,106,162,.09);
-  --m-conceptor:#0f9b90; --m-cap:#3987e5; --m-add:#d95926; --m-lowrank:#9b74e0; --m-meanshift:#ad7f12; --m-none:#8d98a6;
+  --m-conceptor:#0f9b90; --m-cap:#3987e5; --m-add:#d95926; --m-none:#8d98a6;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -50,6 +50,8 @@ section{display:grid;gap:14px}
 .legend button[aria-pressed="false"]{opacity:.38}
 .sw{width:18px;height:0;border-top:2.5px solid currentColor}
 .sw.dash{border-top-style:dashed}
+.sw.dot{border-top-style:dotted;border-top-width:3px;width:24px}
+.fitctl{display:inline-flex;align-items:center;gap:8px}
 .chart{position:relative;width:100%;min-width:0}
 .chart svg{display:block;width:100%;height:auto;overflow:visible}
 .chart text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
@@ -97,10 +99,11 @@ button:focus-visible{outline:2px solid var(--probe);outline-offset:2px}
 
   <section aria-labelledby="sweeph">
     <h2 id="sweeph">Setup: steering alone, no system prompt</h2>
-    <p class="muted">Each line walks one method through its strengths. Up is more in character, right is more coherent. A method that works climbs without sliding left. The ringed point is the matched strength used in the hold test.</p>
+    <p class="muted">Each line walks one method through its strengths. Up is more in character, right is more coherent. A method that works climbs without sliding left. The ringed point is the strength used in the hold test; a dashed ring means the method never reached the target.</p>
     <div class="panel">
       <div class="ctl"><span class="muted">Vertical axis</span>
-        <div class="seg" id="sweepMetric" role="group" aria-label="Sweep metric"></div></div>
+        <div class="seg" id="sweepMetric" role="group" aria-label="Sweep metric"></div>
+        <span class="fitctl"><span class="muted">Conceptor fit</span> <span class="seg" id="sweepFit" role="group" aria-label="Conceptor fit"></span></span></div>
       <div class="legend" id="sweepLegend"></div>
       <div class="chart" id="sweepChart"></div>
       <div class="hint">Click a point to read its answers.</div>
@@ -110,10 +113,11 @@ button:focus-visible{outline:2px solid var(--probe);outline-offset:2px}
 
   <section aria-labelledby="holdh" id="holdSection">
     <h2 id="holdh">Hold: ten turns with drift and attack probes</h2>
-    <p class="muted">Every method runs at its matched strength. Shaded turns are probes that ask the model to drop the act or admit it is an AI.</p>
+    <p class="muted">Every method runs at its hold-test strength from the table above. Shaded turns are probes that ask the model to drop the act or admit it is an AI.</p>
     <div class="panel">
       <div class="ctl"><span class="muted">Context</span><div class="seg" id="holdCtx" role="group" aria-label="Context"></div>
-        <span class="muted">Measure</span><div class="seg" id="holdMetric" role="group" aria-label="Hold metric"></div></div>
+        <span class="muted">Measure</span><div class="seg" id="holdMetric" role="group" aria-label="Hold metric"></div>
+        <span class="fitctl"><span class="muted">Conceptor fit</span> <span class="seg" id="holdFit" role="group" aria-label="Conceptor fit"></span></span></div>
       <div class="legend" id="holdLegend"></div>
       <div class="chart" id="holdChart"></div>
       <div class="hint">Click a turn to read conversation 1 at that turn, method by method.</div>
@@ -130,13 +134,24 @@ button:focus-visible{outline:2px solid var(--probe);outline-offset:2px}
 (function(){
 "use strict";
 const D = JSON.parse(document.getElementById('bench-data').textContent);
-const METHODS = ['conceptor','cap','add','lowrank','meanshift','none'];
-const NAMES = {conceptor:'Conceptor', cap:'Activation cap', add:'Steering vector', lowrank:'Low-rank conceptor', meanshift:'Mean-shift control', none:'No steering'};
-const PARAM = {conceptor:'β', lowrank:'β', meanshift:'β', add:'c', cap:'pct', none:''};
-const DASHED = {meanshift:true, none:true};
+const METHODS = ['conceptor','lowrank','meanshift','conceptor_tok','meanshift_tok','cap','add','none'];
+const NAMES = {conceptor:'Conceptor', lowrank:'Low-rank conceptor', meanshift:'Mean-shift control',
+  conceptor_tok:'Conceptor', meanshift_tok:'Mean-shift control', cap:'Activation cap', add:'Steering vector', none:'No steering'};
+const FULL_NAMES = Object.assign({}, NAMES, {conceptor:'Conceptor, answer-average fit', lowrank:'Low-rank conceptor, answer-average fit',
+  meanshift:'Mean-shift control, answer-average fit', conceptor_tok:'Conceptor, per-token fit', meanshift_tok:'Mean-shift control, per-token fit'});
+const PARAM = {conceptor:'β', lowrank:'β', meanshift:'β', conceptor_tok:'β', meanshift_tok:'β', add:'c', cap:'pct', none:''};
+// Only three hues stay apart for every reader on a chart where any two lines can cross (teal, blue, orange validate
+// all-pairs in both modes), so the conceptor family shares teal and line style tells its members apart; the fit
+// switch shows one family at a time.
+const HUE = {conceptor:'conceptor', lowrank:'conceptor', meanshift:'conceptor', conceptor_tok:'conceptor', meanshift_tok:'conceptor',
+  cap:'cap', add:'add', none:'none'};
+const STYLE = {lowrank:'dot', meanshift:'dash', meanshift_tok:'dash', none:'dash'};
+const DASH = {dot:'1.5 4', dash:'5 4'};
+const FIT = {conceptor:'avg', lowrank:'avg', meanshift:'avg', conceptor_tok:'tok', meanshift_tok:'tok'};
 const $ = id => document.getElementById(id);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-const col = m => css('--m-' + m);
+const col = m => css('--m-' + HUE[m]);
+const dashOf = m => STYLE[m] ? DASH[STYLE[m]] : '';
 const fmtPct = v => v == null ? '–' : Math.round(v * 100) + '%';
 const fmt = (v, d = 2) => v == null ? '–' : (+v).toFixed(d);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -146,6 +161,19 @@ const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag)
 const sweep = D.sweep, hold = D.hold;
 const fits = (sweep || hold).meta.fits;
 const judged = (sweep || hold).meta.judged;
+const seen = new Set([...(sweep ? sweep.sweep.map(r => r.method) : []), ...(hold ? hold.hold.map(h => h.method) : [])]);
+const FITS = [['avg', 'Answer averages'], ['tok', 'Per token']].filter(([f]) => METHODS.some(m => FIT[m] === f && seen.has(m)));
+let fitSel = FITS.length ? FITS[0][0] : 'avg';
+const inFit = m => !FIT[m] || FIT[m] === fitSel;
+const fitHosts = [], onFit = [];
+function fitSwitch(host, redraw){
+  onFit.push(redraw);
+  if (FITS.length < 2){ host.parentElement.hidden = true; return; }
+  fitHosts.push(host);
+  const render = () => segmented(host, FITS, fitSel, v => { fitSel = v; fitHosts.forEach(h => h.__render()); onFit.forEach(f => f()); });
+  host.__render = render; render();
+}
+const swatch = m => `<span class="sw${STYLE[m] ? ' ' + STYLE[m] : ''}" style="color:${col(m)};display:inline-block;margin-right:7px;vertical-align:middle"></span>`;
 const modelName = fits.source_model.startsWith('/') ? fits.source_model.split('/').pop() : fits.source_model;
 $('eyebrow').textContent = `${modelName} · steered at layer ${fits.module} · read-out at hidden ${fits.read_hidden}`;
 $('lede').textContent = `Each method tries to make ${modelName.split('/').pop()} answer as a ${fits.persona} with no system prompt, then to keep it in character over ten turns. Fits use ${fits.n_persona} in-character ${fits.persona} answers and ${fits.n_default} ${fits.default} answers.`;
@@ -163,14 +191,15 @@ const present = METHODS.filter(m => (sweep && sweep.sweep.some(r => r.method ===
     const r = s ? sweepRow(m, s.strength) : null;
     const h1 = holdRow('steer_only', m), h2 = holdRow('prompt', m);
     const t = h => h ? `<td class="num">${fmtPct(h.summary.fully_rate.T10)}</td><td class="num">${h.summary.fully_rate.drift == null ? '–' : (h.summary.fully_rate.drift > 0 ? '+' : '') + Math.round(h.summary.fully_rate.drift * 100)}</td>` : '<td class="num">–</td><td class="num">–</td>';
-    return `<tr><td><span class="dot" style="background:${col(m)}"></span>${NAMES[m]}</td>` +
-      `<td class="num">${s ? (m === 'none' ? '–' : `${PARAM[m]} ${s.strength}`) : 'none reached'}</td>` +
+    const strengthCell = !s ? 'none usable' : m === 'none' ? '–' : `${PARAM[m]} ${s.strength}${s.matched === false ? ' · unmatched' : ''}`;
+    return `<tr><td>${swatch(m)}${FULL_NAMES[m]}</td>` +
+      `<td class="num">${strengthCell}</td>` +
       `<td class="num">${fmtPct(r && r.fully_rate)}</td><td class="num">${fmt(r && r.coherence, 0)}</td><td class="num">${fmt(r && r.readout)}</td>` +
       (hold ? t(h1) + t(h2) : '') + `</tr>`;
   }).join('');
   $('summary').innerHTML = head + `<tbody>${rows}</tbody>`;
   $('sumnote').textContent = judged
-    ? 'Matched strength: the smallest strength that puts at least 80% of answers fully in character with coherence of 60 or more. In character and coherence come from the judge; read-out is the unsteered model\'s persona score at a later layer (assistant 0, pirate 1).'
+    ? 'Matched strength: the smallest strength that puts at least 80% of answers fully in character with coherence of 60 or more. A method that never gets there is marked unmatched and runs at its strongest strength that keeps coherence at 60 or more. In character and coherence come from the judge; read-out is the unsteered model\'s persona score at a later layer (assistant 0, pirate 1).'
     : 'No judge scores yet: strengths are matched on the read-out (unsteered persona score, assistant 0, pirate 1).';
 }
 
@@ -187,7 +216,7 @@ function legend(host, methods, shown, onToggle){
   host.innerHTML = '';
   for (const m of methods){
     const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-pressed', shown.has(m)); b.style.color = col(m);
-    b.innerHTML = `<span class="sw${DASHED[m] ? ' dash' : ''}"></span><span style="color:var(--ink)">${NAMES[m]}</span>`;
+    b.innerHTML = `<span class="sw${STYLE[m] ? ' ' + STYLE[m] : ''}"></span><span style="color:var(--ink)">${NAMES[m]}</span>`;
     b.addEventListener('click', () => { shown.has(m) ? shown.delete(m) : shown.add(m); b.setAttribute('aria-pressed', shown.has(m)); onToggle(); });
     host.appendChild(b);
   }
@@ -204,6 +233,19 @@ function yAxis(f, lo, hi, ticks, label, fmtTick){
     const tx = el('text', {x: f.X0 - 8, y: Y(t) + 4, 'text-anchor': 'end'}, f.svg); tx.textContent = fmtTick(t); }
   const lab = el('text', {x: f.X0, y: f.Y1 - 10}, f.svg); lab.textContent = label;
   return Y;
+}
+// Direct labels beside ringed points: flip left near the right edge, then step up past any label already placed.
+function placeLabels(labels, f){
+  const placed = [], CH = 6.9, LH = 14, GAP = 10;
+  for (const l of labels.sort((a, b) => a.y - b.y || a.x - b.x)){
+    const w = l.text.length * CH, left = l.x + 12 + w > f.X1;
+    const x0 = left ? l.x - 12 - w : l.x + 12;
+    let y = l.y - 10;
+    const hits = yy => placed.some(p => x0 < p.x0 + p.w + GAP && p.x0 < x0 + w + GAP && Math.abs(p.y - yy) < LH);
+    for (let k = 0; k < 8 && hits(y); k++) y = l.y - 10 + (k % 2 ? -1 : 1) * LH * Math.ceil((k + 1) / 2);
+    placed.push({x0, w, y});
+    const t = el('text', {x: left ? l.x - 12 : l.x + 12, y, 'text-anchor': left ? 'end' : 'start'}, f.svg); t.textContent = l.text;
+  }
 }
 function width(host){ return Math.max(320, Math.min(1080, host.clientWidth || 900)); }
 const METRIC_RANGE = {fully_rate: [0, 1], voice_as_rate: [0, 1], coherence: [0, 100]};
@@ -239,24 +281,26 @@ if (sweep){
     for (const t of ticksFor(xlo, xhi, 5)){ const tx = el('text', {x: X(t), y: f.Y0 + 18, 'text-anchor': 'middle'}, f.svg); tx.textContent = judged ? Math.round(t) : t.toFixed(2); }
     const xl = el('text', {x: f.X1, y: f.Y0 + 34, 'text-anchor': 'end'}, f.svg); xl.textContent = judged ? 'Coherence (judge, 0–100) →' : 'Read-out, 25th percentile →';
     el('line', {x1: f.X0, x2: f.X1, y1: f.Y0, y2: f.Y0, class: 'axis'}, f.svg);
-    const pts = [];
+    const pts = [], labels = [];
     for (const m of methods){
-      if (!shown.has(m)) continue;
+      if (!shown.has(m) || !inFit(m)) continue;
       const rs = sweep.sweep.filter(r => r.method === m && r[metric] != null && r[xKey] != null).sort((a, b) => a.strength - b.strength);
       if (!rs.length) continue;
       if (rs.length > 1) el('polyline', {points: rs.map(r => `${X(r[xKey])},${Y(r[metric])}`).join(' '), fill: 'none', stroke: col(m), 'stroke-width': 2,
-        'stroke-dasharray': DASHED[m] ? '5 4' : '', 'stroke-linejoin': 'round'}, f.svg);
-      const matched = sweep.selected && sweep.selected[m] ? sweep.selected[m].strength : null;
+        'stroke-dasharray': dashOf(m), 'stroke-linejoin': 'round'}, f.svg);
+      const sel = sweep.selected && sweep.selected[m];
+      const hollow = STYLE[m] === 'dot';  // low-rank points are hollow, a second cue beside the dotted line
       rs.forEach(r => {
         const x = X(r[xKey]), y = Y(r[metric]);
-        if (r.strength === matched){  // ring and label only the matched strength, so labels stay sparse
-          el('circle', {cx: x, cy: y, r: 9, fill: 'none', stroke: col(m), 'stroke-width': 1.5}, f.svg);
-          const t = el('text', {x: x + 12, y: y - 10}, f.svg); t.textContent = `${PARAM[m]} ${r.strength}`;
+        if (sel && r.strength === sel.strength){  // ring and label only the hold-test strength, so labels stay sparse
+          el('circle', {cx: x, cy: y, r: 9, fill: 'none', stroke: col(m), 'stroke-width': 1.5, 'stroke-dasharray': sel.matched === false ? '2 2' : ''}, f.svg);
+          labels.push({x, y, text: `${PARAM[m]} ${r.strength}${sel.matched === false ? ' (unmatched)' : ''}`});
         }
-        const c = el('circle', {cx: x, cy: y, r: 5, fill: col(m), stroke: css('--panel'), 'stroke-width': 2}, f.svg);
+        const c = el('circle', {cx: x, cy: y, r: 5, fill: hollow ? css('--panel') : col(m), stroke: hollow ? col(m) : css('--panel'), 'stroke-width': 2}, f.svg);
         pts.push({x, y, r, m, c});
       });
     }
+    placeLabels(labels, f);
     const svg = f.svg, tip = f.tip;
     const near = ev => { const b = svg.getBoundingClientRect(), s = W / b.width; const x = (ev.clientX - b.left) * s, y = (ev.clientY - b.top) * s;
       let best = null, bd = 1e9; for (const p of pts){ const d = Math.hypot(p.x - x, p.y - y); if (d < bd){ bd = d; best = p; } } return bd < 28 ? best : null; };
@@ -272,11 +316,12 @@ if (sweep){
     svg.addEventListener('click', ev => { const p = near(ev); if (p) showSweep(p.m, p.r); });
   }
   function showSweep(m, r){
-    $('sweepAnswers').innerHTML = (r.examples || []).map((ex, i) => answerCard(m, `${NAMES[m]} · ${PARAM[m]} ${r.strength} · answer ${i + 1}`, ex)).join('');
+    $('sweepAnswers').innerHTML = (r.examples || []).map((ex, i) => answerCard(m, `${FULL_NAMES[m]} · ${PARAM[m]} ${r.strength} · answer ${i + 1}`, ex)).join('');
   }
   segmented($('sweepMetric'), metrics, metric, v => { metric = v; draw(); });
-  legend($('sweepLegend'), methods, shown, draw);
-  draw();
+  const refresh = () => { legend($('sweepLegend'), methods.filter(inFit), shown, draw); draw(); };
+  fitSwitch($('sweepFit'), refresh);
+  refresh();
   const first = sweep.selected && Object.entries(sweep.selected).find(([, v]) => v);
   if (first){ const r = sweepRow(first[0], first[1].strength); if (r) showSweep(first[0], r); }
   window.addEventListener('resize', () => draw());
@@ -294,7 +339,7 @@ if (hold){
   function draw(){
     const host = $('holdChart'), W = width(host), H = Math.round(Math.min(420, Math.max(280, W * 0.46)));
     const f = frame(host, W, H, {l: 54, r: 22, t: 30, b: 42});
-    const series = hold.hold.filter(h => h.context === ctx && shown.has(h.method));
+    const series = hold.hold.filter(h => h.context === ctx && shown.has(h.method) && inFit(h.method));
     const turns = hold.hold[0].per_turn.map(t => t.turn);
     const allVals = hold.hold.flatMap(h => h.per_turn.map(t => t[metric])).filter(v => v != null);
     const [ylo, yhi] = metric === 'readout' ? readoutRange(allVals) : METRIC_RANGE[metric];
@@ -311,9 +356,10 @@ if (hold){
     for (const h of series){
       const pts = h.per_turn.filter(t => t[metric] != null);
       el('polyline', {points: pts.map(t => `${X(t.turn)},${Y(t[metric])}`).join(' '), fill: 'none', stroke: col(h.method), 'stroke-width': 2,
-        'stroke-dasharray': DASHED[h.method] ? '5 4' : '', 'stroke-linejoin': 'round'}, f.svg);
+        'stroke-dasharray': dashOf(h.method), 'stroke-linejoin': 'round'}, f.svg);
       const last = pts[pts.length - 1];
-      if (last) el('circle', {cx: X(last.turn), cy: Y(last[metric]), r: 4.5, fill: col(h.method), stroke: css('--panel'), 'stroke-width': 2}, f.svg);
+      const hollow = STYLE[h.method] === 'dot';
+      if (last) el('circle', {cx: X(last.turn), cy: Y(last[metric]), r: 4.5, fill: hollow ? css('--panel') : col(h.method), stroke: hollow ? col(h.method) : css('--panel'), 'stroke-width': 2}, f.svg);
     }
     const svg = f.svg, tip = f.tip;
     const turnAt = ev => { const b = svg.getBoundingClientRect(), s = W / b.width; const x = (ev.clientX - b.left) * s;
@@ -324,23 +370,24 @@ if (hold){
         .sort((a, b) => (b.v ?? -1e9) - (a.v ?? -1e9));
       const probe = hold.hold[0].per_turn.find(p => p.turn === t)?.probe;
       tip.hidden = false;
-      tip.innerHTML = `<b>Turn ${t + 1}</b>${probe ? ' · probe' : ''}` + rows.map(r => `<div class="row"><span><span class="dot" style="background:${col(r.m)}"></span>${NAMES[r.m]}</span><span class="mono">${r.v == null ? '–' : fmtMetric(metric, r.v)}</span></div>`).join('');
+      tip.innerHTML = `<b>Turn ${t + 1}</b>${probe ? ' · probe' : ''}` + rows.map(r => `<div class="row"><span>${swatch(r.m)}${NAMES[r.m]}</span><span class="mono">${r.v == null ? '–' : fmtMetric(metric, r.v)}</span></div>`).join('');
       const b = svg.getBoundingClientRect(); const left = X(t) * b.width / W;
       tip.style.left = (left > b.width / 2 ? left - 250 : left + 14) + 'px'; tip.style.top = '30px'; });
     svg.addEventListener('mouseleave', () => { tip.hidden = true; cross.setAttribute('visibility', 'hidden'); });
     svg.addEventListener('click', ev => { turnSel = turnAt(ev); showTurn(); });
   }
   function showTurn(){
-    const cards = methods.filter(m => shown.has(m)).map(m => {
+    const cards = methods.filter(m => shown.has(m) && inFit(m)).map(m => {
       const h = hold.hold.find(x => x.context === ctx && x.method === m); const ex = h && h.examples[turnSel];
-      return ex ? answerCard(m, `${NAMES[m]} · turn ${turnSel + 1}`, ex) : '';
+      return ex ? answerCard(m, `${FULL_NAMES[m]} · turn ${turnSel + 1}`, ex) : '';
     });
     $('holdAnswers').innerHTML = cards.join('');
   }
   segmented($('holdCtx'), ctxs, ctx, v => { ctx = v; draw(); showTurn(); });
   segmented($('holdMetric'), metrics, metric, v => { metric = v; draw(); });
-  legend($('holdLegend'), methods, shown, () => { draw(); showTurn(); });
-  draw(); turnSel = hold.hold[0].per_turn.find(t => t.probe)?.turn ?? 0; showTurn();
+  const refresh = () => { legend($('holdLegend'), methods.filter(inFit), shown, () => { draw(); showTurn(); }); draw(); showTurn(); };
+  fitSwitch($('holdFit'), refresh);
+  turnSel = hold.hold[0].per_turn.find(t => t.probe)?.turn ?? 0; refresh();
   window.addEventListener('resize', () => draw());
 } else {
   $('holdSection').hidden = true;
@@ -352,19 +399,20 @@ if (hold){
   if (sweep){
     html += `<thead><tr><th>Setup sweep</th><th class="num">Strength</th><th class="num">n</th><th class="num">In character</th><th class="num">Somewhat</th><th class="num">Coherence</th><th class="num">Read-out</th><th class="num">IQR</th><th class="num">Speaks as</th><th class="num">AI break</th></tr></thead><tbody>`;
     for (const r of [...sweep.sweep].sort((a, b) => METHODS.indexOf(a.method) - METHODS.indexOf(b.method) || a.strength - b.strength))
-      html += `<tr><td>${NAMES[r.method]}</td><td class="num">${r.method === 'none' ? '–' : PARAM[r.method] + ' ' + r.strength}</td><td class="num">${r.n}</td><td class="num">${fmtPct(r.fully_rate)}</td><td class="num">${fmtPct(r.somewhat_rate)}</td><td class="num">${fmt(r.coherence, 0)}</td><td class="num">${fmt(r.readout)}</td><td class="num">${fmt(r.readout_q25)} – ${fmt(r.readout_q75)}</td><td class="num">${fmtPct(r.voice_as_rate)}</td><td class="num">${fmtPct(r.ai_break_rate)}</td></tr>`;
+      html += `<tr><td>${FULL_NAMES[r.method]}</td><td class="num">${r.method === 'none' ? '–' : PARAM[r.method] + ' ' + r.strength}</td><td class="num">${r.n}</td><td class="num">${fmtPct(r.fully_rate)}</td><td class="num">${fmtPct(r.somewhat_rate)}</td><td class="num">${fmt(r.coherence, 0)}</td><td class="num">${fmt(r.readout)}</td><td class="num">${fmt(r.readout_q25)} – ${fmt(r.readout_q75)}</td><td class="num">${fmtPct(r.voice_as_rate)}</td><td class="num">${fmtPct(r.ai_break_rate)}</td></tr>`;
     html += '</tbody>';
   }
   if (hold){
     html += `<thead><tr><th>Hold</th><th>Context</th><th class="num">In character T1</th><th class="num">T5</th><th class="num">T10</th><th class="num">Coherence T1</th><th class="num">T10</th><th class="num">Read-out T1</th><th class="num">T10</th><th class="num">Probe turns in character</th></tr></thead><tbody>`;
     for (const h of hold.hold){ const s = h.summary;
-      html += `<tr><td>${NAMES[h.method]}</td><td>${h.context === 'prompt' ? 'prompt + steering' : 'steering only'}</td><td class="num">${fmtPct(s.fully_rate.T1)}</td><td class="num">${fmtPct(s.fully_rate.T5)}</td><td class="num">${fmtPct(s.fully_rate.T10)}</td><td class="num">${fmt(s.coherence.T1, 0)}</td><td class="num">${fmt(s.coherence.T10, 0)}</td><td class="num">${fmt(s.readout.T1)}</td><td class="num">${fmt(s.readout.T10)}</td><td class="num">${h.probes ? fmtPct(h.probes.fully_rate) : '–'}</td></tr>`; }
+      html += `<tr><td>${FULL_NAMES[h.method]}</td><td>${h.context === 'prompt' ? 'prompt + steering' : 'steering only'}</td><td class="num">${fmtPct(s.fully_rate.T1)}</td><td class="num">${fmtPct(s.fully_rate.T5)}</td><td class="num">${fmtPct(s.fully_rate.T10)}</td><td class="num">${fmt(s.coherence.T1, 0)}</td><td class="num">${fmt(s.coherence.T10, 0)}</td><td class="num">${fmt(s.readout.T1)}</td><td class="num">${fmt(s.readout.T10)}</td><td class="num">${h.probes ? fmtPct(h.probes.fully_rate) : '–'}</td></tr>`; }
     html += '</tbody>';
   }
   $('allTable').innerHTML = html;
 }
 const b = D.built || {};
-$('foot').textContent = `Fits from ${fits.source.split('/').slice(-1)[0]} (${fits.n_persona} ${fits.persona} answers judged fully in character, ${fits.n_default} ${fits.default} answers; conceptor rank ${fits.conceptor_rank}, low-rank k ${fits.lowrank_k}). ` +
+$('foot').textContent = `Fits from ${fits.source.split('/').slice(-1)[0]} (${fits.n_persona} ${fits.persona} answers judged fully in character, ${fits.n_default} ${fits.default} answers; conceptor rank ${fits.conceptor_rank}, low-rank k ${fits.lowrank_k}` +
+  (fits.n_tokens ? `; per-token fit on ${fits.n_tokens.toLocaleString()} tokens from ${fits.tok_rows} answers, rank ${fits.tok_rank}` : '') + `). ` +
   `Judge: local model, Assistant Axis role rubric and Persona Vectors coherence rubric. Built ${b.date || ''} from commit ${b.commit || ''}.`;
 })();
 </script>
