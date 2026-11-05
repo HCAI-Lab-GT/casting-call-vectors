@@ -8,8 +8,8 @@ import os
 
 os.makedirs("analysis/geometry/figures", exist_ok=True)
 
-# Load vectors from christina-vectors
-vector_dir = "christina-vectors"
+# Assistant Axis role vectors (the old christina-vectors/ folder was a byte-identical copy, minus chemist.pt)
+vector_dir = "persona_data/assistant-axis/olmo-3-7b-instruct/vectors"
 layer_number = 16
 vectors = {}
 
@@ -18,7 +18,8 @@ for fname in os.listdir(vector_dir):
         continue
     data = torch.load(os.path.join(vector_dir, fname), map_location="cpu", weights_only=False)
     name = os.path.splitext(fname)[0]
-    vec = data["vector"].float().numpy().squeeze()
+    vec = data["vector"].float().numpy()
+    vec = vec[layer_number] if vec.shape[0] == 32 else vec.squeeze()  # chemist.pt stores all 32 layers
     vectors[name] = vec
     if vec.shape != (4096,):
         print(f"Warning: {name} has shape {vec.shape}")
