@@ -283,6 +283,18 @@ def test_between_share_matches_row_by_row():
         assert np.isclose(analyze_acts.between_share(Y, labels), (brute ** 2).sum() / (Y ** 2).sum())
 
 
+def test_gap_closure_endpoints():
+    import gap_closure
+
+    rng = np.random.default_rng(2)
+    H, mu = rng.normal(size=(50, 6)), rng.normal(size=6) + 3
+    vhat = (mu - H.mean(0)) / np.linalg.norm(mu - H.mean(0))
+    ident, zero = gap_closure.gap_report(H, vhat, mu, np.eye(6)), gap_closure.gap_report(H, vhat, mu, np.zeros((6, 6)))
+    assert np.isclose(ident["closed_along_vhat_median"], 0) and np.isclose(ident["keep_along_vhat"], 1)
+    assert np.isclose(ident["gap_energy_kept"], 1) and ident["n_kept_dirs"] == 6
+    assert np.isclose(zero["closed_along_vhat_median"], 1) and np.isclose(zero["gap_energy_kept"], 0)
+
+
 def test_explainer_thin_points_keeps_alignment():
     sys.path.insert(0, str(HERE.parent / "explainer"))
     import build

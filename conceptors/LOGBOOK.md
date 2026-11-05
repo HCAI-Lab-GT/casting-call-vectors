@@ -268,3 +268,28 @@ Context: This session picked up a conceptors research project from a cloud sessi
 Action: Read HANDOFF.md, CLAUDE.md and the explainer README, then inventoried the repo's OLMo-3-7B artifacts and wrote `docs/prior_olmo3_inventory.md` under `conceptors/docs/`, plus a dated line in HANDOFF.md. The inventory found no per-sample activations, so nothing can feed a conceptor fit directly. It did find about 330,000 judged OLMo-3-7B-Instruct answers (the Assistant Axis responses), role vectors at hidden 17, trait vectors, and gold-prompt steering CSVs. Searched Google Drive and OneDrive. OneDrive holds an older snapshot of data already in the repo, and Drive has no run data. Diffed the OneDrive folder against the checkout by path and file size, without opening files. Added these findings and a storage recommendation to the inventory doc: leave the existing data in plain git, and use a private Hugging Face Storage Bucket for new activation dumps. After the user's reply, applied approved cleanup edits, including repointing the christina analysis to the Assistant Axis vectors, and checked that the loader returns 276 vectors shaped (4096,). `ruff` wasn't in the venv, so I tried the one on PATH. Then loaded the pace-ice skill and tested the `pace-ice-agent` ssh alias read-only.
 
 Result: Task 1 and the storage question are done, and nothing was moved or deleted on either drive. The `pace-ice-agent` alias connects, landing on `login-ice-gnr-1` as `gmatlin3`. The PACE side had no `rg`, so the check was rerun with `grep`, and the GPU, queue and storage checks were still in progress when the transcript ends. The drafted message to Rehan for the casting-call Discord channel is not confirmed as sent in the visible transcript, and neither is the result of the `ruff` run. The truncated transcript doesn't show the full cleanup list, so I'm not listing which duplicates were removed. The git ground truth shows only an uncommitted deletion of `overleaf`, which isn't clearly tied to this session. Task 2 (generalizing persona_acts.py) has not started.
+
+[2026-11-05 04:10] Why the full-rank conceptors don't steer: they keep the persona direction
+
+Context: in the full sweep both full-rank conceptors left the persona read-out where it was (0.07 and 0.05 at beta
+1.0, unsteered 0.02), yet the per-token one held a prompted pirate at turn 10 (0.90, coherence 90).
+
+Action: copied runs/smollm3_full (4.3 GB) to the local scratchpad and added conceptors/gap_closure.py: refits the
+sweep's conceptors (steering.fit, module 17) and measures, on the 42,201 assistant per-token activations at hidden 18,
+how much of each token's gap to the persona center C closes along the persona direction vhat at beta 1. Test pins the
+endpoints (identity closes 0, C = 0 closes all). 17 tiny-model tests pass; ruff still refused by the shell.
+
+Result:
+- Answer-average conceptor: vhat.C.vhat = 0.974; it closes a median 2.6% of the gap along vhat.
+- Per-token conceptor: vhat.C.vhat = 0.890; it closes 11.0%.
+- Both still drop 30-35% of the gap's energy in other directions (kept 0.65 and 0.70), and about half of that energy
+  sits in directions C keeps above 0.9 (307 and 142 of 2,048).
+- Reading: the persona direction is a high-variance direction of the persona cloud itself, so a median-aperture
+  conceptor treats it as "inside" and leaves it alone. A centered conceptor at this aperture cannot induce the persona;
+  it can only pull stray directions back toward a cloud the model is already in, which is what the hold test shows.
+  These numbers don't explain why the answer-average fit costs far more coherence with the prompt (36 against 90):
+  it keeps nearly as much gap energy (0.65 against 0.70), so the damage must come from which directions it shrinks,
+  not how much; not yet measured.
+
+Next experiments this points to (owner's call, not started): steering vector to set the persona plus per-token
+conceptor to hold it, against steering vector alone, in the hold test; and an aperture sweep for the per-token fit.
