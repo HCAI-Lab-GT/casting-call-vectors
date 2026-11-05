@@ -15,15 +15,25 @@ export HF_HUB_OFFLINE=1
 RUN="$CONCEPTORS_DATA/runs/$1"; shift
 PORT="${JUDGE_PORT:-$((20000 + RANDOM % 20000))}"
 LOG="$RUN/vllm_judge.log"
-# Shared node: a per-job key (env vars, so it stays out of `ps`) means only this job's server answers,
-# and a squatter on the port fails the authenticated readiness check below.
+# Shared node: a per-job key (env vars and stdin only, never argv) keeps other users out of the server,
+# and the readiness check requires that the socket on $PORT belongs to our own vLLM process tree.
 export VLLM_API_KEY="$(openssl rand -hex 24)"
 export LOCAL_JUDGE_API_KEY="$VLLM_API_KEY"
 "$UV_PROJECT_ENVIRONMENT/bin/vllm" serve "$JUDGE_MODEL" --port "$PORT" --host 127.0.0.1 --served-model-name judge \
   --max-model-len 8192 --gpu-memory-utilization 0.90 > "$LOG" 2>&1 &
 SERVER=$!
 trap 'kill $SERVER 2>/dev/null || true; wait $SERVER 2>/dev/null || true' EXIT
-ready() { curl -sf -H "Authorization: Bearer $VLLM_API_KEY" "http://127.0.0.1:$PORT/v1/models" > /dev/null; }
+owned() {  # is the listener on $PORT our server or one of its children? (ss shows pids only for our own processes)
+  local p
+  for p in $(ss -Hltnp "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2); do
+    if [ "$p" = "$SERVER" ] || pgrep -P "$SERVER" | grep -qx "$p"; then return 0; fi
+  done
+  return 1
+}
+ready() {
+  owned && printf 'Authorization: Bearer %s\n' "$VLLM_API_KEY" |
+    curl -sf -H @- "http://127.0.0.1:$PORT/v1/models" > /dev/null
+}
 for _ in $(seq 1 180); do
   if ! kill -0 "$SERVER" 2>/dev/null; then echo "vLLM exited early; see $LOG"; tail -30 "$LOG"; exit 1; fi
   if ready; then break; fi
