@@ -3,6 +3,8 @@
 export CONCEPTORS_DATA="${CONCEPTORS_DATA:-/storage/ice-shared/cs7634/staff/conceptors}"
 export CONCEPTORS_SCRATCH="${CONCEPTORS_SCRATCH:-$HOME/scratch}"
 export HF_HOME="${HF_HOME:-$CONCEPTORS_DATA/hf_cache}"
+# the token stays in the private home dir; the shared course volume is readable by other users
+export HF_TOKEN_PATH="${HF_TOKEN_PATH:-$HOME/.cache/huggingface/token}"
 export UV_CACHE_DIR="${UV_CACHE_DIR:-$CONCEPTORS_SCRATCH/uv-cache}"
 export UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-$CONCEPTORS_SCRATCH/venvs/casting-call-vectors}"
 export AA_DIR="${AA_DIR:-$CONCEPTORS_DATA/assistant-axis}"
