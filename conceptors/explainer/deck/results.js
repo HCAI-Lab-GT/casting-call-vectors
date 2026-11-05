@@ -1,7 +1,9 @@
 /* ================= Deck results slides: the problem, setting, why, holding over turns, trajectories, judges ================= */
 const DK=JSON.parse($('deck-data').textContent);
 const PERSONAS=Object.keys(DK.personas);
-const PNAME=p=>p.charAt(0).toUpperCase()+p.slice(1);
+const PNAME=p=>(DK.personas[p]&&DK.personas[p].label)||p.charAt(0).toUpperCase()+p.slice(1);
+const ROLE=p=>p.replace(/^[a-z0-9]+_/,'');  /* 'olmo_pirate' -> 'pirate' */
+const MODEL=p=>(DK.personas[p]&&DK.personas[p].model)||'SmolLM3-3B';
 let PERS=DK.default_persona in DK.personas?DK.default_persona:PERSONAS[0];
 const PD=()=>DK.personas[PERS];
 const JALL=['qwen','gemma','mistral','llama'];
@@ -72,7 +74,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-persona] b
       const good=e.label==='fully',ai=e.identity==='ai';
       return '<span class="pill '+(good?'good':'bad')+'">'+JSHORT[j]+': '+esc(e.label||'–')+'</span>'+(e.identity?'<span class="pill'+(ai?' bad':'')+'">'+JSHORT[j]+': '+(ai?'admits AI':'no AI claim')+'</span>':'');}).join('');
     $('s2chat').innerHTML='<div class="msg user"><span class="who">User · turn '+turn+(PROBE_KIND[turn]&&probesNow().includes(turn)?' · probe':'')+'</span>'+esc(base.q)+'</div>'+
-      '<div class="msg bot"><span class="who">SmolLM3-3B, '+esc(PNAME(PERS).toLowerCase())+' prompt, no steering</span>'+esc(base.a)+(base.a.length>=500?' …':'')+'</div>'+
+      '<div class="msg bot"><span class="who">'+esc(MODEL(PERS))+', '+esc(ROLE(PERS))+' prompt, no steering</span>'+esc(base.a)+(base.a.length>=500?' …':'')+'</div>'+
       '<div class="pills">'+pills+'</div>';
   }
   const ch=LineChart('s2line',{aspect:.56,ml:64,mr:24,xs:XS,yRange:()=>[0,1],yTicks:()=>[0,.5,1],yFmt:pct,xFmt:String,
@@ -256,7 +258,7 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
       const vals=ms().flatMap(m=>XS().flatMap(t=>[val(m,t,key()),hasTraj()?val(m,t,'x_pre'):null])).filter(v=>v!=null);
       return [Math.min(-.25,Math.floor((Math.min(...vals,0))*4)/4),Math.max(1.25,Math.ceil((Math.max(...vals,1))*4)/4)];},
     yFmt:v=>(+v).toFixed(2),xFmt:String,xTicks:()=>XS().filter(t=>NT()<=12||t===1||t%5===0||probesNow().includes(t)),bands:probeBands,selected:()=>st.turn-1,
-    refs:()=>[{y:0,label:'assistant'},{y:1,label:PNAME(PERS).toLowerCase()},...(hasTraj()?Object.entries(PD().floors||{}).filter(([m])=>st.on.has(m)).map(([m,v])=>({y:v,label:METH[m][1]+' floor'})):[])],
+    refs:()=>[{y:0,label:'assistant'},{y:1,label:ROLE(PERS)},...(hasTraj()?Object.entries(PD().floors||{}).filter(([m])=>st.on.has(m)).map(([m,v])=>({y:v,label:METH[m][1]+' floor'})):[])],
     tipTitle:i=>'turn '+(i+1)+(probesNow().includes(i+1)?' · '+(PROBE_KIND[i+1]||'probe'):''),vFmt:v=>(+v).toFixed(2),
     series:()=>ms().flatMap(m=>{const c=COL[METH[m][2]],d=METH[m][3]||undefined;
       const post={name:METH[m][0]+(hasTraj()?', after':''),color:c,dash:d,width:2.4,values:XS().map(t=>val(m,t,key()))};
@@ -276,9 +278,9 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
     c.strokeStyle=COL.grid;c.lineWidth=1;c.font='10px '+MONO;c.fillStyle=COL.muted;
     ticks(y0,y1,4).forEach(v=>{c.beginPath();c.moveTo(M.l,Y(v)+.5);c.lineTo(w-M.r,Y(v)+.5);c.stroke();c.textAlign='right';c.textBaseline='middle';c.fillText(v.toFixed(2),M.l-6,Y(v));});
     ticks(x0,x1,5).forEach(v=>{c.textAlign='center';c.textBaseline='top';c.fillText(v.toFixed(1),X(v),h-M.b+7);});
-    [[0,'assistant'],[1,PNAME(PERS).toLowerCase()]].forEach(([v,l])=>{c.setLineDash([4,4]);c.strokeStyle=COL.muted;c.beginPath();c.moveTo(X(v)+.5,M.t);c.lineTo(X(v)+.5,h-M.b);c.stroke();c.setLineDash([]);
+    [[0,'assistant'],[1,ROLE(PERS)]].forEach(([v,l])=>{c.setLineDash([4,4]);c.strokeStyle=COL.muted;c.beginPath();c.moveTo(X(v)+.5,M.t);c.lineTo(X(v)+.5,h-M.b);c.stroke();c.setLineDash([]);
       text(c,l,X(v)+4,M.t+8,{size:10});});
-    mark(c,X(1),Y(1),'dia',6,COL.pirate,false,true);text(c,'real '+PNAME(PERS).toLowerCase()+' tokens',X(1)+9,Y(1)+12,{size:10,color:COL.ink});
+    mark(c,X(1),Y(1),'dia',6,COL.pirate,false,true);text(c,'real '+ROLE(PERS)+' tokens',X(1)+9,Y(1)+12,{size:10,color:COL.ink});
     c.textAlign='right';c.textBaseline='bottom';c.fillStyle=COL.muted;c.fillText('position on the persona axis →',w-M.r,h-1);
     c.textAlign='left';c.textBaseline='top';c.fillText('off-axis spread ↑',M.l+4,1);
     P.forEach(m=>{const col=COL[METH[m][2]];
@@ -303,7 +305,7 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
         const pos=e.x_pre!=null?' · axis '+e.x_pre.toFixed(2)+' → '+e.x_post.toFixed(2):'';
         return '<div class="msg bot" style="border-left-color:'+COL[METH[m][2]]+'"><span class="who">'+esc(METH[m][0])+pos+' · '+JSHORT[j]+': '+esc(e.label||'–')+
           (e.identity?' · '+(e.identity==='ai'?'admits AI':'no AI claim'):'')+'</span>'+esc(e.a.slice(0,260))+(e.a.length>260?' …':'')+'</div>';}).join('');
-    $('stn').textContent=(st.view==='conv'?'Conversation 1 only. ':'')+(hasTraj()?'Turn chart: each method\'s position on the '+PNAME(PERS).toLowerCase()+' axis at the steering layer, 0 = assistant, 1 = '+PNAME(PERS).toLowerCase()+
+    $('stn').textContent=(st.view==='conv'?'Conversation 1 only. ':'')+(hasTraj()?MODEL(PERS)+'. Turn chart: each method\'s position on the '+ROLE(PERS)+' axis at the steering layer, 0 = assistant, 1 = '+ROLE(PERS)+
       '; faint dashed = before the method\'s edit at that layer, solid = after. ':'Turn chart: unsteered read-out of each answer (0 = assistant, 1 = persona). ')+
       'Click a turn to see that turn in activation space and read conversation 1. Labels: '+JNAME[j]+'.';
   }

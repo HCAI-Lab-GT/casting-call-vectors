@@ -10,7 +10,8 @@ The config names the run folders (paths are machine-specific, so it lives outsid
    "personas": {"pirate": {"sweep": ["RUNS/steer_sweep_v2_pirate"],
                            "hold": {"qwen": ["RUNS/steer_hold_v2_pirate_prompt.judge-qwen",
                                              "RUNS/steer_hold_v2_pirate_steer_only.judge-qwen"], "gemma": [...], ...},
-                           "fits": "RUNS/steer_hold_v2_pirate_prompt"}, ...}}
+                           "fits": "RUNS/steer_hold_v2_pirate_prompt"},
+                "olmo_pirate": {"label": "OLMo · pirate", "model": "OLMo-3-7B", ...}}}
 
 Sweep runs merge per method and hold runs per (context, method), the first run listed winning. "fits" is a hold run
 folder holding fits.npz and manifest.json; it gives the steering-layer cap floors the trajectory slide draws.
@@ -123,6 +124,9 @@ def persona_data(spec: dict) -> dict:
                                                             "source_model", "cap_aa_modules") if k in sweep["meta"]["fits"]}
     turns = [t["turn"] for rows in out["hold"].values() for h in rows for t in h["per_turn"]]
     out["n_turns"] = max(turns) + 1 if turns else 0
+    for k in ("label", "model"):  # e.g. "OLMo · pirate" for a second model's persona on the same switch
+        if spec.get(k):
+            out[k] = spec[k]
     return out
 
 
