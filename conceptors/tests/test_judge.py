@@ -63,6 +63,23 @@ def test_labels_rubrics_and_resume(tmp: Path):
     assert summary["pirate"]["fully_rate"] == 1.0 and summary["assistant"]["unparsed"] == 1 and "phase2" not in summary
 
 
+def test_voice_rubric_is_additive_and_rejudges(tmp: Path):
+    run_dir, roles = write_run(tmp / "v")
+    judge.run(run_dir, fake_backend, roles)  # first pass without voice
+
+    def with_voice(prompt: str) -> str:
+        if "point of view" in prompt:
+            return "0" if "A pirate would say" in prompt else "2"
+        return fake_backend(prompt)
+
+    results = judge.run(run_dir, with_voice, roles, voice=True)
+    by_idx = {r["idx"]: r for r in results}
+    assert by_idx[0]["voice_label"] == "as" and by_idx[1]["voice_label"] == "about"
+    assert by_idx[1]["roleplay_label"] == "not" and by_idx[0]["roleplay_label"] == "fully"  # existing labels unchanged
+    summary = judge.summarize(results)
+    assert summary["pirate_narrated"]["voice_about_rate"] == 1.0 and summary["pirate"]["voice_as_rate"] == 1.0
+
+
 def test_parse_score():
     assert judge.parse_score("3", 0, 3) == 3
     assert judge.parse_score("Score: 7", 0, 3) is None
