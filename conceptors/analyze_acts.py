@@ -142,7 +142,8 @@ def main(argv=None):
     out_path = a.out or (run / 'derived.json' if run else 'derived.json')
     judge_path = a.judge or (run / 'judge.jsonl' if run and (run / 'judge.jsonl').exists() else None)
 
-    z = np.load(acts)
+    # load each array once: NpzFile decompresses the whole array on every z[key] access, ~80 times per run
+    z = dict(np.load(acts))
     man = json.load(open(manifest))
     T = [json.loads(l) for l in open(texts)]
     p1t = [t for t in T if t.get('phase') != 2]
@@ -412,7 +413,7 @@ def main(argv=None):
         out['lowrank'] = lowrank
 
     # ------------------------------------------------------------------ multi-turn (phase 2)
-    if 'p2_resp_avg' in z.files:
+    if 'p2_resp_avg' in z:
         mt = []
         for read in [STEER_HIDDEN, READ_HIDDEN]:
             X1 = z['p1_resp_avg'][:, col(read), :].astype(np.float64)

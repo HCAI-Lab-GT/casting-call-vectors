@@ -67,3 +67,34 @@ Result: SmolLM3-3B is good enough (judge ceiling like Llama-3.2-3B; AUC 1.00; na
 persona). transformers 4.57 records hidden_states before forward hooks (the steered layer's own entry looks
 unsteered; downstream entries and logits are steered); the test now checks downstream and logits. The judge rubric
 cannot tell narration from role play (morning-list candidate: an additive "speaking as vs about" rubric).
+
+[2026-11-05 00:30] Explainer fixes, voice rubric, slow deploys
+
+Context: task 7 groundwork while waiting on PACE deploys.
+
+Action: build.py takes a run folder; head.html declares UTF-8 (served over HTTP the page decoded as windows-1252);
+tools/interact_inpage.js runs interact.js's checks in-page (no Playwright here; verified on the pilot page in the
+browser pane: no errors, all controls present, 6 tables filled); docs/explainer_05b_passages.md lists the 0.5B prose.
+Added judge.py --voice (additive point-of-view rubric, allowed by the ledger: existing labels unchanged).
+
+Result: commits 04f74ae1 and 335e3b88. PACE connectivity was flaky: the 5687ed81 deploy died mid-fetch (partial
+staging folder left at releases/casting-call-vectors/.staging/5687ed81...), the 04f74ae1 deploy was stopped in favor of
+335e3b88. Scratch holds 6 full releases (about 12 GB each, 185.6 GB of 300).
+
+## For the morning (appended 2026-11-05 00:30)
+
+- Prune superseded releases under `$HOME/scratch/releases/casting-call-vectors/` (all but the active one) and the
+  partial `.staging/` folders; each release is a 12 GB full clone. Not covered by the ledger's delete contract.
+- Consider a lighter deploy path for conceptors (sparse checkout or a split repo): every release clones the repo's
+  ~4 GB of tracked Casting Call data, which is most of the 30-50 minute deploy time tonight.
+
+[2026-11-05 01:05] Steering bench page; unsigned commit
+
+Context: build the visualizer for steering results while the 335e3b88 deploy runs.
+
+Action: wrote explainer/bench/bench.html and build_bench.py; validated the method palette (dataviz validator, light
+and dark both pass after darkening amber for dark mode); checked the page in the browser pane on tiny-model demo
+data (no console errors; one pass of fixes: label only the matched strength, trim local model paths).
+
+Result: commit 8217e1fc is unsigned: the 1Password signer returned an agent error (likely locked while Glenn is away);
+per the unattended-signing rule only that commit skipped signing.
