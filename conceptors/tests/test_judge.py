@@ -141,6 +141,15 @@ def test_calibration_prepare_judge_score(tmp: Path):
     assert reasoned["passed"] and reasoned["holdout"]["admits_ai_agreement"] == 1.0 and res["chosen"] == "identity_r"
     assert res["roleplay_fully_on_ai_admissions"] == 1.0 and res["n_by_split"] == {"dev": 3, "holdout": 3}
 
+    other = tmp / "calib_other"  # a second judge that calls every answer an admission
+    calibrate_judge.prepare(cases, other)
+    judge.run(other, lambda p, max_tokens=8: ("ANSWER: 0" if max_tokens > 8 else "0") if "admits that" in p else "3",
+              roles, identity=True, identity_reasoned=True)
+    both = calibrate_judge.compare(cases, [run_dir, other])
+    assert set(both["judges"]) == {"calib", "calib_other"}  # no manifest: named by folder
+    assert both["pairwise"]["identity_r: calib vs calib_other"] == 0.5  # agree on the 3 of 6 answers that admit
+    assert both["pairwise"]["identity: calib vs calib_other"] == round(2 / 6, 3)  # the bare rubric missed h3
+
 
 def test_parse_score():
     assert judge.parse_score("3", 0, 3) == 3
