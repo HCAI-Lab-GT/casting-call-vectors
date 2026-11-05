@@ -670,3 +670,13 @@ repo on PACE goes on the course volume, never scratch. So:
 - The new venv is built offline from the scratch uv cache (uv.lock is unchanged since 566d01b8). Jobs on 566d01b8
   keep the scratch venv until they finish. After that, the scratch venv (10 GB), uv cache (10 GB) and the 566d01b8
   checkout (12 GB) can go, which needs owner approval.
+
+Security follow-up (from two automated reviews of these commits): /storage/ice-shared/cs7634 is mode 777 with no
+sticky bit (owner mriedl3, group coc-pace-ice-tas). So another user can't write inside staff/, but could rename
+staff/ aside and plant a look-alike venv. env.sh now refuses to run unless every folder from below the volume root
+to the data root, venv, HF cache and working release is a real directory, owned by us, and not group- or
+world-writable. A missing data root, any symlink, or a stat failure also refuses. Tested on PACE: real paths pass;
+a group-writable folder, a symlink, and a missing root refuse; runs outside the volume pass. Release 1cffb910 has
+the first (find-based) version; the stat-based version ships with the next release. Remaining gap: the check can't
+close the window between check and exec. Only a sticky bit on the volume root (`chmod +t`, which needs its owner or
+PACE support) stops staff/ from being renamed.

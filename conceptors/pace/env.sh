@@ -16,17 +16,26 @@ PY="$UV_PROJECT_ENVIRONMENT/bin/python"
 
 # The course volume's top level is world-writable with no sticky bit, so another user could rename staff/ aside and
 # plant a look-alike tree. Before a job runs code or loads weights from the volume, every folder from just below the
-# volume root down to the venv, the HF cache and the release it runs from must be ours and closed to other writers.
+# volume root down to the venv, the HF cache and the release it runs from must be a real directory (not a symlink),
+# ours, and closed to other writers. Any stat failure refuses. This narrows but cannot close the window between the
+# check and exec; only a sticky bit on the volume root (its owner's call) stops staff/ being renamed.
 CONCEPTORS_VOLUME="${CONCEPTORS_VOLUME:-/storage/ice-shared/cs7634}"
 conceptors_trusted() {
-  local p d
-  for p in "$UV_PROJECT_ENVIRONMENT" "$HF_HOME" "$PWD"; do
+  local p d info owner mode kind
+  case "$CONCEPTORS_DATA" in "$CONCEPTORS_VOLUME"/*)
+    if [ ! -d "$CONCEPTORS_DATA" ] || [ -L "$CONCEPTORS_DATA" ]; then
+      echo "env.sh: refusing to run, $CONCEPTORS_DATA is missing or a symlink" >&2; return 1
+    fi ;;
+  esac
+  for p in "$CONCEPTORS_DATA" "$UV_PROJECT_ENVIRONMENT" "$HF_HOME" "$PWD"; do
     case "$p" in "$CONCEPTORS_VOLUME"/*) ;; *) continue ;; esac
     d=$p
-    while [ ! -e "$d" ]; do d=$(dirname "$d"); done
+    while [ ! -e "$d" ] && [ ! -L "$d" ]; do d=$(dirname "$d"); done
     while [ "$d" != "$CONCEPTORS_VOLUME" ] && [ "$d" != / ]; do
-      if [ ! -O "$d" ] || [ -n "$(find "$d" -maxdepth 0 -perm /022)" ]; then
-        echo "env.sh: refusing to run, $d is not owned by $(id -un) or is writable by others" >&2
+      info=$(stat -c '%u %a %F' "$d") || { echo "env.sh: refusing to run, cannot stat $d" >&2; return 1; }
+      read -r owner mode kind <<< "$info"
+      if [ "$owner" != "$(id -u)" ] || [ "$kind" != directory ] || (( 8#$mode & 8#022 )); then
+        echo "env.sh: refusing to run, $d is not a directory owned by $(id -un) and closed to other writers" >&2
         return 1
       fi
       d=$(dirname "$d")
