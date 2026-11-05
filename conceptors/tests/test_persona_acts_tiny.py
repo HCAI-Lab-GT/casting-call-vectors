@@ -94,11 +94,19 @@ def test_file_sources_samples_and_tokens(tmp: Path, model: Path, roles_dir: Path
     n1 = (2 + 2 + 1) * 3 * 2  # 2+2 prompts + narrated, 3 questions, 2 samples
     assert npz["p1_resp_avg"].shape[0] == n1 == len(texts)
     assert sorted(set(npz["p1_sample_idx"].tolist())) == [0, 1]
-    assert npz["p1_tok_job"].tolist() == [0, 1, 2, 3]
+    assert npz["p1_tok_job"].tolist() == [0, 10, 19, 29]  # spread over all 30 rows
     assert npz["p1_tok_offsets"][-1] == npz["p1_tok_acts"].shape[0]
     assert npz["p1_tok_acts"].shape[1:] == (len(man["token_hidden_idx"]), 32)
     assert man["chat_template_kwargs"] == {"enable_thinking": False}
     assert "n_answers_with_think_tags" in man and all("has_think" in t for t in texts)
+
+
+def test_extra_roles_with_builtin_fallback(tmp: Path, model: Path, roles_dir: Path, qfile: Path):
+    _, texts, _ = run(model, tmp / "extra", "--roles_dir", str(roles_dir), "--questions_file", str(qfile),
+                      "--roles", "pirate", "--extra_roles", "pirate_doctor", "--narrated", "--skip_phase2")
+    counts = {r: sum(t["role"] == r for t in texts) for r in {t["role"] for t in texts}}
+    assert counts == {"pirate": 2 * 3, "pirate_doctor": 1 * 3}  # pirate_doctor has no AA file: built-in prompt
+    assert texts[-1]["system"] == persona_acts.ROLES["pirate_doctor"][0]
 
 
 def test_base_mode(tmp: Path, model: Path, roles_dir: Path, qfile: Path):

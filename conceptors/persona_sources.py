@@ -23,11 +23,17 @@ NARRATED_TEMPLATE = (
 NARRATED_WHO = {"pirate": "pirate captain"}  # keeps the pilot's exact pirate_narrated wording
 
 
-def load_role_prompts(roles_dir: Path, names: list[str], n_prompts: int) -> dict[str, list[str]]:
-    """First n_prompts positive instructions per role; the AA 'default' role has one empty prompt."""
+def load_role_prompts(roles_dir: Path, names: list[str], n_prompts: int,
+                      fallback: dict[str, list[str]] | None = None) -> dict[str, list[str]]:
+    """First n_prompts positive instructions per role; the AA 'default' role has one empty prompt.
+    Roles without a release file (e.g. the pilot's pirate_doctor) come from `fallback` when given."""
     roles = {}
     for name in names:
-        data = json.loads((roles_dir / f"{name}.json").read_text())
+        path = roles_dir / f"{name}.json"
+        if not path.exists() and fallback and name in fallback:
+            roles[name] = fallback[name][:n_prompts]
+            continue
+        data = json.loads(path.read_text())
         prompts = [inst["pos"] for inst in data["instruction"]][:n_prompts]
         if not prompts:
             raise ValueError(f"{name}: no instructions in {roles_dir}")

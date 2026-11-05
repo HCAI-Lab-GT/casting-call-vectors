@@ -364,13 +364,15 @@ def parse_args(argv=None):
     ap.add_argument("--roles_dir", default=None, help="Assistant Axis data/roles/instructions")
     ap.add_argument("--roles", nargs="+", default=None, help="role names (default: all built-in roles)")
     ap.add_argument("--n_prompts", type=int, default=5, help="system prompts per role from --roles_dir")
+    ap.add_argument("--extra_roles", nargs="*", default=[], help="side roles (e.g. for group plates and logic tests)")
+    ap.add_argument("--n_prompts_extra", type=int, default=1, help="system prompts per --extra_roles role")
     ap.add_argument("--questions_file", default=None, help="JSONL with a 'question' field")
     ap.add_argument("--n_questions", type=int, default=None)
     ap.add_argument("--n_samples", type=int, default=1, help="answers per (prompt, question)")
     ap.add_argument("--narrated", nargs="*", default=None, help="roles to build '<role>_narrated' hard negatives for (default: pirate)")
     ap.add_argument("--base_name", default="Steve", help="character name in base-mode prompts")
     # outputs
-    ap.add_argument("--save_tokens", type=int, default=0, help="save per-token answer activations for the first N jobs")
+    ap.add_argument("--save_tokens", type=int, default=0, help="save per-token answer activations for N jobs spread over the run")
     ap.add_argument("--token_layers", default="0.5,0.75", help="fractions of n_layers (hidden indices) for --save_tokens")
     # modes
     ap.add_argument("--teacher_forced", nargs="+", default=None, help="JSONL file(s) of fixed answers; record only")
@@ -451,9 +453,11 @@ def build_jobs(args, tok):
     """Phase-1 jobs from built-in or file sources, in chat or base mode."""
     if args.roles_dir:
         names = args.roles or ["assistant", "pirate"]
-        roles = src.load_role_prompts(Path(args.roles_dir), names, args.n_prompts)
+        roles = src.load_role_prompts(Path(args.roles_dir), names, args.n_prompts, ROLES)
+        roles.update(src.load_role_prompts(Path(args.roles_dir), args.extra_roles, args.n_prompts_extra, ROLES))
     else:
         roles = {r: ROLES[r] for r in (args.roles or ROLES)}
+        roles.update({r: ROLES[r][:args.n_prompts_extra] for r in args.extra_roles})
     if args.questions_file:
         questions = src.load_questions(Path(args.questions_file), args.n_questions)
     else:
@@ -555,7 +559,9 @@ def main(argv=None):
     steer_module = args.steer_layer if args.steer_layer >= 0 else n_layers // 2
     save_idx = select_hidden(n_layers, d, len(jobs), args.max_mb, steer_module)
     tok_idx = token_hidden(args.token_layers, n_layers) if args.save_tokens else []
-    token_jobs = range(min(args.save_tokens, len(jobs)))
+    # rows spread evenly over the run, so every role and sample gets per-token data
+    n_tok = min(args.save_tokens, len(jobs))
+    token_jobs = sorted(set(np.linspace(0, len(jobs) - 1, n_tok).round().astype(int).tolist())) if n_tok else []
     print(f"[phase1] {len(jobs)} {'teacher-forced rows' if args.teacher_forced else 'generations'}, "
           f"saving hidden-state indices {save_idx}", flush=True)
 
