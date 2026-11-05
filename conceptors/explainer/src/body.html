@@ -1,0 +1,647 @@
+<div class="wrap">
+
+<nav class="partnav" aria-label="Parts">
+  <ol>
+    <li><a href="#top"><b>0</b>Map</a></li>
+    <li><a href="#data"><b>1</b>Data</a></li>
+    <li><a href="#conceptors"><b>2</b>Conceptors</a></li>
+    <li><a href="#zoo"><b>3</b>Method zoo</a></li>
+    <li><a href="#turns"><b>4</b>Across turns</a></li>
+    <li><a href="#recipe"><b>5</b>Recipe</a></li>
+  </ol>
+</nav>
+
+<header class="hero" id="top">
+  <div class="eyebrow">A field guide for persona and trait steering · toy 2D figures plus real Qwen2.5-0.5B activations</div>
+  <h1>Persona steering, <i>shown</i></h1>
+  <p class="lede">Every steering method answers two questions. What shape does a persona take inside the model? And when do you touch the activation? The grid below places each method on those two axes. Click any method to see it work on the same toy space in Part 3. Parts 1 and 2 build the pieces: how persona data is collected, and what a conceptor is. Part 4 follows a conversation turn by turn.</p>
+  <div class="grid-wrap">
+    <table class="shape" id="shapegrid">
+      <thead><tr><th scope="col">Shape of the persona</th><th scope="col">Always on</th><th scope="col">Past a threshold</th><th scope="col">Gated per token</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Arrow<small>one direction</small></th>
+          <td><button class="chip" data-m="caa">Steering vector · CAA, Persona Vectors</button></td>
+          <td><span class="note">—</span></td>
+          <td><button class="chip" data-m="gate">Gated vector · DSAS, MERA</button></td></tr>
+        <tr><th scope="row">Half-space<small>one boundary</small></th>
+          <td><span class="note">—</span></td>
+          <td><button class="chip" data-m="cap">Activation cap · Assistant Axis</button><button class="chip" data-m="liseco">LiSeCo</button></td>
+          <td><span class="note">—</span></td></tr>
+        <tr><th scope="row">Subspace<small>a few directions</small></th>
+          <td><button class="chip" data-m="pass">Erase or rescale · INLP, LEACE, PaSS</button><button class="chip" data-m="sea">Spectral editing · SEA</button></td>
+          <td><button class="chip" data-m="mags">Error subspace · MAGS</button></td>
+          <td><span class="note">—</span></td></tr>
+        <tr><th scope="row">Ellipsoid<small>a spread, direction by direction</small></th>
+          <td><button class="chip" data-m="conceptor">Conceptor</button><button class="chip" data-m="coast">Contrastive conceptor · COAST</button><button class="chip" data-m="ot">Distribution map · MiMiC, AcT</button></td>
+          <td><span class="cell-empty">untested</span></td>
+          <td><a class="cell-empty" href="#recipe">untested: a gated conceptor</a></td></tr>
+        <tr><th scope="row">Curved sheet<small>a manifold</small></th>
+          <td><button class="chip" data-m="manifold">Geodesic steering · PersonaManifold</button></td>
+          <td><span class="note">—</span></td>
+          <td><span class="note">—</span></td></tr>
+        <tr><th scope="row">Attention pathway<small>not the residual stream</small></th>
+          <td><span class="note">—</span></td>
+          <td><span class="note">—</span></td>
+          <td><button class="chip" data-m="gcad">Gated attention delta · GCAD</button></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">A dash means we know of no method in that cell. The two dashed boxes are the openings this guide cares about: the ellipsoid row has a shape but no built-in "when", which is where Part 5 ends.</p>
+</header>
+
+<!-- ============================== PART 1 ============================== -->
+<section class="part" id="data">
+  <div class="eyebrow">Part 1</div>
+  <h2>Where the points come from</h2>
+  <p>Every method here is fitted to a pile of activations, and how that pile is collected decides what the method learns. We ran the standard recipe on Qwen2.5-0.5B-Instruct (24 layers, 896 dimensions) on a laptop: 9 roles plus one hard negative, 24 questions and 384 answers, in about 19 minutes. All Part 1 figures use that run.</p>
+</section>
+
+<section class="plate wide" id="recipe-steps">
+  <div class="intro">
+    <div class="eyebrow">Plate 1.1</div>
+    <h3>The recipe has six knobs</h3>
+    <p>Persona vectors, Assistant-Axis role vectors and conceptors all come from the same pipeline. Each step is a choice that changes the shape a method ends up learning.</p>
+  </div>
+  <div class="fig">
+    <div class="rail">
+      <div class="step"><h4>Write the roles</h4><p>System prompts that ask for the persona, with several wordings so no single phrasing dominates.</p>
+        <p class="src">Assistant Axis: 275 roles × 5 prompts. Persona Vectors: 5 contrastive prompt pairs, generated from a trait description.</p>
+        <p class="ours">Ours: 3 pirate and 3 assistant prompts, 1 each for doctor, teacher, bard, robot, consultant and ghost, plus 3 for a pirate ship's doctor.</p></div>
+      <div class="step"><h4>Pick shared questions</h4><p>Ask every role the same questions, so differences come from the role and not the topic.</p>
+        <p class="src">Assistant Axis: 240 shared questions. Persona Vectors: 40 per trait, half for extraction and half for evaluation.</p>
+        <p class="ours">Ours: 24 questions across 10 task types: math, code, facts, comfort, negotiation, advice, opinion and more.</p></div>
+      <div class="step"><h4>Generate answers</h4><p>Sample answers with the persona prompt in place. Add hard negatives: text that has the costume but not the identity.</p>
+        <p class="src">Both papers sample several rollouts per question.</p>
+        <p class="ours">Ours: one answer each, temperature 0.7, up to 72 new tokens. Hard negative: the assistant describing how a pirate would answer, in the third person.</p></div>
+      <div class="step"><h4>Judge and filter</h4><p>A judge model scores whether each answer is actually in character, and weak ones are dropped.</p>
+        <p class="src">Assistant Axis: an LLM judge labels each answer fully, somewhat or not role-playing, and the axis uses the fully role-playing answers. Persona Vectors: keeps trait ≥ 50 for positive prompts and &lt; 50 for negative ones, coherence ≥ 50.</p>
+        <p class="ours">Ours: no LLM judge. A pirate-word counter stands in for one, with obvious limits (Plate 1.3).</p></div>
+      <div class="step"><h4>Read activations</h4><p>Run prompt + answer through the model and read the residual stream at every layer. Pool the token positions into one vector.</p>
+        <p class="src">Both papers average over the answer's tokens. Persona Vectors also tried prompt tokens and found answer tokens steer better.</p>
+        <p class="ours">Ours: answer average and last prompt token, all 25 hidden states (Plates 1.4–1.6).</p></div>
+      <div class="step"><h4>Fit</h4><p>The same pile feeds every method: a mean difference gives a steering vector, the spread gives a conceptor, a probe gives LiSeCo, and per-question differences give a MAGS-style subspace.</p>
+        <p class="src">Layer is chosen by sweeping, usually around the middle of the network.</p>
+        <p class="ours">Ours: steering layer 12 (of 24). Part 2 fits conceptors on these exact activations.</p></div>
+    </div>
+  </div>
+  <div class="panel"></div>
+</section>
+
+<section class="plate" id="answers-plate">
+  <div class="intro">
+    <div class="eyebrow">Plate 1.2</div>
+    <h3>Read what the model actually wrote</h3>
+    <p>Pick a question. On most task questions, the 0.5B "pirate" answers like the assistant. The persona shows up mainly when the question is about itself: asked to describe itself in three words, the pirate says "Seafarer."</p>
+    <p>The hard negative is the surprise. Asked to describe how a pirate would answer, the plain assistant uses <em>more</em> pirate words than the pirate does.</p>
+    <p class="try"><b>Try</b>Pick "How would you describe yourself in three words?", then "What is 15% of 240?".</p>
+  </div>
+  <div class="panel">
+    <div class="ctl"><label for="qsel">Question</label><select id="qsel"></select></div>
+    <div class="ctl"><label for="rolesel">Fifth card shows</label><select id="rolesel"></select></div>
+    <p class="note">Badges: share of words that are pirate vocabulary, and whether the answer says it is an AI. The first answer from each role's first prompt wording is shown.</p>
+  </div>
+  <figure class="fig"><div class="answers" id="answers"></div>
+    <figcaption>Real answers from Qwen2.5-0.5B-Instruct, truncated to 260 characters.</figcaption></figure>
+</section>
+
+<section class="plate" id="judge-plate">
+  <div class="intro">
+    <div class="eyebrow">Plate 1.3</div>
+    <h3>The judge decides what "in character" means</h3>
+    <p>Without filtering, the "pirate" cloud mostly records that a pirate system prompt was present. Filtering keeps only answers that sound like a pirate. Here it turns the fitted direction by about 36°.</p>
+    <p>A word-count judge rewards vocabulary, and the hard negative has plenty of it. That's why the papers judge with a rubric about identity ("does the model take on the role?"), not about words.</p>
+  </div>
+  <div class="panel"></div>
+  <figure class="fig"><div class="tiles" id="judgeTiles"></div>
+    <figcaption>Keyword judge: an answer passes if any word is pirate vocabulary. It stands in for an LLM judge.</figcaption></figure>
+</section>
+
+<section class="plate" id="sweep-plate">
+  <div class="intro">
+    <div class="eyebrow">Plate 1.4</div>
+    <h3>Which token and which layer you read changes everything</h3>
+    <p><strong>At the last prompt token</strong>, the moment just before the model starts writing, pirate and assistant separate perfectly from layer 4 to layer 14, and almost perfectly after that. The model has just read the system prompt.</p>
+    <p><strong>Averaged over the answer</strong>, where the persona has to be <em>expressed</em>, a probe separates them only partly, and the role explains a few percent of the variance.</p>
+    <p class="try"><b>Try</b>Hover a layer to read both values.</p>
+  </div>
+  <div class="panel">
+    <ul class="legend" aria-label="Series">
+      <li><span class="key line" style="background:var(--pirate)"></span>answer average</li>
+      <li><span class="key line" style="background:var(--orange)"></span>last prompt token</li>
+    </ul>
+    <p class="note">Separability is a logistic-regression probe's AUC on held-out questions (trained on even-numbered questions, tested on odd ones). 0.5 is chance.</p>
+  </div>
+  <figure class="fig">
+    <div class="figrow">
+      <div><h4 class="chart-title">Pirate vs assistant separability</h4><canvas id="cSweepAuc" role="img" aria-label="Probe AUC by layer for two poolings"></canvas></div>
+      <div><h4 class="chart-title">Share of variance from the role</h4><canvas id="cSweepVar" role="img" aria-label="Role share of variance by layer for two poolings"></canvas></div>
+    </div>
+    <figcaption>Layer 0 is the embedding layer; 24 is after the final norm. Dimensions are standardized first, because three outlier dimensions carry 60–70% of the raw energy.</figcaption>
+  </figure>
+</section>
+
+<section class="plate" id="map-plate">
+  <div class="intro">
+    <div class="eyebrow">Plate 1.5</div>
+    <h3>The persona map</h3>
+    <p><strong>"Top-2 variance" view:</strong> the two directions the data varies along most. This view shows the questions, not the personas: points bunch up by what was asked.</p>
+    <p><strong>"Persona plane" view:</strong> the x-axis is the pirate-minus-assistant direction, scaled so 0 is the average assistant answer and 1 is the average pirate answer. The y-axis is the biggest leftover variation.</p>
+    <p class="try"><b>Try</b>In the top-2 view, hover a tight cluster: it is one question, asked of every role.</p>
+  </div>
+  <div class="panel">
+    <div class="seg" id="mapView" role="group" aria-label="View">
+      <button type="button" data-v="plane" aria-pressed="true">Persona plane</button>
+      <button type="button" data-v="pca" aria-pressed="false">Top-2 variance</button>
+    </div>
+    <div class="seg" id="mapPool" role="group" aria-label="Pooling">
+      <button type="button" data-v="resp" aria-pressed="true">Answer average</button>
+      <button type="button" data-v="last" aria-pressed="false">Last prompt token</button>
+    </div>
+    <div class="ctl"><label for="mapLayer">Layer <output for="mapLayer"></output></label><input id="mapLayer" type="range" min="0" max="6" step="1" value="3"></div>
+    <ul class="legend" id="mapLegend" aria-label="Groups"></ul>
+    <div class="readout" id="mapRead"></div>
+  </div>
+  <figure class="fig"><canvas id="cMap" role="img" aria-label="Scatter of 384 answers in the chosen projection"></canvas>
+    <figcaption>384 real answers. Hover a point to read it. "Assistant describing a pirate" uses the assistant's system prompt.</figcaption></figure>
+</section>
+
+<section class="plate" id="strip-plate">
+  <div class="intro">
+    <div class="eyebrow">Plate 1.6</div>
+    <h3>Where the hard negative lands</h3>
+    <p>Each row places every answer of one group on the persona axis (0 = average assistant, 1 = average pirate).</p>
+    <p>On the answer-average axis, the assistant describing a pirate scores <strong>more pirate than the pirate</strong>. Bard and ghost sit close by. This axis behaves less like "pirate" and more like "storybook character vs assistant". That matches the Assistant Axis finding that the main persona direction separates fantastical roles from the default assistant.</p>
+    <p>At the last prompt token, the hard negative drops to about halfway.</p>
+  </div>
+  <div class="panel">
+    <div class="seg" id="stripPool" role="group" aria-label="Pooling">
+      <button type="button" data-v="resp" aria-pressed="true">Answer average</button>
+      <button type="button" data-v="last" aria-pressed="false">Last prompt token</button>
+    </div>
+    <p class="note">Layer 13 hidden state, which is the output of layer 12 and the layer the multi-turn steering uses. Ticks mark each group's mean.</p>
+  </div>
+  <figure class="fig"><canvas id="cStrip" role="img" aria-label="Strip plot of persona scores per group"></canvas></figure>
+</section>
+
+<section class="plate" id="slice-plate">
+  <div class="intro">
+    <div class="eyebrow">Plate 1.7</div>
+    <h3>The persona is a thin slice of the variance</h3>
+    <p>Anything fitted to the raw cloud (PCA, covariance, a conceptor) mostly learns what was asked. On this model, the role explains a few percent of answer-averaged variance. The question explains most of it.</p>
+    <p>Even inside the pirate cloud alone, the task type (math vs comfort vs code) accounts for about half the spread. A pirate doing arithmetic and a pirate giving comfort are far apart. Part 2 shows what that does to conceptors.</p>
+    <p class="note">For scale: the Assistant Axis paper reports persona components explaining 19–34% of activation variance on chat data for 27–70B models.</p>
+  </div>
+  <div class="panel"></div>
+  <figure class="fig"><div class="tiles" id="sliceTiles"></div></figure>
+</section>
+
+<!-- ============================== PART 2 ============================== -->
+<section class="part" id="conceptors">
+  <div class="eyebrow">Part 2</div>
+  <h2>Conceptors, from toy to real</h2>
+  <p>A conceptor turns a cloud of activations into a soft stencil. Directions the cloud uses a lot pass through; directions it barely uses get squeezed. Plates 2.1–2.6 build the idea on a 2D toy. The rest cover variants, a trap that only appears in high dimensions, a conceptor that tunes itself, and tests on the real activations.</p>
+</section>
+
+<section class="plate" id="arrow">
+  <div class="intro">
+    <div class="eyebrow">Plate 2.1</div>
+    <h3>An arrow forgets the shape</h3>
+    <p>A steering vector is the arrow from the average assistant state to the average pirate state. A conceptor starts from the whole pirate cloud: which way it stretches, and how far.</p>
+    <p class="try"><b>Try</b>Stretch and tilt the pirate cloud. Watch the arrow's numbers.</p>
+  </div>
+  <div class="panel">
+    <div class="ctl"><label for="p1s">Stretch <output for="p1s"></output></label><input id="p1s" type="range" min="0.1" max="0.42" step="0.01" value="0.32"></div>
+    <div class="ctl"><label for="p1t">Tilt <output for="p1t"></output></label><input id="p1t" type="range" min="-80" max="80" step="1" value="28"></div>
+    <div class="readout" id="r1"></div>
+    <p class="note">The arrow never moves, so everything you just changed is invisible to a steering vector. On the real model the arrow is 896 numbers and the shape is an 896 × 896 table.</p>
+  </div>
+  <figure class="fig"><canvas id="c1" role="img" aria-label="Two clouds with an arrow between their centers and an ellipse around the pirate cloud"></canvas>
+    <figcaption>Toy 2D data from a fixed seed. The rules are the same in 896 dimensions.</figcaption></figure>
+</section>
+
+<section class="plate" id="stencil">
+  <div class="intro">
+    <div class="eyebrow">Plate 2.2</div>
+    <h3>A conceptor is a soft stencil</h3>
+    <p>Fit to the pirate cloud, it decides how much of any activation gets through, direction by direction. Directions the cloud uses a lot pass almost untouched. Directions it barely uses get squeezed.</p>
+    <p class="try"><b>Try</b>Guess first: what does the stencil become with the aperture wide open? Fully closed? Then drag.</p>
+  </div>
+  <div class="panel">
+    <div class="ctl"><label for="p2a">Aperture <output for="p2a"></output></label><input id="p2a" type="range" min="0" max="1000" step="1" value="500"></div>
+    <div class="bars" id="b2"></div>
+    <div class="rule">keep = spread ÷ (spread + 1 / aperture²)</div>
+    <details class="math"><summary>The math</summary>
+      <div class="eq">C = R (R + α⁻² I)⁻¹, with R = (1/n) Σ hᵢ hᵢᵀ</div>
+      <span class="eqnote">C minimizes ‖h − Ch‖² + α⁻²‖C‖² on average: it is the best "regularized identity" for the cloud. Along a principal direction with spread λ, it keeps λ / (λ + α⁻²). Changing the aperture by a factor γ maps each keep-fraction s to s / (s + γ⁻²(1 − s)) (Jaeger's aperture adaptation), so 0 and 1 never move.</span>
+    </details>
+  </div>
+  <figure class="fig"><canvas id="c2" role="img" aria-label="Unit circle with arrows to an ellipse showing how much passes in each direction"></canvas>
+    <figcaption>Dashed circle: every input of length 1. Arrows: where each one lands. Solid outline: the stencil.</figcaption></figure>
+</section>
+
+<section class="plate" id="edits">
+  <div class="intro">
+    <div class="eyebrow">Plate 2.3</div>
+    <h3>Same activations, five different edits</h3>
+    <p>Each faint dot is some activation. Switch methods and watch where they all go. The pink dot is yours: drag it, or click to place it.</p>
+    <p class="try"><b>Try</b>The pink dot starts past the line. Switch between Cap and Conceptor. Only one of them leaves it alone.</p>
+  </div>
+  <div class="panel">
+    <div class="seg" id="m3" role="group" aria-label="Editing method">
+      <button type="button" data-v="push" aria-pressed="false">Push</button>
+      <button type="button" data-v="cap" aria-pressed="false">Cap</button>
+      <button type="button" data-v="cut" aria-pressed="false">Hard cut</button>
+      <button type="button" data-v="conceptor" aria-pressed="true">Conceptor</button>
+      <button type="button" data-v="not" aria-pressed="false">NOT</button>
+    </div>
+    <p class="modecap" id="cap3"></p>
+    <div class="ctl" id="w3s"><label for="p3s"><span id="l3s">Gain β</span> <output for="p3s"></output></label><input id="p3s" type="range" min="0" max="1" step="0.01" value="0.5"></div>
+    <div class="ctl" id="w3a"><label for="p3a">Aperture <output for="p3a"></output></label><input id="p3a" type="range" min="0" max="1000" step="1" value="500"></div>
+    <div class="readout" id="r3"></div>
+  </div>
+  <figure class="fig"><canvas id="c3" class="drag" tabindex="0" role="img" aria-label="Grid of activations transformed by the selected method. Use arrow keys to move the pink point."></canvas>
+    <figcaption>Faint grid: activations before. Dark dots: after. Arrow keys move the pink dot when the figure has focus.</figcaption></figure>
+</section>
+
+<section class="plate" id="center">
+  <div class="intro">
+    <div class="eyebrow">Plate 2.4</div>
+    <h3>Where the cloud sits changes what it learns</h3>
+    <p>Real activations sit far from zero, and they all share a large common offset. Fit the conceptor on raw pirate states and its main direction mostly points at <em>where</em> pirate states are. Fit it around the pirate cloud's own center and it learns <em>how</em> pirate states vary.</p>
+    <p class="try"><b>Try</b>Switch fits and watch where the blue assistant states land. On the raw fit, raise the gain: they slide along one line toward the pirates.</p>
+  </div>
+  <div class="panel">
+    <div class="seg" id="m4" role="group" aria-label="How the conceptor is fitted">
+      <button type="button" data-v="raw" aria-pressed="true">Fit on raw states</button>
+      <button type="button" data-v="centered" aria-pressed="false">Fit around the pirate center</button>
+    </div>
+    <p class="modecap" id="cap4"></p>
+    <div class="ctl"><label for="p4b">Gain β <output for="p4b"></output></label><input id="p4b" type="range" min="0.25" max="2.5" step="0.05" value="1"></div>
+    <div class="ctl"><label for="p4a">Aperture <output for="p4a"></output></label><input id="p4a" type="range" min="0" max="1000" step="1" value="500"></div>
+    <div class="readout" id="r4"></div>
+  </div>
+  <figure class="fig"><canvas id="c4" role="img" aria-label="Pirate and assistant clouds away from the origin, with assistant states moved by the conceptor"></canvas>
+    <figcaption>Cross: the zero vector. Dashed line: the conceptor's main direction. Hollow blue: assistant states before. Solid blue: after.</figcaption></figure>
+</section>
+
+<section class="plate" id="logic">
+  <div class="intro">
+    <div class="eyebrow">Plate 2.5</div>
+    <h3>Concepts combine like logic</h3>
+    <p>OR leaves room for either concept. AND keeps only the room both share. NOT keeps everything a concept ignores. It is all matrix arithmetic on the stencils, with no new data and no training.</p>
+    <p class="try"><b>Try</b>Pick AND, then turn the doctor cloud until it is perpendicular to the pirate cloud. What happens to the room? Plate 2.10 tests this on the real model.</p>
+  </div>
+  <div class="panel">
+    <div class="seg" id="m5" role="group" aria-label="Operation">
+      <button type="button" data-v="A" aria-pressed="false">Pirate</button>
+      <button type="button" data-v="B" aria-pressed="false">Doctor</button>
+      <button type="button" data-v="or" aria-pressed="false">Pirate OR doctor</button>
+      <button type="button" data-v="and" aria-pressed="true">Pirate AND doctor</button>
+      <button type="button" data-v="notA" aria-pressed="false">NOT pirate</button>
+      <button type="button" data-v="andnot" aria-pressed="false">Pirate AND NOT doctor</button>
+    </div>
+    <p class="modecap" id="cap5"></p>
+    <div class="ctl"><label for="p5t">Angle between the clouds <output for="p5t"></output></label><input id="p5t" type="range" min="0" max="90" step="1" value="45"></div>
+    <div class="readout" id="r5"></div>
+    <details class="math"><summary>The math</summary>
+      <div class="eq">¬C = I − C</div>
+      <div class="eq">C ∧ B = (C⁻¹ + B⁻¹ − I)⁻¹</div>
+      <div class="eq">C ∨ B = ¬(¬C ∧ ¬B), the conceptor of R_C + R_B</div>
+      <span class="eqnote">De Morgan, associativity, commutativity and double negation hold. Absorption and distributivity fail except for hard projectors, and C ∧ C ≠ C. When C or B is singular (fewer samples than dimensions), the inverses don't exist. Jaeger's general AND restricts to the intersection of their ranges, which in high dimensions is often just {0}.</span>
+    </details>
+  </div>
+  <figure class="fig"><canvas id="c5" role="img" aria-label="Two stencils and the stencil produced by the chosen logic operation"></canvas>
+    <figcaption>Thin outlines: the two concept stencils. Thick outline: the result. Dashed: inputs of length 1.</figcaption></figure>
+</section>
+
+<section class="plate" id="gain">
+  <div class="intro">
+    <div class="eyebrow">Plate 2.6</div>
+    <h3>Check that the stencil is doing the work</h3>
+    <p>After the stencil, the gain β multiplies everything. If every direction ends up multiplied by roughly the same amount, the edit is mostly a zoom, and the stencil's shape barely matters.</p>
+    <p>An October 2026 audit of a re-centered NOT conceptor on persona traits (3 models, 7 traits, aperture 0.05, gain 2) found every direction stretched by at least 1.66×. Removing the matrix while keeping the same center and gain changed many responses, but gave no consistent extra suppression.</p>
+    <p class="try"><b>Try</b>Load the audited regime, then flip to "Matrix removed": the matched control the audit used.</p>
+  </div>
+  <div class="panel">
+    <div class="seg" id="m6" role="group" aria-label="Which map">
+      <button type="button" data-v="conceptor" aria-pressed="true">β · Conceptor</button>
+      <button type="button" data-v="not" aria-pressed="false">β · NOT conceptor</button>
+    </div>
+    <div class="seg" id="m6c" role="group" aria-label="Control">
+      <button type="button" data-v="full" aria-pressed="true">Full map</button>
+      <button type="button" data-v="removed" aria-pressed="false">Matrix removed</button>
+    </div>
+    <div class="ctl"><label for="p6b">Gain β <output for="p6b"></output></label><input id="p6b" type="range" min="0.25" max="2.5" step="0.05" value="1"></div>
+    <div class="ctl"><label for="p6a">Aperture <output for="p6a"></output></label><input id="p6a" type="range" min="0" max="1000" step="1" value="500"></div>
+    <button type="button" class="btn" id="preset6">Load the audited regime</button>
+    <div class="bars" id="b6"></div>
+    <div class="scale" aria-hidden="true"><span>0×</span><span>1×</span><span>2×</span><span>3×</span></div>
+    <div class="status" id="s6"></div>
+  </div>
+  <figure class="fig"><canvas id="c6" role="img" aria-label="Unit circle and its image under the full edit, showing stretch or shrink per direction"></canvas>
+    <figcaption>Dashed circle: inputs of length 1. Solid outline: where the full edit (gain included) sends them. Outside the circle means stretched.</figcaption></figure>
+</section>
+
+<section class="plate" id="rank">
+  <div class="intro">
+    <div class="eyebrow">Plate 2.7 · real data</div>
+    <h3>The rank trap: fewer samples than dimensions</h3>
+    <p>In 2D, any cloud of a few points fills the plane. In 896 dimensions, 72 pirate answers span at most 71 directions. The other 825 directions get a keep-fraction of exactly 0, whatever the aperture.</p>
+    <p>Plain C·h therefore deletes everything outside the span of the training answers. NOT does the reverse: those 825 directions pass untouched, so at gain 2 every one of them is stretched 2×, the regime the October audit flagged. Interpolating with the identity, (1 − β)h + βCh, keeps part of everything.</p>
+    <p class="try"><b>Try</b>Hover the curve: how many answers until the span holds most of a new pirate answer?</p>
+  </div>
+  <div class="panel">
+    <div class="tiles" id="rankTiles"></div>
+    <details class="math"><summary>The math and the fixes</summary>
+      <div class="eq">rank R ≤ n − 1 (centered) ⇒ keepᵢ = 0 on at least d − n + 1 directions</div>
+      <span class="eqnote">Fixes, from simplest: interpolate with the identity; center on the persona mean; shrink R to R + εI (Ledoit-Wolf picks ε); add samples by using per-token states instead of one vector per answer; store C = U diag(s) Uᵀ with k ≤ n columns and apply Ch = U(s ⊙ Uᵀh) at O(dk) cost. A dense float32 C costs 4d² bytes: 3.2 MB here, 67 MB at d = 4096.</span>
+    </details>
+  </div>
+  <figure class="fig">
+    <h4 class="chart-title">Share of a held-out pirate answer inside the span of n training answers</h4>
+    <p class="chart-sub">Activation measured from the pirate mean, layer 13, averaged over 20 random draws</p>
+    <canvas id="cCover" role="img" aria-label="Line chart: share inside span rises from 13% at n=2 to 83% at n=71"></canvas>
+    <h4 class="chart-title" style="margin-top:14px">What each conceptor form keeps of an assistant answer</h4>
+    <p class="chart-sub">Share of the activation's energy (measured from the pirate mean) that survives; fitted on all 72 pirate answers</p>
+    <div class="bars" id="rankBars"></div>
+  </figure>
+</section>
+
+<section class="plate" id="variants">
+  <div class="intro">
+    <div class="eyebrow">Plate 2.8</div>
+    <h3>Six conceptor variants from the papers</h3>
+    <p>Same stencil math, different choices about where the stencil is anchored and what it is fitted on. Each variant moves the same states differently. The card says who used it and why.</p>
+    <p class="try"><b>Try</b>Compare "Raw" with "Target-centered" and "Gated".</p>
+  </div>
+  <div class="panel">
+    <div class="seg" id="m8" role="group" aria-label="Variant">
+      <button type="button" data-v="raw" aria-pressed="true">Raw</button>
+      <button type="button" data-v="global" aria-pressed="false">Global-centered</button>
+      <button type="button" data-v="target" aria-pressed="false">Target-centered NOT</button>
+      <button type="button" data-v="bipolar" aria-pressed="false">Bipolar</button>
+      <button type="button" data-v="contrast" aria-pressed="false">Contrastive</button>
+      <button type="button" data-v="gated" aria-pressed="false">Gated (untested)</button>
+    </div>
+    <div class="ctl"><label for="p8b">Strength β <output for="p8b"></output></label><input id="p8b" type="range" min="0" max="1.5" step="0.05" value="0.7"></div>
+    <div class="card" id="var8"></div>
+  </div>
+  <figure class="fig"><canvas id="c8" role="img" aria-label="Toy clouds and where each conceptor variant moves the assistant states"></canvas>
+    <figcaption>Teal: pirate states. Blue: assistant states. Orange (contrastive only): pirate turns that broke character. Every state goes through the same map: hollow before, solid after. Outline: the stencil in use.</figcaption></figure>
+</section>
+
+<section class="plate" id="auto">
+  <div class="intro">
+    <div class="eyebrow">Plate 2.9</div>
+    <h3>A conceptor that tunes itself</h3>
+    <p>Jaeger's self-adjusting conceptor (an "autoconceptor") filters its own input and keeps re-fitting to whatever gets through. A short cue starts it off. After that it runs on its own output.</p>
+    <p>Each line is one direction's keep-fraction over time. Strong directions settle above ½. Weak ones die to 0. Nothing can settle in between, so it sharpens itself into nearly a hard projection. That is a possible "persona memory" that locks in from a cue. Nobody has tried it in an LLM.</p>
+    <p class="try"><b>Try</b>Narrow the aperture until a direction falls from ½-plus to 0.</p>
+  </div>
+  <div class="panel">
+    <div class="ctl"><label for="p9a">Aperture α <output for="p9a"></output></label><input id="p9a" type="range" min="0" max="1000" step="1" value="460"></div>
+    <div class="ctl"><label for="p9c">Cue length (steps) <output for="p9c"></output></label><input id="p9c" type="range" min="2" max="80" step="1" value="25"></div>
+    <div class="readout" id="r9"></div>
+    <details class="math"><summary>The math</summary>
+      <div class="eq">C ← C + λ[(z − Cz)zᵀ − α⁻² C], with z = C x during the autonomous phase</div>
+      <span class="eqnote">Along a direction with input variance σ, a fixed point satisfies cσ(1 − c) = α⁻², so c = ½(1 + √(1 − 4α⁻²/σ)) when σ &gt; 4α⁻². The lower root is unstable and 0 is stable, so the final keep-fractions lie in {0} ∪ (½, 1) (Jaeger 2014, §3.14). This toy runs the expected dynamics in 4 directions.</span>
+    </details>
+  </div>
+  <figure class="fig"><canvas id="c9" role="img" aria-label="Keep-fractions of four directions over time under self-adjustment"></canvas>
+    <figcaption>Shaded band: the cue phase (plain online fitting). After it, the conceptor filters its own input. Dashed line at ½.</figcaption></figure>
+</section>
+
+<section class="plate" id="reallogic">
+  <div class="intro">
+    <div class="eyebrow">Plate 2.10 · real data</div>
+    <h3>Does "pirate AND doctor" make a pirate doctor?</h3>
+    <p>We fitted a conceptor directly on the "pirate ship's doctor" answers and compared it with combinations of separately fitted ones.</p>
+    <p><strong>Fit on each role's raw cloud</strong>, every conceptor is at least 0.93 similar to every other. They mostly learn the shared questions (Plate 1.7).</p>
+    <p><strong>Fit on per-question differences from the assistant</strong> (what each role changes about the same question), they separate. The model's pirate doctor is basically a pirate. OR comes next, and AND, which keeps only what both share, scores below bard.</p>
+  </div>
+  <div class="panel">
+    <div class="seg" id="logicFit" role="group" aria-label="Fit">
+      <button type="button" data-v="diff" aria-pressed="true">Per-question differences</button>
+      <button type="button" data-v="raw" aria-pressed="false">Raw clouds</button>
+    </div>
+    <div class="seg" id="logicLayer" role="group" aria-label="Layer">
+      <button type="button" data-v="13" aria-pressed="true">Layer 13</button>
+      <button type="button" data-v="18" aria-pressed="false">Layer 18</button>
+      <button type="button" data-v="22" aria-pressed="false">Layer 22</button>
+    </div>
+    <details class="math"><summary>How this was computed</summary>
+      <span class="eqnote">Standardized answer-average activations, reduced to 12 principal directions. Aperture α⁻² is set to the median eigenvalue of the pooled correlation matrix. Similarity is Jaeger's generalized squared cosine, tr(C₁C₂) / (‖C₁‖·‖C₂‖), which is 1 for identical stencils. Difference fit: for each question, role(q) − assistant(q), averaged over prompt wordings.</span>
+    </details>
+  </div>
+  <figure class="fig">
+    <h4 class="chart-title">Similarity to the directly fitted pirate-doctor conceptor</h4>
+    <div class="bars" id="logicBars"></div>
+    <figcaption id="logicCap"></figcaption>
+  </figure>
+</section>
+
+<!-- ============================== PART 3 ============================== -->
+<section class="part" id="zoo">
+  <div class="eyebrow">Part 3</div>
+  <h2>The method zoo, on one toy space</h2>
+  <p>Every method below acts on the same toy: a blue assistant cloud, a teal pirate cloud, a grid of activations, and a pink activation you can drag. Each card gives what it learns, the edit it makes, when it acts, and what it can't do. The math is in the expandable panel.</p>
+</section>
+
+<section class="zoo" id="zoo-explorer">
+  <div class="zoo-list" id="zooList"></div>
+  <div class="zoo-main">
+    <figure class="fig" style="position:static">
+      <canvas id="cZoo" class="drag" tabindex="0" role="img" aria-label="Toy activation space transformed by the selected method"></canvas>
+      <figcaption id="zooCap">Faint grid: activations before. Dark dots: after. Pink: your activation.</figcaption>
+      <div class="panel" style="margin-top:12px">
+        <div class="ctl" id="zooCtl1"><label for="zs1"><span id="zs1l">Strength</span> <output for="zs1"></output></label><input id="zs1" type="range" min="0" max="1" step="0.01" value="0.5"></div>
+        <div class="readout" id="zooRead"></div>
+      </div>
+    </figure>
+    <div class="card" id="zooCard"></div>
+  </div>
+</section>
+
+<section class="plate wide" id="compare">
+  <div class="intro">
+    <div class="eyebrow">Plate 3.2</div>
+    <h3>All of them, side by side</h3>
+    <p>The highlighted row is the open cell from the grid at the top.</p>
+  </div>
+  <div class="fig">
+    <div class="tbl-wrap">
+      <table class="cmp">
+        <thead><tr><th>Method</th><th>Persona shape</th><th>Data it needs</th><th>The edit</th><th>When it acts</th><th>Cost per token</th><th>Multi-turn evidence</th><th>Main failure</th></tr></thead>
+        <tbody>
+          <tr><th>Steering vector</th><td>direction</td><td>pos/neg rollouts, judge-filtered</td><td>h + αv</td><td>always</td><td>O(d)</td><td>degrades: −18.6 coherence over 10 turns (GCAD baseline)</td><td>moves states already in character; piles up in the KV cache</td></tr>
+          <tr><th>Activation cap</th><td>floor on one axis</td><td>role and default rollouts; percentile threshold</td><td>lift to τ along v</td><td>past a threshold</td><td>O(d) × layers</td><td>replayed case-study conversations; nearly 60% fewer harmful answers to persona jailbreaks, capabilities kept</td><td>one axis only</td></tr>
+          <tr><th>LiSeCo</th><td>probe half-space</td><td>labelled constraint set</td><td>smallest move back to probability p</td><td>past a threshold</td><td>O(d) per layer</td><td>none found</td><td>guarantee holds only relative to the probe</td></tr>
+          <tr><th>Gated vector (DSAS, MERA)</th><td>direction + gate</td><td>source/control sets (+ calibration)</td><td>(1 − g)h + g·T(h)</td><td>gated per token</td><td>+2d</td><td>none found</td><td>needs a control set for the gate</td></tr>
+          <tr><th>MAGS</th><td>error subspace in a few heads</td><td>correct vs failed traces</td><td>subtract BᵀB(a − μ_c)</td><td>triggered</td><td>O(Kkd_h)</td><td>none (reasoning tasks)</td><td>needs contrastive traces</td></tr>
+          <tr><th>INLP / LEACE / PaSS</th><td>hard subspace</td><td>labels</td><td>project out or rescale</td><td>always</td><td>O(dk)</td><td>none found</td><td>hard cut also removes shared content</td></tr>
+          <tr><th>SEA</th><td>cross-covariance spectrum</td><td>neutral / positive / negative</td><td>spectral projection</td><td>always</td><td>O(d²)</td><td>none found</td><td>hard truncation</td></tr>
+          <tr><th>Conceptor</th><td>ellipsoid</td><td>~100 samples or more</td><td>βCh or interpolation</td><td>always</td><td>O(d²), or O(dk) low-rank</td><td><strong>none measured</strong> (Part 4 has a 3-conversation pilot)</td><td>rank deficiency deletes content</td></tr>
+          <tr><th>Contrastive conceptor</th><td>region minus failure region</td><td>success and failure rollouts</td><td>soft gate (1 − β)I + βC₊∧¬C₋</td><td>always / per step</td><td>O(d²)</td><td>none (robot policies)</td><td>needs failure data</td></tr>
+          <tr class="hl"><th>Gated conceptor</th><td>ellipsoid + gate</td><td>persona samples + a gate</td><td>(1 − g)h + g·(m + C(h − m))</td><td>gated</td><td>O(dk) + 2d</td><td><strong>untested</strong></td><td>unknown</td></tr>
+          <tr><th>Distribution map (MiMiC, AcT)</th><td>mean + covariance</td><td>unpaired source/target</td><td>Wh + b</td><td>always</td><td>O(d)–O(d²)</td><td>none found</td><td>AcT is per-dimension (cannot rotate)</td></tr>
+          <tr><th>Geodesic steering</th><td>curved sheet</td><td>many personas</td><td>path along a k-NN graph</td><td>always</td><td>&lt; 1 ms per pair</td><td>20-turn dialogues at each point along the path; more consistent than straight lines</td><td>needs dense persona sampling</td></tr>
+          <tr><th>GCAD</th><td>attention pathway</td><td>contrastive system prompts</td><td>gated, cropped attention delta</td><td>gated per token</td><td>1 dot product per head</td><td><strong>best measured: −1.9 coherence drift; trait 93.1 at turn 10</strong></td><td>needs a system-prompt contrast</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="panel"></div>
+</section>
+
+<!-- ============================== PART 4 ============================== -->
+<section class="part" id="turns">
+  <div class="eyebrow">Part 4</div>
+  <h2>Across a conversation</h2>
+  <p>A single answer is the easy case. Over many turns, three things pull a persona apart. <strong>Attention decay:</strong> the system prompt becomes a smaller share of what each new token looks at. <strong>KV-cache pile-up:</strong> every steered token is written to the cache and read again, so an always-on edit compounds. <strong>User pull:</strong> the latest message largely sets where the persona lands; the Assistant Axis paper found message embeddings predict the next turn's position with R² of 0.53–0.77.</p>
+</section>
+
+<section class="plate" id="sim">
+  <div class="intro">
+    <div class="eyebrow">Plate 4.1 · toy dynamics</div>
+    <h3>Why "when" matters more than "shape" over many turns</h3>
+    <p>A toy model with the three forces above. Each turn, the persona score decays toward the assistant, user messages pull it, and edits applied at every token leave a residue in the cache that builds up.</p>
+    <p>Always-on edits keep the score up but pile up residue. A cap only adds what is missing to reach its floor, so it leaves the least.</p>
+    <p class="try"><b>Try</b>Raise the cache memory: every edited line loses coherence faster, the cap least. Then raise the user pull: the vector stops holding the persona, and the cap has to add more each turn.</p>
+  </div>
+  <div class="panel">
+    <div class="ctl"><label for="simPull">User pull toward assistant <output for="simPull"></output></label><input id="simPull" type="range" min="0" max="1" step="0.01" value="0.35"></div>
+    <div class="ctl"><label for="simMem">Cache memory (how long edits linger) <output for="simMem"></output></label><input id="simMem" type="range" min="0" max="0.95" step="0.01" value="0.7"></div>
+    <ul class="legend" aria-label="Conditions">
+      <li><span class="key line" style="background:var(--none)"></span>prompt only</li>
+      <li><span class="key line" style="background:var(--orange)"></span>always-on vector</li>
+      <li><span class="key line" style="background:var(--pirate)"></span>always-on conceptor</li>
+      <li><span class="key line" style="background:var(--assist)"></span>cap (acts when needed)</li>
+    </ul>
+    <p class="note">This is a cartoon for intuition, not a measurement. Its rules are in the panel below.</p>
+    <details class="math"><summary>The toy's rules</summary>
+      <span class="eqnote">Persona score s (1 = in character). Each turn: s ← s + 0.25·(1 − s)·a(t) − pull·k(t) + noise, where a(t) = 1/(1 + t/6) is the decaying anchor from the system prompt and k(t) is 1 on attack turns (4, 8, 12, 16) and 0.15 otherwise. Scores above 1 relax by 15% of the excess. The vector adds +0.15. The conceptor moves 40% of the way back toward 1 and also squeezes some content on every turn (+0.08 residue). The cap lifts s to 0.75 if it is below 0.75. Residue r ← memory·r + |edit|. Coherence = 1 − 0.35·r, clipped at 0.</span>
+    </details>
+  </div>
+  <figure class="fig">
+    <div class="figrow">
+      <div><h4 class="chart-title">Persona score per turn</h4><canvas id="cSimP" role="img" aria-label="Toy persona score per turn for four conditions"></canvas></div>
+      <div><h4 class="chart-title">Coherence left per turn</h4><canvas id="cSimC" role="img" aria-label="Toy coherence per turn for four conditions"></canvas></div>
+    </div>
+  </figure>
+</section>
+
+<section class="plate" id="realturns">
+  <div class="intro">
+    <div class="eyebrow">Plate 4.2 · real data</div>
+    <h3>A 12-turn pilot on Qwen2.5-0.5B</h3>
+    <p>There are three scripted conversations under a pirate system prompt. "Switch" asks the model to drop the act at turn 5 and asks "are you an AI?" at turn 9. "Benign" just changes topics. "Replace" tells the model at turn 3 that it is now a kindergarten teacher.</p>
+    <p>Four conditions: prompt only, adding the pirate vector at layer 12, a cap across layers 10–14 at the 25th percentile, and a conceptor at layer 12 (β = 0.3). The y-axis reads the persona score downstream at layer 18 (0 = average assistant answer, 1 = average pirate answer). Rings mark answers that say they are an AI.</p>
+    <p>What to take from it: every condition is high on the intro turn and falls on task turns. Adding the vector raises the meter but not the pirate words, so the meter and the behavior come apart. With one sample per turn, treat differences as anecdotes.</p>
+  </div>
+  <div class="panel">
+    <div class="seg" id="mtConv" role="group" aria-label="Conversation">
+      <button type="button" data-v="switch" aria-pressed="true">Switch</button>
+      <button type="button" data-v="benign" aria-pressed="false">Benign</button>
+      <button type="button" data-v="replace" aria-pressed="false">Replace</button>
+    </div>
+    <ul class="legend" aria-label="Conditions">
+      <li><span class="key line" style="background:var(--none)"></span>prompt only</li>
+      <li><span class="key line" style="background:var(--orange)"></span>add vector</li>
+      <li><span class="key line" style="background:var(--assist)"></span>cap</li>
+      <li><span class="key line" style="background:var(--pirate)"></span>conceptor</li>
+    </ul>
+    <div class="tiles" id="mtTiles"></div>
+  </div>
+  <figure class="fig">
+    <canvas id="cMT" role="img" aria-label="Persona score per turn for four steering conditions"></canvas>
+    <figcaption>Click a turn to read all four answers below.</figcaption>
+    <div class="answers" id="mtAns" style="margin-top:10px"></div>
+  </figure>
+</section>
+
+<section class="plate" id="litturns">
+  <div class="intro">
+    <div class="eyebrow">Plate 4.3 · published numbers</div>
+    <h3>What larger studies measured</h3>
+    <p><strong>GCAD</strong> (Kang et al. 2026): 15 traits, Qwen2.5-7B, 10 turns with the KV cache kept between turns. Standard persona-vector steering loses coherence turn after turn. Moving the edit into the attention output and gating it per token keeps coherence flat <em>and</em> keeps the trait stronger.</p>
+    <p><strong>Assistant Axis</strong> (Lu et al. 2026): in long simulated conversations, coding stays in the Assistant range, while therapy-like conversations and pushes to reflect on the model's own mind drift away. Capping at every token, across 8 to 16 middle-to-late layers, stopped the harmful drift in their case studies.</p>
+    <p><strong>Li et al. 2024</strong>: system-prompt adherence drops measurably within 8 rounds. Split-softmax, which boosts attention to the system prompt, helps.</p>
+  </div>
+  <div class="panel">
+    <ul class="legend" aria-label="Methods">
+      <li><span class="key line" style="background:var(--orange)"></span>residual persona vector</li>
+      <li><span class="key line" style="background:var(--pirate)"></span>GCAD</li>
+    </ul>
+  </div>
+  <figure class="fig">
+    <div class="figrow">
+      <div><h4 class="chart-title">Coherence (0–100)</h4><canvas id="cGcadC" role="img" aria-label="Coherence at turns 1, 5 and 10"></canvas></div>
+      <div><h4 class="chart-title">Trait expression (0–100)</h4><canvas id="cGcadT" role="img" aria-label="Trait expression at turns 1, 5 and 10"></canvas></div>
+    </div>
+    <figcaption>15-trait averages on Qwen2.5-7B-Instruct at turns 1, 5 and 10, from Kang et al. 2026, Table 1. GPT-4.1-mini judge.</figcaption>
+  </figure>
+</section>
+
+<!-- ============================== PART 5 ============================== -->
+<section class="part" id="recipe">
+  <div class="eyebrow">Part 5</div>
+  <h2>A recipe for semantic conceptors on personas</h2>
+  <p>What the papers and this pilot suggest, in order. Each step names the plate that shows why.</p>
+</section>
+
+<section class="plate wide">
+  <div class="fig">
+    <ol class="recipe">
+      <li><strong>Cross every persona with the same questions, and add hard negatives</strong>: an assistant describing the persona, quoted dialogue, and persona vocabulary without persona commitments. Otherwise you fit the costume (1.2, 1.6).</li>
+      <li><strong>Judge identity, not words.</strong> Keep fully in-character answers and drop the ambiguous middle. A word counter rewards the hard negative (1.3).</li>
+      <li><strong>Pick the pooling that matches your question.</strong> The last prompt token measures "the persona has been set up". The answer average measures "the persona is being expressed" (1.4).</li>
+      <li><strong>Sweep layers with a probe on held-out questions</strong>, not on held-out samples of the same questions (1.4).</li>
+      <li><strong>Fit on per-question differences, or center on the persona mean.</strong> Never use plain raw βCh: raw clouds mostly encode the questions (1.7, 2.4, 2.10).</li>
+      <li><strong>Handle rank.</strong> Use a low-rank C, shrinkage, or per-token samples, and interpolate with the identity so content outside the span survives (2.7).</li>
+      <li><strong>Give it a "when".</strong> Add a gate or a cap so in-character states are left alone. For long conversations, consider injecting in the attention output, not the residual stream (3, 4.1, 4.3).</li>
+      <li><strong>Run the controls:</strong> the same center and gain with the matrix removed (2.6), a random subspace with a matched spectrum (COAST), and a cap on the same direction.</li>
+      <li><strong>Evaluate per turn</strong>, with identity probes and persona-replacement attacks, and score coherence separately from the trait (4.2).</li>
+    </ol>
+  </div>
+</section>
+
+<section class="plate wide">
+  <div class="fig">
+    <div class="cols">
+      <section><h4>Open cell: a gated conceptor</h4><p>A conceptor supplies the shape, and a DSAS-style gate or a cap supplies the "when": (1 − g)h + g·(m + C(h − m)). Nobody has tested it on personas or across turns. Plate 2.8 shows the toy version.</p></section>
+      <section><h4>In character AND NOT broken</h4><p>Fit one conceptor on turns where the model stayed in character and one on turns where it broke, then combine them as COAST did for robot success and failure. If breaks look alike across personas, the way failures looked alike across robot tasks, one "not broken" conceptor could serve many personas.</p></section>
+      <section><h4>Compare spectra across models</h4><p>A conceptor's list of keep-fractions does not depend on how a model's axes are oriented. Persona conceptors from Llama, Qwen and Gemma can be compared without aligning the models. Rerun <span class="mono">persona_acts.py</span> with a 7–8B model to get the data.</p></section>
+    </div>
+  </div>
+</section>
+
+<section class="sources" id="sources">
+  <h2 style="font-family:var(--f-display);font-weight:400;font-size:1.4rem;margin:40px 0 12px">Sources</h2>
+  <ol>
+    <li><a href="https://arxiv.org/abs/1403.3369">Controlling Recurrent Neural Networks by Conceptors</a> <span>· Jaeger, 2014. Aperture adaptation, Boolean laws, autoconceptors.</span></li>
+    <li><a href="https://arxiv.org/abs/1406.2671">Conceptors: an easy introduction</a> <span>· Jaeger, 2014. The short version.</span></li>
+    <li><a href="https://arxiv.org/abs/2410.16314">Steering Large Language Models using Conceptors</a> <span>· Postmus &amp; Abreu, NeurIPS 2024 MINT workshop. Raw and globally centered conceptors, AND composition.</span></li>
+    <li><a href="https://www.lesswrong.com/posts/9aZYJinAyxequjQbn/a-conceptor-by-any-other-name">A conceptor by any other name</a> <span>· Keenan Pepper, LessWrong, July 2026. Conceptors as soft PCA and ridge shrinkage, with a pirate-persona example.</span></li>
+    <li><a href="https://arxiv.org/abs/2605.04980">Conceptors for Semantic Steering</a> <span>· Triantafyllopoulos et al., 2026. Bipolar fits, interpolation vs replace, quota.</span></li>
+    <li><a href="https://arxiv.org/abs/2610.16325">When a Conceptor Complement Becomes Gain</a> <span>· Razdan &amp; Balamurugan, 2026. Target-centered complement; the matrix-removed control.</span></li>
+    <li><a href="https://arxiv.org/abs/2605.17144">COAST: Contrastive Conceptor Activation Steering</a> <span>· Miao et al., 2026. Success AND NOT failure.</span></li>
+    <li><a href="https://arxiv.org/abs/2507.21509">Persona Vectors</a> <span>· Chen et al., 2025. The automated trait pipeline. <a href="https://github.com/safety-research/persona_vectors">Code</a>.</span></li>
+    <li><a href="https://arxiv.org/abs/2601.10387">The Assistant Axis</a> <span>· Lu et al., 2026. Role pipeline, activation capping. <a href="https://github.com/safety-research/assistant-axis">Code and role prompts</a> (used in our run).</span></li>
+    <li><a href="https://arxiv.org/abs/2405.15454">Linearly Controlled Language Generation with Performative Guarantees (LiSeCo)</a> <span>· Cheng, Baroni &amp; Amo Alonso.</span></li>
+    <li><a href="https://arxiv.org/abs/2512.03661">Dynamically Scaled Activation Steering (DSAS)</a> <span>· Ferrando et al. Per-token gating.</span></li>
+    <li><a href="https://github.com/annahedstroem/MERA-steering">MERA: To Steer or Not to Steer?</a> <span>· Hedström et al., ICML 2025. Calibrated, error-triggered steering.</span></li>
+    <li><a href="https://arxiv.org/abs/2605.21770">MAGS: Manifold-Guided Attention Steering</a> <span>· Li et al., 2026. Error subspaces in attention heads.</span></li>
+    <li><a href="https://arxiv.org/abs/2610.04676">PaSS: persona subspaces via iterative nullspace projection</a> <span>· Malik &amp; ElSherief, 2026.</span></li>
+    <li><a href="https://arxiv.org/abs/2405.09719">Spectral Editing of Activations</a> <span>· Qiu et al., NeurIPS 2024.</span></li>
+    <li><a href="https://arxiv.org/abs/2402.09631">Representation Surgery: Theory and Practice of Affine Steering</a> <span>· Singh et al., ICML 2024 (MiMiC).</span></li>
+    <li><a href="https://arxiv.org/abs/2605.05220">MidSteer: Optimal Affine Framework for Steering</a> <span>· 2026. Steering as a special case of LEACE.</span></li>
+    <li><a href="https://arxiv.org/abs/2609.34571">PersonaManifold</a> <span>· Xu, Xu &amp; Wu, 2026. Geodesic steering between personas.</span></li>
+    <li><a href="https://arxiv.org/abs/2605.05115">Manifold Steering</a> <span>· Wurgaft et al., 2026. Steering as choosing a geometry.</span></li>
+    <li><a href="https://arxiv.org/abs/2605.10664">Prompt–Activation Duality (GCAD)</a> <span>· Kang et al., 2026. KV-cache contamination; gated attention-level steering.</span></li>
+    <li><a href="https://arxiv.org/abs/2402.10962">Measuring and Controlling Instruction (In)Stability in Language Model Dialogs</a> <span>· Li et al., COLM 2024.</span></li>
+  </ol>
+  <p class="foot">Toy figures use seeded synthetic data. Real figures come from one run of persona_acts.py on Qwen2.5-0.5B-Instruct (Apple MPS, float32, seed 7, 4 Nov 2026): 384 single-turn answers and 144 multi-turn answers, one sample each, scored with a keyword judge. Analysis: analyze_acts.py. Both scripts live in casting-call-vectors/conceptors.</p>
+</section>
+
+</div>
+<div class="tip" id="tip" hidden></div>

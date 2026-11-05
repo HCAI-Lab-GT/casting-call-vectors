@@ -1,0 +1,60 @@
+# Prior OLMo-3-7B-Instruct artifacts in this repo
+
+Inventory taken 4 Nov 2026, read-only. Nothing outside `conceptors/` was changed.
+
+**Verdict.** The reusable asset is the Assistant Axis set for OLMo-3-7B-Instruct: 330,000 answers (275 roles x 5 system prompts x 240 questions, one sample each) with a 0-3 role-play label on every role answer, 54% of them fully in character. No per-sample activations are stored anywhere in the repo, so every conceptor fit needs a new forward pass. Teacher-forcing these existing answers (the read-only mode planned for `persona_acts.py`) gets those activations without generating anything, and because we pick the layer and pooling ourselves, they match our conventions by construction. The Casting Call role vectors are pooled mean differences, so they are useful only as steering-vector baselines.
+
+OLMo-3-7B has 32 decoder layers, d = 4096, and 33 hidden states (index 0 = embeddings). Throughout, "layer 16" in the Casting Call code means `hidden_states[16 + 1]`, which is hidden 17 in our convention.
+
+## What exists
+
+| Path | Contents | Layers | Pooling | Prompts and questions |
+|---|---|---|---|---|
+| `persona_data/assistant-axis/olmo-3-7b-instruct/responses/<role>.jsonl` (903 MB) | 276 files (275 roles + `default`), 1200 lines each: `system_prompt`, `prompt_index`, `question_index`, `question`, full `conversation`. Pirate answers have a median of ~2,000 characters and a max of ~2,800, which looks like a 512-token cap ⚠️ | n/a (text) | n/a | 5 short AA-style role prompts per role (e.g. "You are a pirate captain who has sailed the seven seas..."), 240 shared questions. `default` uses `""`, "Respond as yourself.", "You are Olmo.", "You are a large language model.", "You are an AI assistant." |
+| `.../olmo-3-7b-instruct/scores/<role>.json` | 275 files (none for `default`), keys `pos_p{prompt}_q{question}` mapping to 0-3. Totals: 0: 8,245; 1: 91,445; 2: 52,714; 3: 177,596 | n/a | n/a | same as responses |
+| `.../olmo-3-7b-instruct/vectors/<role>.pt` | 276 dicts `{vector: (1, 4096) bf16, type: "pos_3", role}`; `default.pt` has type `mean`; `chemist.pt` holds all 32 layers as (32, 4096) | "layer 16" by the paper's convention; probably hidden 17 ⚠️ | mean over score-3 answers (AA method) | AA prompts |
+| ~~`christina-vectors/`~~ | removed 4 Nov 2026: two byte-identical copies of the AA vectors minus `chemist.pt`; `analysis/geometry/christina_analysis.py` now reads the AA folder | same | same | same |
+| `persona_data/model_inits/<role>_persona_initialization/allenai__Olmo-3-7B-Instruct_layer16_count{20,40,50}.json` | Casting Call role vectors: `prompt_persona_vector` (1, 4096), `response_persona_vector` (1, 4096), `all_layers_response_persona_vector` (33, 1, 4096). count50 covers all 275 roles, count40 covers 210, count20 covers 202 | hidden 17 for prompt and response; all 33 hidden states for the all-layers vector | mean over n pairs of (role prompt) minus (empty system prompt). Prompt vector = last prompt token; response vector = mean over freshly generated tokens | 5 long role prompts per role written by kimi-k2.5 with immersion instructions; 50 role-specific dilemma questions per role (`persona_data/role_datasets/`) |
+| `persona_data/pt_vectors/<role>.pt` | 275 tensors, (1, 4096) fp32, the layer-16 Casting Call export (`README.md:244`) | hidden 17 | as above | as above |
+| `persona_data/trait_inits/<trait>_persona_initialization/..._layer{14,16}_count40.json` | 241 trait vectors (225 at layer 14, 240 at layer 16), same format | hidden 15 / 17 | positive minus negative system prompt, 5 pairs | 100 questions per trait (`persona_data/trait_datasets/`) |
+| `experiment_data/gold_prompt_experiments/Comparison_GoldStandard_<role>.csv` (2 GB) | 275 roles x 228 questions x alpha {1.0, 1.5, 2.0, 2.5} = 912 rows per role. Columns: `baseline` (gold-prompted answer), `steered` (CastVector, layer 16, count 50), `assistant_axis` (AA-vector steered), gpt-4.1-mini role score 0-100 plus 5 sub-dimension comparisons with the gold answer. Pirate: baseline ~95, steered mean 34, AA-steered mean 16 | layer 16 steering | n/a (text) | `configs/validation_questions.jsonl` |
+| `experiment_data/pairwise_judge_experiments{,_gpt}/` | 40 and 39 roles, alpha 2.5 only, adds a debiased A/B pairwise judge | layer 16 | n/a | same 228 questions |
+| `analysis/empirical/*`, `analysis/geometry/*` | RDMs, RSA, norm and intrinsic-dimension studies of the 275 layer-16 vectors | hidden 17 | derived | derived |
+| `persona_data/gold_standard_prompts/`, `gold_labels_prompts_dataset/` | 4-question interviews with kimi-k2.5 as interviewee (not OLMo), plus judge prompts | n/a | n/a | n/a |
+
+The Casting Call extraction (`src/pvx/implementations/roles_optimized/roles_optimized_gpu.py:206-337`, `src/pvx/abstraction/pvx_models/abstract_persona_model.py:697-800`) regenerates its own answers (temperature 0.2, top-p 0.99) instead of teacher-forcing the judged CPU-phase answers. So the response vectors average unjudged text, and the judged CPU-phase files (`persona_data/model_qa_responses/`) are not in this checkout. The `manifest.json` files in `model_inits/` and `trait_inits/` point at `.safetensors` files that don't exist; they are stale.
+
+Fully-in-character rate (score 3) per role: min 5%, 10th percentile 27%, median 54%, 90th percentile 82%, max 96%. For the pilot roles: pirate 94%, assistant 91%, teacher 84%, ghost 71%, bard 69%, consultant 68%, doctor 38%, robot 30%. So OLMo-3-7B plays storybook characters readily and often answers occupational roles as the assistant. The judge filter matters even for pirate: the first pirate answer in the file ("law and morality") is plain assistant prose and scored 1.
+
+## Reusable for this project
+
+- **AA answers plus labels, teacher-forced.** Run the existing texts through OLMo-3-7B-Instruct and save per-answer and per-token activations at every hidden state. Fit on score 3 only. Score 0-1 answers under role prompts are natural "broke character" negatives for the contrastive conceptor, and `default.jsonl` supplies 1,200 assistant answers over 5 default prompts. The same texts can also be forced through `-Instruct-SFT` and `-Instruct-DPO`, which is the stage comparison we want. All 330k answers are far too many for the Mac (about 500 tokens each), so a subset of roles is needed; task 6 will size it.
+- **AA vectors and CastVectors as steering baselines** at hidden 17, once the AA layer index is confirmed.
+- **Gold-prompt CSVs as a single-turn reference curve** (role score vs alpha for vector steering on OLMo), which helps choose matched trait levels, and the 228 validation questions as a held-out eval set.
+
+## Not reusable
+
+- **Casting Call vectors as conceptor input.** They are pooled sums with no per-sample cloud, the contrast is against an empty system prompt rather than assistant prompts, and the answers behind them were regenerated and never judged.
+- **One fit that mixes CastVector and AA data.** The prompts (long kimi-written vs short AA), the questions (50 role-specific dilemmas vs 240 shared) and the contrast all differ.
+- **Multi-turn data.** None exists for OLMo; the gold-standard interviews are kimi-k2.5 outputs.
+- **Hard negatives** (narrated persona, quoted dialogue, vocabulary without identity). None exist; we still have to generate them.
+
+## Open checks ⚠️
+
+1. **AA layer index.** `chemist.pt` has 32 rows, which suggests decoder-layer outputs 0-31 (so row 16 = hidden 17) rather than hidden states 0-31. Confirm against the AA extraction code when we clone `safety-research/assistant-axis` in task 2.
+2. **Question and prompt identity.** Check that the 240 questions here match `data/extraction_questions.jsonl` and the role prompts match `data/roles/instructions/*.json`, also in task 2.
+3. **Generation and judge settings.** Temperature, max tokens and the judge model for the AA files aren't recorded in this repo; the producing code lived in a sibling `../assistant-axis-pvx` checkout.
+## Where the data lives (checked 4 Nov 2026)
+
+The repo checkout is the canonical copy, and nothing more is stored on Google Drive or OneDrive. Everything above is tracked in plain git (not LFS) on `origin` (`eilab-gt/personality-vectors`), with a 3.79 GiB pack; `git lfs ls-files` is empty, and the `.gitattributes` LFS rule only covers `model_inits/**/*.safetensors` files that no longer exist.
+
+- **Google Drive** holds synced session notes, papers and Zotero exports, but no run data.
+- **OneDrive** (`~/Library/CloudStorage/OneDrive-GeorgiaInstituteofTechnology/download-dump-september2026/`) holds `personality-vectors-main/` (9.5 GB) and a cloud-only `personality-vectors-main.zip` (2.6 GB). A path-and-size diff against this checkout matches every file in `persona_data/` and `experiment_data/`. Its 343 "extra" analysis files are `nlp_experiments/per_role/*.json`, which sit at `analysis/empirical/nlp_experiments/figures/per_role/` here with identical sizes, and its 33 `scripts/evaluation/` files moved into `analysis/`. The only file missing here was `persona_data/role_datasets.zip` (2.8 MB), an older archive of `role_datasets/` whose JSONs all exist here (its other entries are macOS `._` files). Both copies were deleted on 4 Nov 2026 (OneDrive recycle bin); the dump's README and triage manifest remain. `Persona/` and the TDA `olmo3_social_benchmark_handoff` pack contain papers, notes and plans, but no activations. `Persona/20_Research_and_Notes/persona_trajectory_agent_pack.zip` has OLMo checkpoint configs for the 2605.13329 pretraining sweep, which will be useful in task 2.
+- **Data defect**: for 18 roles (advocate, archivist, coach, debugger, engineer, facilitator, hybrid, journalist, maverick, moderator, nutritionist, organizer, publisher, reporter, reviewer, scout, summarizer, trickster), `persona_data/gold_standard_prompts/<role>.json` is a byte-identical copy of `gold_labels_prompts_dataset/<role>_gold_label.json`. The interview transcripts are missing, and have been since commit `8c8a6901` (23 Mar). The gold-prompt judge reads the gold-label files, which are correct.
+- **Still missing**: the judged CPU-phase Q/A files (`persona_data/model_qa_responses/`) and the Assistant Axis generation code and settings (`../assistant-axis-pvx`). Neither is on this machine, Drive or OneDrive, and the MATS cluster and the Modal volume hold nothing for this project. Rehan is the person to ask.
+
+**Storage for new data.** Leave the existing data in git: moving it to LFS means `git lfs migrate`, a history rewrite and a force-push of a shared repo. For the new activation dumps, use a private Hugging Face Storage Bucket as working storage. Buckets are mutable, non-versioned and S3-like (`hf buckets sync`), so Mac and cluster runs can overwrite caches freely. Freeze finished runs (`texts.jsonl`, judge scores, `manifest.json`, `derived.json`) into a private HF dataset repo and pin each analysis to its commit SHA. For scale: per-answer means at all 33 hidden states in fp16 cost about 270 KB per answer on OLMo-3-7B (about 3 GB for 10 roles x 1,200 answers). Per-token activations cost about 8 KB per token per layer, so they need a layer and answer subset.
+
+## Resolved: the empty system prompt means two different things
+
+The OLMo-3-7B-Instruct `chat_template.jinja` (read from the Hub) injects "You are a helpful function-calling AI assistant. You do not currently have access to any functions. <functions></functions>" only when the conversation has no system message. A system message with empty content renders as an empty system block. The Casting Call contrast sends `{"role": "system", "content": ""}`, so its negative is an empty system block. The AA `""` default rows store no system message at all (`["user", "assistant"]`), so if they were generated with this template, their negative is the built-in function-calling prompt. For teacher-forcing, render each AA row exactly as stored, and record which of the two empty-prompt conditions a run uses. The Hub config also lists `transformers_version` 4.57.1 and `model_type` olmo3, and the bf16 weights total 14.6 GB.

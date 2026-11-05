@@ -1,0 +1,20 @@
+const { chromium } = require('playwright');
+(async () => {
+  const browser = await chromium.launch();
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const errs = [];
+  page.on('pageerror', e => errs.push('PAGEERROR: ' + e.message));
+  await page.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
+  await page.goto('file://' + require('path').resolve(__dirname, '../persona_steering_field_guide.html'));
+  await page.waitForTimeout(500);
+  await page.click('#shapegrid .chip[data-m="gcad"]'); await page.waitForTimeout(2500);
+  const zooTop = await page.evaluate(() => document.getElementById('zoo-explorer').getBoundingClientRect().top);
+  const pressed = await page.$$eval('.chip[aria-pressed="true"]', b => b.map(x => x.dataset.m));
+  const mt = await page.$('#cMT'); await mt.scrollIntoViewIfNeeded(); await page.waitForTimeout(200);
+  const bb = await mt.boundingBox(); await page.mouse.click(bb.x + bb.width * .45, bb.y + bb.height * .5); await page.waitForTimeout(150);
+  const mtHead = await page.$eval('#mtAns .annot', el => el.textContent);
+  const nav = await page.$$eval('.partnav a.on', a => a.map(x => x.textContent));
+  console.log(JSON.stringify({ zooTop: Math.round(zooTop), pressed, mtHead, nav }));
+  console.log(errs.join('\n') || 'no errors');
+  await browser.close();
+})();

@@ -1,0 +1,763 @@
+<title>Conceptors in Two Dimensions</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* Layout: one column of numbered plates (a real sequence: each builds on the last). Text and controls on the left, a live figure on the right; on phones: intro, figure, controls. */
+:root{
+  --paper:#F1F4F7; --panel:#FAFBFC; --ink:#16202B; --muted:#5A6676; --hair:#D3DAE2; --grid:#E4E9EF;
+  --pirate:#0D716E; --pirate-wash:rgba(13,113,110,.10); --doctor:#A4570F; --probe:#BE1858; --assist:#7B8695;
+  --f-display:"STIX Two Text",Georgia,"Times New Roman",serif;
+  --f-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0F141A; --panel:#141B23; --ink:#E3E8EE; --muted:#97A3B2; --hair:#2B3542; --grid:#1B242E;
+    --pirate:#3CBDB6; --pirate-wash:rgba(60,189,182,.14); --doctor:#E39B57; --probe:#F36AA2; --assist:#8D98A6;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0F141A; --panel:#141B23; --ink:#E3E8EE; --muted:#97A3B2; --hair:#2B3542; --grid:#1B242E;
+  --pirate:#3CBDB6; --pirate-wash:rgba(60,189,182,.14); --doctor:#E39B57; --probe:#F36AA2; --assist:#8D98A6;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.55}
+a{color:var(--pirate);text-underline-offset:2px}
+a:focus-visible,button:focus-visible,input:focus-visible,canvas:focus-visible,summary:focus-visible{outline:2px solid var(--probe);outline-offset:2px}
+.wrap{max-width:1120px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:36px 64px}
+.mono{font-family:var(--f-mono)}
+.eyebrow{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+
+/* hero */
+.hero{display:grid;gap:16px;padding-block:12px 34px;border-bottom:1px solid var(--hair)}
+h1{font-family:var(--f-display);font-weight:400;font-size:clamp(2.3rem,5.4vw,3.6rem);line-height:1.03;margin:0;letter-spacing:-.012em;text-wrap:balance}
+h1 i{color:var(--pirate)}
+.lede{font-size:1.14rem;max-width:62ch;margin:0}
+.legend{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:.88rem;color:var(--muted);margin:4px 0 0;padding:0;list-style:none}
+.legend li{display:flex;align-items:center;gap:7px}
+.sw{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none}
+
+/* plates */
+.plate{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.32fr);grid-template-areas:"intro fig" "panel fig";grid-template-rows:auto 1fr;gap:18px 44px;padding-block:44px;border-bottom:1px solid var(--hair);align-items:start}
+.intro{grid-area:intro;min-width:0}
+.panel{grid-area:panel;min-width:0;display:grid;gap:16px;align-content:start}
+.fig{grid-area:fig;margin:0;min-width:0;position:sticky;top:calc(env(safe-area-inset-top,0px) + 16px)}
+@media (max-width:840px){
+  .plate{grid-template-columns:minmax(0,1fr);grid-template-areas:"intro" "fig" "panel";gap:16px;padding-block:34px}
+  .fig{position:static}
+}
+.plate h2{font-family:var(--f-display);font-weight:400;font-size:clamp(1.5rem,2.7vw,1.95rem);line-height:1.14;margin:6px 0 12px;text-wrap:balance}
+.plate p{margin:0 0 10px;max-width:60ch}
+.try{color:var(--ink)}
+.try b{font-family:var(--f-mono);font-weight:500;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--probe);margin-right:6px}
+canvas{display:block;width:100%;border:1px solid var(--hair);border-radius:4px;background:var(--panel)}
+canvas.drag{touch-action:none;cursor:crosshair}
+figcaption{font-family:var(--f-mono);font-size:.74rem;color:var(--muted);margin-top:8px;line-height:1.45}
+
+/* controls */
+.ctl{display:grid;gap:4px}
+.ctl label{display:flex;justify-content:space-between;gap:12px;font-family:var(--f-mono);font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.ctl output{color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:0;text-transform:none}
+input[type=range]{width:100%;margin:2px 0 0;accent-color:var(--pirate)}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{font:500 .84rem/1 var(--f-body);padding:8px 12px;border:1px solid var(--hair);background:var(--panel);color:var(--ink);border-radius:999px;cursor:pointer}
+.seg button:hover{border-color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.btn{font:500 .84rem/1 var(--f-body);padding:9px 13px;border:1px solid var(--probe);color:var(--probe);background:transparent;border-radius:4px;cursor:pointer;justify-self:start}
+.btn:hover{background:var(--probe);color:var(--panel)}
+.modecap{margin:0;min-height:3.1em}
+.modecap strong{font-weight:700}
+.readout{font-family:var(--f-mono);font-size:.8rem;font-variant-numeric:tabular-nums;display:grid;gap:5px;padding:10px 12px;background:var(--panel);border:1px solid var(--hair);border-radius:4px;overflow-x:auto}
+.readout div{display:flex;justify-content:space-between;gap:14px;white-space:nowrap}
+.readout .k{color:var(--muted)}
+.bars{display:grid;gap:9px}
+.barrow{display:grid;grid-template-columns:8.2em minmax(0,1fr) 3.8em;align-items:center;gap:10px;font-size:.88rem}
+.barrow .v{font-family:var(--f-mono);font-size:.8rem;text-align:right;font-variant-numeric:tabular-nums}
+.bar{position:relative;height:10px;background:var(--grid);border-radius:2px}
+.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--pirate)}
+.bar .one{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink);transform:translateX(-1px)}
+.scale{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:.68rem;color:var(--muted);margin-left:calc(8.2em + 10px);margin-right:calc(3.8em + 10px)}
+.rule{font-family:var(--f-mono);font-size:.8rem;color:var(--muted)}
+.status{font-family:var(--f-mono);font-size:.8rem;padding:6px 9px;border:1px solid currentColor;border-radius:3px;justify-self:start}
+.note{font-size:.9rem;color:var(--muted)}
+
+/* takeaways */
+.take{padding-block:46px 30px;border-bottom:1px solid var(--hair)}
+.take h2{font-family:var(--f-display);font-weight:400;font-size:clamp(1.6rem,3vw,2.1rem);margin:6px 0 22px;text-wrap:balance}
+.cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:26px}
+@media (max-width:840px){.cols{grid-template-columns:minmax(0,1fr)}}
+.cols section{border-top:2px solid var(--ink);padding-top:12px;min-width:0}
+.cols h3{font-family:var(--f-display);font-weight:600;font-size:1.15rem;line-height:1.2;margin:0 0 8px}
+.cols p{margin:0 0 8px;font-size:.96rem}
+
+/* math + sources */
+details{padding-block:26px;border-bottom:1px solid var(--hair)}
+summary{cursor:pointer;font-family:var(--f-display);font-size:1.3rem}
+.math{display:grid;gap:12px;margin-top:16px;max-width:76ch}
+.math div{display:grid;grid-template-columns:11em minmax(0,1fr);gap:14px;align-items:baseline}
+@media (max-width:600px){.math div{grid-template-columns:minmax(0,1fr);gap:2px}}
+.math .lhs{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.math code{font-family:var(--f-display);font-size:1.08rem;font-style:italic;overflow-x:auto;display:block}
+.math small{display:block;font-family:var(--f-body);font-style:normal;font-size:.86rem;color:var(--muted)}
+.sources{padding-block:28px 8px}
+.sources h2{font-family:var(--f-display);font-weight:400;font-size:1.3rem;margin:0 0 12px}
+.sources ol{margin:0;padding-left:1.3em;display:grid;gap:8px;font-size:.92rem;max-width:80ch}
+.sources li span{color:var(--muted)}
+.foot{font-family:var(--f-mono);font-size:.74rem;color:var(--muted);margin-top:26px}
+</style>
+
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">A hands-on explainer · activation steering</div>
+  <h1>Conceptors in <i>two dimensions</i></h1>
+  <p class="lede">Record a model's internal states while it plays a pirate. That pile of points has a shape. A conceptor is a matrix built from that shape: apply it to a new state and it keeps the parts that point the way pirate states spread, and shrinks the rest. One knob, the aperture, sets how strict it is.</p>
+  <ul class="legend" aria-label="Figure key">
+    <li><span class="sw" style="background:var(--pirate)"></span>pirate states</li>
+    <li><span class="sw" style="background:var(--assist)"></span>assistant states</li>
+    <li><span class="sw" style="background:var(--doctor)"></span>a second concept</li>
+    <li><span class="sw" style="background:var(--probe)"></span>an activation you can drag</li>
+  </ul>
+</header>
+
+<!-- PLATE 1 -->
+<section class="plate" id="arrow">
+  <div class="intro">
+    <div class="eyebrow">Plate 1 of 6</div>
+    <h2>An arrow forgets the shape</h2>
+    <p>A steering vector is the arrow from the average assistant state to the average pirate state. A conceptor starts from the whole pirate cloud: which way it stretches, and how far.</p>
+    <p class="try"><b>Try</b>Stretch and tilt the pirate cloud. Watch the arrow's numbers.</p>
+  </div>
+  <div class="panel">
+    <div class="ctl"><label for="p1s">Stretch <output for="p1s"></output></label><input id="p1s" type="range" min="0.1" max="0.42" step="0.01" value="0.32"></div>
+    <div class="ctl"><label for="p1t">Tilt <output for="p1t"></output></label><input id="p1t" type="range" min="-80" max="80" step="1" value="28"></div>
+    <div class="readout" id="r1"></div>
+    <p class="note">The arrow never moves, so everything you just changed is invisible to a steering vector. Here the arrow is 2 numbers and the shape is a 2×2 table. In Llama‑3‑8B the arrow is 4,096 numbers and the shape is a 4,096×4,096 table.</p>
+  </div>
+  <figure class="fig"><canvas id="c1" role="img" aria-label="Two clouds of points with an arrow between their centers and an ellipse around the pirate cloud"></canvas>
+    <figcaption>Toy 2D data from a fixed seed. Real activations have thousands of directions; the rules are the same.</figcaption></figure>
+</section>
+
+<!-- PLATE 2 -->
+<section class="plate" id="stencil">
+  <div class="intro">
+    <div class="eyebrow">Plate 2 of 6</div>
+    <h2>A conceptor is a soft stencil</h2>
+    <p>Fit it to the pirate cloud and it decides how much of any activation gets through, direction by direction. Directions the cloud uses a lot pass almost untouched. Directions it barely uses get squeezed.</p>
+    <p>For now the cloud sits at zero. Plate 4 shows why that matters.</p>
+    <p class="try"><b>Try</b>Guess first: what does the stencil become with the aperture wide open? Fully closed? Then drag.</p>
+  </div>
+  <div class="panel">
+    <div class="ctl"><label for="p2a">Aperture <output for="p2a"></output></label><input id="p2a" type="range" min="0" max="1000" step="1" value="500"></div>
+    <div class="bars" id="b2"></div>
+    <div class="rule">keep = spread ÷ (spread + 1 / aperture²)</div>
+  </div>
+  <figure class="fig"><canvas id="c2" role="img" aria-label="Unit circle with arrows to an ellipse showing how much passes in each direction"></canvas>
+    <figcaption>Dashed circle: every input of length 1. Arrows: where each lands. Solid outline: the stencil.</figcaption></figure>
+</section>
+
+<!-- PLATE 3 -->
+<section class="plate" id="edits">
+  <div class="intro">
+    <div class="eyebrow">Plate 3 of 6</div>
+    <h2>Same activations, five different edits</h2>
+    <p>Each faint dot is some activation. Switch methods and watch where they all go. The pink dot is yours: drag it, or click to place it.</p>
+    <p class="try"><b>Try</b>The pink dot starts past the line. Switch between Cap and Conceptor. Only one of them leaves it alone.</p>
+  </div>
+  <div class="panel">
+    <div class="seg" id="m3" role="group" aria-label="Editing method">
+      <button type="button" data-v="push" aria-pressed="false">Push</button>
+      <button type="button" data-v="cap" aria-pressed="false">Cap</button>
+      <button type="button" data-v="cut" aria-pressed="false">Hard cut</button>
+      <button type="button" data-v="conceptor" aria-pressed="true">Conceptor</button>
+      <button type="button" data-v="not" aria-pressed="false">NOT</button>
+    </div>
+    <p class="modecap" id="cap3"></p>
+    <div class="ctl" id="w3s"><label for="p3s"><span id="l3s">Gain β</span> <output for="p3s"></output></label><input id="p3s" type="range" min="0" max="1" step="0.01" value="0.5"></div>
+    <div class="ctl" id="w3a"><label for="p3a">Aperture <output for="p3a"></output></label><input id="p3a" type="range" min="0" max="1000" step="1" value="500"></div>
+    <div class="readout" id="r3"></div>
+  </div>
+  <figure class="fig"><canvas id="c3" class="drag" tabindex="0" role="img" aria-label="Grid of activations transformed by the selected method. Use arrow keys to move the pink point."></canvas>
+    <figcaption>Faint grid: activations before. Dark dots: after. Arrow keys move the pink dot when the figure has focus.</figcaption></figure>
+</section>
+
+<!-- PLATE 4 -->
+<section class="plate" id="center">
+  <div class="intro">
+    <div class="eyebrow">Plate 4 of 6</div>
+    <h2>Where the cloud sits changes what it learns</h2>
+    <p>Real activations sit far from zero, and all of them share a large common offset. Fit the conceptor on raw pirate states and its main direction mostly points at <em>where</em> pirate states are. Fit it around the pirate cloud's own center and it learns <em>how</em> pirate states vary.</p>
+    <p class="try"><b>Try</b>Switch fits and watch where the grey assistant states land. On the raw fit, raise the gain: they slide along one line toward the pirates.</p>
+  </div>
+  <div class="panel">
+    <div class="seg" id="m4" role="group" aria-label="How the conceptor is fitted">
+      <button type="button" data-v="raw" aria-pressed="true">Fit on raw states</button>
+      <button type="button" data-v="centered" aria-pressed="false">Fit around the pirate center</button>
+    </div>
+    <p class="modecap" id="cap4"></p>
+    <div class="ctl"><label for="p4b">Gain β <output for="p4b"></output></label><input id="p4b" type="range" min="0.25" max="2.5" step="0.05" value="1"></div>
+    <div class="ctl"><label for="p4a">Aperture <output for="p4a"></output></label><input id="p4a" type="range" min="0" max="1000" step="1" value="500"></div>
+    <div class="readout" id="r4"></div>
+  </div>
+  <figure class="fig"><canvas id="c4" role="img" aria-label="Pirate and assistant clouds away from the origin, with assistant states moved by the conceptor"></canvas>
+    <figcaption>Cross: the zero vector. Dashed line: the conceptor's main direction. Hollow grey: assistant states before. Solid grey: after.</figcaption></figure>
+</section>
+
+<!-- PLATE 5 -->
+<section class="plate" id="logic">
+  <div class="intro">
+    <div class="eyebrow">Plate 5 of 6</div>
+    <h2>Concepts combine like logic</h2>
+    <p>OR leaves room for either concept. AND keeps only the room both share. NOT keeps everything a concept ignores. It is all matrix arithmetic on the stencils, with no new data and no training.</p>
+    <p class="try"><b>Try</b>Pick AND, then turn the doctor cloud until it is perpendicular to the pirate cloud. What happens to the room?</p>
+  </div>
+  <div class="panel">
+    <div class="seg" id="m5" role="group" aria-label="Operation">
+      <button type="button" data-v="A" aria-pressed="false">Pirate</button>
+      <button type="button" data-v="B" aria-pressed="false">Doctor</button>
+      <button type="button" data-v="or" aria-pressed="false">Pirate OR doctor</button>
+      <button type="button" data-v="and" aria-pressed="true">Pirate AND doctor</button>
+      <button type="button" data-v="notA" aria-pressed="false">NOT pirate</button>
+      <button type="button" data-v="andnot" aria-pressed="false">Pirate AND NOT doctor</button>
+    </div>
+    <p class="modecap" id="cap5"></p>
+    <div class="ctl"><label for="p5t">Angle between the clouds <output for="p5t"></output></label><input id="p5t" type="range" min="0" max="90" step="1" value="45"></div>
+    <div class="readout" id="r5"></div>
+    <p class="note">Postmus &amp; Abreu found AND-combined conceptors beat averaged steering vectors on composite tasks. Triantafyllopoulos et al. found AND only helps when the two concepts overlap.</p>
+  </div>
+  <figure class="fig"><canvas id="c5" role="img" aria-label="Two stencils and the stencil produced by the chosen logic operation"></canvas>
+    <figcaption>Thin outlines: the two concept stencils. Thick outline: the result. Dashed: inputs of length 1.</figcaption></figure>
+</section>
+
+<!-- PLATE 6 -->
+<section class="plate" id="gain">
+  <div class="intro">
+    <div class="eyebrow">Plate 6 of 6</div>
+    <h2>Check that the stencil is doing the work</h2>
+    <p>After the stencil, the gain β multiplies everything. If every direction ends up multiplied by roughly the same amount, the edit is mostly a zoom and the stencil's shape barely matters.</p>
+    <p>An October 2026 audit of a re-centered NOT conceptor on persona traits (3 models, 7 traits, aperture 0.05, gain 2) found every direction of every fitted map stretched by at least 1.66×. Removing the matrix while keeping the same center and gain changed many responses, with no consistent extra suppression.</p>
+    <p class="try"><b>Try</b>Load the audited regime, read the two bars, then drop the gain to 1.</p>
+  </div>
+  <div class="panel">
+    <div class="seg" id="m6" role="group" aria-label="Which map">
+      <button type="button" data-v="conceptor" aria-pressed="true">β · Conceptor</button>
+      <button type="button" data-v="not" aria-pressed="false">β · NOT conceptor</button>
+    </div>
+    <div class="ctl"><label for="p6b">Gain β <output for="p6b"></output></label><input id="p6b" type="range" min="0.25" max="2.5" step="0.05" value="1"></div>
+    <div class="ctl"><label for="p6a">Aperture <output for="p6a"></output></label><input id="p6a" type="range" min="0" max="1000" step="1" value="500"></div>
+    <button type="button" class="btn" id="preset6">Load the audited regime</button>
+    <div class="bars" id="b6"></div>
+    <div class="scale" aria-hidden="true"><span>0×</span><span>1×</span><span>2×</span><span>3×</span></div>
+    <div class="status" id="s6"></div>
+  </div>
+  <figure class="fig"><canvas id="c6" role="img" aria-label="Unit circle and its image under the full edit, showing stretch or shrink per direction"></canvas>
+    <figcaption>Dashed circle: inputs of length 1. Solid outline: where the full edit (gain included) sends them. Outside the circle means stretched.</figcaption></figure>
+</section>
+
+<section class="take">
+  <div class="eyebrow">Back to your question</div>
+  <h2>What this means for a pirate persona space</h2>
+  <div class="cols">
+    <section>
+      <h3>A conceptor has no inside or outside</h3>
+      <p>It edits every activation, including ones already in character (plate 3). The stencil says how much passes in each direction; it never says where the pirate cloud ends.</p>
+      <p>"Only correct when out of character" is the cap rule. A conceptor could supply the shape that such a rule checks against.</p>
+    </section>
+    <section>
+      <h3>What you fit on is what it means</h3>
+      <p>Pirate states around their own center: how a pirate varies while staying a pirate. Raw pirate states: mostly where pirates sit (plate 4).</p>
+      <p>Pirate and assistant states pooled: a subspace holding the pirate‑minus‑assistant arrow plus the room around it (the "bipolar" fit in Triantafyllopoulos et al.).</p>
+    </section>
+    <section>
+      <h3>Run the matrix-removed control</h3>
+      <p>Same reference point, same gain, stencil set to zero (plate 6). If behavior barely changes, the shape was not doing the work.</p>
+      <p>Report the gain per direction alongside the result, so readers can see whether the edit filtered or zoomed.</p>
+    </section>
+  </div>
+</section>
+
+<details>
+  <summary>The math, in six lines</summary>
+  <div class="math">
+    <div><span class="lhs">Shape of the cloud</span><code>R = (1/n) Σ hᵢ hᵢᵀ<small>Average of each activation times itself. Subtract the cloud's center first if you want spread only (plate 4).</small></code></div>
+    <div><span class="lhs">The conceptor</span><code>C = R (R + α⁻² I)⁻¹<small>Along each principal direction with spread λ, it keeps λ / (λ + α⁻²). Always between 0 and 1.</small></code></div>
+    <div><span class="lhs">Steer (plain)</span><code>h′ = β C h<small>Postmus &amp; Abreu 2024. Triantafyllopoulos et al. 2026 also test h′ = (1 − β) h + β C h.</small></code></div>
+    <div><span class="lhs">Steer (re-centered)</span><code>h′ = m + β C (h − m)<small>m is a reference point: a global average (Postmus &amp; Abreu's centered variant) or the concept's own center.</small></code></div>
+    <div><span class="lhs">Logic</span><code>¬C = I − C · C∧B = (C⁻¹ + B⁻¹ − I)⁻¹ · C∨B = conceptor of R_C + R_B</code></div>
+    <div><span class="lhs">Cap, for comparison</span><code>h′ = h + v · max(0, τ − vᵀh)<small>Unit direction v, threshold τ. Moves only states short of the line, and only by the minimum amount.</small></code></div>
+  </div>
+</details>
+
+<section class="sources">
+  <h2>Sources</h2>
+  <ol>
+    <li><a href="https://arxiv.org/abs/1406.2671">Conceptors: an easy introduction</a> <span>· Jaeger, 2014. The original idea, from recurrent networks.</span></li>
+    <li><a href="https://arxiv.org/abs/2410.16314">Steering Large Language Models using Conceptors</a> <span>· Postmus &amp; Abreu, NeurIPS 2024 MINT workshop. βCh steering, AND composition, best aperture near 0.05–0.1 on GPT‑J and GPT‑NeoX.</span></li>
+    <li><a href="https://arxiv.org/abs/2605.04980">Conceptors for Semantic Steering</a> <span>· Triantafyllopoulos et al., May 2026. Bipolar fits, quota as a layer-selection signal, fewer degenerate outputs.</span></li>
+    <li><a href="https://arxiv.org/abs/2610.16325">When a Conceptor Complement Becomes Gain</a> <span>· Razdan &amp; Balamurugan, Oct 2026. The matrix-removed control on persona-vector targets.</span></li>
+    <li><a href="https://www.lesswrong.com/posts/9aZYJinAyxequjQbn/a-conceptor-by-any-other-name">A conceptor by any other name</a> <span>· Keenan Pepper, LessWrong, July 2026. Conceptors as soft PCA and ridge shrinkage, with a pirate-persona example.</span></li>
+  </ol>
+  <p class="foot">All figures run on toy 2D data generated in your browser. Nothing here is measured from a model.</p>
+</section>
+
+</div>
+
+<script>
+(function(){
+"use strict";
+const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const deg = Math.PI/180;
+
+/* ---------- 2×2 linear algebra; matrices are [a,b,c,d] = [[a,b],[c,d]] ---------- */
+const I2=[1,0,0,1];
+const mm=(A,B)=>[A[0]*B[0]+A[1]*B[2],A[0]*B[1]+A[1]*B[3],A[2]*B[0]+A[3]*B[2],A[2]*B[1]+A[3]*B[3]];
+const mv=(A,v)=>[A[0]*v[0]+A[1]*v[1],A[2]*v[0]+A[3]*v[1]];
+const madd=(A,B)=>A.map((x,i)=>x+B[i]);
+const msub=(A,B)=>A.map((x,i)=>x-B[i]);
+const msc=(A,s)=>A.map(x=>x*s);
+const T=A=>[A[0],A[2],A[1],A[3]];
+const minv=A=>{const d=A[0]*A[3]-A[1]*A[2];return [A[3]/d,-A[1]/d,-A[2]/d,A[0]/d];};
+const sym=A=>{const b=(A[1]+A[2])/2;return [A[0],b,b,A[3]];};
+const rot=t=>[Math.cos(t),-Math.sin(t),Math.sin(t),Math.cos(t)];
+const diag=(a,b)=>[a,0,0,b];
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1];
+const add=(a,b)=>[a[0]+b[0],a[1]+b[1]];
+const sub=(a,b)=>[a[0]-b[0],a[1]-b[1]];
+const sc=(a,s)=>[a[0]*s,a[1]*s];
+const lerp=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
+function eigSym(A){
+  const a=A[0],b=(A[1]+A[2])/2,d=A[3];
+  const tr=a+d,det=a*d-b*b,disc=Math.sqrt(Math.max(0,tr*tr/4-det));
+  const l1=tr/2+disc,l2=tr/2-disc;
+  let v=Math.abs(b)>1e-12?[l1-d,b]:(a>=d?[1,0]:[0,1]);
+  const n=Math.hypot(v[0],v[1]);v=[v[0]/n,v[1]/n];
+  if(v[0]<0||(Math.abs(v[0])<1e-12&&v[1]<0))v=[-v[0],-v[1]];
+  return {l:[l1,l2],u1:v,u2:[-v[1],v[0]]};
+}
+const mean=P=>{let x=0,y=0;for(const p of P){x+=p[0];y+=p[1];}return [x/P.length,y/P.length];};
+function corr(P,c){c=c||[0,0];let s0=0,s1=0,s3=0;for(const p of P){const x=p[0]-c[0],y=p[1]-c[1];s0+=x*x;s1+=x*y;s3+=y*y;}const n=P.length;return [s0/n,s1/n,s1/n,s3/n];}
+function conceptor(R,alpha){const a=1/(alpha*alpha);return sym(mm(R,minv(madd(R,msc(I2,a)))));}
+const keepOf=(l,alpha)=>l/(l+1/(alpha*alpha));
+const AND=(A,B)=>sym(minv(msub(madd(minv(A),minv(B)),I2)));
+const NOT=A=>msub(I2,A);
+
+/* ---------- seeded data: whitened so each cloud's spread is exactly what we set ---------- */
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+function gaussians(n,seed){
+  const r=rng(seed),Z=[];
+  for(let i=0;i<n;i++){const u=Math.max(1e-9,r()),v=r(),m=Math.sqrt(-2*Math.log(u));Z.push([m*Math.cos(2*Math.PI*v),m*Math.sin(2*Math.PI*v)]);}
+  const mu=mean(Z);Z.forEach(z=>{z[0]-=mu[0];z[1]-=mu[1];});
+  const e=eigSym(corr(Z));
+  const U=[e.u1[0],e.u2[0],e.u1[1],e.u2[1]];
+  const W=mm(mm(U,diag(1/Math.sqrt(e.l[0]),1/Math.sqrt(e.l[1]))),T(U));
+  return Z.map(z=>mv(W,z));
+}
+const cloud=(Z,mu,L)=>Z.map(z=>add(mu,mv(L,z)));
+
+/* ---------- colors from the theme tokens ---------- */
+const COL={};
+function readColors(){
+  const cs=getComputedStyle(document.documentElement);
+  const g=k=>cs.getPropertyValue('--'+k).trim();
+  Object.assign(COL,{panel:g('panel'),ink:g('ink'),muted:g('muted'),hair:g('hair'),grid:g('grid'),pirate:g('pirate'),wash:g('pirate-wash'),doctor:g('doctor'),probe:g('probe'),assist:g('assist')});
+}
+readColors();
+const MONO='"IBM Plex Mono",ui-monospace,Menlo,monospace';
+
+/* ---------- canvas figure helper ---------- */
+const figs=[];
+function makeView(w,h,b,pad){
+  pad=pad==null?14:pad;
+  const bw=b[1]-b[0],bh=b[3]-b[2];
+  const s=Math.min((w-2*pad)/bw,(h-2*pad)/bh);
+  const ox=(w-s*bw)/2-s*b[0], oy=(h+s*bh)/2+s*b[2];
+  return {s,X:x=>ox+s*x,Y:y=>oy-s*y,inv:(px,py)=>[(px-ox)/s,(oy-py)/s]};
+}
+function Fig(id,aspect,bounds,paint){
+  const cv=document.getElementById(id);
+  const f={cv,ctx:null,w:0,h:0,V:null,lastW:-1};
+  f.resize=()=>{
+    const w=cv.clientWidth||600;
+    if(w===f.lastW&&f.ctx)return;
+    f.lastW=w;
+    const dpr=Math.min(2,window.devicePixelRatio||1);
+    const h=Math.round(Math.min(w*aspect,500));
+    cv.style.height=h+'px';cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);
+    f.ctx=cv.getContext('2d');f.ctx.setTransform(dpr,0,0,dpr,0,0);f.w=w;f.h=h;
+  };
+  f.draw=()=>{
+    f.resize();
+    const c=f.ctx;f.V=makeView(f.w,f.h,bounds);
+    c.clearRect(0,0,f.w,f.h);c.fillStyle=COL.panel;c.fillRect(0,0,f.w,f.h);
+    grid(c,f.V,f.w,f.h);paint(c,f.V,f);
+  };
+  if(window.ResizeObserver)new ResizeObserver(()=>f.draw()).observe(cv.parentElement);
+  figs.push(f);
+  return f;
+}
+function grid(c,V,w,h){
+  const [x0,y1]=V.inv(0,0),[x1,y0]=V.inv(w,h),st=0.25;
+  c.lineWidth=1;c.strokeStyle=COL.grid;c.beginPath();
+  for(let x=Math.ceil(x0/st)*st;x<=x1;x+=st){const px=Math.round(V.X(x))+.5;c.moveTo(px,0);c.lineTo(px,h);}
+  for(let y=Math.ceil(y0/st)*st;y<=y1;y+=st){const py=Math.round(V.Y(y))+.5;c.moveTo(0,py);c.lineTo(w,py);}
+  c.stroke();
+  c.strokeStyle=COL.hair;c.beginPath();
+  const ax=Math.round(V.X(0))+.5,ay=Math.round(V.Y(0))+.5;
+  c.moveTo(ax,0);c.lineTo(ax,h);c.moveTo(0,ay);c.lineTo(w,ay);c.stroke();
+}
+function dots(c,V,P,color,r,alpha,hollow){
+  c.globalAlpha=alpha==null?1:alpha;c.beginPath();
+  for(const p of P){const x=V.X(p[0]),y=V.Y(p[1]);c.moveTo(x+r,y);c.arc(x,y,r,0,2*Math.PI);}
+  if(hollow){c.lineWidth=1.1;c.strokeStyle=color;c.stroke();}else{c.fillStyle=color;c.fill();}
+  c.globalAlpha=1;
+}
+function poly(c,V,pts,o){
+  o=o||{};c.beginPath();
+  pts.forEach((p,i)=>{const x=V.X(p[0]),y=V.Y(p[1]);i?c.lineTo(x,y):c.moveTo(x,y);});
+  if(o.closed!==false)c.closePath();
+  if(o.fill){c.globalAlpha=o.fillAlpha==null?1:o.fillAlpha;c.fillStyle=o.fill;c.fill();c.globalAlpha=1;}
+  if(o.stroke){c.setLineDash(o.dash||[]);c.lineWidth=o.width||1.5;c.strokeStyle=o.stroke;c.globalAlpha=o.alpha==null?1:o.alpha;c.stroke();c.globalAlpha=1;c.setLineDash([]);}
+}
+function seg(c,V,a,b,color,width,dash,alpha){
+  c.beginPath();c.moveTo(V.X(a[0]),V.Y(a[1]));c.lineTo(V.X(b[0]),V.Y(b[1]));
+  c.setLineDash(dash||[]);c.lineWidth=width||1;c.strokeStyle=color;c.globalAlpha=alpha==null?1:alpha;c.stroke();c.globalAlpha=1;c.setLineDash([]);
+}
+function arrow(c,V,a,b,color,width,head,alpha){
+  const ax=V.X(a[0]),ay=V.Y(a[1]),bx=V.X(b[0]),by=V.Y(b[1]);
+  const L=Math.hypot(bx-ax,by-ay);if(L<2)return;
+  const ux=(bx-ax)/L,uy=(by-ay)/L,hd=Math.min(head||9,L*.45);
+  c.globalAlpha=alpha==null?1:alpha;c.strokeStyle=color;c.fillStyle=color;c.lineWidth=width||2;
+  c.beginPath();c.moveTo(ax,ay);c.lineTo(bx-ux*hd*.7,by-uy*hd*.7);c.stroke();
+  c.beginPath();c.moveTo(bx,by);c.lineTo(bx-ux*hd-uy*hd*.45,by-uy*hd+ux*hd*.45);c.lineTo(bx-ux*hd+uy*hd*.45,by-uy*hd-ux*hd*.45);c.closePath();c.fill();
+  c.globalAlpha=1;
+}
+function label(c,V,s,p,o){
+  o=o||{};const x=V.X(p[0])+(o.dx||0),y=V.Y(p[1])+(o.dy||0);
+  c.font=(o.weight||'500')+' '+(o.size||11)+'px '+MONO;c.textAlign=o.align||'left';c.textBaseline='middle';
+  c.lineJoin='round';c.lineWidth=4;c.strokeStyle=COL.panel;c.strokeText(s,x,y);
+  c.fillStyle=o.color||COL.muted;c.fillText(s,x,y);
+}
+function circlePts(center,r,n){n=n||120;const o=[];for(let i=0;i<n;i++){const t=i/n*2*Math.PI;o.push([center[0]+r*Math.cos(t),center[1]+r*Math.sin(t)]);}return o;}
+function imgCircle(M,center,r,n){center=center||[0,0];r=r||1;n=n||120;const o=[];for(let i=0;i<n;i++){const t=i/n*2*Math.PI;const q=mv(M,[r*Math.cos(t),r*Math.sin(t)]);o.push([center[0]+q[0],center[1]+q[1]]);}return o;}
+function shapeEll(S,center,k){const e=eigSym(S),a=k*Math.sqrt(Math.max(0,e.l[0])),b=k*Math.sqrt(Math.max(0,e.l[1]));const o=[];for(let i=0;i<120;i++){const t=i/120*2*Math.PI;o.push([center[0]+a*Math.cos(t)*e.u1[0]+b*Math.sin(t)*e.u2[0],center[1]+a*Math.cos(t)*e.u1[1]+b*Math.sin(t)*e.u2[1]]);}return o;}
+
+/* ---------- control helpers ---------- */
+const $=id=>document.getElementById(id);
+const f2=x=>(x<0?'−':'')+Math.abs(x).toFixed(2);
+const pct=x=>Math.round(x*100)+'%';
+const A_MIN=0.5,A_MAX=50;
+const sliderToAlpha=v=>A_MIN*Math.pow(A_MAX/A_MIN,v/1000);
+const alphaToSlider=a=>Math.round(1000*Math.log(a/A_MIN)/Math.log(A_MAX/A_MIN));
+const fmtA=a=>a<1?a.toFixed(2):a<10?a.toFixed(1):a.toFixed(0);
+function out(id,text){const o=document.querySelector('output[for="'+id+'"]');if(o)o.textContent=text;}
+function onRange(id,fn){const el=$(id);el.addEventListener('input',()=>fn(+el.value));return el;}
+function onSeg(id,fn){
+  const box=$(id);
+  box.addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(!b)return;setSeg(id,b.dataset.v);fn(b.dataset.v);});
+}
+function setSeg(id,v){$(id).querySelectorAll('button[data-v]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.v===v)));}
+function rows(el,list){el.innerHTML=list.map(r=>'<div><span class="k">'+r[0]+'</span><span>'+r[1]+'</span></div>').join('');}
+function bars(el,list,max,one){
+  el.innerHTML=list.map(r=>{
+    const w=Math.max(0,Math.min(1,r[1]/max))*100;
+    return '<div class="barrow"><span>'+r[0]+'</span><span class="bar"><i style="width:'+w.toFixed(1)+'%;background:'+(r[2]||'var(--pirate)')+'"></i>'+(one?'<span class="one" style="left:'+(100/max).toFixed(2)+'%"></span>':'')+'</span><span class="v">'+r[3]+'</span></div>';
+  }).join('');
+}
+const ease=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+function animate(st,fig){
+  if(reduce){st.t=1;fig.draw();return;}
+  st.t=0;const t0=performance.now();st.token=(st.token||0)+1;const tok=st.token;
+  const step=now=>{if(tok!==st.token)return;st.t=Math.min(1,(now-t0)/650);fig.draw();if(st.t<1)requestAnimationFrame(step);};
+  requestAnimationFrame(step);
+}
+
+/* =================== PLATE 1: arrow vs shape =================== */
+const s1={stretch:.32,tilt:28};
+const Z1p=gaussians(120,11),Z1a=gaussians(90,23);
+const MU_A=[-.6,-.38],MU_P=[.45,.35];
+const A1=cloud(Z1a,MU_A,mm(rot(15*deg),diag(.15,.115)));
+const fig1=Fig('c1',.8,[-1.15,1.45,-1.0,1.3],(c,V)=>{
+  const L=mm(rot(s1.tilt*deg),diag(s1.stretch,.085));
+  const P=cloud(Z1p,MU_P,L);
+  dots(c,V,A1,COL.assist,2.3,.6);
+  poly(c,V,shapeEll(mm(L,T(L)),MU_P,2),{fill:COL.wash});
+  dots(c,V,P,COL.pirate,2.4,.65);
+  poly(c,V,shapeEll(mm(L,T(L)),MU_P,2),{stroke:COL.pirate,width:1.8});
+  arrow(c,V,MU_A,MU_P,COL.ink,2.4,11);
+  label(c,V,'assistant states',[-1.08,-0.92],{color:COL.assist});
+  label(c,V,'pirate states and their shape',[1.40,1.22],{align:'right',color:COL.pirate});
+  const d=sub(MU_P,MU_A),n=Math.hypot(d[0],d[1]),perp=[-d[1]/n,d[0]/n];
+  label(c,V,'steering vector',add(lerp(MU_A,MU_P,.42),sc(perp,.11)),{align:'right',color:COL.ink});
+});
+function upd1(){
+  out('p1s',s1.stretch.toFixed(2));out('p1t',s1.tilt+'°');
+  const d=sub(MU_P,MU_A);
+  rows($('r1'),[['Arrow',`(${f2(d[0])}, ${f2(d[1])})  unchanged`],['Shape',`long ${s1.stretch.toFixed(2)} · short 0.09 · tilt ${s1.tilt}°`]]);
+  fig1.draw();
+}
+onRange('p1s',v=>{s1.stretch=v;upd1();});
+onRange('p1t',v=>{s1.tilt=v;upd1();});
+
+/* =================== shared pirate cloud for plates 2, 3, 6 =================== */
+const Z2=gaussians(150,5);
+const L2=mm(rot(28*deg),diag(.5,.17));
+const P2=cloud(Z2,[0,0],L2);
+const R2=corr(P2);
+const E2=eigSym(R2);
+
+/* =================== PLATE 2: the stencil =================== */
+const s2={alpha:5};
+const fig2=Fig('c2',.86,[-1.3,1.3,-1.25,1.25],(c,V)=>{
+  const C=conceptor(R2,s2.alpha);
+  seg(c,V,sc(E2.u1,-1.25),sc(E2.u1,1.25),COL.hair,1,[3,4]);
+  seg(c,V,sc(E2.u2,-1.25),sc(E2.u2,1.25),COL.hair,1,[3,4]);
+  dots(c,V,P2,COL.pirate,2.1,.28);
+  poly(c,V,circlePts([0,0],1),{stroke:COL.muted,width:1.2,dash:[4,4]});
+  poly(c,V,imgCircle(C),{fill:COL.wash});
+  for(let k=0;k<20;k++){const t=k/20*2*Math.PI,q=[Math.cos(t),Math.sin(t)];arrow(c,V,q,mv(C,q),COL.muted,1.1,6,.8);}
+  poly(c,V,imgCircle(C),{stroke:COL.pirate,width:2.4});
+  label(c,V,'long direction',sc(E2.u1,1.13),{align:'center',color:COL.ink});
+  label(c,V,'short direction',sc(E2.u2,1.13),{align:'center',color:COL.ink});
+});
+function upd2(){
+  out('p2a',fmtA(s2.alpha));
+  const k1=keepOf(E2.l[0],s2.alpha),k2=keepOf(E2.l[1],s2.alpha);
+  bars($('b2'),[['Long direction',k1,null,'keeps '+pct(k1)],['Short direction',k2,null,'keeps '+pct(k2)]],1,false);
+  fig2.draw();
+}
+onRange('p2a',v=>{s2.alpha=sliderToAlpha(v);upd2();});
+
+/* =================== PLATE 3: five edits =================== */
+const s3={mode:'conceptor',alpha:5,beta:1,push:.4,tau:.35,h:[.2,.75],t:1,from:null};
+const U1=E2.u1,U2=E2.u2;
+const G3=[];for(let i=-4;i<=4;i++)for(let j=-4;j<=4;j++)G3.push([i*.25,j*.25]);
+const CAPS={
+  push:'<strong>Push</strong> (steering vector). Everything shifts the same way by the same amount, wherever it started.',
+  cap:'<strong>Cap</strong> (the Assistant Axis rule; LiSeCo with one direction). States past the line stay put. The rest get lifted just enough to reach it.',
+  cut:'<strong>Hard cut</strong> (top‑1 PCA). Keep the long direction, delete everything else.',
+  conceptor:'<strong>Conceptor</strong>. Keep each direction in proportion to how much the pirate cloud uses it, then multiply by the gain.',
+  not:'<strong>NOT conceptor</strong> (I − C). The reverse: squeeze what the pirate cloud uses, keep what it ignores. This is how conceptors remove a concept.'
+};
+function F3(mode,p){
+  switch(mode){
+    case 'push':return add(p,sc(U1,s3.push));
+    case 'cap':{const k=Math.max(0,s3.tau-dot(U1,p));return add(p,sc(U1,k));}
+    case 'cut':return sc(U1,dot(U1,p));
+    case 'conceptor':return sc(mv(conceptor(R2,s3.alpha),p),s3.beta);
+    case 'not':return sc(mv(NOT(conceptor(R2,s3.alpha)),p),s3.beta);
+  }
+  return p;
+}
+function pos3(){
+  const pts=G3.concat([s3.h]);const e=ease(s3.t);
+  return pts.map((p,i)=>{const to=F3(s3.mode,p);return (s3.from&&s3.t<1)?lerp(s3.from[i],to,e):to;});
+}
+const B3=[-1.3,1.6,-1.25,1.45];
+const fig3=Fig('c3',.86,B3,(c,V)=>{
+  dots(c,V,P2,COL.pirate,2,.16);
+  if(s3.mode==='conceptor'||s3.mode==='not'){
+    const C=conceptor(R2,s3.alpha),M=s3.mode==='not'?NOT(C):C;
+    poly(c,V,imgCircle(M),{stroke:COL.pirate,width:1.4,dash:[5,4],alpha:.8});
+  }
+  if(s3.mode==='cap'){
+    const base=sc(U1,s3.tau);
+    seg(c,V,add(base,sc(U2,-2.2)),add(base,sc(U2,2.2)),COL.pirate,1.8,[6,4]);
+    label(c,V,'line',add(base,sc(U2,-1.05)),{dx:6,color:COL.pirate});
+  }
+  if(s3.mode==='cut'||s3.mode==='push'){
+    seg(c,V,sc(U1,-1.8),sc(U1,1.9),COL.pirate,1.2,[6,4],.8);
+  }
+  const P=pos3(),n=G3.length;
+  dots(c,V,G3,COL.muted,1.9,.35);
+  c.globalAlpha=.28;c.strokeStyle=COL.muted;c.lineWidth=1;c.beginPath();
+  for(let i=0;i<n;i++){c.moveTo(V.X(G3[i][0]),V.Y(G3[i][1]));c.lineTo(V.X(P[i][0]),V.Y(P[i][1]));}
+  c.stroke();c.globalAlpha=1;
+  dots(c,V,P.slice(0,n),COL.ink,2.3,.9);
+  const h=s3.h,h2=P[n];
+  arrow(c,V,h,h2,COL.probe,2.2,9);
+  dots(c,V,[h],COL.probe,6,1,true);
+  dots(c,V,[h2],COL.probe,5,1);
+  label(c,V,'yours',h,{dx:10,dy:-10,color:COL.probe});
+});
+function cfg3(){
+  const m=s3.mode,s=$('p3s');
+  $('cap3').innerHTML=CAPS[m];
+  $('w3a').hidden=!(m==='conceptor'||m==='not');
+  $('w3s').hidden=(m==='cut');
+  if(m==='push'){$('l3s').textContent='Push amount';s.min=0;s.max=.6;s.step=.01;s.value=s3.push;}
+  else if(m==='cap'){$('l3s').textContent='Line position';s.min=-.4;s.max=.9;s.step=.01;s.value=s3.tau;}
+  else{$('l3s').textContent='Gain β';s.min=.25;s.max=2.5;s.step=.05;s.value=s3.beta;}
+}
+function upd3(){
+  const m=s3.mode;
+  out('p3s',m==='push'?s3.push.toFixed(2):m==='cap'?f2(s3.tau):s3.beta.toFixed(2));
+  out('p3a',fmtA(s3.alpha));
+  const h=s3.h,h2=F3(m,h);
+  rows($('r3'),[
+    ['Along long direction',`${f2(dot(U1,h))} → ${f2(dot(U1,h2))}`],
+    ['Along short direction',`${f2(dot(U2,h))} → ${f2(dot(U2,h2))}`],
+    ['Moved by',Math.hypot(h2[0]-h[0],h2[1]-h[1]).toFixed(2)]
+  ]);
+  fig3.draw();
+}
+onSeg('m3',v=>{if(v===s3.mode)return;s3.from=pos3();s3.mode=v;cfg3();upd3();animate(s3,fig3);});
+onRange('p3s',v=>{if(s3.mode==='push')s3.push=v;else if(s3.mode==='cap')s3.tau=v;else s3.beta=v;s3.t=1;upd3();});
+onRange('p3a',v=>{s3.alpha=sliderToAlpha(v);s3.t=1;upd3();});
+(function(){
+  const cv=fig3.cv;let on=false;
+  const clamp=p=>[Math.max(B3[0]+.05,Math.min(B3[1]-.05,p[0])),Math.max(B3[2]+.05,Math.min(B3[3]-.05,p[1]))];
+  const at=e=>{const r=cv.getBoundingClientRect();return fig3.V.inv(e.clientX-r.left,e.clientY-r.top);};
+  const set=p=>{s3.h=clamp(p);s3.t=1;upd3();};
+  cv.addEventListener('pointerdown',e=>{on=true;try{cv.setPointerCapture(e.pointerId);}catch(_){}set(at(e));});
+  cv.addEventListener('pointermove',e=>{if(on)set(at(e));});
+  cv.addEventListener('pointerup',()=>{on=false;});
+  cv.addEventListener('pointercancel',()=>{on=false;});
+  cv.addEventListener('keydown',e=>{const d=.05,k={ArrowLeft:[-d,0],ArrowRight:[d,0],ArrowUp:[0,d],ArrowDown:[0,-d]}[e.key];if(!k)return;e.preventDefault();set(add(s3.h,k));});
+})();
+
+/* =================== PLATE 4: raw vs centered fit =================== */
+const s4={fit:'raw',alpha:5,beta:1,t:1,from:null};
+const MU4P=[1.15,.85],MU4A=[.85,.12];
+const P4=cloud(gaussians(130,41),MU4P,mm(rot(28*deg),diag(.3,.09)));
+const A4=cloud(gaussians(90,57),MU4A,mm(rot(-12*deg),diag(.13,.1)));
+const R4raw=corr(P4),R4cen=corr(P4,MU4P);
+const E4raw=eigSym(R4raw),E4cen=eigSym(R4cen);
+function g4(fit,p){
+  if(fit==='raw')return sc(mv(conceptor(R4raw,s4.alpha),p),s4.beta);
+  return add(MU4P,sc(mv(conceptor(R4cen,s4.alpha),sub(p,MU4P)),s4.beta));
+}
+function pos4(){const e=ease(s4.t);return A4.map((p,i)=>{const to=g4(s4.fit,p);return (s4.from&&s4.t<1)?lerp(s4.from[i],to,e):to;});}
+const fig4=Fig('c4',.84,[-.4,2.1,-.4,1.7],(c,V)=>{
+  const raw=s4.fit==='raw';
+  const anchor=raw?[0,0]:MU4P,E=raw?E4raw:E4cen,C=conceptor(raw?R4raw:R4cen,s4.alpha),r=raw?.5:.42;
+  seg(c,V,add(anchor,sc(E.u1,raw?-.6:-1.5)),add(anchor,sc(E.u1,raw?2.8:1.5)),COL.pirate,1.4,[6,4],.9);
+  poly(c,V,circlePts(anchor,r),{stroke:COL.muted,width:1,dash:[3,4],alpha:.8});
+  poly(c,V,imgCircle(C,anchor,r),{stroke:COL.pirate,width:2,fill:COL.wash});
+  dots(c,V,P4,COL.pirate,2.3,.6);
+  const P=pos4();
+  dots(c,V,A4,COL.assist,2.4,.7,true);
+  c.globalAlpha=.25;c.strokeStyle=COL.assist;c.lineWidth=1;c.beginPath();
+  for(let i=0;i<A4.length;i++){c.moveTo(V.X(A4[i][0]),V.Y(A4[i][1]));c.lineTo(V.X(P[i][0]),V.Y(P[i][1]));}
+  c.stroke();c.globalAlpha=1;
+  dots(c,V,P,COL.assist,2.4,.95);
+  const o=[V.X(0),V.Y(0)];c.strokeStyle=COL.ink;c.lineWidth=1.6;c.beginPath();c.moveTo(o[0]-6,o[1]-6);c.lineTo(o[0]+6,o[1]+6);c.moveTo(o[0]+6,o[1]-6);c.lineTo(o[0]-6,o[1]+6);c.stroke();
+  label(c,V,'zero',[0,0],{dx:10,dy:12,color:COL.ink});
+  label(c,V,'pirate states',[MU4P[0]+.05,MU4P[1]+.42],{align:'center',color:COL.pirate});
+  label(c,V,'assistant states',[MU4A[0]+.25,MU4A[1]-.3],{align:'center',color:COL.assist});
+  label(c,V,raw?'fit anchored at zero':'fit anchored at the pirate center',raw?[-.32,1.58]:[-.32,1.58],{color:COL.pirate});
+});
+function upd4(){
+  out('p4b',s4.beta.toFixed(2));out('p4a',fmtA(s4.alpha));
+  const raw=s4.fit==='raw',E=raw?E4raw:E4cen;
+  $('cap4').innerHTML=raw
+    ?'<strong>h′ = β · C · h</strong>, with C fitted on raw pirate states. Its main direction runs from zero toward the cloud.'
+    :'<strong>h′ = center + β · C · (h − center)</strong>, with C fitted on the spread around the pirate center. Its main direction follows the cloud\'s own stretch.';
+  const before=A4.reduce((s,p)=>s+Math.hypot(p[0]-MU4P[0],p[1]-MU4P[1]),0)/A4.length;
+  const after=A4.reduce((s,p)=>{const q=g4(s4.fit,p);return s+Math.hypot(q[0]-MU4P[0],q[1]-MU4P[1]);},0)/A4.length;
+  const ang=Math.atan2(E.u1[1],E.u1[0])/deg;
+  rows($('r4'),[
+    ['Main direction',`${ang.toFixed(0)}° ${raw?'(points at the cloud)':'(the cloud\'s stretch)'}`],
+    ['Keeps along main / other',`${pct(keepOf(E.l[0],s4.alpha))} / ${pct(keepOf(E.l[1],s4.alpha))}`],
+    ['Assistant → pirate center',`avg distance ${before.toFixed(2)} → ${after.toFixed(2)}`]
+  ]);
+  fig4.draw();
+}
+onSeg('m4',v=>{if(v===s4.fit)return;s4.from=pos4();s4.fit=v;upd4();animate(s4,fig4);});
+onRange('p4b',v=>{s4.beta=v;s4.t=1;upd4();});
+onRange('p4a',v=>{s4.alpha=sliderToAlpha(v);s4.t=1;upd4();});
+
+/* =================== PLATE 5: logic =================== */
+const s5={op:'and',theta:45,alpha:4};
+const ZA5=gaussians(80,71),ZB5=gaussians(80,83);
+const CAP5={
+  A:'<strong>Pirate</strong> on its own.',
+  B:'<strong>Doctor</strong> on its own.',
+  or:'<strong>OR</strong>: room for either. Same as pooling both clouds before fitting.',
+  and:'<strong>AND</strong>: only the room both stencils allow. It shrinks fast when the clouds point different ways.',
+  notA:'<strong>NOT pirate</strong>: everything the pirate stencil squeezes, passed; everything it keeps, squeezed.',
+  andnot:'<strong>Pirate AND NOT doctor</strong>: pirate room with the doctor part taken out.'
+};
+function mats5(){
+  const LA=mm(rot(15*deg),diag(.5,.15)),LB=mm(rot((15+s5.theta)*deg),diag(.45,.16));
+  const RA=mm(LA,T(LA)),RB=mm(LB,T(LB));
+  const CA=conceptor(RA,s5.alpha),CB=conceptor(RB,s5.alpha);
+  let C;
+  switch(s5.op){
+    case 'A':C=CA;break;case 'B':C=CB;break;
+    case 'or':C=conceptor(madd(RA,RB),s5.alpha);break;
+    case 'and':C=AND(CA,CB);break;
+    case 'notA':C=NOT(CA);break;
+    case 'andnot':C=AND(CA,NOT(CB));break;
+  }
+  return {LA,LB,CA,CB,C};
+}
+const fig5=Fig('c5',.86,[-1.25,1.25,-1.2,1.2],(c,V)=>{
+  const m=mats5();
+  dots(c,V,cloud(ZA5,[0,0],m.LA),COL.pirate,2,.22);
+  dots(c,V,cloud(ZB5,[0,0],m.LB),COL.doctor,2,.22);
+  poly(c,V,circlePts([0,0],1),{stroke:COL.muted,width:1.1,dash:[4,4]});
+  poly(c,V,imgCircle(m.CA),{stroke:COL.pirate,width:1.5});
+  poly(c,V,imgCircle(m.CB),{stroke:COL.doctor,width:1.5});
+  poly(c,V,imgCircle(m.C),{stroke:COL.ink,width:2.8,fill:COL.ink,fillAlpha:.07});
+  label(c,V,'pirate',mv(m.CA,[Math.cos(15*deg),Math.sin(15*deg)]),{dx:8,dy:-10,color:COL.pirate});
+  const tb=(15+s5.theta)*deg;
+  label(c,V,'doctor',mv(m.CB,[Math.cos(tb),Math.sin(tb)]),{dx:8,dy:-10,color:COL.doctor});
+});
+function upd5(){
+  out('p5t',s5.theta+'°');
+  $('cap5').innerHTML=CAP5[s5.op];
+  const m=mats5(),room=C=>(C[0]+C[3])/2;
+  rows($('r5'),[['Room left (average keep)',''],['  pirate',pct(room(m.CA))],['  doctor',pct(room(m.CB))],['  result',pct(room(m.C))]]);
+  fig5.draw();
+}
+onSeg('m5',v=>{s5.op=v;upd5();});
+onRange('p5t',v=>{s5.theta=v;upd5();});
+
+/* =================== PLATE 6: gain check =================== */
+const s6={mode:'conceptor',alpha:5,beta:1};
+function G6(){const C=conceptor(R2,s6.alpha);return msc(s6.mode==='not'?NOT(C):C,s6.beta);}
+function mult6(){const k1=keepOf(E2.l[0],s6.alpha),k2=keepOf(E2.l[1],s6.alpha);return s6.mode==='not'?[s6.beta*(1-k1),s6.beta*(1-k2)]:[s6.beta*k1,s6.beta*k2];}
+const fig6=Fig('c6',.86,[-2.6,2.6,-2.5,2.5],(c,V)=>{
+  const G=G6(),m=mult6(),stretch=Math.min(m[0],m[1])>1;
+  seg(c,V,sc(E2.u1,-2.6),sc(E2.u1,2.6),COL.hair,1,[3,4]);
+  seg(c,V,sc(E2.u2,-2.6),sc(E2.u2,2.6),COL.hair,1,[3,4]);
+  poly(c,V,circlePts([0,0],1),{stroke:COL.muted,width:1.3,dash:[4,4]});
+  for(let k=0;k<20;k++){const t=k/20*2*Math.PI,q=[Math.cos(t),Math.sin(t)];arrow(c,V,q,mv(G,q),COL.muted,1.1,6,.8);}
+  const col=stretch?COL.probe:COL.pirate;
+  poly(c,V,imgCircle(G),{stroke:col,width:2.4});
+  label(c,V,'long',sc(E2.u1,Math.max(1,m[0])+.22),{align:'center',color:COL.ink});
+  label(c,V,'short',sc(E2.u2,Math.max(1,m[1])+.22),{align:'center',color:COL.ink});
+});
+function upd6(){
+  out('p6b',s6.beta.toFixed(2));out('p6a',fmtA(s6.alpha));
+  const m=mult6(),c=x=>x>1?'var(--probe)':'var(--pirate)';
+  bars($('b6'),[['Long direction',m[0],c(m[0]),m[0].toFixed(2)+'×'],['Short direction',m[1],c(m[1]),m[1].toFixed(2)+'×']],3,true);
+  const lo=Math.min(m[0],m[1]),hi=Math.max(m[0],m[1]),ratio=hi/Math.max(lo,1e-9);
+  let s=lo>1?'Stretches every direction':hi<1?'Shrinks every direction':'Shrinks some directions, stretches others';
+  s+=' · directions differ by '+ratio.toFixed(2)+'×';
+  if(ratio<1.25)s+=' · close to a plain zoom';
+  const el=$('s6');el.textContent=s;el.style.color=lo>1?'var(--probe)':'var(--ink)';
+  fig6.draw();
+}
+onSeg('m6',v=>{s6.mode=v;upd6();});
+onRange('p6b',v=>{s6.beta=v;upd6();});
+onRange('p6a',v=>{s6.alpha=sliderToAlpha(v);upd6();});
+$('preset6').addEventListener('click',()=>{
+  // largest keep fraction 0.17 and gain 2, matching the audited operating point's spectrum
+  const a=E2.l[0]*(1/0.17-1);s6.alpha=1/Math.sqrt(a);s6.beta=2;s6.mode='not';
+  setSeg('m6','not');$('p6b').value=2;$('p6a').value=alphaToSlider(s6.alpha);upd6();
+});
+
+/* ---------- boot ---------- */
+function all(){upd1();upd2();cfg3();upd3();upd4();upd5();upd6();}
+all();
+const redraw=()=>{readColors();figs.forEach(f=>f.draw());};
+if(window.matchMedia)matchMedia('(prefers-color-scheme: dark)').addEventListener('change',redraw);
+new MutationObserver(redraw).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(redraw);
+})();
+</script>
