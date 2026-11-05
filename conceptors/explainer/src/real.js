@@ -64,7 +64,10 @@ const sweepSeries=key=>()=>[
 const chAuc=LineChart('cSweepAuc',{aspect:.78,xs:()=>XL,yRange:()=>[.4,1.02],yTicks:()=>[.5,.6,.7,.8,.9,1],yFmt:v=>v.toFixed(1),
   xTicks:()=>LT,xTitle:'layer',mr:50,refs:()=>[{y:.5,label:'chance'}],series:sweepSeries('lr_auc'),
   tipTitle:i=>'layer '+XL[i],vFmt:v=>'AUC '+v.toFixed(3)});
-const chVar=LineChart('cSweepVar',{aspect:.78,xs:()=>XL,yRange:()=>[0,.32],yTicks:()=>[0,.1,.2,.3],yFmt:v=>Math.round(v*100)+'%',
+/* role share tops out near 30% on the 0.5B pilot but passes 50% at SmolLM3's last prompt token */
+const VMAX=Math.max(.32,1.05*Math.max(...D.sweep.resp.map(s=>s.role_var),...D.sweep.last.map(s=>s.role_var)));
+const chVar=LineChart('cSweepVar',{aspect:.78,xs:()=>XL,yRange:()=>[0,VMAX],
+  yTicks:()=>Array.from({length:Math.floor(VMAX*10+1e-9)+1},(_,i)=>i/10),yFmt:v=>Math.round(v*100)+'%',
   xTicks:()=>LT,xTitle:'layer',mr:50,series:sweepSeries('role_var'),
   tipTitle:i=>'layer '+XL[i],vFmt:v=>pct1(v)});
 const tabSweep=dataTable($('cSweepVar').closest('.figrow'),'Show the numbers');
@@ -187,12 +190,15 @@ onSeg('stripPool',v=>{s16.pool=v;s16.hover=null;upd16();});
 
 /* ---------- Plate 1.7: the persona is a thin slice ---------- */
 function upd17(){
-  const L=D.meta.steer_hidden,r=D.sweep.resp[L],l=D.sweep.last[L],W=D.within;
+  const L=D.meta.steer_hidden,W=D.within;  /* the saved layer nearest the steering layer (exact when all are saved) */
+  const at=k=>D.sweep[k].reduce((b,s)=>Math.abs(s.layer-L)<Math.abs(b.layer-L)?s:b),r=at('resp'),l=at('last');
+  const oneTask=new Set(PT.map(p=>p.t)).size<2;  /* a single question set has no task split to report */
   tiles($('sliceTiles'),[
-    ['Role\'s share of the variance',pct1(r.role_var),'answer average, layer '+L],
+    ['Role\'s share of the variance',pct1(r.role_var),'answer average, layer '+r.layer],
     ['Question\'s share',pct(r.q_var),'same activations'],
-    ['Inside the pirate cloud, task type explains',pct(W.pirate.task_frac),'question: '+pct(W.pirate.question_frac)],
-    ['Role\'s share at the last prompt token',pct1(l.role_var),'layer '+L+', before the answer starts']
+    oneTask?['Inside the pirate cloud, the question explains',pct(W.pirate.question_frac),'one question set, so no task split']
+      :['Inside the pirate cloud, task type explains',pct(W.pirate.task_frac),'question: '+pct(W.pirate.question_frac)],
+    ['Role\'s share at the last prompt token',pct1(l.role_var),'layer '+l.layer+', before the answer starts']
   ]);
 }
 
