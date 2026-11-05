@@ -675,8 +675,10 @@ Security follow-up (from two automated reviews of these commits): /storage/ice-s
 sticky bit (owner mriedl3, group coc-pace-ice-tas). So another user can't write inside staff/, but could rename
 staff/ aside and plant a look-alike venv. env.sh now refuses to run unless every folder from below the volume root
 to the data root, venv, HF cache and working release is a real directory, owned by us, and not group- or
-world-writable. A missing data root, any symlink, or a stat failure also refuses. Tested on PACE: real paths pass;
-a group-writable folder, a symlink, and a missing root refuse; runs outside the volume pass. Release 1cffb910 has
-the first (find-based) version; the stat-based version ships with the next release. Remaining gap: the check can't
+world-writable. A missing data root, any symlink, or a stat failure also refuses. Paths are compared physically,
+so a path that reaches the volume through a symlink (even one outside it), `..` or `//` refuses instead of slipping
+past the prefix test. Tested on PACE in 8 cases: real paths pass; a group-writable folder, a symlink inside or
+outside the volume, a missing root, and `..` or `//` spellings refuse; runs outside the volume pass. Release 1cffb910
+has the first (find-based) version; the current one ships with the next release. Remaining gap: the check can't
 close the window between check and exec. Only a sticky bit on the volume root (`chmod +t`, which needs its owner or
 PACE support) stops staff/ from being renamed.
