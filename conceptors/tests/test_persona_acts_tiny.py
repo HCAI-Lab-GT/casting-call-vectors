@@ -283,6 +283,24 @@ def test_between_share_matches_row_by_row():
         assert np.isclose(analyze_acts.between_share(Y, labels), (brute ** 2).sum() / (Y ** 2).sum())
 
 
+def test_explainer_thin_points_keeps_alignment():
+    sys.path.insert(0, str(HERE.parent / "explainer"))
+    import build
+
+    # two roles, one prompt, two questions, three draws each, interleaved the way a run writes them
+    pts = [dict(r=r, s=0, q=q, a=f"{r}{q}-{k}") for k in range(3) for q in (0, 1) for r in ("assistant", "pirate")]
+    coords = [[i, -i] for i in range(len(pts))]
+    vals = {r: [float(i) for i, p in enumerate(pts) if p["r"] == r] for r in ("assistant", "pirate")}
+    data = dict(meta={}, points=pts, maps={"resp": {"2": dict(pca=coords, plane=coords), "4": None}},
+                groups={"resp": {r: dict(vals=v) for r, v in vals.items()}})
+    out = build.thin_points(json.loads(json.dumps(data)), 1)
+    assert [p["a"] for p in out["points"]] == ["assistant0-0", "pirate0-0", "assistant1-0", "pirate1-0"]
+    kept = [i for i, p in enumerate(pts) if p["a"].endswith("-0")]
+    assert out["maps"]["resp"]["2"]["plane"] == [coords[i] for i in kept]
+    for r in ("assistant", "pirate"):  # strip value j still belongs to the j-th kept point of that role
+        assert out["groups"]["resp"][r]["vals"] == [float(i) for i in kept if pts[i]["r"] == r]
+
+
 def test_layer_paths():
     from transformers import GPT2Config, GPT2LMHeadModel, GPTNeoXConfig, GPTNeoXForCausalLM
 

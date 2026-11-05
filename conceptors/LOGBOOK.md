@@ -172,3 +172,35 @@ Result:
 - **Cleanup:** The christina analysis was repointed and verified by the loader check above. `ruff` was not in the venv, so a PATH copy was tried. The transcript does not show the lint result, so that gate is unverified.
 - **Git state:** The only uncommitted change is the staged deletion of `overleaf`. The session's other edits are not listed in the git ground truth, so their commit status is unknown.
 - **Open items:** The PACE ICE survey was cut off before any GPU, queue or storage results, so task 2 (generalizing persona_acts.py) has not started. The transient-version check on transformers support for smollm3 and olmo3, the float16-on-MPS retest, and the drafted message to Rehan in the casting-call Discord channel are not shown as done in the transcript. The transcript is truncated, so some of those steps may have happened without being visible.
+
+[2026-11-05 03:15] Full sweep and hold results; analyze_acts timeout fixed (release 5daa77b9)
+
+Context: the c45df6af chain finished (sweep 25 min, judge 9 min, hold 34 min, judge 9 min, both analyze_steer jobs
+in seconds). analyze-smollm3_full 6821021 hit its 2 h limit at full CPU with no output.
+
+Action: pulled steer_sweep_full and steer_hold_full (steer_derived.json, judge, texts) locally and built
+explainer/steering_bench.html from them; checked it in the browser pane (no console errors, both contexts and both
+fit families render). Traced the timeout to the layer sweep in analyze_acts.py: role_var and q_var rebuilt each row's
+group mean row by row, O(n^2 d) per layer, run 37 layers x 2 keys at n = 12,960. Replaced it (and the same pattern in
+the within-persona split) with between_share, one pass per group; added a test that it equals the row-by-row form,
+and stage timings. Commit 5daa77b9 (signer locked: unsigned), pushed to conceptors/scale-up, deploying.
+
+Result, sweep (SmolLM3-3B, module 17, fits from 3,600 fully in-character pirate answers, 80 answers per cell):
+- Steering vector c 1.0 is the only matched method: 0.875 fully, coherence 92 (c 1.5: 1.0 fully at coherence 83).
+- Activation cap tops out at 0.775 fully (pct 99), coherence 94.
+- Full-rank conceptor, answer-average fit: 0.39 fully at beta 1.0, read-out 0.07. Per-token fit: 0.28 at beta 1.0,
+  read-out 0.05 (unsteered 0.02), so neither moves the persona score. Likely cause, not yet measured: the median
+  aperture keeps the high-variance directions almost whole, and those carry most of an assistant activation's offset
+  from the persona mean; derived.json's rank.kept_C will show how much energy C keeps.
+- Low-rank (k 16, null keep 2e-4) and both mean-shift controls act only from beta 0.7, where coherence falls to 43-57
+  and then to 0-8; at beta 0.5 they reach 0.41-0.66 fully.
+Result, hold (10 turns, probes at turns 5 and 8, 20 conversations per cell, method at its sweep strength):
+- Prompt alone: 1.00 fully through turn 4, 0.05 at the first probe, 0.20 at turn 10; probes 0.03 overall.
+- Prompt + per-token conceptor (beta 1.0): 0.90 at turn 10, coherence 90 (prompt alone 92), probes 0.70.
+- Prompt + cap: 0.95 at turn 10, coherence 88, probes 0.57. Prompt + steering vector: 1.00 throughout, probes 1.00,
+  but coherence 71 (50 at turn 10). Prompt + answer-average conceptor: probes 0.75 at coherence 36.
+- Reading: the per-token conceptor does not induce the persona from the assistant default, but it holds a
+  prompted persona at almost no coherence cost. The probe gap to cap (0.70 vs 0.57, 40 probe answers each) is within
+  noise at this n.
+
+Next: rerun analyze_acts on smollm3_full from 5daa77b9, rebuild the field guide from it, run the interaction check.
