@@ -251,7 +251,7 @@ function placeLabels(labels, f){
   }
 }
 function width(host){ return Math.max(320, Math.min(1080, host.clientWidth || 900)); }
-const METRIC_RANGE = {fully_rate: [0, 1], voice_as_rate: [0, 1], coherence: [0, 100]};
+const METRIC_RANGE = {fully_rate: [0, 1], voice_as_rate: [0, 1], identity_ai_rate: [0, 1], coherence: [0, 100]};
 function readoutRange(vals){ const lo = Math.min(-0.25, ...vals), hi = Math.max(1.25, ...vals); return [Math.floor(lo * 4) / 4, Math.ceil(hi * 4) / 4]; }
 function ticksFor(lo, hi, n){ const st = (hi - lo) / n; return Array.from({length: n + 1}, (_, i) => +(lo + i * st).toFixed(4)); }
 const fmtMetric = (k, v) => k === 'coherence' ? Math.round(v) : (k === 'readout' ? (+v).toFixed(2) : Math.round(v * 100) + '%');
@@ -259,7 +259,8 @@ const fmtMetric = (k, v) => k === 'coherence' ? Math.round(v) : (k === 'readout'
 function answerCard(m, title, ex){
   const lab = ex.label ? `<span class="pill ${ex.label === 'fully' ? 'fully' : ex.label === 'not' ? 'not' : ''}">${esc(ex.label)}</span>` : '';
   const voice = ex.voice ? `<span class="pill">voice: ${esc(ex.voice)}</span>` : '';
-  return `<div class="ans" style="border-left:3px solid ${col(m)}"><div class="meta"><b style="color:var(--ink)">${esc(title)}</b>${lab}${voice}` +
+  const ident = ex.identity ? `<span class="pill">identity: ${esc({ai: 'admits AI', none: 'no claim', persona: 'the role'}[ex.identity] || ex.identity)}</span>` : '';
+  return `<div class="ans" style="border-left:3px solid ${col(m)}"><div class="meta"><b style="color:var(--ink)">${esc(title)}</b>${lab}${voice}${ident}` +
     `<span>coherence ${ex.coh == null ? '–' : Math.round(ex.coh)}</span><span>read-out ${fmt(ex.readout)}</span></div>` +
     `<div class="q">${esc(ex.q)}</div><div class="a">${esc(ex.a)}</div></div>`;
 }
@@ -335,6 +336,8 @@ if (hold){
   const ctxs = [['steer_only', 'Steering only'], ['prompt', 'Prompt + steering']];
   const metrics = [['fully_rate', 'In character'], ['coherence', 'Coherence'], ['readout', 'Read-out']];
   if (hold.hold.some(h => h.per_turn.some(t => t.voice_as_rate != null))) metrics.push(['voice_as_rate', 'Speaks as the role']);
+  // identity rubric (judge.py --identity): shown only for runs judged with it; lower is better on this one
+  if (hold.hold.some(h => h.per_turn.some(t => t.identity_ai_rate != null))) metrics.push(['identity_ai_rate', 'Admits being an AI']);
   let ctx = 'steer_only', metric = hold.meta.judged ? 'fully_rate' : 'readout';
   const methods = METHODS.filter(m => hold.hold.some(h => h.method === m));
   const shown = new Set(methods);

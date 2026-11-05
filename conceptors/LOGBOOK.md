@@ -396,3 +396,33 @@ Context: The project tests whether conceptors set up and hold a persona or trait
 Action: Read HANDOFF.md, CLAUDE.md and explainer/README.md. Inventoried the repo's OLMo-3-7B artifacts: Assistant Axis responses and scores, Assistant Axis role vectors, Casting Call role and trait vectors, and the gold-prompt steering CSVs. Wrote the findings to a new doc, conceptors/docs/prior_olmo3_inventory.md, and added a dated line to HANDOFF.md. Resolved the OLMo-3 chat-template question by reading it from the Hub without downloading the model. Searched Google Drive and OneDrive for the run data. On OneDrive I diffed the download dump against the checkout by path and file size, without opening files, and appended the findings plus a storage recommendation to the inventory doc. After the user asked to unify and clean up, applied four approved cleanup edits, including repointing the christina analysis to the Assistant Axis vectors, and checked that the loader returns 276 vectors shaped (4096,). Loaded the PACE ICE skill and connected over the unattended `pace-ice-agent` ssh alias, then began checking GPUs, queue state and storage (PACE has no `rg`, so the check was rerun with `grep`).
 
 Result: The repo saved no per-sample OLMo-3-7B activations, so nothing can be fitted as a conceptor directly. The reusable assets are about 330,000 judged OLMo-3-7B-Instruct answers, which can be teacher-forced through the model to rebuild the activation clouds, plus the steering-vector baselines. The Drive and OneDrive searches found no new data. The OneDrive dump is an older snapshot of what is already tracked in git, and the only file missing here is `persona_data/role_datasets.zip`. The judged Q/A answers from the CPU phase and the code that generated the Assistant Axis data were not found on either drive. The recommendation is to leave the existing data in plain git and use a private Hugging Face bucket for new activation dumps. The ssh connection to PACE ICE works (login node `login-ice-gnr-1`, user `gmatlin3`). The GPU, queue and storage survey had not finished when the transcript ends. Tasks 2 onward (generalizing persona_acts.py, the float16 re-test, the transformers architecture check) have not started. Git ground truth also shows uncommitted changes that the transcript doesn't explain: a modification to conceptors/explainer/bench/bench.html and a staged deletion of the `overleaf` entry. The message draft to the casting-call channel was never confirmed in the visible transcript. The transcript is truncated, so some cleanup details may be missing.
+
+[2026-11-05 11:06] Identity rubric calibration: failed the pre-set bars; the role-play rubric's flaw confirmed
+
+Context: owner asked to calibrate the new identity rubric before rescoring anything (Casting Call's calibration
+idea), then decide whether to bring over Casting Call's judges. The Casting Call paper (arXiv 2608.00023v2) used
+GPT-4.1-mini for all judges and reports split-half reliability (r = 0.97) and position-swap debiasing, but no human
+labels, calibration set, multi-turn or identity probes, so this calibration is new rather than a repeat.
+
+Action: commit e3cc42ca (deployed, verified): judge.py --identity (0 admits AI / 1 no claim / 2 presents as the
+role; a judged row gets only the rubrics it lacks, so existing labels never change); calibrate_judge.py (prepare /
+score, bars fixed before the run: admits-AI agreement >= 0.90 on all cases, three-way >= 0.80 on cases not marked
+hard); calibration/identity_cases.jsonl, 33 answers from the hold runs, labeled by reading each in full (20 admit
+AI, 7 no claim, 6 claim the pirate; 4 marked hard; one ambiguous candidate dropped). analyze_steer.py reports
+identity rates. 7 judge tests and 19 tiny-model tests pass. Chain: judge 6825182 (--voice --identity) -> score
+6825183 -> rescoring of the three hold runs gated on the score job with --kill-on-invalid-dep.
+
+Result: FAILED (score job exit 1); the gate cancelled all six rescoring jobs, so no hold run was changed.
+- Identity rubric: admits-AI agreement 0.879 (29/33, bar 0.90); three-way 0.759 on cases not hard (bar 0.80).
+  It never answered "no claim": all 7 no-claim answers came back "presents as the role", so it reads the voice as a
+  claim. It caught 8 of 12 admissions made in pirate voice (all 8 plain ones); the 4 misses call themselves a
+  computer, a tool for answering questions, or a humble assistant while also denying (3 of the 4 marked hard).
+- Role-play rubric (Assistant Axis, same judge, same cases): "fully in character" on 12 of 12 admissions made in
+  pirate voice, "not" on all 8 plain admissions. So under steering the role-play rubric scores voice, not identity;
+  every identity-probe "fully" rate for the vector methods is unreliable, as suspected from reading answers.
+- Calibration outputs: runs/calib_identity/{judge.jsonl,calibration.json}.
+
+Next (owner's call, not started): revise to the binary question the analysis needs (admits AI anywhere, even when it
+also denies it or stays in voice) and test it on a fresh, separately labeled held-out set, so the revision isn't
+tuned on these 33 cases; optionally in the same judge job, the same question with Casting Call's
+justification-before-score, which tests whether that technique helps.
