@@ -41,7 +41,18 @@ case "$JUDGE_MODEL" in mistralai/*) EXTRA=(--tokenizer-mode mistral --config-for
 "$UV_PROJECT_ENVIRONMENT/bin/vllm" serve "$JUDGE_PATH" --port "$PORT" --host 127.0.0.1 --served-model-name judge \
   --max-model-len 8192 --gpu-memory-utilization 0.90 --tensor-parallel-size "${JUDGE_TP:-1}" "${EXTRA[@]}" > "$LOG" 2>&1 &
 SERVER=$!
-trap 'kill $SERVER 2>/dev/null || true; wait $SERVER 2>/dev/null || true; rm -rf "$JOB_TMP"' EXIT
+# On exit, stop the server and never wait on it forever: a vLLM still loading can ignore SIGTERM, and a plain
+# `wait` then held a failed job until its time limit (job 6826242, 5 Nov 2026).
+cleanup() {
+  if kill -0 "$SERVER" 2>/dev/null; then
+    kill "$SERVER" 2>/dev/null || true
+    for _ in $(seq 1 30); do kill -0 "$SERVER" 2>/dev/null || break; sleep 2; done
+    pkill -9 -P "$SERVER" 2>/dev/null || true
+    kill -9 "$SERVER" 2>/dev/null || true
+  fi
+  rm -rf "$JOB_TMP"
+}
+trap cleanup EXIT
 owned() {  # is the listener on $PORT our server or one of its children? (ss shows pids only for our own processes)
   local p
   for p in $(ss -Hltnp "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2); do
@@ -53,12 +64,13 @@ ready() {
   owned && printf 'Authorization: Bearer %s\n' "$VLLM_API_KEY" |
     curl -sf -H @- "http://127.0.0.1:$PORT/v1/models" > /dev/null
 }
-for _ in $(seq 1 180); do
+# Up to 45 min: with several judge jobs reading weights from the shared volume at once, loading took 18 min.
+for _ in $(seq 1 540); do
   if ! kill -0 "$SERVER" 2>/dev/null; then echo "vLLM exited early; see $LOG"; tail -30 "$LOG"; exit 1; fi
   if ready; then break; fi
   sleep 5
 done
-ready || { echo "vLLM not ready after 15 min"; tail -30 "$LOG"; exit 1; }
+ready || { echo "vLLM not ready after 45 min"; tail -30 "$LOG"; exit 1; }
 echo "judge $JUDGE_MODEL ready on port $PORT; release $(git rev-parse HEAD)"
 for name in "${RUN_NAMES[@]}"; do
   R="$CONCEPTORS_DATA/runs/$name"
