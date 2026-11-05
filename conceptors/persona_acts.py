@@ -393,22 +393,39 @@ def parse_args(argv=None):
     return args
 
 
+def resolve_model_path(model, revision):
+    """(path, snapshot commit). A cached hub model resolves to its local snapshot folder, which pins the exact
+    files and avoids hub calls (transformers 4.57's tokenizer calls model_info() for repo ids even when
+    HF_HUB_OFFLINE=1). Uncached models fall back to the repo id unless offline mode is on."""
+    if Path(model).is_dir():
+        return model, None
+    from huggingface_hub import snapshot_download
+    try:
+        path = snapshot_download(model, revision=revision, local_files_only=True)
+        return path, Path(path).name
+    except Exception:
+        if os.environ.get("HF_HUB_OFFLINE") == "1":
+            raise
+        return model, None
+
+
 def load_model(args, device):
     if args.dtype == "auto":
         dtype = torch.bfloat16 if device == "cuda" else torch.float32
     else:
         dtype = getattr(torch, args.dtype)
-    hub = dict(revision=args.revision, trust_remote_code=args.trust_remote_code)
-    tok = AutoTokenizer.from_pretrained(args.model, **hub)
+    path, args.model_snapshot = resolve_model_path(args.model, args.revision)
+    hub = dict(revision=None if args.model_snapshot else args.revision, trust_remote_code=args.trust_remote_code)
+    tok = AutoTokenizer.from_pretrained(path, **hub)
     if tok.pad_token_id is None:
         tok.pad_token = tok.eos_token
     # On Apple MPS, SDPA attention with left-padded batches can produce NaN probabilities
     # ("probability tensor contains inf/nan") -> use eager attention there.
     kw = {"attn_implementation": "eager"} if device == "mps" else {}
     try:
-        model = AutoModelForCausalLM.from_pretrained(args.model, dtype=dtype, **hub, **kw)
+        model = AutoModelForCausalLM.from_pretrained(path, dtype=dtype, **hub, **kw)
     except TypeError:  # older transformers use torch_dtype
-        model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=dtype, **hub, **kw)
+        model = AutoModelForCausalLM.from_pretrained(path, torch_dtype=dtype, **hub, **kw)
     return tok, model.to(device).eval(), dtype
 
 
@@ -570,7 +587,8 @@ def main(argv=None):
             f.write(json.dumps(row) + "\n")
 
     n_think = sum(j["has_think"] for j in jobs)
-    manifest = dict(model=args.model, revision=args.revision, mode=args.mode, preset=args.preset, device=device,
+    manifest = dict(model=args.model, revision=args.revision, model_snapshot=args.model_snapshot, mode=args.mode,
+                    preset=args.preset, device=device,
                     dtype=str(dtype), n_layers=n_layers, d=d, layer_path=layer_path, saved_hidden_idx=save_idx,
                     token_hidden_idx=tok_idx, n_token_jobs=len(tokens), max_new_tokens=args.max_new_tokens,
                     temperature=args.temperature, top_p=args.top_p, repetition_penalty=args.repetition_penalty,

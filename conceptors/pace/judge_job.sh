@@ -19,7 +19,10 @@ LOG="$RUN/vllm_judge.log"
 # and the readiness check requires that the socket on $PORT belongs to our own vLLM process tree.
 export VLLM_API_KEY="$(openssl rand -hex 24)"
 export LOCAL_JUDGE_API_KEY="$VLLM_API_KEY"
-"$UV_PROJECT_ENVIRONMENT/bin/vllm" serve "$JUDGE_MODEL" --port "$PORT" --host 127.0.0.1 --served-model-name judge \
+# serve the local snapshot folder: transformers 4.57 makes a hub call for repo ids even when offline
+JUDGE_PATH="$("$PY" -c 'import os; from huggingface_hub import snapshot_download as s; print(s(os.environ["JUDGE_MODEL"], local_files_only=True))')"
+echo "judge snapshot $(basename "$JUDGE_PATH")"
+"$UV_PROJECT_ENVIRONMENT/bin/vllm" serve "$JUDGE_PATH" --port "$PORT" --host 127.0.0.1 --served-model-name judge \
   --max-model-len 8192 --gpu-memory-utilization 0.90 > "$LOG" 2>&1 &
 SERVER=$!
 trap 'kill $SERVER 2>/dev/null || true; wait $SERVER 2>/dev/null || true' EXIT

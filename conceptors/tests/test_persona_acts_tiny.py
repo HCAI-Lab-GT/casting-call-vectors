@@ -182,6 +182,25 @@ def test_presets_and_overrides():
     assert args.repetition_penalty == 1.1
 
 
+def test_resolve_model_path_offline(tmp: Path):
+    """A cached repo id resolves to its snapshot folder without network, as needed under HF_HUB_OFFLINE=1."""
+    import os
+    import subprocess
+
+    hub = tmp / "hfhome" / "hub" / "models--org--tiny"
+    sha = "0123456789abcdef0123456789abcdef01234567"
+    (hub / "snapshots" / sha).mkdir(parents=True)
+    (hub / "snapshots" / sha / "config.json").write_text("{}")
+    (hub / "refs").mkdir()
+    (hub / "refs" / "main").write_text(sha)
+    code = ("import sys; sys.path.insert(0, %r); import persona_acts as p; "
+            "path, snap = p.resolve_model_path('org/tiny', None); print(path); print(snap)") % str(HERE.parent)
+    env = dict(os.environ, HF_HOME=str(tmp / "hfhome"), HF_HUB_OFFLINE="1")
+    out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, check=True).stdout.split()
+    assert out[0].endswith(f"snapshots/{sha}") and out[1] == sha
+    assert persona_acts.resolve_model_path(str(tmp), None) == (str(tmp), None)  # local dirs pass through
+
+
 def test_third_person():
     assert src.third_person("You are a pirate captain who has sailed your ship.") == \
         "Steve is a pirate captain who has sailed their ship."
