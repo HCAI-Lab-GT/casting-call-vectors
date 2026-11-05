@@ -119,3 +119,19 @@ coherence >= 50, which picked beta 0.1 on a three-way tie. Excluding such method
 the prompt-context hold test, which is the comparison they are meant to win.
 
 Result: 14 tiny-model tests and 5 judge tests pass; ruff could not run (the shell call was refused).
+
+[2026-11-05 00:20] Release c45df6af; full sweep and hold chain submitted
+
+Context: commit c45df6af (signer still locked: unsigned) deployed and verified at
+releases/casting-call-vectors/c45df6af...; bench commit d2bb51cc (unsigned, local page only, not deployed).
+
+Action: second pilot sweep (runs/steer_sweep_quick2, widened grid, pre-fix code) analyzed locally: add reproduces the
+first sweep exactly (c=1.0: 0.925 fully, coherence 90.2); conceptor, lowrank and meanshift all keep coherence ~94 at
+beta 0.5 and collapse by 0.7 (coherence 38 / 14 / 12), so the answer-average conceptor adds nothing over its control.
+Submitted from the c45df6af release, all afterok with --kill-on-invalid-dep=yes, behind judge-smollm3_full 6820305:
+analyze-smollm3_full 6821021 (CPU); steer-sweep-full 6821023 (fits from smollm3_full at module 17, all 8 methods,
+2 samples x 40 role questions) -> judge 6821024 (--voice) -> analyze_steer 6821025 (sbatch --wrap, CPU) ->
+steer-hold-full 6821027 (--select_from steer_sweep_full) -> judge 6821028 (--voice) -> analyze_steer 6821029.
+
+Result: chain queued; collect-smollm3_full 6820304 was writing phase-1 activations at 34 min (12,960 answers,
+147,272 per-token rows).
