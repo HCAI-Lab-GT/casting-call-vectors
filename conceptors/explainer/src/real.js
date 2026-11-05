@@ -57,14 +57,15 @@ function upd13(){
 
 /* ---------- Plate 1.4: layer sweep ---------- */
 const XL=D.sweep.resp.map(s=>s.layer);
+const LT=(()=>{const n=D.meta.n_layers,st=n<=24?4:n<=36?6:8;return Array.from({length:Math.floor(n/st)+1},(_,i)=>i*st);})();
 const sweepSeries=key=>()=>[
   {name:'answer average',short:'avg',color:COL.pirate,values:D.sweep.resp.map(s=>s[key])},
   {name:'last prompt token',short:'last',color:COL.orange,values:D.sweep.last.map(s=>s[key])}];
 const chAuc=LineChart('cSweepAuc',{aspect:.78,xs:()=>XL,yRange:()=>[.4,1.02],yTicks:()=>[.5,.6,.7,.8,.9,1],yFmt:v=>v.toFixed(1),
-  xTicks:()=>[0,4,8,12,16,20,24],xTitle:'layer',mr:50,refs:()=>[{y:.5,label:'chance'}],series:sweepSeries('lr_auc'),
+  xTicks:()=>LT,xTitle:'layer',mr:50,refs:()=>[{y:.5,label:'chance'}],series:sweepSeries('lr_auc'),
   tipTitle:i=>'layer '+XL[i],vFmt:v=>'AUC '+v.toFixed(3)});
 const chVar=LineChart('cSweepVar',{aspect:.78,xs:()=>XL,yRange:()=>[0,.32],yTicks:()=>[0,.1,.2,.3],yFmt:v=>Math.round(v*100)+'%',
-  xTicks:()=>[0,4,8,12,16,20,24],xTitle:'layer',mr:50,series:sweepSeries('role_var'),
+  xTicks:()=>LT,xTitle:'layer',mr:50,series:sweepSeries('role_var'),
   tipTitle:i=>'layer '+XL[i],vFmt:v=>pct1(v)});
 const tabSweep=dataTable($('cSweepVar').closest('.figrow'),'Show the numbers');
 tabSweep.set(['layer','AUC, answer avg','AUC, last token','role share, answer avg','role share, last token','question share, answer avg'],
@@ -217,14 +218,19 @@ function upd27(){
   $('rankBars').insertAdjacentElement('afterend',n);
 }
 const XC=RK.cover.map(c=>c.n);
-const chCover=LineChart('cCover',{aspect:.5,xs:()=>XC,xMin:0,xMax:72,yRange:()=>[0,1],yTicks:()=>[0,.25,.5,.75,1],yFmt:v=>Math.round(v*100)+'%',
-  xTicks:()=>[2,16,32,48,64,71],xTitle:'n training answers',mr:18,direct:false,
+const XCT=(()=>{const mx=Math.max(...XC),st=[8,16,32,64,128,256,512,1024,2048,4096].find(s=>mx/s<=5)||8192,t=[XC[0]];
+  for(let v=st;v<mx-st/3;v+=st)t.push(v);t.push(mx);return t;})();  // 0.5B run: 2, 16, 32, 48, 64, 71
+const chCover=LineChart('cCover',{aspect:.5,xs:()=>XC,xMin:0,xMax:Math.max(...XC)+1,yRange:()=>[0,1],yTicks:()=>[0,.25,.5,.75,1],yFmt:v=>Math.round(v*100)+'%',
+  xTicks:()=>XCT,xTitle:'n training answers',mr:18,direct:false,
   series:()=>[{name:'share inside the span',color:COL.pirate,values:RK.cover.map(c=>c.inside),dots:true}],
   tipTitle:i=>'n = '+XC[i],vFmt:v=>pct1(v)});
 dataTable('cCover','Show the numbers').set(['n','share inside span'],RK.cover.map(c=>[String(c.n),pct1(c.inside)]));
 
 /* ---------- Plate 2.10: conceptor logic on real data ---------- */
-const s210={fit:'diff',layer:'13'};
+const LOGIC_LAYERS=D.logic?Object.keys(D.logic.sims).sort((a,b)=>a-b):[];
+const s210={fit:'diff',layer:LOGIC_LAYERS.includes(String(D.meta.steer_hidden))?String(D.meta.steer_hidden):LOGIC_LAYERS[0]};
+$('logicLayer').replaceChildren(...LOGIC_LAYERS.map(l=>{const b=document.createElement('button');b.type='button';b.dataset.v=l;
+  b.setAttribute('aria-pressed',String(l===s210.layer));b.textContent='Layer '+l;return b;}));
 const LOGIC_LABEL={'pirate AND doctor':'Pirate AND doctor','pirate OR doctor':'Pirate OR doctor',pirate:'Pirate',doctor:'Doctor',assistant:'Assistant',bard:'Bard',ghost:'Ghost',robot:'Robot',teacher:'Teacher',consultant:'Consultant'};
 function upd210(){
   const S=D.logic.sims[s210.layer][s210.fit],keys=Object.keys(S);
