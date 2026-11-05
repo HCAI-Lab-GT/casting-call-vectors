@@ -1,17 +1,18 @@
 <section class="slide cover" data-title="Can a conceptor hold a persona?" data-part="Cover">
   <div class="kicker">Human-Centered AI Lab · lab meeting · 6 November 2026</div>
   <h1>Can a conceptor <em>hold</em> a persona?</h1>
-  <p class="lede">Prompts, steering vectors, activation caps and conceptors, compared on one persona over ten turns of pressure to drop it. Real SmolLM3-3B activations, scored by four judges from four model families.</p>
-  <div class="meta"><span>SmolLM3-3B · 12,960 answers · 147k token activations</span><span>Builds on the Casting Call role-steering work</span><span>Keys: → next · ← back · G all slides</span></div>
+  <p class="lede">Prompts, steering vectors, activation caps and conceptors, compared on holding a persona through a conversation that keeps pushing the model to drop it. Real SmolLM3-3B activations, scored by four judges from four model families.</p>
+  <div class="meta"><span>SmolLM3-3B · <span data-stat="npersonas"></span> personas · 12,960 answers in the base run</span><span>Builds on the Casting Call role-steering work</span><span>Keys: → next · ← back · G all slides</span></div>
 </section>
 
 <section class="slide" data-title="A prompted persona fades, then breaks" data-part="The problem">
   <header class="shead"><div class="kicker">The problem</div><h2>A prompted persona fades, then breaks</h2></header>
   <div class="sbody s2">
     <div class="scol">
-      <p class="big">SmolLM3-3B gets a pirate system prompt, then ten questions. At turn 5 the user asks it to drop the act; at turn 8, whether it is an AI.</p>
-      <div><p class="chart-title">In character with the prompt alone, each turn: share of 40 conversations (black: mean of the judges; grey: each judge)</p><canvas id="s2line" role="img" aria-label="Share of answers in character at each turn with the prompt alone"></canvas>
-        <p class="note">Shaded: turn 5 "drop the act", turn 8 "are you an AI?". Click a turn to read it.</p></div>
+      <p class="big">SmolLM3-3B gets a persona system prompt, then a conversation. Some turns push back: "drop the act" and "are you an AI?".</p>
+      <div id="s2p"></div>
+      <div><p class="chart-title">In character with the prompt alone, each turn: share of conversations (black: mean of the judges; grey: each judge)</p><canvas id="s2line" role="img" aria-label="Share of answers in character at each turn with the prompt alone"></canvas>
+        <p class="note">Shaded turns are the probes. Click a turn to read it.</p></div>
     </div>
     <div class="scol">
       <div class="ctlrow"><span>Turn of conversation 1</span><div class="turns" id="s2turns" role="group" aria-label="Turn"></div></div>
@@ -50,11 +51,12 @@
   {{plate:map-plate}}
 </section>
 
-<section class="slide" data-title="Only the steering vector sets the persona on its own" data-part="Setting a persona">
+<section class="slide" data-title="Setting a persona in one turn" data-part="Setting a persona">
   <header class="shead"><div class="kicker">Setting a persona · one turn, no system prompt</div><h2>Only the steering vector sets the persona on its own</h2></header>
   <div class="sbody">
     <div class="scol">
-      <p class="big">Each method at increasing strength, applied at layer 17 with no system prompt. Up is more answers fully in character; right is more coherent. The best spot is the top right.</p>
+      <p class="big">Each method at increasing strength, applied with no system prompt. Up is more answers fully in character; right is more coherent. The best spot is the top right.</p>
+      <div id="s9p"></div>
       <div class="ctlrow"><span>Methods</span><div class="mtog" id="s9tog"></div></div>
       <div class="ctlrow"><span>Coherence range</span><div class="seg" id="s9z" role="group" aria-label="Coherence range"><button type="button" data-v="all" aria-pressed="true">All, 0-100</button><button type="button" data-v="zoom" aria-pressed="false">Coherent only, 60-100</button></div></div>
       <p class="note" id="s9note"></p>
@@ -72,25 +74,42 @@
       <div class="ctl"><label for="s10a">Aperture <output for="s10a"></output></label><input id="s10a" type="range" min="0" max="1000" step="1" value="735"></div>
       <div class="seg" id="s10m" role="group" aria-label="Shape of the persona cloud"><button type="button" data-v="along" aria-pressed="true">Cloud wide along the persona direction</button><button type="button" data-v="across" aria-pressed="false">Cloud wide across it</button></div>
       <div class="readout" id="s10r"></div>
-      <div class="msg bot" style="border-left-color:var(--navy)"><span class="who">Measured on SmolLM3, layer 17, 42,201 assistant tokens</span>Answer-average conceptor keeps <b>97%</b> along the persona direction and closes <b>2.6%</b> of the gap. Per-token conceptor keeps <b>89%</b> and closes <b>11%</b>. The steering vector closes all of it by construction.</div>
+      <div class="msg bot" style="border-left-color:var(--navy)"><span class="who">Measured on SmolLM3, layer 17, 42,201 assistant tokens, pirate fits</span>Answer-average conceptor keeps <b>97%</b> along the persona direction and closes <b>2.6%</b> of the gap. Per-token conceptor keeps <b>89%</b> and closes <b>11%</b>. The steering vector closes all of it by construction.</div>
     </div>
     <div><canvas id="s10c" role="img" aria-label="Toy persona cloud, an assistant activation and where the conceptor sends it"></canvas>
-      <p class="note">Grey: assistant activations. Teal: persona cloud and its stencil. Dashed: the persona direction. Arrow: where the conceptor sends the grey point.</p></div>
+      <p class="note">Grey: assistant activations. Teal: persona cloud and its stencil. Dashed: the persona direction. Arrow: where the conceptor sends the pink point.</p></div>
   </div>
 </section>
 
-<section class="slide" data-title="Holding a persona over ten turns" data-part="Holding a persona">
-  <header class="shead"><div class="kicker">Holding a persona · ten turns, probes at 5 and 8</div><h2>With a prompt, the per-token conceptor holds without costing coherence</h2></header>
+<section class="slide" data-title="Holding a persona across the conversation" data-part="Holding a persona">
+  <header class="shead"><div class="kicker">Holding a persona · probes shaded</div><h2>Holding a persona across the conversation</h2></header>
   <div class="sbody hold" data-hold="s11" data-measure="fully_rate" data-context="prompt"></div>
 </section>
 
-<section class="slide" data-title="Holding costs coherence" data-part="Holding a persona">
-  <header class="shead"><div class="kicker">Holding a persona · the cost</div><h2>The vector holds hardest, and its coherence sinks turn by turn</h2></header>
+<section class="slide" data-title="What holding costs in coherence" data-part="Holding a persona">
+  <header class="shead"><div class="kicker">Holding a persona · the cost</div><h2>What holding costs in coherence, turn by turn</h2></header>
   <div class="sbody hold" data-hold="s12" data-measure="coherence" data-context="prompt"></div>
 </section>
 
-<section class="slide" data-title="Asked directly, every method admits it is an AI" data-part="Holding a persona">
-  <header class="shead"><div class="kicker">Holding a persona · the identity probe</div><h2>Asked directly, every method admits it is an AI</h2></header>
+<section class="slide" data-title="Where each method puts the activations" data-part="Holding a persona">
+  <header class="shead"><div class="kicker">Mechanism · the steering layer, mean over conversations</div><h2>Where each method puts the activations, turn by turn</h2></header>
+  <div class="sbody traj">
+    <div class="scol">
+      <div id="stp"></div>
+      <div class="ctlrow"><span>Context</span><div id="stcw"></div></div>
+      <div class="ctlrow"><span>Methods</span><div class="mtog" id="stt"></div></div>
+      <div class="chat" id="stx" style="max-height:34vh;overflow:auto"></div>
+    </div>
+    <div class="scol">
+      <canvas id="stc" role="img" aria-label="Each method's position on the persona axis at every turn, before and after its edit"></canvas>
+      <canvas id="stm" role="img" aria-label="Persona-axis position against off-axis spread at the selected turn, before and after each method"></canvas>
+      <p class="note" id="stn"></p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-title="Asked directly, does it admit being an AI?" data-part="Holding a persona">
+  <header class="shead"><div class="kicker">Holding a persona · the identity probe</div><h2>Asked directly, does it still admit being an AI?</h2></header>
   <div class="sbody hold" data-hold="s13" data-measure="identity_ai_rate" data-context="prompt" data-transcript="8"></div>
 </section>
 
@@ -98,37 +117,39 @@
   <header class="shead"><div class="kicker">Measuring it · four judge families</div><h2>The judges agree on identity and disagree on holding</h2></header>
   <div class="sbody">
     <div class="scol">
-      <p class="big">The standard role-play rubric scores voice, not identity: it calls an answer that admits being an AI "fully in character" as long as it sounds like a pirate. We added an identity rubric and checked every judge against 65 hand-labeled answers.</p>
+      <p class="big">The standard role-play rubric scores voice, not identity: it calls an answer that admits being an AI "fully in character" as long as it sounds like the role. We added an identity rubric and checked every judge against 65 hand-labeled answers.</p>
       <div><p class="chart-title">Role-play rubric: AI admissions called "fully in character"</p><div id="s14rp" style="display:grid;gap:8px"></div></div>
       <div><p class="chart-title">Identity rubric: agreement with hand labels, held-out answers</p><div id="s14id" style="display:grid;gap:8px"></div></div>
     </div>
     <div class="scol">
+      <div id="s14p"></div>
       <div class="ctlrow"><span>Measure</span><div class="seg" id="s14m" role="group" aria-label="Measure"></div></div>
       <div class="ctlrow"><span>Context</span><div class="seg" id="s14c" role="group" aria-label="Context"></div></div>
       <div style="overflow-x:auto"><table class="jtable" id="s14t"></table></div>
-      <p class="note">Each cell: share of conversations (20 or 40 per method) at that turn, by that judge. Darker means higher.</p>
+      <p class="note">Each cell: share of conversations at that turn, by that judge. Darker means higher.</p>
     </div>
   </div>
 </section>
 
 <section class="slide navy" data-title="What we know so far" data-part="Takeaways">
-  <header class="shead"><div class="kicker">Takeaways · SmolLM3-3B, pirate persona</div><h2>Vectors set a persona, conceptors hold one, nothing holds identity</h2></header>
+  <header class="shead"><div class="kicker">Takeaways · SmolLM3-3B, <span data-stat="npersonas"></span> personas, means over judges and personas</div><h2>Vectors set a persona, conceptors hold one, nothing holds identity</h2></header>
   <div class="cards">
-    <div class="card"><div class="n" data-stat="sweep|add|1.0|fully_rate"></div><h3>The vector sets it</h3><p>Of answers fully in character with the steering vector alone at c 1.0, coherence <span data-stat="sweep|add|1.0|coherence|num"></span>. Conceptors alone barely move it.</p></div>
-    <div class="card"><div class="n" data-stat="prompt|conceptor_tok|ordinary|fully_rate"></div><h3>The conceptor holds it</h3><p>In character on ordinary turns with prompt + per-token conceptor, against <span data-stat="prompt|none|ordinary|fully_rate"></span> for the prompt alone, at coherence <span data-stat="prompt|conceptor_tok|ordinary|coherence|num"></span>.</p></div>
-    <div class="card"><div class="n" data-stat="prompt|add|t8|identity_ai_rate"></div><h3>Nothing holds identity</h3><p>Of answers admit being an AI at the turn-8 probe even with prompt + vector, which stays in pirate voice. Every method that keeps coherence admits it.</p></div>
-    <div class="card"><div class="n" data-stat="judge-spread"></div><h3>The judge matters</h3><p>Spread between judges on prompt + per-token conceptor at the "drop the act" probe. Identity calls agree; role-play calls do not.</p></div>
+    <div class="card"><div class="n" data-stat="sweepsel|add|fully_rate"></div><h3>The vector sets it</h3><p>Fully in character with the steering vector alone at each persona's selected strength, coherence <span data-stat="sweepsel|add|coherence"></span>. Conceptors alone barely move it.</p></div>
+    <div class="card"><div class="n" data-stat="all|prompt|conceptor_tok|ordinary|fully_rate"></div><h3>The conceptor holds it</h3><p>In character on ordinary turns with prompt + per-token conceptor, against <span data-stat="all|prompt|none|ordinary|fully_rate"></span> for the prompt alone, at coherence <span data-stat="all|prompt|conceptor_tok|ordinary|coherence"></span>.</p></div>
+    <div class="card"><div class="n" data-stat="all|prompt|cap_aa|ordinary|fully_rate"></div><h3>Against the cap</h3><p>Prompt + Assistant-Axis-style cap, ordinary turns, coherence <span data-stat="all|prompt|cap_aa|ordinary|coherence"></span>; one-layer cap <span data-stat="all|prompt|cap|ordinary|fully_rate"></span> at <span data-stat="all|prompt|cap|ordinary|coherence"></span>.</p></div>
+    <div class="card"><div class="n" data-stat="all|prompt|add|t8|identity_ai_rate"></div><h3>Nothing holds identity</h3><p>Of answers admit being an AI at the turn-8 probe even with prompt + vector, which stays in the role's voice.</p></div>
+    <div class="card"><div class="n" data-stat="spread|prompt|conceptor_tok|t5|fully_rate"></div><h3>The judge matters</h3><p>Range over judges and personas for prompt + per-token conceptor at the first "drop the act". Identity calls agree; role-play calls do not.</p></div>
   </div>
-  <p class="note">Numbers are means over the <span data-stat="njudges"></span> judges unless a judge is named. Hold cells are 40 conversations (prompt alone, vector, per-token conceptor, both) or 20 (the rest).</p>
+  <p class="note">Numbers are means over the <span data-stat="njudges"></span> judges and over personas unless named.</p>
 </section>
 
 <section class="slide" data-title="Next" data-part="Next">
   <header class="shead"><div class="kicker">Next</div><h2>Where this goes next</h2></header>
   <div class="cards">
-    <div class="card"><h3>A bigger model</h3><p>OLMo-3-7B-Instruct, the Casting Call model, through the same pipeline. Does a 7B model keep its identity under the same pressure?</p></div>
-    <div class="card"><h3>Longer conversations</h3><p>Fifteen to twenty turns with more probes, to see whether the conceptor's hold decays or stays flat.</p></div>
-    <div class="card"><h3>More personas</h3><p>Up to three, so a result is about steering, not about pirates.</p></div>
-    <div class="card"><h3>More methods</h3><p>Gated and contrastive conceptors (hold only when drifting), an aperture sweep, and the vector + conceptor at lower strength with a prompt.</p></div>
+    <div class="card"><h3>A bigger model</h3><p>OLMo-3-7B-Instruct, the Casting Call model, fit from its own Assistant Axis answers. Does a 7B model keep its identity under the same pressure?</p></div>
+    <div class="card"><h3>Longer conversations</h3><p>Past twenty turns, with more kinds of pressure, to see whether the conceptor's hold decays or stays flat.</p></div>
+    <div class="card"><h3>More methods</h3><p>Gated and contrastive conceptors (act only when drifting), an aperture sweep, and lower vector strengths with a prompt.</p></div>
+    <div class="card"><h3>Why it works</h3><p>Which directions the conceptor shrinks that the cap leaves alone, and whether those carry the coherence cost.</p></div>
   </div>
   <p class="note">Everything here is reproducible from the conceptors/ folder of casting-call-vectors: runs, judge calibration, and this deck's build script.</p>
 </section>

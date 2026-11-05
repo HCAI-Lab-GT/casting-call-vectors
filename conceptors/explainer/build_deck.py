@@ -1,28 +1,38 @@
 #!/usr/bin/env python3
 """Assemble the lab-meeting deck: one self-contained, click-through HTML presentation.
 
-  python explainer/build_deck.py --guide-data RUNS/smollm3_full --samples 1 \
-      --sweep RUNS/steer_sweep_full RUNS/steer_sweep_combo \
-      --hold qwen=RUNS/steer_hold_combo,RUNS/steer_hold_full gemma=RUNS/steer_hold_combo.judge-gemma,... \
-      --calib qwen=RUNS/calib2_qwen gemma=RUNS/calib2_gemma ... --out explainer/lab_deck.html
+  python explainer/build_deck.py --config deck_runs.json
+
+The config names the run folders (paths are machine-specific, so it lives outside the repo):
+
+  {"guide_data": "RUNS/smollm3_full", "samples": 1, "default_persona": "pirate", "out": "explainer/lab_deck.html",
+   "calib": {"qwen": "RUNS/calib2_qwen", "gemma": "...", "mistral": "...", "llama": "..."},
+   "personas": {"pirate": {"sweep": ["RUNS/steer_sweep_v2_pirate"],
+                           "hold": {"qwen": ["RUNS/steer_hold_v2_pirate_prompt.judge-qwen",
+                                             "RUNS/steer_hold_v2_pirate_steer_only.judge-qwen"], "gemma": [...], ...},
+                           "fits": "RUNS/steer_hold_v2_pirate_prompt"}, ...}}
+
+Sweep runs merge per method and hold runs per (context, method), the first run listed winning. "fits" is a hold run
+folder holding fits.npz and manifest.json; it gives the steering-layer cap floors the trajectory slide draws.
 
 Slides live in deck/slides.html; a line '{{plate:ID}}' pulls the field guide plate with that id from src/body.html,
 and every plate the slides don't use becomes an appendix slide, so the field guide's scripts (which bind every plate
 by id at load) find all their elements. Styles: the field guide's CSS, then deck/deck.css (HCAI Lab tokens, slide
 layout). Scripts: deck/nav.js (navigation, no dependencies), then src/lib.js + toy.js + real.js + deck/results.js
-in one function, as in build.py. Standard library only.
+in one function, as in build.py. Needs numpy only for the cap floors.
 """
 import argparse, datetime, json, pathlib, re, subprocess, sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from build import thin_points  # noqa: E402
-from build_bench import merge  # noqa: E402
+from build_bench import load, merge  # noqa: E402
 
 PLATE_RE = re.compile(r'<section class="(?:plate|zoo)[^"]*"(?: id="([^"]+)")?>.*?</section>', re.S)
 TITLES = {"zoo-explorer": "The method zoo: twelve steering methods on one toy space"}  # sections without an h3
-TURN_KEYS = ("turn", "probe", "n", "fully_rate", "coherence", "identity_ai_rate", "voice_as_rate", "readout")
-SUMMARY_KEYS = ("n", "fully_rate", "coherence", "identity_ai_rate", "voice_as_rate", "readout")
+TRAJ = ("x_pre", "x_post", "off_pre", "off_post", "read_steered")
+TURN_KEYS = ("turn", "probe", "n", "fully_rate", "coherence", "identity_ai_rate", "voice_as_rate", "readout") + TRAJ
+SUMMARY_KEYS = ("n", "fully_rate", "coherence", "identity_ai_rate", "voice_as_rate", "readout") + TRAJ
 
 
 def plates(body: str) -> dict:
@@ -49,17 +59,45 @@ def pick(d: dict, keys) -> dict:
     return {k: d[k] for k in keys if k in d and d[k] is not None}
 
 
-def hold_for(paths: list[str]) -> list[dict]:
-    data = merge(paths, "hold")
-    rows = []
-    for h in data["hold"]:
-        rows.append(dict(context=h["context"], method=h["method"], strength=h["strength"],
-                         source=data["meta"]["sources"].get(h["method"]),
-                         per_turn=[pick(t, TURN_KEYS) for t in h["per_turn"]],
-                         ordinary=pick(h["ordinary"], SUMMARY_KEYS),
-                         examples=[dict(q=e["q"], a=e["a"], label=e.get("label"), coh=e.get("coh"),
-                                        identity=e.get("identity")) for e in h["examples"]]))
+def hold_rows(paths: list[str]) -> list[dict]:
+    """Hold entries from several runs (e.g. one per context), first run winning per (context, method)."""
+    seen, rows = set(), []
+    for p in paths:
+        d = load(p)
+        for h in d["hold"]:
+            key = (h["context"], h["method"])
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(dict(context=h["context"], method=h["method"], strength=h["strength"],
+                             per_turn=[pick(t, TURN_KEYS) for t in h["per_turn"]],
+                             ordinary=pick(h["ordinary"], SUMMARY_KEYS),
+                             examples=[dict(pick(e, TRAJ), q=e["q"], a=e["a"], label=e.get("label"), coh=e.get("coh"),
+                                            identity=e.get("identity")) for e in h["examples"]]))
     return rows
+
+
+def floors(fits_dir: str | None) -> dict:
+    """Steering-layer cap floors in default-0 / persona-1 units, for the methods that floor at that layer."""
+    if not fits_dir:
+        return {}
+    d = pathlib.Path(fits_dir)
+    if not (d / "fits.npz").exists() or not (d / "manifest.json").exists():
+        return {}
+    import numpy as np
+    man = json.loads((d / "manifest.json").read_text())
+    f, z = man["fits"], np.load(d / "fits.npz")
+    a0, p0 = f.get("steer_a0"), f.get("steer_p0")
+    if a0 is None or "proj_persona" not in z:
+        return {}
+    scale = lambda tau: round((tau - a0) / (p0 - a0), 4)  # noqa: E731
+    st = man.get("strengths", {})
+    out = {}
+    if "cap" in st:
+        out["cap"] = scale(float(np.percentile(z["proj_persona"], st["cap"])))
+    if "add_cap" in st:
+        out["add_cap"] = scale(float(np.percentile(z["proj_persona"], f.get("cap_hold_pct", 25))))
+    return out
 
 
 def calib_for(run: pathlib.Path) -> dict:
@@ -70,46 +108,43 @@ def calib_for(run: pathlib.Path) -> dict:
     r = c["rubrics"].get(chosen, {}) if chosen else {}
     return dict(model=model, chosen=chosen, holdout=r.get("holdout", {}).get("admits_ai_agreement"),
                 dev=r.get("dev", {}).get("admits_ai_agreement"),
-                bare_holdout=c["rubrics"].get("identity", {}).get("holdout", {}).get("admits_ai_agreement"),
-                reasoned_holdout=c["rubrics"].get("identity_r", {}).get("holdout", {}).get("admits_ai_agreement"),
                 roleplay_fully_on_ai=c.get("roleplay_fully_on_ai_admissions"), n_ai=c.get("n_ai_admissions"))
 
 
-def keyed(pairs: list[str]) -> dict:
-    out = {}
-    for p in pairs:
-        name, _, rest = p.partition("=")
-        out[name] = rest.split(",")
+def persona_data(spec: dict) -> dict:
+    sweep = merge(spec["sweep"], "sweep") if spec.get("sweep") else None
+    out = dict(hold={j: hold_rows(paths) for j, paths in spec["hold"].items()}, floors=floors(spec.get("fits")))
+    if sweep:
+        out["sweep"] = [dict(pick(r, ("method", "strength", "n", "fully_rate", "coherence", "readout", "voice_as_rate")),
+                             examples=[dict(q=e["q"], a=e["a"], label=e.get("label"), coh=e.get("coh"))
+                                       for e in r["examples"][:2]]) for r in sweep["sweep"]]
+        out["selected"] = sweep.get("selected", {})
+        out["fits"] = {k: sweep["meta"]["fits"][k] for k in ("module", "read_hidden", "n_persona", "n_default", "n_tokens",
+                                                            "source_model", "cap_aa_modules") if k in sweep["meta"]["fits"]}
+    turns = [t["turn"] for rows in out["hold"].values() for h in rows for t in h["per_turn"]]
+    out["n_turns"] = max(turns) + 1 if turns else 0
     return out
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--guide-data", type=pathlib.Path, required=True, help="derived.json or a run folder holding it")
-    ap.add_argument("--samples", type=int, default=1)
-    ap.add_argument("--sweep", nargs="+", required=True)
-    ap.add_argument("--hold", nargs="+", required=True, help="judge=run,run ... (first run listed wins per method)")
-    ap.add_argument("--calib", nargs="+", default=[], help="judge=calibration run folder")
-    ap.add_argument("--out", type=pathlib.Path, default=HERE / "lab_deck.html")
+    ap.add_argument("--config", type=pathlib.Path, required=True)
+    ap.add_argument("--out", type=pathlib.Path, default=None, help="overrides the config's out")
     a = ap.parse_args()
+    cfg = json.loads(a.config.read_text())
+    out_path = a.out or pathlib.Path(cfg.get("out", HERE / "lab_deck.html"))
 
-    gd = a.guide_data / "derived.json" if a.guide_data.is_dir() else a.guide_data
-    guide = thin_points(json.loads(gd.read_text()), a.samples) if a.samples else json.loads(gd.read_text())
+    gd = pathlib.Path(cfg["guide_data"])
+    gd = gd / "derived.json" if gd.is_dir() else gd
+    samples = cfg.get("samples", 1)
+    guide = thin_points(json.loads(gd.read_text()), samples) if samples else json.loads(gd.read_text())
     for k in ["resp", "last"]:
         for row in guide["sweep"][k]:
             row.pop("md_auc", None)
 
-    sweep = merge(a.sweep, "sweep")
-    results = dict(
-        sweep=[dict(pick(r, ("method", "strength", "n", "fully_rate", "coherence", "readout", "voice_as_rate")),
-                    examples=[dict(q=e["q"], a=e["a"], label=e.get("label"), coh=e.get("coh")) for e in r["examples"][:2]])
-               for r in sweep["sweep"]],
-        selected=sweep.get("selected", {}),
-        hold={judge: hold_for(paths) for judge, paths in keyed(a.hold).items()},
-        calib={judge: calib_for(pathlib.Path(p[0])) for judge, p in keyed(a.calib).items()},
-        fits={k: sweep["meta"]["fits"][k] for k in ("module", "read_hidden", "n_persona", "n_default", "n_tokens",
-                                                     "source_model") if k in sweep["meta"]["fits"]},
-    )
+    personas = {p: persona_data(spec) for p, spec in cfg["personas"].items()}
+    results = dict(personas=personas, default_persona=cfg.get("default_persona", next(iter(personas))),
+                   calib={j: calib_for(pathlib.Path(p)) for j, p in cfg.get("calib", {}).items()})
 
     style = re.search(r"<style>(.*?)</style>", (HERE / "src/head.html").read_text(), re.S).group(1)
     body = (HERE / "src/body.html").read_text()
@@ -157,9 +192,9 @@ def main():
     gone = sorted(refs - set(ids) - {"zooOpt"})  # zooOpt is looked up optionally
     if gone:
         raise SystemExit(f"scripts reference ids the deck lacks: {gone}")
-    a.out.write_text(html)
-    print(f"wrote {a.out} ({len(html.encode()) / 1024:.0f} KB; {len(used)} plates on slides, "
-          f"{len(all_plates) - len(used)} in the appendix)")
+    out_path.write_text(html)
+    print(f"wrote {out_path} ({len(html.encode()) / 1024:.0f} KB; {len(used)} plates on slides, "
+          f"{len(all_plates) - len(used)} in the appendix; personas {', '.join(personas)})")
 
 
 if __name__ == "__main__":
