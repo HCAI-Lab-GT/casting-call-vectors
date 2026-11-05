@@ -155,10 +155,11 @@ def synthetic_judged_run(tmp: Path, model: Path, name: str) -> tuple[Path, list[
     return run_dir, labels
 
 
-def fake_judge(run_dir: Path, label_of) -> None:
+def fake_judge(run_dir: Path, label_of, identity_of=None) -> None:
     rows = [json.loads(line) for line in (run_dir / "texts.jsonl").read_text().splitlines()]
     (run_dir / "judge.jsonl").write_text("\n".join(
-        json.dumps({"idx": i, "phase": 1, "roleplay_label": label_of(r), "coherence": 70}) for i, r in enumerate(rows)))
+        json.dumps({"idx": i, "phase": 1, "roleplay_label": label_of(r), "coherence": 70,
+                    **({"identity_label": identity_of(r)} if identity_of else {})}) for i, r in enumerate(rows)))
 
 
 def test_analyze_with_judge_filter(tmp: Path, model: Path, roles_dir: Path, qfile: Path):
@@ -270,11 +271,13 @@ def test_steer_eval_sweep_select_and_hold(tmp: Path, model: Path, roles_dir: Pat
     assert len(hrows) == 2 * 9 * 2 * 6  # contexts x (none + 8 methods) x convs x turns
     assert {r["context"] for r in hrows} == {"steer_only", "prompt"}
     assert any(r["probe"] and r["user"].startswith("Okay, drop the act") for r in hrows)
-    fake_judge(hold, lambda r: "fully" if r["turn"] < 3 else "somewhat")
+    fake_judge(hold, lambda r: "fully" if r["turn"] < 3 else "somewhat", lambda r: "ai" if r["probe"] else "none")
     analyze_steer.main(["--run", str(hold)])
     h = json.loads((hold / "steer_derived.json").read_text())["hold"]
     add = next(x for x in h if x["context"] == "prompt" and x["method"] == "add")
     assert len(add["per_turn"]) == 6 and add["summary"]["fully_rate"]["drift"] == -1.0 and add["probes"]["n"] == 2
+    assert add["probes"]["identity_ai_rate"] == 1.0 and add["ordinary"]["identity_ai_rate"] == 0.0
+    assert add["per_turn"][4]["identity_ai_rate"] == 1.0 and add["examples"][4]["identity"] == "ai"
 
 
 def test_select_matched_and_strongest_coherent():

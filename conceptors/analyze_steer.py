@@ -26,6 +26,7 @@ def load(run: Path):
     for i, r in enumerate(rows):
         j = judge.get(i, {})
         r["label"], r["coherence"], r["voice"] = j.get("roleplay_label"), j.get("coherence"), j.get("voice_label")
+        r["identity"] = j.get("identity_label")
     return rows, bool(judge), json.loads((run / "manifest.json").read_text())
 
 
@@ -46,6 +47,10 @@ def stats(rs: list[dict]) -> dict:
     if voices:  # additive point-of-view rubric: speaks as / mixed / about the role
         out["voice_as_rate"] = round(voices.count("as") / len(voices), 3)
         out["voice_about_rate"] = round(voices.count("about") / len(voices), 3)
+    ids = [r.get("identity") for r in rs if r.get("identity") is not None]
+    if ids:  # additive identity rubric: admits AI / no claim / presents as the role
+        out["identity_ai_rate"] = round(ids.count("ai") / len(ids), 3)
+        out["identity_persona_rate"] = round(ids.count("persona") / len(ids), 3)
     return out
 
 
@@ -86,7 +91,7 @@ def select(table: list[dict], judged: bool, target: float, min_coh: float) -> di
 
 def examples(rs: list[dict], k: int = 3) -> list[dict]:
     return [dict(q=r["user"][:200], a=r["answer"][:500], label=r["label"], coh=r["coherence"], voice=r.get("voice"),
-                 readout=round(r["readout"], 2)) for r in rs[:k]]
+                 identity=r.get("identity"), readout=round(r["readout"], 2)) for r in rs[:k]]
 
 
 def main(argv=None):

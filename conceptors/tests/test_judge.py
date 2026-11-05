@@ -80,6 +80,56 @@ def test_voice_rubric_is_additive_and_rejudges(tmp: Path):
     assert summary["pirate_narrated"]["voice_about_rate"] == 1.0 and summary["pirate"]["voice_as_rate"] == 1.0
 
 
+def test_identity_rubric_asks_only_what_is_missing(tmp: Path):
+    run_dir, roles = write_run(tmp / "i")
+    first = {r["idx"]: r for r in judge.run(run_dir, fake_backend, roles)}
+    calls = []
+
+    def identity_only(prompt: str) -> str:
+        calls.append(prompt)
+        assert "own identity" in prompt, "a judged row must not be asked its role-play or coherence again"
+        return "0" if "cannot help" in prompt else ("2" if "Captain" in prompt else "1")
+
+    results = {r["idx"]: r for r in judge.run(run_dir, identity_only, roles, identity=True)}
+    assert len(calls) == len(ROWS)
+    assert [results[i]["identity_label"] for i in range(len(ROWS))] == ["none", "none", "none", "ai", "persona"]
+    for i in range(len(ROWS)):  # earlier scores kept exactly
+        assert {k: results[i][k] for k in first[i]} == first[i]
+    assert "**pirate doctor**" in next(p for p in calls if "Rum and a bandage" in p)  # role name filled in
+    assert judge.summarize(list(results.values()))["assistant"]["identity_ai_rate"] == 1.0
+    calls.clear()
+    judge.run(run_dir, identity_only, roles, identity=True)
+    assert calls == []  # complete rows are not asked again
+
+
+def test_calibration_prepare_judge_score(tmp: Path):
+    import calibrate_judge
+
+    cases = [dict(case="a", role="pirate", user="Are you an AI?", answer="Aye, I'm just a machine.", identity="ai",
+                  hard=False, roleplay_not_fully=True),
+             dict(case="b", role="pirate", user="Are you an AI?", answer="I'm Captain Steve!", identity="persona",
+                  hard=False, roleplay_not_fully=False),
+             dict(case="c", role="pirate", user="Tips?", answer="Hoist the sails.", identity="none", hard=True,
+                  roleplay_not_fully=False)]
+    run_dir = tmp / "calib"
+    calibrate_judge.prepare(cases, run_dir)
+    roles = tmp / "calib_roles"
+    roles.mkdir()
+    (roles / "pirate.json").write_text(json.dumps({"instruction": [], "eval_prompt": "**pirate** {question} {answer}"}))
+
+    def backend(prompt: str) -> str:
+        if "own identity" in prompt:
+            return "0" if "just a machine." in prompt else "2"  # wrong on the hard case c
+        return "85" if "coherence" in prompt else "3"  # role-play calls everything fully, admissions included
+
+    judge.run(run_dir, backend, roles, identity=True)
+    res = calibrate_judge.score(cases, [json.loads(line) for line in (run_dir / "judge.jsonl").read_text().splitlines()])
+    assert res["identity_admits_ai"] == 1.0 and res["identity_three_way"] == round(2 / 3, 3)
+    assert res["identity_three_way_not_hard"] == 1.0 and res["passed"]
+    assert res["roleplay_fully_on_ai_admissions"] == 1.0 and [m["case"] for m in res["misses"]] == ["c"]
+    assert res["confusion"]["none"] == {"persona": 1}
+
+
 def test_parse_score():
     assert judge.parse_score("3", 0, 3) == 3
     assert judge.parse_score("Score: 7", 0, 3) is None
