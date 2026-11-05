@@ -25,5 +25,15 @@ Model-specific layer numbers (13, 12, 18, 10-14, 24) follow the 24-layer model; 
 | 536-538 | Plate 4.2 | "A 12-turn pilot on Qwen2.5-0.5B"; add at layer 12, cap across layers 10-14, conceptor beta 0.3, read at layer 18 |
 | 643 | footer | run provenance: Apple MPS, float32, seed 7, 384 single-turn and 144 multi-turn answers |
 
+Added 5 Nov 2026, after the first build from `runs/smollm3_full` (line numbers at commit `9fa91dfd`). These are
+claims the SmolLM3 data contradicts, not just numbers to swap:
+
+| Line | Passage | What SmolLM3-3B shows |
+|---|---|---|
+| 123 | Plate 1.4 | last-token separation "from layer 4 to layer 14": on SmolLM3 the AUC is 1.0 from layer 1 to the end |
+| 124 | Plate 1.4 | answer averages separate "only partly" and the role explains "a few percent": AUC at least 0.9999 at every layer, role share 9-32% |
+| 190 | Plate 1.7 | role explains "a few percent" of answer-averaged variance: 11% at layer 19, question 58% |
+| 191 | Plate 1.7 | task type: the full run uses one question set (Assistant Axis), so there is no task split; the tile now reports the question's share (67% of the pirate cloud) |
+
 Numbers computed live from `derived.json` (charts, tables, tooltips) update on rebuild; only the prose above needs
 editing by hand. Plate 4.3 (GCAD, lines 566, 581) quotes the published paper, not our run, and stays.

@@ -232,3 +232,31 @@ Context: Picking up the conceptors research project from a cloud session. The qu
 Action: Read HANDOFF.md, CLAUDE.md and explainer/README.md, then inventoried the repo's OLMo-3-7B artifacts read-only (vectors, Assistant Axis responses and scores, gold-prompt CSVs, trait vectors) and wrote `conceptors/docs/prior_olmo3_inventory.md`. I put it under the project folder so nothing outside it changed, and added a dated line to HANDOFF.md. I resolved the chat-template check by reading OLMo-3's template from the Hub without downloading the model. The user then asked me to look on Google Drive, and later OneDrive. I found no run data on Google Drive. On OneDrive I diffed `download-dump-september2026/personality-vectors-main/` against the checkout by path and file size, without opening files. I added the findings and a storage recommendation to the inventory doc. After the user said the MATS cluster and Modal volumes held nothing relevant, and that a message to Rehan should be drafted, I applied four approved cleanup edits. These included repointing the christina analysis to the Assistant Axis vectors; the loader then returned 276 vectors (275 roles plus default), all shaped (4096,). I tried `ruff`, which wasn't in the venv, and used the one on PATH. I then loaded the pace-ice skill and tested the `pace-ice-agent` ssh alias read-only.
 
 Result: Task 1 is done. The repo saved no per-sample activations for OLMo-3-7B, so nothing there can go straight into a conceptor fit. It does have 330,000 OLMo-3-7B-Instruct answers, each with a 0-3 role-play label. Teacher-forcing them back through the model would give activation clouds without generating anything new. 54% of answers are fully in character, so OLMo-3-7B plays storybook characters. The OneDrive dump is an older snapshot of data already tracked in plain git on `origin`, so there is nothing new to move. The one file missing here is `persona_data/role_datasets.zip`, and the Q/A answers from the CPU phase and the code that generated the Assistant Axis data were on neither drive. The recommendation was to leave existing data in git and put new activation dumps in a private Hugging Face bucket. The ssh connection to PACE ICE works (login node `login-ice-gnr-1`, user `gmatlin3`). The transcript ends while I was checking queue state, storage and GPUs, so the GPU and storage findings are not recorded and the PACE setup is unfinished. Tasks 2 and onward (generalizing persona_acts.py, checking transformers support for smollm3 and olmo3) have not started. The transcript doesn't show whether the message to Rehan was drafted, and the only git change is the staged deletion of `overleaf`, which isn't clearly linked to this work. I made no commits during this session.
+
+[2026-11-05 03:50] Full-run analysis done; field guide builds from real data; bench published
+
+Context: release 5daa77b9 deployed (the GitHub fetch onto PACE ran at about 0.6 MB/s, 2.6 GB per release, about
+40 min, against 30 s for c45df6af). Executor and coordinator release 5daa77b9; input runs/smollm3_full from the
+collect and judge jobs of the earlier releases.
+
+Action: analyze-smollm3_full 6823040 (coe-ice CPU) finished in 495 s (layer sweep 130 s, maps 123 s, rest 119 s),
+where 6821021 ran out its 2 h limit. Built the field guide from runs/smollm3_full/derived.json (11 MB) with
+build.py --samples 1 (3.8 MB page; the unthinned page takes 1.3 s per map-layer change). In-page interaction check
+on that page and on the pilot: no errors, no missing controls; tables 37/10/12/20/12/3 (full) and 25/10/9/20/12/3
+(pilot, as before). real.js fixes in 9fa91dfd: the role-share chart's fixed 0-32% range clipped SmolLM3's 53%
+last-token share; the slice tile looks its layer up by number and reports the question's share when a run has one
+question set. Both page templates got a viewport meta (191669d5). Published the bench as a private artifact:
+https://claude.ai/artifact/PQYFKuAqAjWKXSR8UqRYAh.
+
+Result:
+- SmolLM3-3B separates pirate from assistant perfectly everywhere: probe AUC at least 0.9999 on answer averages at
+  every layer, 1.0 at the last prompt token from layer 1. The role carries 9-32% of answer-averaged variance and up to
+  53% at the last token; the 0.5B pilot had a few percent and partial separation. docs/explainer_05b_passages.md now
+  lists the four passages this contradicts (body.html 123, 124, 190, 191).
+- The answer-average conceptor at the analysis layer keeps 0.999 or more along its top directions (rank.keep), which
+  fits the near-identity reading of the sweep; the direct gap-closing measurement is running locally.
+- The committed persona_steering_field_guide.html stays built from the pilot until the prose pass, since its text
+  quotes 0.5B numbers. The SmolLM3 build is explainer/_guide_full.html (ignored, rebuild with the command above).
+
+Morning list: the release path re-fetches the whole 2.6 GB repo per revision; a lighter path (fetch reusing the
+previous release's objects, or a sparse checkout of conceptors/) would make code fixes minutes instead of an hour.
