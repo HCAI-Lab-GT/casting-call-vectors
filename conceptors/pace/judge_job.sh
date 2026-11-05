@@ -13,6 +13,11 @@ cd "${SLURM_SUBMIT_DIR:-.}"
 source conceptors/pace/env.sh
 export HF_HUB_OFFLINE=1
 RUN="$CONCEPTORS_DATA/runs/$1"; shift
+# per-job compile caches on node-local disk: concurrent judge jobs sharing the NFS-home cache hit
+# "OSError: [Errno 116] Stale file handle" inside torch inductor
+JOB_TMP="${TMPDIR:-/tmp}/conceptors-judge-${SLURM_JOB_ID:-$$}"
+export VLLM_CACHE_ROOT="$JOB_TMP/vllm" TORCHINDUCTOR_CACHE_DIR="$JOB_TMP/inductor" TRITON_CACHE_DIR="$JOB_TMP/triton"
+mkdir -p "$VLLM_CACHE_ROOT" "$TORCHINDUCTOR_CACHE_DIR" "$TRITON_CACHE_DIR"
 PORT="${JUDGE_PORT:-$((20000 + RANDOM % 20000))}"
 LOG="$RUN/vllm_judge.log"
 # Shared node: a per-job key (env vars and stdin only, never argv) keeps other users out of the server,
