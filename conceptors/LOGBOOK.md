@@ -55,3 +55,15 @@ Result: in progress.
 ## For the morning
 
 - (empty)
+
+[2026-11-04 23:40] Smoke-run decision, transformers 4.57 caveat, steering harness
+
+Context: finish task 5's decision point and start the steering comparison.
+
+Action: analyzed the three smoke runs (CPU job 6819658); wrote steering.py, steer_eval.py and analyze_steer.py with
+tiny-model tests; added --extra_roles and spread --save_tokens for the full run.
+
+Result: SmolLM3-3B is good enough (judge ceiling like Llama-3.2-3B; AUC 1.00; narrated negative at 0.89, below the
+persona). transformers 4.57 records hidden_states before forward hooks (the steered layer's own entry looks
+unsteered; downstream entries and logits are steered); the test now checks downstream and logits. The judge rubric
+cannot tell narration from role play (morning-list candidate: an additive "speaking as vs about" rubric).

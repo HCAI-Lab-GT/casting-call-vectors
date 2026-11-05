@@ -125,3 +125,17 @@ Ordered; each step has a clear output.
   - **I/O and robustness:** `--run DIR` writes `DIR/derived.json`; sections that need roles not present are skipped, and zero-variance map layers are skipped.
   - **Verification:** on `acts_qwen05` every shared section matches a fresh run of the old script with zero difference, and the stored file within 7e-17 (`tests/compare_derived.py`). The old script did not byte-reproduce the stored file either; the only drift is the unrounded `alpha_inv2`.
   - **Pilot low-rank result:** a raw rank-4 conceptor keeps 9.3% of held-out pirate energy against 8.6% of assistant energy (no separation at 0.5B). The difference fit keeps 3.7% for pirate against 0.8-3.4% for other roles, with `pirate_narrated` at 3.4%.
+- **4 Nov 2026, task 5 done (smoke runs, `runs/{smollm3_quick,llama32_quick,smollm3base_quick}` on CS 7634).** Each run is 20 AA questions x (5 pirate + 5 assistant prompts + narrated) x 2 samples, judged locally.
+  - **Judge results:**
+    - SmolLM3-3B: pirate fully 200/200 (coherence 78.2), assistant 94.8, `<think>` tags 0/440.
+    - Llama-3.2-3B: 200/200 (coherence 81.2), assistant 94.4.
+    - SmolLM3-3B-Base (Steve): pirate fully 144/200 (coherence 49.7), and answers are short (median 14 words).
+  - **Activation results** (steering layer, answer mean): pirate-vs-assistant AUC 1.00, 1.00 and 0.88; role variance 11%, 8.7% and 2.2%; the narrated negative on the persona axis at 0.89, 1.12 and 0.44.
+  - **Decision:** SmolLM3-3B holds the persona as well as Llama-3.2-3B, and its narrated negative sits below the persona (Llama's overshoots, as the 0.5B pilot's did).
+  - **Caveats:** the AA rubric rates narration "fully in character" (39-40/40), because it only checks for an AI identity; base-model labels fit the rubric poorly.
+- **4 Nov 2026, infra fixes:**
+  - transformers 4.57 tokenizers call `model_info()` for repo ids even when offline, so models now load from their snapshot folder (`model_snapshot` is recorded in the manifest).
+  - Concurrent vLLM compiles shared an NFS cache and hit a stale handle, so each job gets a private `mktemp` cache in `$TMPDIR`.
+  - Login nodes kill long CPU work, so analyses run through `pace/analyze_job.sh`.
+  - **Caveat:** in transformers 4.57, `output_hidden_states` records each decoder layer's output before forward hooks run. The steered layer's own entry therefore looks unsteered, while every downstream entry and the logits are steered. Phase-2 activations at the steered layer are pre-steering; read layers are fine.
+- **4 Nov 2026, steering harness:** `steering.py` fits add / cap / conceptor / lowrank (k=16, Ledoit-Wolf) / meanshift (matrix-removed control) from a run's fully-in-character persona rows at module n//2. `steer_eval.py --stage sweep` is the setup test (no system prompt, a strength grid, held-out AA role questions); `--stage hold` runs 10-turn conversations with probes at turns 5 and 8, in `steer_only` and `prompt` contexts, at strengths matched from the sweep. Every answer gets an unsteered read-out at the 0.75-depth layer. `analyze_steer.py` writes `steer_derived.json` (sweep table, selected strengths, per-turn hold curves with T1/T5/T10 and drift). 13 tiny-model tests pass.

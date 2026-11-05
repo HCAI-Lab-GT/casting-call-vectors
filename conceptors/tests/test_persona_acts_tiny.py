@@ -135,22 +135,36 @@ def test_teacher_forced(tmp: Path, model: Path, roles_dir: Path, qfile: Path):
     assert npz["p1_resp_avg"].shape[0] == len(tf_texts) and man["teacher_forced"]
 
 
-def test_analyze_with_judge_filter(tmp: Path, model: Path, roles_dir: Path, qfile: Path):
-    import analyze_acts
-
-    # varied synthetic answers, replayed teacher-forced, so activations differ across rows
+def synthetic_judged_run(tmp: Path, model: Path, name: str) -> tuple[Path, list[str]]:
+    """Varied synthetic answers replayed teacher-forced (so activations differ across rows) plus fake judge labels."""
+    run_dir = tmp / name
+    if (run_dir / "judge.jsonl").exists():
+        texts = [json.loads(line) for line in (run_dir / "texts.jsonl").read_text().splitlines()]
+        return run_dir, ["fully" if t["role"] == "pirate" and i % 3 else "not" for i, t in enumerate(texts)]
     rng = np.random.default_rng(0)
     words = "arr matey sea ship gold the a we you sail captain help answer here is task question".split()
     rows = [{"role": r, "sp_idx": s, "q_idx": qi, "task": "aa", "system": ROLE_FILES[r][s], "user": q,
              "answer": " ".join(rng.choice(words, size=12)), "sample_idx": k}
             for r in ("assistant", "pirate") for s in range(2) for qi, q in enumerate(AA_QUESTIONS * 2) for k in range(2)]
-    src_file = tmp / "synthetic_texts.jsonl"
+    src_file = tmp / f"{name}_synthetic_texts.jsonl"
     src_file.write_text("\n".join(json.dumps(r) for r in rows))
-    run_dir = tmp / "analyze"
-    _, texts, man = run(model, run_dir, "--teacher_forced", str(src_file))
+    _, texts, _ = run(model, run_dir, "--teacher_forced", str(src_file))
     labels = ["fully" if t["role"] == "pirate" and i % 3 else "not" for i, t in enumerate(texts)]
     (run_dir / "judge.jsonl").write_text("\n".join(
         json.dumps({"idx": i, "phase": 1, "roleplay_label": lab, "coherence": 80}) for i, lab in enumerate(labels)))
+    return run_dir, labels
+
+
+def fake_judge(run_dir: Path, label_of) -> None:
+    rows = [json.loads(line) for line in (run_dir / "texts.jsonl").read_text().splitlines()]
+    (run_dir / "judge.jsonl").write_text("\n".join(
+        json.dumps({"idx": i, "phase": 1, "roleplay_label": label_of(r), "coherence": 70}) for i, r in enumerate(rows)))
+
+
+def test_analyze_with_judge_filter(tmp: Path, model: Path, roles_dir: Path, qfile: Path):
+    import analyze_acts
+
+    run_dir, labels = synthetic_judged_run(tmp, model, "analyze")
     analyze_acts.main(["--run", str(run_dir)])
     d = json.loads((run_dir / "derived.json").read_text())
     n_fully = sum(lab == "fully" for lab in labels)
@@ -159,6 +173,66 @@ def test_analyze_with_judge_filter(tmp: Path, model: Path, roles_dir: Path, qfil
     assert d["meta"]["steer_hidden"] == 3 and d["meta"]["read_hidden"] == 3  # 4 layers: 4//2+1, round(0.75*4)
     assert {"sweep", "maps", "groups", "rank", "lowrank", "judge"} <= set(d) and "logic" not in d
     assert all("j" in p for p in d["points"])
+
+
+def test_steer_modes_change_the_steered_layer(tmp: Path, model: Path):
+    import torch
+    from transformers import AutoModelForCausalLM
+
+    import steering
+
+    run_dir, _ = synthetic_judged_run(tmp, model, "fitrun")
+    fits = steering.fit(run_dir)
+    assert fits["module"] == 2 and fits["read_hidden"] == 3 and fits["n_persona"] < fits["n_default"] + 100
+    m = AutoModelForCausalLM.from_pretrained(model).eval()
+    x = torch.tensor([[5, 6, 7, 8, 9]])
+    # transformers 4.57 records hidden_states[m + 1] before forward hooks run, so the steered layer's own entry
+    # looks unsteered; the edit propagates, so check the next hidden state and the logits instead
+    with torch.no_grad():
+        out = m(input_ids=x, output_hidden_states=True)
+        base_next, base_logits = out.hidden_states[fits["module"] + 2], out.logits
+        for method, strength in [("add", 1.0), ("cap", 90), ("conceptor", 0.5), ("lowrank", 0.5), ("meanshift", 0.5)]:
+            specs = steering.specs(fits, method, strength)
+            if method == "cap":  # a cap only acts below its floor; force a floor every position is under
+                specs[0]["tau"] = 1e3
+            with persona_acts.Steer(m, specs):
+                out = m(input_ids=x, output_hidden_states=True)
+            assert not torch.allclose(out.hidden_states[fits["module"] + 2], base_next), method
+            assert not torch.allclose(out.logits, base_logits), method
+        with persona_acts.Steer(m, steering.specs(fits, "none", 0)):
+            assert torch.allclose(m(input_ids=x).logits, base_logits)
+
+
+def test_steer_eval_sweep_select_and_hold(tmp: Path, model: Path, roles_dir: Path, qfile: Path):
+    import analyze_steer
+    import steer_eval
+
+    run_dir, _ = synthetic_judged_run(tmp, model, "fitrun")
+    grid = '{"add": [0.5, 2.0], "cap": [50], "conceptor": [0.5], "lowrank": [0.5], "meanshift": [0.5]}'
+    common = ["--model", str(model), "--device", "cpu", "--fit_run", str(run_dir), "--roles_dir", str(roles_dir),
+              "--eval_questions", str(qfile), "--max_new_tokens", "4", "--batch_size", "8"]
+    sweep = tmp / "steer_sweep"
+    steer_eval.main(common + ["--stage", "sweep", "--out", str(sweep), "--grid", grid])
+    rows = [json.loads(line) for line in (sweep / "texts.jsonl").read_text().splitlines()]
+    assert len(rows) == (1 + 2 + 1 + 1 + 1 + 1) * 3  # none + strengths, 3 questions, 1 sample
+    assert all(np.isfinite(r["readout"]) and r["role"] == "pirate" and r["system"] == "" for r in rows)
+    fake_judge(sweep, lambda r: "fully" if r["method"] != "none" and r["strength"] >= 0.5 else "not")
+    analyze_steer.main(["--run", str(sweep)])
+    d = json.loads((sweep / "steer_derived.json").read_text())
+    assert d["selected"]["add"]["strength"] == 0.5 and set(d["selected"]) == {"add", "cap", "conceptor", "lowrank", "meanshift"}
+
+    hold = tmp / "steer_hold"
+    steer_eval.main(common + ["--stage", "hold", "--out", str(hold), "--select_from", str(sweep),
+                              "--hold_convs", "2", "--hold_turns", "6"])
+    hrows = [json.loads(line) for line in (hold / "texts.jsonl").read_text().splitlines()]
+    assert len(hrows) == 2 * 6 * 2 * 6  # contexts x (none + 5 methods) x convs x turns
+    assert {r["context"] for r in hrows} == {"steer_only", "prompt"}
+    assert any(r["probe"] and r["user"].startswith("Okay, drop the act") for r in hrows)
+    fake_judge(hold, lambda r: "fully" if r["turn"] < 3 else "somewhat")
+    analyze_steer.main(["--run", str(hold)])
+    h = json.loads((hold / "steer_derived.json").read_text())["hold"]
+    add = next(x for x in h if x["context"] == "prompt" and x["method"] == "add")
+    assert len(add["per_turn"]) == 6 and add["summary"]["fully_rate"]["drift"] == -1.0 and add["probes"]["n"] == 2
 
 
 def test_layer_plan_matches_pilot():

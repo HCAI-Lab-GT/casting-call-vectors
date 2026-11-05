@@ -321,6 +321,12 @@ class Steer:
             elif spec["mode"] == "conceptor":  # h' = (1-b) h + b (mu + C (h - mu))
                 mu, C, b = spec["mu"].to(x.device), spec["C"].to(x.device), spec["beta"]
                 x = (1 - b) * x + b * (mu + (x - mu) @ C)
+            elif spec["mode"] == "lowrank":  # same with C = U^T diag(keep) U, applied as (h - mu) U^T diag(keep) U
+                mu, U, keep, b = spec["mu"].to(x.device), spec["U"].to(x.device), spec["keep"].to(x.device), spec["beta"]
+                x = (1 - b) * x + b * (mu + (((x - mu) @ U.T) * keep) @ U)
+            elif spec["mode"] == "meanshift":  # matrix-removed control: same center and gain, C = 0
+                mu, b = spec["mu"].to(x.device), spec["beta"]
+                x = (1 - b) * x + b * mu
             h2 = x.to(dt)
             return (h2,) + tuple(out[1:]) if isinstance(out, tuple) else h2
         return fn
