@@ -15,16 +15,21 @@ export HF_HUB_OFFLINE=1
 RUN="$CONCEPTORS_DATA/runs/$1"; shift
 PORT="${JUDGE_PORT:-$((20000 + RANDOM % 20000))}"
 LOG="$RUN/vllm_judge.log"
+# Shared node: a per-job key (env vars, so it stays out of `ps`) means only this job's server answers,
+# and a squatter on the port fails the authenticated readiness check below.
+export VLLM_API_KEY="$(openssl rand -hex 24)"
+export LOCAL_JUDGE_API_KEY="$VLLM_API_KEY"
 "$UV_PROJECT_ENVIRONMENT/bin/vllm" serve "$JUDGE_MODEL" --port "$PORT" --host 127.0.0.1 --served-model-name judge \
   --max-model-len 8192 --gpu-memory-utilization 0.90 > "$LOG" 2>&1 &
 SERVER=$!
 trap 'kill $SERVER 2>/dev/null || true; wait $SERVER 2>/dev/null || true' EXIT
+ready() { curl -sf -H "Authorization: Bearer $VLLM_API_KEY" "http://127.0.0.1:$PORT/v1/models" > /dev/null; }
 for _ in $(seq 1 180); do
-  if curl -sf "http://127.0.0.1:$PORT/v1/models" > /dev/null; then break; fi
   if ! kill -0 "$SERVER" 2>/dev/null; then echo "vLLM exited early; see $LOG"; tail -30 "$LOG"; exit 1; fi
+  if ready; then break; fi
   sleep 5
 done
-curl -sf "http://127.0.0.1:$PORT/v1/models" > /dev/null || { echo "vLLM not ready after 15 min"; tail -30 "$LOG"; exit 1; }
+ready || { echo "vLLM not ready after 15 min"; tail -30 "$LOG"; exit 1; }
 echo "judge $JUDGE_MODEL ready on port $PORT; release $(git rev-parse HEAD)"
 "$PY" conceptors/judge.py --run "$RUN" --roles_dir "$AA_DIR/data/roles/instructions" --backend local \
   --base_url "http://127.0.0.1:$PORT/v1" --judge_model judge --workers 32 "$@"
