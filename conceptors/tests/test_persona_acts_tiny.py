@@ -127,6 +127,42 @@ def test_teacher_forced(tmp: Path, model: Path, roles_dir: Path, qfile: Path):
     assert npz["p1_resp_avg"].shape[0] == len(tf_texts) and man["teacher_forced"]
 
 
+def test_analyze_with_judge_filter(tmp: Path, model: Path, roles_dir: Path, qfile: Path):
+    import analyze_acts
+
+    # varied synthetic answers, replayed teacher-forced, so activations differ across rows
+    rng = np.random.default_rng(0)
+    words = "arr matey sea ship gold the a we you sail captain help answer here is task question".split()
+    rows = [{"role": r, "sp_idx": s, "q_idx": qi, "task": "aa", "system": ROLE_FILES[r][s], "user": q,
+             "answer": " ".join(rng.choice(words, size=12)), "sample_idx": k}
+            for r in ("assistant", "pirate") for s in range(2) for qi, q in enumerate(AA_QUESTIONS * 2) for k in range(2)]
+    src_file = tmp / "synthetic_texts.jsonl"
+    src_file.write_text("\n".join(json.dumps(r) for r in rows))
+    run_dir = tmp / "analyze"
+    _, texts, man = run(model, run_dir, "--teacher_forced", str(src_file))
+    labels = ["fully" if t["role"] == "pirate" and i % 3 else "not" for i, t in enumerate(texts)]
+    (run_dir / "judge.jsonl").write_text("\n".join(
+        json.dumps({"idx": i, "phase": 1, "roleplay_label": lab, "coherence": 80}) for i, lab in enumerate(labels)))
+    analyze_acts.main(["--run", str(run_dir)])
+    d = json.loads((run_dir / "derived.json").read_text())
+    n_fully = sum(lab == "fully" for lab in labels)
+    assert d["judge"]["n_fit"] == n_fully < d["meta"]["counts"]["pirate"]
+    assert d["rank"]["n"] == n_fully
+    assert d["meta"]["steer_hidden"] == 3 and d["meta"]["read_hidden"] == 3  # 4 layers: 4//2+1, round(0.75*4)
+    assert {"sweep", "maps", "groups", "rank", "lowrank", "judge"} <= set(d) and "logic" not in d
+    assert all("j" in p for p in d["points"])
+
+
+def test_layer_plan_matches_pilot():
+    import analyze_acts
+
+    assert analyze_acts.layer_plan(24) == (13, 18, [2, 6, 10, 13, 16, 20, 24], [13, 18, 22])
+    steer, read, maps, logic = analyze_acts.layer_plan(32)
+    assert (steer, read) == (17, 24) and maps[-1] == 32
+    col = analyze_acts.column_map([0, 4, 8, 12, 15, 16, 17, 18, 19, 24, 28, 32])  # a thinned 32-layer save
+    assert col(17) == 6 and col(24) == 9 and col(3) == 1 and col(30) == 10
+
+
 def test_layer_paths():
     from transformers import GPT2Config, GPT2LMHeadModel, GPTNeoXConfig, GPTNeoXForCausalLM
 
