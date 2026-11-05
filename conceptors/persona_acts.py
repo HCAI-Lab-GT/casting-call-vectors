@@ -368,7 +368,7 @@ def parse_args(argv=None):
     ap.add_argument("--n_questions", type=int, default=None)
     ap.add_argument("--n_samples", type=int, default=1, help="answers per (prompt, question)")
     ap.add_argument("--narrated", nargs="*", default=None, help="roles to build '<role>_narrated' hard negatives for (default: pirate)")
-    ap.add_argument("--base_name", default="Alex", help="character name in base-mode prompts")
+    ap.add_argument("--base_name", default="Steve", help="character name in base-mode prompts")
     # outputs
     ap.add_argument("--save_tokens", type=int, default=0, help="save per-token answer activations for the first N jobs")
     ap.add_argument("--token_layers", default="0.5,0.75", help="fractions of n_layers (hidden indices) for --save_tokens")
@@ -551,7 +551,8 @@ def main(argv=None):
             if (s // args.batch_size) % 10 == 0:
                 print(f"  generated {len(answers)}/{len(jobs)}  ({time.time()-t0:.0f}s)", flush=True)
         for j, a in zip(jobs, answers):
-            j["answer"] = a
+            j["raw_answer"] = a
+            j["answer"] = src.trim_base_answer(a) if args.mode == "base" else a
     for j in jobs:
         annotate(j)
     resp, last, tokens = record_activations(model, tok, [j["prompt"] for j in jobs], [j["answer"] for j in jobs],
@@ -563,7 +564,10 @@ def main(argv=None):
     with open(os.path.join(args.out, "texts.jsonl"), "w") as f:
         for j in jobs:
             # the rendered prompt can differ by run date (SmolLM3's template stamps today's date), so keep it
-            f.write(json.dumps({**{k: j[k] for k in TEXT_KEYS}, "prompt": j["prompt"]}) + "\n")
+            row = {**{k: j[k] for k in TEXT_KEYS}, "prompt": j["prompt"]}
+            if args.mode == "base" and "raw_answer" in j:
+                row["raw_answer"] = j["raw_answer"]  # untrimmed continuation, for checking the closing-quote cut
+            f.write(json.dumps(row) + "\n")
 
     n_think = sum(j["has_think"] for j in jobs)
     manifest = dict(model=args.model, revision=args.revision, mode=args.mode, preset=args.preset, device=device,

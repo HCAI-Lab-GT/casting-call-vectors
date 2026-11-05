@@ -8,7 +8,7 @@ Sources:
 
 Base mode follows "Tracing Persona Vectors Through LLM Pretraining" (arXiv 2605.13329, Sec. 2.1 and App. D):
 the system prompt becomes a third-person character description and the question a hypothetical
-("If Alex ..."), which the base model continues as plain text.
+("If someone asked Steve, ..."), which the base model continues as plain text.
 """
 
 import json
@@ -60,8 +60,8 @@ _LEADS = [
 ]
 
 
-def third_person(role_prompt: str, name: str = "Alex") -> str:
-    """Mechanical second-to-third-person rewrite of an AA role prompt ('You are a pirate...' -> 'Alex is a pirate...').
+def third_person(role_prompt: str, name: str = "Steve") -> str:
+    """Mechanical second-to-third-person rewrite of an AA role prompt ('You are a pirate...' -> 'Steve is a pirate...').
 
     The paper used an LLM for this step; this keeps base-mode prompts deterministic and offline.
     """
@@ -84,13 +84,17 @@ def third_person(role_prompt: str, name: str = "Alex") -> str:
     return text
 
 
-def base_prompt(role_prompt: str, question: str, name: str = "Alex") -> str:
+def base_prompt(role_prompt: str, question: str, name: str = "Steve") -> str:
     """Plain-text continuation prompt for a base model: character description, then the question as a hypothetical.
 
-    TODO(owner): this is the placeholder wording. The paper recasts each question as a situation
-    ("If Alex found his neighbor's lost wallet...") and lets the model continue. Decide how a
-    direct question ("What is 15% of 240?") becomes a hypothetical, and which cue ends the prompt
-    so the continuation is the character's answer rather than more narration.
+    Paper-style "If <name>..." framing (2605.13329) ending in an open quote, so the continuation is the
+    character's own first-person reply and compares directly with chat-mode answers. Every role shares
+    the name, so only the description differs between personas.
     """
     description = third_person(role_prompt, name) if role_prompt else f"{name} is a helpful assistant."
-    return f"{description}\n\nIf {name} were asked, \"{question}\", {name} would answer:"
+    return f'{description}\n\nIf someone asked {name}, "{question}", {name} would reply: "'
+
+
+def trim_base_answer(text: str) -> str:
+    """Cut a base-model continuation at the character's closing quote."""
+    return text.split('"', 1)[0].strip()

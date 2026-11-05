@@ -106,8 +106,9 @@ def test_base_mode(tmp: Path, model: Path, roles_dir: Path, qfile: Path):
                           "--questions_file", str(qfile), "--roles", "pirate", "--narrated")
     assert man["mode"] == "base" and "phase2" not in man
     assert len(texts) == 2 * 3
-    assert all(t["prompt"].startswith("Alex is a pirate") for t in texts)
+    assert all(t["prompt"].startswith("Steve is a pirate") and t["prompt"].endswith('would reply: "') for t in texts)
     assert all("<|assistant|>" not in t["prompt"] for t in texts)
+    assert all('"' not in t["answer"] and "raw_answer" in t for t in texts)
 
 
 def test_teacher_forced(tmp: Path, model: Path, roles_dir: Path, qfile: Path):
@@ -147,8 +148,9 @@ def test_presets_and_overrides():
 
 def test_third_person():
     assert src.third_person("You are a pirate captain who has sailed your ship.") == \
-        "Alex is a pirate captain who has sailed their ship."
-    assert src.third_person("Act as a seasoned pirate who values freedom.").startswith("Alex is a seasoned pirate")
+        "Steve is a pirate captain who has sailed their ship."
+    assert src.third_person("Act as a seasoned pirate who values freedom.").startswith("Steve is a seasoned pirate")
+    assert src.trim_base_answer('Arr, freedom above all." He laughed. "More') == "Arr, freedom above all."
 
 
 def _main() -> int:
