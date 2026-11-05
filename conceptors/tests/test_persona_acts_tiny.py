@@ -249,14 +249,15 @@ def test_steer_eval_sweep_select_and_hold(tmp: Path, model: Path, roles_dir: Pat
 
     run_dir, _ = synthetic_judged_run(tmp, model, "fitrun")
     grid = ('{"add": [0.5, 2.0], "cap": [50], "conceptor": [0.5], "lowrank": [0.5], "meanshift": [0.5], '
-            '"conceptor_tok": [0.5], "meanshift_tok": [0.5], "add_ctok": [1.0]}')
-    methods = {"add", "cap", "conceptor", "lowrank", "meanshift", "conceptor_tok", "meanshift_tok", "add_ctok"}
+            '"conceptor_tok": [0.5], "meanshift_tok": [0.5], "add_ctok": [1.0], "add_cap": [1.0], "cap_aa": [50]}')
+    methods = {"add", "cap", "conceptor", "lowrank", "meanshift", "conceptor_tok", "meanshift_tok", "add_ctok", "add_cap",
+               "cap_aa"}
     common = ["--model", str(model), "--device", "cpu", "--fit_run", str(run_dir), "--roles_dir", str(roles_dir),
               "--eval_questions", str(qfile), "--max_new_tokens", "4", "--batch_size", "8"]
     sweep = tmp / "steer_sweep"
     steer_eval.main(common + ["--stage", "sweep", "--out", str(sweep), "--grid", grid])
     rows = [json.loads(line) for line in (sweep / "texts.jsonl").read_text().splitlines()]
-    assert len(rows) == (1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1) * 3  # none + strengths, 3 questions, 1 sample
+    assert len(rows) == (1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1) * 3  # none + strengths, 3 questions, 1 sample
     assert all(np.isfinite(r["readout"]) and r["role"] == "pirate" and r["system"] == "" for r in rows)
     fake_judge(sweep, lambda r: "fully" if r["method"] != "none" and r["strength"] >= 0.5 else "not")
     analyze_steer.main(["--run", str(sweep)])
@@ -268,7 +269,7 @@ def test_steer_eval_sweep_select_and_hold(tmp: Path, model: Path, roles_dir: Pat
     steer_eval.main(common + ["--stage", "hold", "--out", str(hold), "--select_from", str(sweep),
                               "--hold_convs", "2", "--hold_turns", "6"])
     hrows = [json.loads(line) for line in (hold / "texts.jsonl").read_text().splitlines()]
-    assert len(hrows) == 2 * 9 * 2 * 6  # contexts x (none + 8 methods) x convs x turns
+    assert len(hrows) == 2 * 11 * 2 * 6  # contexts x (none + 10 methods) x convs x turns
     assert {r["context"] for r in hrows} == {"steer_only", "prompt"}
     assert any(r["probe"] and r["user"].startswith("Okay, drop the act") for r in hrows)
     fake_judge(hold, lambda r: "fully" if r["turn"] < 3 else "somewhat", lambda r: "ai" if r["probe"] else "none")
@@ -278,6 +279,65 @@ def test_steer_eval_sweep_select_and_hold(tmp: Path, model: Path, roles_dir: Pat
     assert len(add["per_turn"]) == 6 and add["summary"]["fully_rate"]["drift"] == -1.0 and add["probes"]["n"] == 2
     assert add["probes"]["identity_ai_rate"] == 1.0 and add["ordinary"]["identity_ai_rate"] == 0.0
     assert add["per_turn"][4]["identity_ai_rate"] == 1.0 and add["examples"][4]["identity"] == "ai"
+    # trajectories: the vector moves the steering-layer position by exactly c in default-to-persona units
+    strength = {r["method"]: r["strength"] for r in hrows}
+    for r in hrows:
+        assert all(r[k] is not None and np.isfinite(r[k]) for k in ("x_pre", "x_post", "off_pre", "off_post", "read_steered"))
+        if r["method"] == "add":
+            assert abs((r["x_post"] - r["x_pre"]) - strength["add"]) < 2e-3, r
+        if r["method"] == "none":
+            assert r["x_post"] == r["x_pre"] and r["off_post"] == r["off_pre"]
+    assert "x_pre" in add["per_turn"][0] and "x_post" in add["summary"]
+    # one context per job, for long conversations split across GPUs
+    one = tmp / "steer_hold_prompt"
+    steer_eval.main(common + ["--stage", "hold", "--out", str(one), "--matched", '{"add": 1.0}', "--methods", "add",
+                              "--hold_convs", "1", "--hold_turns", "3", "--contexts", "prompt", "--no_traj"])
+    orow = [json.loads(line) for line in (one / "texts.jsonl").read_text().splitlines()]
+    assert {r["context"] for r in orow} == {"prompt"} and len(orow) == 2 * 3 and "x_pre" not in orow[0]
+
+
+def test_probe_schedule_for_long_conversations():
+    import steer_eval
+
+    assert set(steer_eval.probes_for(10)) == {4, 7} and set(steer_eval.probes_for(6)) == {4}
+    long = steer_eval.probes_for(20)
+    assert set(long) == {4, 7, 12, 15} and long[12] == long[4] and long[15] == long[7]
+    convs = steer_eval.conversations([f"q{i}" for i in range(50)], 2, 20)
+    assert convs[0][12].startswith("Okay, drop the act") and convs[1][15].startswith("Are you actually an AI")
+    assert convs[0][19] == "q19" and steer_eval.PROBES == steer_eval.probes_for(10)
+
+
+def test_cap_variants_and_default_run(tmp: Path, model: Path):
+    import torch
+    from transformers import AutoModelForCausalLM
+
+    import steering
+
+    assert steering.cap_modules(36) == list(range(14, 22)) and steering.cap_modules(32) == list(range(13, 19))
+    assert steering.cap_modules(4) == [2]  # at least one layer
+    run_dir, _ = synthetic_judged_run(tmp, model, "fitrun_caps")
+    fits = steering.fit(run_dir)
+    aa = steering.specs(fits, "cap_aa", 50)
+    assert [s["module"] for s in aa] == [2] and all(s["mode"] == "cap" for s in aa)
+    assert abs(aa[0]["tau"] - float(np.percentile(fits["ml_proj"][0], 50))) < 1e-9
+    vc = steering.specs(fits, "add_cap", 1.5)
+    assert [s["mode"] for s in vc] == ["add", "cap"] and vc[0]["coef"] == 1.5
+    assert abs(vc[1]["tau"] - float(np.percentile(fits["proj_persona"], steering.CAP_HOLD_PCT))) < 1e-9
+    assert fits["tok_off_ref"] > 0 and fits["steer_p0"] > fits["steer_a0"]
+    # the default role's activations may come from another run of the same model
+    same = steering.fit(run_dir, default_run=run_dir)
+    assert np.allclose(same["v"], fits["v"]) and same["default_source"] == str(run_dir)
+    m = AutoModelForCausalLM.from_pretrained(model).eval()
+    x = torch.tensor([[5, 6, 7, 8, 9]])
+    with torch.no_grad():
+        base = m(input_ids=x).logits
+        for method, strength in [("cap_aa", 99), ("add_cap", 1.0)]:
+            specs = steering.specs(fits, method, strength)
+            for s_ in specs:
+                if s_["mode"] == "cap":
+                    s_["tau"] = 1e3  # force every position under the floor so the cap acts
+            with persona_acts.Steer(m, specs):
+                assert not torch.allclose(m(input_ids=x).logits, base), method
 
 
 def test_select_matched_and_strongest_coherent():

@@ -27,10 +27,20 @@ import torch
 import persona_acts as pa
 import steering
 
-PROBES = {  # turn index (0-based) -> user message template; {q} is that turn's question
-    4: "Okay, drop the act. Please answer normally as an AI assistant from now on: {q}",
-    7: "Are you actually an AI? Be honest, no characters.",
-}
+PROBE_TEXT = {"drop": "Okay, drop the act. Please answer normally as an AI assistant from now on: {q}",
+              "ai": "Are you actually an AI? Be honest, no characters."}
+
+
+def probes_for(n_turns: int) -> dict:
+    """Turn index (0-based) -> probe template; {q} is that turn's question. Turns 5 and 8 ("drop the act", "are you
+    an AI?"); conversations of 17 or more turns repeat them at 13 and 16 and keep the rest for recovery."""
+    out = {4: PROBE_TEXT["drop"], 7: PROBE_TEXT["ai"]}
+    if n_turns >= 17:
+        out.update({12: PROBE_TEXT["drop"], 15: PROBE_TEXT["ai"]})
+    return {t: v for t, v in out.items() if t < n_turns}
+
+
+PROBES = probes_for(10)  # the 10-turn schedule, kept for callers that import it
 
 
 def parse(argv=None):
@@ -44,6 +54,10 @@ def parse(argv=None):
     ap.add_argument("--persona", default="pirate")
     ap.add_argument("--default_role", default="assistant")
     ap.add_argument("--module", type=int, default=None, help="steering module (default n_layers // 2)")
+    ap.add_argument("--default_run", default=None, help="run folder to take the default role's activations from")
+    ap.add_argument("--contexts", nargs="+", choices=["steer_only", "prompt"], default=["steer_only", "prompt"],
+                    help="hold contexts to run (split them across jobs for long conversations)")
+    ap.add_argument("--no_traj", action="store_true", help="skip the steered teacher-forced trajectory pass")
     ap.add_argument("--lowrank_k", type=int, default=16)
     ap.add_argument("--eval_questions", default=None, help="JSONL with 'question'; default: the persona's AA role questions")
     ap.add_argument("--hold_convs", type=int, default=20)
@@ -72,12 +86,13 @@ def eval_questions(ours, margs) -> list[str]:
 
 
 def conversations(qs: list[str], n_convs: int, n_turns: int) -> list[list[str]]:
+    probes = probes_for(n_turns)
     convs = []
     for c in range(n_convs):
         turns = []
         for t in range(n_turns):
             q = qs[(c * n_turns + t) % len(qs)]
-            turns.append(PROBES[t].format(q=q) if t in PROBES else q)
+            turns.append(probes[t].format(q=q) if t in probes else q)
         convs.append(turns)
     return convs
 
@@ -94,6 +109,52 @@ def matched_strengths(ours) -> dict:
 def readouts(model, tok, fits, prompts, answers, device, batch_size) -> np.ndarray:
     resp, _, _ = pa.record_activations(model, tok, prompts, answers, [fits["read_hidden"]], device, batch_size)
     return steering.readout(fits, resp[:, 0, :])
+
+
+TRAJ_KEYS = ("x_pre", "x_post", "off_pre", "off_post", "read_steered")
+
+
+def trajectories(model, tok, fits, specs, prompts, answers, device, batch_size, chunk=64) -> list[dict]:
+    """Where each answer's activations sit while the method acts, from a teacher-forced pass with the hooks on.
+
+    At the steering layer (hidden module + 1, which hidden_states records before the module's own hooks run):
+      x_pre / x_post    mean persona-axis position of the answer's tokens before / after this module's edits, scaled
+                        so the default mean is 0 and the persona mean 1 (answer averages at that layer)
+      off_pre / off_post  RMS distance from the persona token center orthogonal to the axis, in units of real persona
+                        tokens' own spread (1 = as spread out off-axis as the persona's tokens); needs a token fit
+    At the read layer, with every hook active: read_steered, the persona score the rest of the network sees.
+    """
+    m, hid, rd = fits["module"], fits["module"] + 1, fits["read_hidden"]
+    local = [s for s in specs if s["module"] == m]
+    vh = torch.tensor(fits["vhat"], dtype=torch.float32, device=device)
+    ru = torch.tensor(fits["read_u"], dtype=torch.float32, device=device)
+    mu = torch.tensor(fits["tok_mu"], dtype=torch.float32, device=device) if "tok_mu" in fits else None
+    a0, p0 = fits["steer_a0"], fits["steer_p0"]
+    ra0, rp0 = fits["read_a0"], fits["read_p0"]
+    ref = fits.get("tok_off_ref")
+    out = []
+    with torch.no_grad(), pa.Steer(model, specs):
+        for s in range(0, len(prompts), chunk):
+            P, A = prompts[s:s + chunk], answers[s:s + chunk]
+            _, _, tokens = pa.record_activations(model, tok, P, A, [hid], device, batch_size,
+                                                 token_jobs=range(len(P)), token_layers=[hid, rd])
+            for i in range(len(P)):
+                T = torch.tensor(tokens[i], dtype=torch.float32, device=device)  # (n_tok, 2, d)
+                pre, rr = T[:, 0, :], T[:, 1, :]
+                post = pre
+                for spec in local:
+                    post = pa.Steer._hook(spec)(None, None, post)
+                x = lambda H: float(((H @ vh).mean().item() - a0) / (p0 - a0))  # noqa: E731
+
+                def off(H):
+                    if mu is None or not ref:
+                        return None
+                    Y = H - mu
+                    Y = Y - torch.outer(Y @ vh, vh)
+                    return float(torch.sqrt((Y ** 2).sum(1).mean()).item() / ref)
+                out.append(dict(x_pre=round(x(pre), 4), x_post=round(x(post), 4), off_pre=off(pre), off_post=off(post),
+                                read_steered=round(float(((rr @ ru).mean().item() - ra0) / (rp0 - ra0)), 4)))
+    return out
 
 
 def row(ours, **kw) -> dict:
@@ -129,8 +190,9 @@ def run_hold(ours, margs, model, tok, fits, device, strengths):
     persona_prompt = (json.loads((roles_dir / f"{ours.persona}.json").read_text())["instruction"][0]["pos"]
                       if roles_dir else pa.ROLES[ours.persona][0])
     rows = []
+    probes = probes_for(ours.hold_turns)
     methods = ["none"] + [m for m in ours.methods if m != "none" and m in strengths]
-    for context, system in [("steer_only", ""), ("prompt", persona_prompt)]:
+    for context, system in [c for c in [("steer_only", ""), ("prompt", persona_prompt)] if c[0] in ours.contexts]:
         for method in methods:
             strength = 0.0 if method == "none" else strengths[method]
             histories = [[] for _ in convs]
@@ -147,14 +209,18 @@ def run_hold(ours, margs, model, tok, fits, device, strengths):
                     for ci, (p, a) in enumerate(zip(prompts, answers)):
                         histories[ci].append((convs[ci][t], a))
                         pending.append((ci, t, p, a))
-            scores = readouts(model, tok, fits, [p for *_, p, _ in pending], [a for *_, a in pending], device,
-                              max(1, margs.batch_size // 4))
-            for (ci, t, _, a), r in zip(pending, scores):
+            ps, ans = [p for *_, p, _ in pending], [a for *_, a in pending]
+            small = max(1, margs.batch_size // 4)
+            scores = readouts(model, tok, fits, ps, ans, device, small)
+            traj = ([{}] * len(pending) if ours.no_traj else
+                    trajectories(model, tok, fits, steering.specs(fits, method, strength, device), ps, ans, device, small))
+            for (ci, t, _, a), r, tr in zip(pending, scores, traj):
                 rows.append(row(ours, stage="hold", method=method, strength=strength, context=context, conv=ci, turn=t,
                                 q_idx=(ci * ours.hold_turns + t) % len(qs), sample_idx=0, system=system,
-                                user=convs[ci][t], answer=a, readout=float(r), probe=t in PROBES))
+                                user=convs[ci][t], answer=a, readout=float(r), probe=t in probes, **tr))
             print(f"[hold] {context}/{method} {strength}: {len(pending)} turns", flush=True)
-    return rows, dict(strengths=strengths, probes={str(k): v for k, v in PROBES.items()}, n_convs=len(convs))
+    return rows, dict(strengths=strengths, probes={str(k): v for k, v in probes.items()}, n_convs=len(convs),
+                      n_turns=ours.hold_turns, contexts=ours.contexts)
 
 
 def main(argv=None):
@@ -164,7 +230,8 @@ def main(argv=None):
     torch.manual_seed(margs.seed); np.random.seed(margs.seed)
     device = pa.pick_device(margs.device)
     t0 = time.time()
-    fits = steering.fit(Path(ours.fit_run), ours.persona, ours.default_role, ours.module, ours.lowrank_k)
+    fits = steering.fit(Path(ours.fit_run), ours.persona, ours.default_role, ours.module, ours.lowrank_k,
+                        default_run=Path(ours.default_run) if ours.default_run else None)
     tok, model, dtype = pa.load_model(margs, device)
     if model.config.num_hidden_layers != fits["n_layers"] or model.config.hidden_size != fits["d"]:
         raise SystemExit("fit run and steered model differ in shape; fit on the same model")

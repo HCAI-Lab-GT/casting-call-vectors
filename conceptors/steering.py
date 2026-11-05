@@ -14,6 +14,10 @@ Methods and their strength parameter:
   meanshift_tok its matrix-removed control
   add_ctok      add at c, then conceptor_tok at beta 1 on the same module (hooks run in registration order): the vector
                 sets the persona and the per-token conceptor pulls everything else back to the persona cloud; strength c
+  add_cap       add at c, then a cap on the same module with its floor at the CAP_HOLD_PCT percentile: the vector sets the
+                persona and the cap holds it along the persona axis only; strength c (the cap counterpart of add_ctok)
+  cap_aa        the Assistant Axis paper's capping, mirrored to hold a persona: a floor on each layer's own persona axis
+                at every module in [0.4 n, 0.6 n), each floor at this percentile of the persona's projections there
   none          no intervention
 
 Read-out: a persona score from an unsteered teacher-forced pass, projected on the persona axis at the read layer
@@ -39,12 +43,23 @@ DEFAULT_GRID = {  # widened after the first SmolLM3 sweep (5 Nov 2026): the conc
     "conceptor_tok": [0.3, 0.5, 0.7, 0.8, 0.9, 1.0],
     "meanshift_tok": [0.3, 0.5, 0.7, 0.8, 0.9, 1.0],
     "add_ctok": [0.5, 1.0, 1.5, 2.0, 3.0],
+    "add_cap": [0.5, 1.0, 1.5, 2.0, 3.0],
+    "cap_aa": [10, 25, 50, 75, 90],
 }
+CAP_HOLD_PCT = 25  # add_cap's floor: the Assistant Axis paper caps at the 25th percentile of the role's own range
 TOKEN_METHODS = ("conceptor_tok", "meanshift_tok", "add_ctok")
 
 
+def cap_modules(n_layers: int) -> list[int]:
+    """Modules the Assistant-Axis-style cap acts on: the middle fifth of the network, [0.4 n, 0.6 n), at least one."""
+    lo = round(0.4 * n_layers)
+    return list(range(lo, max(lo + 1, round(0.6 * n_layers))))
+
+
 def fit(run_dir: Path, persona: str = "pirate", default: str = "assistant", module: int | None = None,
-        lowrank_k: int = 16, use_judge: bool = True) -> dict:
+        lowrank_k: int = 16, use_judge: bool = True, default_run: Path | None = None) -> dict:
+    """default_run: take the default role's answer averages from another run of the same model (e.g. a run that only
+    collected new personas), instead of from run_dir."""
     run_dir = Path(run_dir)
     z = dict(np.load(run_dir / "acts.npz"))  # load once: NpzFile decompresses on every access
     man = json.loads((run_dir / "manifest.json").read_text())
@@ -53,7 +68,17 @@ def fit(run_dir: Path, persona: str = "pirate", default: str = "assistant", modu
     read_hidden = layer_plan(n_layers)[1]
     col = column_map(man.get("saved_hidden_idx", list(range(z["p1_resp_avg"].shape[1]))))
     role = z["p1_role"]
-    P, A = role == persona, role == default
+    P = role == persona
+    if default_run is None:
+        A, Zd, cold = role == default, z, col
+    else:
+        Zd = dict(np.load(Path(default_run) / "acts.npz"))
+        mand = json.loads((Path(default_run) / "manifest.json").read_text())
+        if mand["n_layers"] != n_layers or Zd["p1_resp_avg"].shape[-1] != z["p1_resp_avg"].shape[-1]:
+            raise ValueError(f"{default_run} is a different model shape than {run_dir}")
+        cold = column_map(mand.get("saved_hidden_idx", list(range(Zd["p1_resp_avg"].shape[1]))))
+        A = Zd["p1_role"] == default
+    defaults = lambda hidden: Zd["p1_resp_avg"][A][:, cold(hidden), :].astype(np.float64)  # noqa: E731
     n_judged = None
     if use_judge and (run_dir / "judge.jsonl").exists():
         labels, _ = load_judge(run_dir / "judge.jsonl", len(role))
@@ -63,7 +88,7 @@ def fit(run_dir: Path, persona: str = "pirate", default: str = "assistant", modu
         raise ValueError(f"need >= 2 persona and default rows, got {int(P.sum())} and {int(A.sum())}")
 
     X = z["p1_resp_avg"][:, col(module + 1), :].astype(np.float64)
-    Xp, Xa = X[P], X[A]
+    Xp, Xa = X[P], defaults(module + 1)
     v = Xp.mean(0) - Xa.mean(0)
     vhat = v / np.linalg.norm(v)
     mu = Xp.mean(0)
@@ -71,9 +96,18 @@ def fit(run_dir: Path, persona: str = "pirate", default: str = "assistant", modu
     lr = lowrank_conceptor(Xp, lowrank_k)
 
     Xr = z["p1_resp_avg"][:, col(read_hidden), :].astype(np.float64)
-    vr = Xr[P].mean(0) - Xr[A].mean(0)
+    Xra = defaults(read_hidden)
+    vr = Xr[P].mean(0) - Xra.mean(0)
     ur = vr / np.linalg.norm(vr)
-    a0, p0 = float((Xr[A] @ ur).mean()), float((Xr[P] @ ur).mean())
+    a0, p0 = float((Xra @ ur).mean()), float((Xr[P] @ ur).mean())
+    # per-layer persona axes for the Assistant-Axis-style cap
+    mods = cap_modules(n_layers)
+    ml_vhat, ml_proj = [], []
+    for m_ in mods:
+        Xl = z["p1_resp_avg"][P][:, col(m_ + 1), :].astype(np.float64)
+        vl = Xl.mean(0) - defaults(m_ + 1).mean(0)
+        ul = vl / np.linalg.norm(vl)
+        ml_vhat.append(ul); ml_proj.append(Xl @ ul)
 
     out = dict(
         module=module, read_hidden=read_hidden, n_layers=n_layers, d=int(X.shape[1]), persona=persona, default=default,
@@ -82,8 +116,13 @@ def fit(run_dir: Path, persona: str = "pirate", default: str = "assistant", modu
         v=v, vhat=vhat, proj_persona=Xp @ vhat, mu=mu, C=C, conceptor_rank=int((keep > 1e-6).sum()),
         conceptor_aperture=float(aperture), lr_U=lr["U"], lr_keep=lr["keep"], lr_delta=lr["delta"],
         lr_null_keep=lr["null_keep"], read_u=ur, read_a0=a0, read_p0=p0, n_tokens=0,
+        steer_a0=float((Xa @ vhat).mean()), steer_p0=float((Xp @ vhat).mean()),
+        ml_modules=np.array(mods), ml_vhat=np.stack(ml_vhat), ml_proj=np.stack(ml_proj),
+        default_source=str(default_run or run_dir),
     )
     out.update(token_fit(z, man, P, module + 1))
+    if "tok_C" in out:  # typical off-axis spread of real persona tokens, the unit for trajectory read-outs
+        out["tok_off_ref"] = out.pop("_tok_off_ref_fn")(vhat)
     return out
 
 
@@ -108,8 +147,12 @@ def token_fit(z: dict, man: dict, persona_rows: np.ndarray, hidden: int) -> dict
     lam = np.clip(lam, 0, None)
     a = float(np.median(lam[lam > lam.max() * 1e-10]))
     C_t = (U * (lam / (lam + a))) @ U.T
+
+    def off_ref(vhat):
+        Y = Tc - np.outer(Tc @ vhat, vhat)
+        return float(np.sqrt((Y ** 2).sum(1).mean()))
     return dict(tok_mu=mu_t, tok_C=C_t, n_tokens=int(len(T)), tok_rows=len(rows), tok_aperture=a,
-                tok_rank=int((lam > lam.max() * 1e-10).sum()))
+                tok_rank=int((lam > lam.max() * 1e-10).sum()), _tok_off_ref_fn=off_ref)
 
 
 def available(fits: dict, method: str) -> bool:
@@ -142,6 +185,11 @@ def specs(fits: dict, method: str, strength: float, device: str = "cpu") -> list
         return [dict(mode="meanshift", module=m, beta=float(strength), mu=t(fits["tok_mu"]))]
     if method == "add_ctok":
         return specs(fits, "add", strength, device) + specs(fits, "conceptor_tok", 1.0, device)
+    if method == "add_cap":
+        return specs(fits, "add", strength, device) + specs(fits, "cap", CAP_HOLD_PCT, device)
+    if method == "cap_aa":
+        return [dict(mode="cap", module=int(m_), vhat=t(u), tau=float(np.percentile(pr, strength)))
+                for m_, u, pr in zip(fits["ml_modules"], fits["ml_vhat"], fits["ml_proj"])]
     raise ValueError(f"unknown method {method}")
 
 
@@ -155,8 +203,12 @@ def summary(fits: dict) -> dict:
     """JSON-safe provenance of a fit (no arrays)."""
     keep = ("module", "read_hidden", "n_layers", "d", "persona", "default", "n_persona", "n_default",
             "n_persona_judged_fully", "source", "source_model", "source_snapshot", "conceptor_rank",
-            "conceptor_aperture", "lr_delta", "lr_null_keep", "n_tokens", "tok_rows", "tok_rank", "tok_aperture")
+            "conceptor_aperture", "lr_delta", "lr_null_keep", "n_tokens", "tok_rows", "tok_rank", "tok_aperture",
+            "steer_a0", "steer_p0", "tok_off_ref", "default_source")
     out = {k: fits[k] for k in keep if k in fits}
+    if "ml_modules" in fits:
+        out["cap_aa_modules"] = [int(m_) for m_ in fits["ml_modules"]]
+    out["cap_hold_pct"] = CAP_HOLD_PCT
     out["v_norm"] = float(np.linalg.norm(fits["v"]))
     out["lowrank_k"] = int(len(fits["lr_keep"]))
     return out

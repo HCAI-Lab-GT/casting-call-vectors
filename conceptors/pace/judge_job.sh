@@ -7,13 +7,16 @@
 #SBATCH -t 03:00:00
 # Serve $JUDGE_MODEL with vLLM on this node, judge one run folder, then stop the server.
 # Runs after the subject-model job (chain with --dependency=afterok:<collect job id>).
-# Submit from the release root:  sbatch -o "$LOGS/%x-%j.out" conceptors/pace/judge_job.sh RUN_NAME [judge.py args]
+# Submit from the release root:  sbatch -o "$LOGS/%x-%j.out" conceptors/pace/judge_job.sh RUN_NAME[,RUN_NAME...] [judge.py args]
+# Several comma-separated runs share one judge server (one model load, one queue slot); they are judged in order.
 # Another judge: sbatch --export=ALL,JUDGE_MODEL=google/gemma-3-27b-it ... (snapshot must be in $HF_HOME already)
+# ANALYZE_KEY=identity|identity_r in --export also runs analyze_steer.py on each steer run after judging it.
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-.}"
 source conceptors/pace/env.sh
 export HF_HUB_OFFLINE=1
-RUN="$CONCEPTORS_DATA/runs/$1"; shift
+IFS=, read -r -a RUN_NAMES <<< "$1"; shift
+RUN="$CONCEPTORS_DATA/runs/${RUN_NAMES[0]}"  # the server log goes in the first run's folder
 # per-job compile caches on node-local disk: concurrent judge jobs sharing the NFS-home cache hit
 # "OSError: [Errno 116] Stale file handle" inside torch inductor
 # (random name, owner-only, ownership checked: the caches hold compiled code, so no predictable shared path)
@@ -57,5 +60,10 @@ for _ in $(seq 1 180); do
 done
 ready || { echo "vLLM not ready after 15 min"; tail -30 "$LOG"; exit 1; }
 echo "judge $JUDGE_MODEL ready on port $PORT; release $(git rev-parse HEAD)"
-"$PY" conceptors/judge.py --run "$RUN" --roles_dir "$AA_DIR/data/roles/instructions" --backend local \
-  --base_url "http://127.0.0.1:$PORT/v1" --judge_model judge --workers 32 "$@"
+for name in "${RUN_NAMES[@]}"; do
+  R="$CONCEPTORS_DATA/runs/$name"
+  echo "judging $name"
+  "$PY" conceptors/judge.py --run "$R" --roles_dir "$AA_DIR/data/roles/instructions" --backend local \
+    --base_url "http://127.0.0.1:$PORT/v1" --judge_model judge --workers 32 "$@"
+  if [ -n "${ANALYZE_KEY:-}" ]; then "$PY" -B conceptors/analyze_steer.py --run "$R" --identity_key "$ANALYZE_KEY"; fi
+done

@@ -30,6 +30,9 @@ def load(run: Path, identity_key: str = "identity"):
     return rows, bool(judge), json.loads((run / "manifest.json").read_text())
 
 
+TRAJ_KEYS = ("x_pre", "x_post", "off_pre", "off_post", "read_steered")  # steer_eval.trajectories
+
+
 def stats(rs: list[dict]) -> dict:
     labels = [r["label"] for r in rs]
     judged = [x for x in labels if x is not None]
@@ -47,6 +50,10 @@ def stats(rs: list[dict]) -> dict:
     if voices:  # additive point-of-view rubric: speaks as / mixed / about the role
         out["voice_as_rate"] = round(voices.count("as") / len(voices), 3)
         out["voice_about_rate"] = round(voices.count("about") / len(voices), 3)
+    for k in TRAJ_KEYS:  # where the activations sat while the method acted (hold rows from newer runs)
+        vals = [r[k] for r in rs if r.get(k) is not None]
+        if vals:
+            out[k] = round(float(np.mean(vals)), 4)
     ids = [r.get("identity") for r in rs if r.get("identity") is not None]
     if ids:  # additive identity rubric: does the answer admit being an AI?
         out["identity_ai_rate"] = round(ids.count("ai") / len(ids), 3)
@@ -90,7 +97,8 @@ def select(table: list[dict], judged: bool, target: float, min_coh: float) -> di
 
 def examples(rs: list[dict], k: int = 3) -> list[dict]:
     return [dict(q=r["user"][:200], a=r["answer"][:500], label=r["label"], coh=r["coherence"], voice=r.get("voice"),
-                 identity=r.get("identity"), readout=round(r["readout"], 2)) for r in rs[:k]]
+                 identity=r.get("identity"), readout=round(r["readout"], 2),
+                 **{t: r[t] for t in TRAJ_KEYS if r.get(t) is not None}) for r in rs[:k]]
 
 
 def main(argv=None):
@@ -127,10 +135,13 @@ def main(argv=None):
             pick = lambda t, key: next((p[key] for p in per_turn if p["turn"] == t), None)  # noqa: E731
             last = turns[-1]
             summary = {}
-            for key in ("fully_rate", "coherence", "readout"):
-                t1, t5, t10 = pick(0, key), pick(min(4, last), key), pick(last, key)
-                summary[key] = dict(T1=t1, T5=t5, T10=t10,
-                                    drift=None if t1 is None or t10 is None else round(t10 - t1, 3))
+            for key in ("fully_rate", "coherence", "readout", "identity_ai_rate", "x_pre", "x_post"):
+                t1, tl = pick(0, key), pick(last, key)
+                if t1 is None and tl is None:
+                    continue
+                # T5 / T10 / T15 / T20 where the run has those turns (a 10-turn run's T10 is its last turn, as before)
+                marks = {f"T{n}": pick(n - 1, key) for n in (5, 10, 15, 20) if n - 1 <= last}
+                summary[key] = dict(T1=t1, **marks, last=tl, drift=None if t1 is None or tl is None else round(tl - t1, 3))
             hold.append(dict(context=ctx, method=m, strength=rs[0]["strength"], per_turn=per_turn, summary=summary,
                              ordinary=stats([r for r in rs if not r.get("probe")]),
                              probes=stats([r for r in rs if r.get("probe")]) if any(r.get("probe") for r in rs) else None,
