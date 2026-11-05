@@ -590,3 +590,46 @@ add_ctok, 20 for the rest):
 Brainstorm with the owner (not started, owner's call): more personas on SmolLM3 with no code change (ghost and bard play
 as strongly as the pirate; consultant sits near the assistant; teacher, robot and doctor are poor fits), OLMo-3-7B as
 the overnight track, new methods (gated or contrastive conceptor) after the meeting, longer conversations.
+
+[2026-11-05 13:46] Pilot v2 launched: six SmolLM3 personas, 20-turn holds, cap baselines, trajectories; OLMo-3-7B started
+
+Context: owner's priorities for the 6 Nov lab meeting: holding a persona over many turns is the point; compare prompt,
+vector, cap (including the Assistant Axis paper's method), conceptor and the vector combinations; a few personas
+(assistant, pirate, ghost, bard, consultant, plus two); early multi-turn data; a visual that ties activation
+trajectories to outputs, like the Assistant Axis paper's Figure 1; SmolLM3 first, OLMo-3-7B in parallel on spare
+GPUs. Owner chose (grill): 20-turn holds with repeated probes, the AA-paper cap added, genie and alien as the extra
+personas.
+
+Decisions and code (releases d7d19e04 and 5a5e1dc2 stopped mid-deploy, superseded; deployed 566d01b8):
+- steering.py: add_cap (vector, then a cap at the 25th percentile on the same module) next to add_ctok; cap_aa
+  mirrors the AA paper's capping (Section 5: a floor h - v min(<h,v> - tau, 0) on adjacent late-middle layers, 25th
+  percentile) to hold a persona: a floor on each layer's persona axis at modules [0.70 n, 0.85 n) (SmolLM3 25-30,
+  OLMo 22-26), threshold a percentile of the persona's answer-average projections there. First built at
+  [0.4 n, 0.6 n); moved after reading the paper (Qwen3-32B layers 46-53 of 64, Llama-70B 56-71 of 80).
+- fit(default_run=...) takes the default role from another run, so genie and alien (collected alone) reuse
+  smollm3_full's 3,600 assistant answers.
+- steer_eval.py: 20-turn holds repeat the probes ("drop the act" turns 5 and 13, "are you an AI?" 8 and 16);
+  --contexts splits prompt and steer_only into separate jobs; each conversation asks the persona's questions in
+  its own seeded order (the old stepping gave a 20-turn, 40-question hold only two distinct sequences); every hold
+  answer gets a steered teacher-forced trajectory (persona-axis position and off-axis spread before and after the
+  method's edit at the steering layer; read-layer score under steering).
+- judge_job.sh judges several comma-separated runs on one server and can run analyze_steer after each
+  (ANALYZE_KEY), so the 33 SmolLM3 jobs fit the 50-job coe-ice cap. 21 tiny-model and 7 judge tests pass.
+
+Jobs (release 566d01b8 unless noted):
+- SmolLM3 genie/alien collection 6826099 (69a164db; 1 AA prompt, 240 questions x 3 samples, tokens for 100 answers;
+  done in 11 min) -> judge 6826100.
+- SmolLM3 v2, six personas: sweeps 6826236-41 (8 methods, 2 samples x 40 role questions), Qwen sweep judges per
+  pair 6826242 / 6826252 / 6826261 (+ analyze), holds 6826243-47, 6826253-56, 6826262-65 (20 turns, 40 conversations,
+  batch 40, one context per job), hold judges per pair: Qwen 6826248/57/66, Gemma 6826249/58/67, Mistral
+  6826250/59/68, Llama 6826251/60/69 (2 x H200), each in runs/<hold>.judge-<name>.
+- OLMo-3-7B-Instruct: fetch 6826101 (31 s), teacher-forced pass over the AA OLMo answers for assistant, pirate, ghost,
+  bard, consultant, genie, alien 6826102 (69a164db; 8,400 answers, 306,612 per-token rows at hidden 16 and 24) ->
+  Qwen judge 6826103. Pilot v2 for pirate, genie and consultant: sweeps 6826270-72 -> judge 6826273 -> holds
+  6826274-79 (module 15, 20 turns, 20 conversations, batch 10: a 7B's cache for 40 x 6k tokens would not fit),
+  --nice 200. Hold judges wait for queue room (47 of 50 jobs in use at launch).
+
+Deck: build_deck.py now reads a per-persona config; results.js has a deck-wide persona switch, the new methods
+(hue = what holds the persona, dotted = with the vector), probe turns from the data, and a trajectory slide (turn
+chart before/after with cap floors, the same turn in activation space, answers at the chosen turn). Tested on the
+current pirate data; the published deck stays on that data until the v2 runs land. Commit 6165c3b5.
