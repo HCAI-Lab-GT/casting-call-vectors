@@ -12,6 +12,8 @@ Methods and their strength parameter:
   meanshift     (1 - b) h + b mu: the conceptor's center and gain with C removed (matrix-removed control)
   conceptor_tok conceptor and center fitted on per-token persona activations (needs --save_tokens at hidden m + 1)
   meanshift_tok its matrix-removed control
+  add_ctok      add at c, then conceptor_tok at beta 1 on the same module (hooks run in registration order): the vector
+                sets the persona and the per-token conceptor pulls everything else back to the persona cloud; strength c
   none          no intervention
 
 Read-out: a persona score from an unsteered teacher-forced pass, projected on the persona axis at the read layer
@@ -36,8 +38,9 @@ DEFAULT_GRID = {  # widened after the first SmolLM3 sweep (5 Nov 2026): the conc
     "meanshift": [0.3, 0.5, 0.7, 0.8, 0.9, 1.0],
     "conceptor_tok": [0.3, 0.5, 0.7, 0.8, 0.9, 1.0],
     "meanshift_tok": [0.3, 0.5, 0.7, 0.8, 0.9, 1.0],
+    "add_ctok": [0.5, 1.0, 1.5, 2.0, 3.0],
 }
-TOKEN_METHODS = ("conceptor_tok", "meanshift_tok")
+TOKEN_METHODS = ("conceptor_tok", "meanshift_tok", "add_ctok")
 
 
 def fit(run_dir: Path, persona: str = "pirate", default: str = "assistant", module: int | None = None,
@@ -137,6 +140,8 @@ def specs(fits: dict, method: str, strength: float, device: str = "cpu") -> list
         return [dict(mode="conceptor", module=m, beta=float(strength), mu=t(fits["tok_mu"]), C=t(fits["tok_C"]))]
     if method == "meanshift_tok":
         return [dict(mode="meanshift", module=m, beta=float(strength), mu=t(fits["tok_mu"]))]
+    if method == "add_ctok":
+        return specs(fits, "add", strength, device) + specs(fits, "conceptor_tok", 1.0, device)
     raise ValueError(f"unknown method {method}")
 
 

@@ -211,20 +211,51 @@ def test_steer_modes_change_the_steered_layer(tmp: Path, model: Path):
             assert torch.allclose(m(input_ids=x).logits, base_logits)
 
 
+def test_add_then_conceptor_tok_composes_in_order(tmp: Path, model: Path):
+    import torch
+    from transformers import AutoModelForCausalLM
+
+    import steering
+
+    run_dir, _ = synthetic_judged_run(tmp, model, "fitrun_combo")
+    fits = steering.fit(run_dir)
+    specs = steering.specs(fits, "add_ctok", 1.5)
+    assert [s["mode"] for s in specs] == ["add", "conceptor"] and specs[1]["beta"] == 1.0
+    v, mu, C = (torch.tensor(fits[k], dtype=torch.float32) for k in ("v", "tok_mu", "tok_C"))
+
+    def by_hand(mod, ins, out):  # conceptor(add(h)) at beta 1 in one hook; the reverse order gives a different map
+        h = out[0] if isinstance(out, tuple) else out
+        h2 = mu + (h + 1.5 * v - mu) @ C
+        return (h2,) + tuple(out[1:]) if isinstance(out, tuple) else h2
+
+    m = AutoModelForCausalLM.from_pretrained(model).eval()
+    x = torch.tensor([[5, 6, 7, 8, 9]])
+    with torch.no_grad():
+        handle = persona_acts.layer_modules(m)[fits["module"]].register_forward_hook(by_hand)
+        expected = m(input_ids=x).logits
+        handle.remove()
+        with persona_acts.Steer(m, specs):
+            got = m(input_ids=x).logits
+        with persona_acts.Steer(m, specs[::-1]):
+            reversed_order = m(input_ids=x).logits
+    assert torch.allclose(got, expected, atol=1e-4)
+    assert not torch.allclose(reversed_order, expected, atol=1e-4)
+
+
 def test_steer_eval_sweep_select_and_hold(tmp: Path, model: Path, roles_dir: Path, qfile: Path):
     import analyze_steer
     import steer_eval
 
     run_dir, _ = synthetic_judged_run(tmp, model, "fitrun")
     grid = ('{"add": [0.5, 2.0], "cap": [50], "conceptor": [0.5], "lowrank": [0.5], "meanshift": [0.5], '
-            '"conceptor_tok": [0.5], "meanshift_tok": [0.5]}')
-    methods = {"add", "cap", "conceptor", "lowrank", "meanshift", "conceptor_tok", "meanshift_tok"}
+            '"conceptor_tok": [0.5], "meanshift_tok": [0.5], "add_ctok": [1.0]}')
+    methods = {"add", "cap", "conceptor", "lowrank", "meanshift", "conceptor_tok", "meanshift_tok", "add_ctok"}
     common = ["--model", str(model), "--device", "cpu", "--fit_run", str(run_dir), "--roles_dir", str(roles_dir),
               "--eval_questions", str(qfile), "--max_new_tokens", "4", "--batch_size", "8"]
     sweep = tmp / "steer_sweep"
     steer_eval.main(common + ["--stage", "sweep", "--out", str(sweep), "--grid", grid])
     rows = [json.loads(line) for line in (sweep / "texts.jsonl").read_text().splitlines()]
-    assert len(rows) == (1 + 2 + 1 + 1 + 1 + 1 + 1 + 1) * 3  # none + strengths, 3 questions, 1 sample
+    assert len(rows) == (1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1) * 3  # none + strengths, 3 questions, 1 sample
     assert all(np.isfinite(r["readout"]) and r["role"] == "pirate" and r["system"] == "" for r in rows)
     fake_judge(sweep, lambda r: "fully" if r["method"] != "none" and r["strength"] >= 0.5 else "not")
     analyze_steer.main(["--run", str(sweep)])
@@ -236,7 +267,7 @@ def test_steer_eval_sweep_select_and_hold(tmp: Path, model: Path, roles_dir: Pat
     steer_eval.main(common + ["--stage", "hold", "--out", str(hold), "--select_from", str(sweep),
                               "--hold_convs", "2", "--hold_turns", "6"])
     hrows = [json.loads(line) for line in (hold / "texts.jsonl").read_text().splitlines()]
-    assert len(hrows) == 2 * 8 * 2 * 6  # contexts x (none + 7 methods) x convs x turns
+    assert len(hrows) == 2 * 9 * 2 * 6  # contexts x (none + 8 methods) x convs x turns
     assert {r["context"] for r in hrows} == {"steer_only", "prompt"}
     assert any(r["probe"] and r["user"].startswith("Okay, drop the act") for r in hrows)
     fake_judge(hold, lambda r: "fully" if r["turn"] < 3 else "somewhat")
