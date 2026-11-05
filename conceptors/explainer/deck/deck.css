@@ -1,0 +1,137 @@
+/* ===== Lab-meeting deck: HCAI Lab tokens over the field guide's, then a full-screen slide layout. =====
+   The HCAI Lab system is paper-only, so the deck commits to one light look in every viewer theme. Data series keep
+   the field guide's colorblind-checked colors (orange vector, blue cap, teal conceptors); chrome follows HCAI:
+   paper ground, ink text, navy as the only dark ground and accent, gold for hairlines only. */
+:root,:root:not([data-theme="light"]),:root[data-theme="dark"]{
+  --paper:#fbfaf7; --panel:#fffefb; --ink:#1a1a18; --muted:#6b6a64; --hair:#dcd6c3; --grid:#ece8dc;
+  --pirate:#008f82; --assist:#2a78d6; --orange:#e2622d; --other:#a9a59a; --none:#6b6a64; --probe:#BE1858;
+  --wash:rgba(0,143,130,.10); --accent-ink:#003057; --warn-ink:#9a3412;
+  --navy:#003057; --navy-hover:#002543; --gold:#b3a369; --hairline:rgba(179,163,105,.8); --sunk:#f3f1e9;
+  --on-dark:#fbfaf7; --on-dark-muted:#bcc8cf; --buzz:#eaaa00;
+  --f-display:"Fraunces",Georgia,serif;
+  --f-body:-apple-system,BlinkMacSystemFont,"Roboto","Segoe UI","Helvetica Neue",Arial,sans-serif;
+  --f-mono:ui-monospace,Monaco,Consolas,"Lucida Console",monospace;
+  color-scheme:light;
+}
+html{font-size:clamp(14px,1.02vw,24px);height:100%}
+body{margin:0;height:100%;overflow:hidden;background:var(--paper);color:var(--ink);font-family:var(--f-body);line-height:1.45}
+body::before{display:none}
+a{color:var(--navy);text-decoration-color:var(--underline,rgba(179,163,105,.65))}
+a:hover{color:var(--navy-hover);text-decoration-color:var(--gold)}
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,canvas:focus-visible,summary:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
+.tip{font-size:.78rem;max-width:360px}
+
+/* ---------- slides ---------- */
+.deck{position:fixed;inset:0}
+.slide{position:absolute;inset:0;display:none;flex-direction:column;gap:clamp(10px,1.6vh,22px);overflow:auto;
+  padding-top:max(clamp(18px,3.4vh,44px),env(safe-area-inset-top,0px));
+  padding-bottom:calc(clamp(52px,7vh,76px) + env(safe-area-inset-bottom,0px));
+  padding-left:max(clamp(20px,4.2vw,84px),env(safe-area-inset-left,0px));
+  padding-right:max(clamp(20px,4.2vw,84px),env(safe-area-inset-right,0px))}
+.slide.on{display:flex}
+.shead{display:grid;gap:6px;padding-bottom:clamp(8px,1.2vh,16px);border-bottom:1px solid var(--hairline)}
+.kicker{font:600 .74rem/1.2 var(--f-body);letter-spacing:.14em;text-transform:uppercase;color:var(--navy)}
+.slide h2{font-family:var(--f-display);font-weight:600;letter-spacing:-.01em;font-size:clamp(26px,3.05vw,62px);line-height:1.06;margin:0;text-wrap:balance;max-width:34ch}
+.slide .sub{font-size:1.06rem;color:var(--muted);margin:0;max-width:72ch}
+.sbody{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,.86fr) minmax(0,1.5fr);gap:clamp(14px,2.4vh,32px) clamp(20px,3.4vw,64px);align-items:start}
+.sbody.one{grid-template-columns:minmax(0,1fr)}
+.sbody.s2{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}
+.scol{display:grid;gap:clamp(10px,1.6vh,18px);align-content:start;min-width:0}
+.slide p{margin:0;max-width:52ch}
+.big{font-size:1.18rem;line-height:1.42}
+.note{font-size:.82rem;color:var(--muted)}
+.slide .chart-title{font-family:var(--f-body);font-weight:700;font-size:.86rem;margin:0}
+
+/* field guide plates inside a slide: header comes from the slide, the plate keeps text, controls and figure */
+.slide .plate{flex:1;min-height:0;padding:0;border:0;grid-template-columns:minmax(0,.86fr) minmax(0,1.5fr);gap:clamp(12px,2vh,26px) clamp(20px,3.4vw,64px)}
+.slide .plate.wide{grid-template-columns:minmax(0,1fr)}
+.slide .plate .fig{position:static}
+.slide .plate .intro .eyebrow,.slide .plate .intro h3{display:none}
+.slide .plate .intro p{font-size:1.02rem;max-width:46ch}
+.slide .plate .intro p:not(:first-of-type):not(.try){display:none}
+.slide .plate .try{font-size:.9rem;color:var(--muted)}
+.slide .plate figcaption{font-size:.74rem}
+.try b{color:var(--navy)}
+.seg button[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:var(--on-dark)}
+.seg button{font-size:.8rem}
+
+/* cover and statement slides */
+.slide.cover{justify-content:center;gap:clamp(16px,3vh,36px);background:var(--paper)}
+.slide.cover h1{font-family:var(--f-display);font-weight:600;letter-spacing:-.015em;font-size:clamp(40px,5.6vw,112px);line-height:1.02;margin:0;max-width:16ch;text-wrap:balance;color:var(--ink)}
+.slide.cover h1 em{font-style:italic;font-weight:500;color:var(--navy);padding-right:.14em}
+.slide.cover .lede{font-size:1.3rem;max-width:46ch;color:var(--ink)}
+.slide.cover .meta{display:flex;gap:10px 28px;flex-wrap:wrap;font-size:.86rem;color:var(--muted);border-top:1px solid var(--hairline);padding-top:14px;max-width:70ch}
+.slide.navy{background:var(--navy);color:var(--on-dark)}
+.slide.navy h2{color:var(--on-dark)}
+.slide.navy .kicker{color:var(--buzz)}
+.slide.navy .shead{border-bottom-color:var(--gold)}
+.slide.navy .note,.slide.navy .sub{color:var(--on-dark-muted)}
+
+/* cards for takeaways and next steps */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:clamp(12px,1.8vw,28px)}
+.card{display:grid;gap:8px;align-content:start;padding:clamp(14px,1.6vw,26px);border-top:2px solid var(--gold);background:transparent}
+.card .n{font-family:var(--f-display);font-weight:600;font-size:clamp(34px,3.6vw,72px);line-height:1;letter-spacing:-.02em}
+.card h3{font-family:var(--f-display);font-weight:600;font-size:1.2rem;margin:0;line-height:1.2}
+.card p{font-size:.95rem;max-width:none}
+.slide.navy .card{border-top-color:var(--buzz)}
+.slide.navy .card p{color:var(--on-dark)}
+
+/* chat transcript */
+.turns{display:flex;flex-wrap:wrap;gap:6px}
+.turns button{font:600 .8rem/1 var(--f-body);min-width:2.4em;padding:8px 10px;border:1px solid var(--hair);border-radius:3px;background:var(--panel);color:var(--ink);cursor:pointer}
+.turns button.probe{border-color:var(--probe);color:var(--probe)}
+.turns button[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:var(--on-dark)}
+.chat{display:grid;gap:10px;align-content:start}
+.msg{padding:12px 14px;border-radius:3px;font-size:.92rem;line-height:1.45;max-width:none}
+.msg.user{background:var(--sunk);justify-self:end;max-width:86%}
+.msg.bot{background:var(--panel);border:1px solid var(--hair);border-left:3px solid var(--pirate)}
+.msg .who{display:block;font:600 .66rem/1.2 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.pills{display:flex;flex-wrap:wrap;gap:6px}
+.pill{font:500 .7rem/1 var(--f-body);padding:5px 8px;border-radius:3px;border:1px solid var(--hair);color:var(--ink);background:var(--panel);white-space:nowrap}
+.pill.good{border-color:var(--pirate);color:#00695f}
+.pill.bad{border-color:var(--probe);color:var(--probe)}
+
+/* method toggles with line swatches */
+.mtog{display:flex;flex-wrap:wrap;gap:6px}
+.mtog button{display:inline-flex;align-items:center;gap:7px;font:500 .76rem/1 var(--f-body);padding:7px 10px;border:1px solid var(--hair);border-radius:3px;background:var(--panel);color:var(--ink);cursor:pointer}
+.mtog button[aria-pressed="false"]{opacity:.42}
+.mtog i{display:inline-block;width:20px;height:0;border-top:3px solid currentColor}
+.mtog i.dash{border-top-style:dashed}
+.mtog i.dot{border-top-style:dotted}
+.ctlrow{display:grid;gap:6px}
+.ctlrow > span{font:600 .66rem/1.2 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+
+/* judge table */
+.jtable{border-collapse:collapse;width:100%;font-size:.86rem}
+.jtable th,.jtable td{padding:9px 10px;border-bottom:1px solid var(--grid);text-align:right;font-variant-numeric:tabular-nums}
+.jtable th:first-child,.jtable td:first-child{text-align:left}
+.jtable thead th{font:600 .66rem/1.2 var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--hairline)}
+.jtable td.cell{position:relative}
+.hbar{display:grid;grid-template-columns:7.5em minmax(0,1fr) 3.4em;align-items:center;gap:10px;font-size:.84rem}
+.hbar .track{height:14px;background:var(--grid);border-radius:2px;overflow:hidden}
+.hbar .track i{display:block;height:100%;background:var(--navy)}
+.hbar b{font-variant-numeric:tabular-nums;text-align:right}
+
+/* navigation chrome */
+.navbar{position:fixed;left:0;right:0;bottom:0;z-index:15;display:flex;align-items:center;gap:12px;
+  padding:8px max(16px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
+  font:500 .74rem/1 var(--f-body);color:var(--muted);pointer-events:none}
+.navbar > *{pointer-events:auto}
+.navbar .where{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.navbar button{font:600 .8rem/1 var(--f-body);padding:8px 12px;border:1px solid var(--hair);border-radius:3px;background:var(--panel);color:var(--ink);cursor:pointer}
+.navbar .count{font-variant-numeric:tabular-nums;min-width:4.5em;text-align:right}
+.navbar.dark{color:var(--on-dark-muted)}
+.progress{position:fixed;left:0;top:0;height:3px;background:var(--gold);z-index:16;transition:width .2s}
+.overview{position:fixed;inset:0;z-index:30;background:rgba(251,250,247,.97);overflow:auto;
+  padding:max(24px,env(safe-area-inset-top,0px)) max(24px,env(safe-area-inset-right,0px)) max(24px,env(safe-area-inset-bottom,0px)) max(24px,env(safe-area-inset-left,0px))}
+.overview[hidden]{display:none}
+.overview h2{font-family:var(--f-display);font-weight:600;margin:0 0 14px;font-size:1.6rem}
+.overview ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:8px}
+.overview button{width:100%;text-align:left;display:grid;gap:4px;padding:12px;border:1px solid var(--hair);border-radius:3px;background:var(--panel);color:var(--ink);cursor:pointer;font:500 .86rem/1.3 var(--f-body)}
+.overview button small{color:var(--muted);font-size:.7rem;letter-spacing:.08em;text-transform:uppercase}
+.overview button.cur{border-color:var(--navy);box-shadow:inset 3px 0 0 var(--navy)}
+
+@media (max-width:900px){
+  .sbody,.slide .plate{grid-template-columns:minmax(0,1fr)}
+  .slide h2{font-size:clamp(24px,6vw,40px)}
+}

@@ -80,7 +80,7 @@ function Canvas(id,aspect,paint,opt){
   const f={cv,ctx:null,w:0,h:0,lastW:-1,lastH:-1};
   f.resize=()=>{
     const w=cv.clientWidth||600;
-    const h=Math.round(Math.max(opt.minH||0,Math.min(w*aspect,opt.maxH||500)));
+    const h=Math.round(Math.max(opt.minH||0,Math.min(w*aspect,opt.maxH||window.FIG_MAX_H||500)));  // the deck raises the cap
     if(w===f.lastW&&h===f.lastH&&f.ctx)return;
     f.lastW=w;f.lastH=h;
     const dpr=Math.min(2,window.devicePixelRatio||1);

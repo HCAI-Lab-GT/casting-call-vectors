@@ -36,6 +36,22 @@ python explainer/build.py
 - The layer constants at the top of `analyze_acts.py` (`MAP_LAYERS`, `STEER_HIDDEN`, `READ_HIDDEN`, and the logic-test layers `[13, 18, 22]`) are set for the 24-layer 0.5B model.
 - The page text quotes numbers from this run, so the prose needs a pass after the figures update.
 
+## Lab deck
+
+`lab_deck.html` is a click-through presentation of the same material for a lab meeting: the field guide's live plates as
+slides, plus results slides for setting a persona, holding it over ten turns, the identity probe and the judge
+comparison. Arrow keys or PageUp/PageDown move between slides, G opens the slide list, `#slide-N` links to one. Plates
+the slides don't use become appendix slides. Sources are in `deck/` (HCAI Lab styling in `deck.css`, slide markup with
+`{{plate:ID}}` lines in `slides.html`, results charts in `results.js`); `build_deck.py` assembles them with run folders:
+
+```
+python build_deck.py --guide-data RUNS/smollm3_full --samples 1 \
+    --sweep RUNS/steer_sweep_full RUNS/steer_sweep_combo \
+    --hold qwen=RUNS/steer_hold_combo,RUNS/steer_hold_full gemma=RUNS/steer_hold_combo.judge-gemma,RUNS/steer_hold_full.judge-gemma \
+           mistral=... llama=... \
+    --calib qwen=RUNS/calib2_qwen gemma=RUNS/calib2_gemma mistral=RUNS/calib2_mistral llama=RUNS/calib2_llama
+```
+
 ## Also here
 
 - `v1/conceptors_in_2d.html`: the first, 2-D-only conceptor page (28 Oct), with two screenshots.
