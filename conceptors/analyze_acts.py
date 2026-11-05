@@ -19,7 +19,7 @@ Conventions
   * with judge.jsonl, persona-side fits (directions, conceptors) use only rows the judge labels
     "fully" in character; the default role is not filtered
 """
-import argparse, json, re
+import argparse, json, re, time
 from fractions import Fraction
 from pathlib import Path
 
@@ -43,6 +43,18 @@ def auc(pos, neg):
 def standardize(X, ref):
     mu, sd = X[ref].mean(0), X[ref].std(0) + 1e-6
     return (X - mu) / sd, mu, sd
+
+
+def between_share(Y, labels):
+    """Share of centered rows' energy carried by their group means: sum_g n_g |mean_g|^2 / sum_i |y_i|^2.
+
+    One pass per group; replacing each row by its group mean row by row is O(n^2 d) and took hours at 13k rows.
+    """
+    between = 0.0
+    for g in np.unique(labels):
+        G = Y[labels == g]
+        between += len(G) * float((G.mean(0) ** 2).sum())
+    return between / float((Y ** 2).sum())
 
 
 def degenerate(text):
@@ -173,6 +185,10 @@ def main(argv=None):
     out = dict(meta=dict(model=man['model'], d=man['d'], n_layers=n_layers,
                          counts={g: int((role == g).sum()) for g in GROUPS},
                          steer_hidden=STEER_HIDDEN, read_hidden=READ_HIDDEN, map_layers=MAP_LAYERS))
+    t0 = time.time()
+
+    def stage(name):
+        print(f'[{name}] done at {time.time() - t0:.0f}s', flush=True)
 
     # ------------------------------------------------------------------ layer sweep
     sweep = {}
@@ -190,14 +206,13 @@ def main(argv=None):
             clf = LogisticRegression(C=0.1, max_iter=3000).fit(
                 np.r_[Xs[Pf & tr], Xs[A & tr]], np.r_[np.ones((Pf & tr).sum()), np.zeros((A & tr).sum())])
             lr = auc(clf.decision_function(Xs[P & te]), clf.decision_function(Xs[A & te]))
-            Y = Xs[main_m] - Xs[main_m].mean(0); tot = (Y ** 2).sum()
-            rm = np.array([Y[role[main_m] == r].mean(0) for r in role[main_m]])
-            qm = np.array([Y[q[main_m] == k].mean(0) for k in q[main_m]])
+            Y = Xs[main_m] - Xs[main_m].mean(0)
             rows.append(dict(layer=int(saved[l]), md_auc=round(md, 4), lr_auc=round(lr, 4),
-                             role_var=round(float((rm ** 2).sum() / tot), 4),
-                             q_var=round(float((qm ** 2).sum() / tot), 4), top3=round(top3, 4)))
+                             role_var=round(between_share(Y, role[main_m]), 4),
+                             q_var=round(between_share(Y, q[main_m]), 4), top3=round(top3, 4)))
         sweep[name] = rows
     out['sweep'] = sweep
+    stage('layer sweep')
 
     # ------------------------------------------------------------------ 2-D maps
     def persona_axis(Xs):
@@ -232,6 +247,7 @@ def main(argv=None):
                 pca_ev=[round(float(ev[0]), 4), round(float(ev[1]), 4)],
                 plane=np.round(np.c_[score, ys], 3).tolist())
     out['maps'] = maps
+    stage('maps')
 
     # ------------------------------------------------------------------ points (shared metadata)
     pts = []
@@ -263,11 +279,9 @@ def main(argv=None):
     Xs, _, _ = standardize(X, main_m)
     within = {}
     for g in [a.persona, a.default_role]:
-        Y = Xs[role == g]; Y = Y - Y.mean(0); tg = task[role == g]
-        tm = np.array([Y[tg == k].mean(0) for k in tg]); qg = q[role == g]
-        qm = np.array([Y[qg == k].mean(0) for k in qg])
-        within[g] = dict(task_frac=round(float((tm ** 2).sum() / (Y ** 2).sum()), 3),
-                         question_frac=round(float((qm ** 2).sum() / (Y ** 2).sum()), 3))
+        Y = Xs[role == g]; Y = Y - Y.mean(0)
+        within[g] = dict(task_frac=round(between_share(Y, task[role == g]), 3),
+                         question_frac=round(between_share(Y, q[role == g]), 3))
     out['within'] = within
 
     # ------------------------------------------------------------------ rank deficiency (raw space, steering layer)
@@ -430,6 +444,7 @@ def main(argv=None):
                              deg=int(degenerate(t['answer'])), u=t['user'][:140], a=t['answer'][:300]))
         out['multiturn'] = dict(rows=rows, steer=man.get('phase2', {}))
 
+    stage('all sections')
     json.dump(out, open(out_path, 'w'), separators=(',', ':'))
     print('wrote', out_path)
 

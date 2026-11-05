@@ -271,6 +271,18 @@ def test_layer_plan_matches_pilot():
     assert col(17) == 6 and col(24) == 9 and col(3) == 1 and col(30) == 10
 
 
+def test_between_share_matches_row_by_row():
+    import analyze_acts
+    import numpy as np
+
+    rng = np.random.default_rng(1)
+    Y = rng.normal(size=(60, 5)) + np.repeat(rng.normal(size=(4, 5)), 15, axis=0)
+    Y -= Y.mean(0)
+    for labels in (np.repeat(np.array(["a", "b", "c", "d"]), 15), rng.integers(0, 7, 60)):
+        brute = np.array([Y[labels == g].mean(0) for g in labels])  # the old O(n^2) form
+        assert np.isclose(analyze_acts.between_share(Y, labels), (brute ** 2).sum() / (Y ** 2).sum())
+
+
 def test_layer_paths():
     from transformers import GPT2Config, GPT2LMHeadModel, GPTNeoXConfig, GPTNeoXForCausalLM
 
