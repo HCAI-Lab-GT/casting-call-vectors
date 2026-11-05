@@ -8,6 +8,7 @@
 # Serve $JUDGE_MODEL with vLLM on this node, judge one run folder, then stop the server.
 # Runs after the subject-model job (chain with --dependency=afterok:<collect job id>).
 # Submit from the release root:  sbatch -o "$LOGS/%x-%j.out" conceptors/pace/judge_job.sh RUN_NAME [judge.py args]
+# Another judge: sbatch --export=ALL,JUDGE_MODEL=google/gemma-3-27b-it ... (snapshot must be in $HF_HOME already)
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-.}"
 source conceptors/pace/env.sh
@@ -30,8 +31,12 @@ export LOCAL_JUDGE_API_KEY="$VLLM_API_KEY"
 # serve the local snapshot folder: transformers 4.57 makes a hub call for repo ids even when offline
 JUDGE_PATH="$("$PY" -c 'import os; from huggingface_hub import snapshot_download as s; print(s(os.environ["JUDGE_MODEL"], local_files_only=True))')"
 echo "judge snapshot $(basename "$JUDGE_PATH")"
+# per-family serve flags: Mistral's repos ship their tokenizer only as tekken.json, so serve them in Mistral format
+EXTRA=()
+case "$JUDGE_MODEL" in mistralai/*) EXTRA=(--tokenizer-mode mistral --config-format mistral --load-format mistral) ;; esac
+# JUDGE_TP > 1 for judges that need several GPUs (submit with a matching --gres, e.g. gpu:H200:2 for a 70B in bf16)
 "$UV_PROJECT_ENVIRONMENT/bin/vllm" serve "$JUDGE_PATH" --port "$PORT" --host 127.0.0.1 --served-model-name judge \
-  --max-model-len 8192 --gpu-memory-utilization 0.90 > "$LOG" 2>&1 &
+  --max-model-len 8192 --gpu-memory-utilization 0.90 --tensor-parallel-size "${JUDGE_TP:-1}" "${EXTRA[@]}" > "$LOG" 2>&1 &
 SERVER=$!
 trap 'kill $SERVER 2>/dev/null || true; wait $SERVER 2>/dev/null || true; rm -rf "$JOB_TMP"' EXIT
 owned() {  # is the listener on $PORT our server or one of its children? (ss shows pids only for our own processes)

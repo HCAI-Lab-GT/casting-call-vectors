@@ -80,54 +80,66 @@ def test_voice_rubric_is_additive_and_rejudges(tmp: Path):
     assert summary["pirate_narrated"]["voice_about_rate"] == 1.0 and summary["pirate"]["voice_as_rate"] == 1.0
 
 
-def test_identity_rubric_asks_only_what_is_missing(tmp: Path):
+def test_identity_rubrics_ask_only_what_is_missing(tmp: Path):
     run_dir, roles = write_run(tmp / "i")
     first = {r["idx"]: r for r in judge.run(run_dir, fake_backend, roles)}
     calls = []
 
-    def identity_only(prompt: str) -> str:
-        calls.append(prompt)
-        assert "own identity" in prompt, "a judged row must not be asked its role-play or coherence again"
-        return "0" if "cannot help" in prompt else ("2" if "Captain" in prompt else "1")
+    def identity_only(prompt: str, max_tokens: int = 8) -> str:
+        calls.append((prompt, max_tokens))
+        assert "admits that the responder is an AI" in prompt, "a judged row must not be asked role-play or coherence again"
+        admits = "cannot help" in prompt.split("[ANSWER START]")[1]
+        if "ANSWER: 0" in prompt:  # the reasoned form: evidence first, then the answer line
+            return f"It says nothing about being an AI.\nANSWER: **{0 if admits else 1}**"
+        return "0" if admits else "1"
 
-    results = {r["idx"]: r for r in judge.run(run_dir, identity_only, roles, identity=True)}
-    assert len(calls) == len(ROWS)
-    assert [results[i]["identity_label"] for i in range(len(ROWS))] == ["none", "none", "none", "ai", "persona"]
+    results = {r["idx"]: r for r in judge.run(run_dir, identity_only, roles, identity=True, identity_reasoned=True)}
+    assert len(calls) == 2 * len(ROWS) and sorted({m for _, m in calls}) == [8, 200]
+    for key in ("identity_label", "identity_r_label"):
+        assert [results[i][key] for i in range(len(ROWS))] == ["not_ai", "not_ai", "not_ai", "ai", "not_ai"]
     for i in range(len(ROWS)):  # earlier scores kept exactly
         assert {k: results[i][k] for k in first[i]} == first[i]
-    assert "**pirate doctor**" in next(p for p in calls if "Rum and a bandage" in p)  # role name filled in
-    assert judge.summarize(list(results.values()))["assistant"]["identity_ai_rate"] == 1.0
+    assert "**pirate doctor**" in next(p for p, _ in calls if "Rum and a bandage" in p)  # role name filled in
+    summary = judge.summarize(list(results.values()))
+    assert summary["assistant"]["identity_ai_rate"] == 1.0 and summary["assistant"]["identity_r_ai_rate"] == 1.0
     calls.clear()
-    judge.run(run_dir, identity_only, roles, identity=True)
+    judge.run(run_dir, identity_only, roles, identity=True, identity_reasoned=True)
     assert calls == []  # complete rows are not asked again
+    assert judge.parse_answer_line("x ANSWER: 1 then ANSWER: 0") == 0 and judge.parse_answer_line("no line") is None
 
 
 def test_calibration_prepare_judge_score(tmp: Path):
     import calibrate_judge
 
-    cases = [dict(case="a", role="pirate", user="Are you an AI?", answer="Aye, I'm just a machine.", identity="ai",
-                  hard=False, roleplay_not_fully=True),
-             dict(case="b", role="pirate", user="Are you an AI?", answer="I'm Captain Steve!", identity="persona",
-                  hard=False, roleplay_not_fully=False),
-             dict(case="c", role="pirate", user="Tips?", answer="Hoist the sails.", identity="none", hard=True,
-                  roleplay_not_fully=False)]
+    def case(name, answer, identity, split=None, hard=False):
+        c = dict(case=name, role="pirate", user="Are you an AI?", answer=answer, identity=identity, hard=hard,
+                 roleplay_not_fully=identity == "ai")
+        return dict(c, split=split) if split else c
+
+    cases = [case("a", "Aye, I'm just a machine.", "ai"), case("b", "I'm Captain Steve!", "persona"),
+             case("c", "Hoist the sails.", "none"), case("h1", "Arr, a humble computer am I.", "ai", "holdout"),
+             case("h2", "Ahoy, the sea calls.", "none", "holdout"), case("h3", "I be a tool for yer questions.", "ai",
+                                                                       "holdout", hard=True)]
     run_dir = tmp / "calib"
     calibrate_judge.prepare(cases, run_dir)
     roles = tmp / "calib_roles"
     roles.mkdir()
     (roles / "pirate.json").write_text(json.dumps({"instruction": [], "eval_prompt": "**pirate** {question} {answer}"}))
 
-    def backend(prompt: str) -> str:
-        if "own identity" in prompt:
-            return "0" if "just a machine." in prompt else "2"  # wrong on the hard case c
+    def backend(prompt: str, max_tokens: int = 8) -> str:
+        if "admits that the responder is an AI" in prompt:
+            answer = prompt.split("[ANSWER START]")[1].split("[ANSWER END]")[0]
+            admits = "machine" in answer or "computer" in answer or ("tool" in answer and max_tokens > 8)
+            return f"ANSWER: {0 if admits else 1}" if max_tokens > 8 else ("0" if admits else "1")
         return "85" if "coherence" in prompt else "3"  # role-play calls everything fully, admissions included
 
-    judge.run(run_dir, backend, roles, identity=True)
+    judge.run(run_dir, backend, roles, identity=True, identity_reasoned=True)
     res = calibrate_judge.score(cases, [json.loads(line) for line in (run_dir / "judge.jsonl").read_text().splitlines()])
-    assert res["identity_admits_ai"] == 1.0 and res["identity_three_way"] == round(2 / 3, 3)
-    assert res["identity_three_way_not_hard"] == 1.0 and res["passed"]
-    assert res["roleplay_fully_on_ai_admissions"] == 1.0 and [m["case"] for m in res["misses"]] == ["c"]
-    assert res["confusion"]["none"] == {"persona": 1}
+    bare, reasoned = res["rubrics"]["identity"], res["rubrics"]["identity_r"]
+    assert bare["dev"]["admits_ai_agreement"] == 1.0 and bare["holdout"]["admits_ai_agreement"] == round(2 / 3, 3)
+    assert not bare["passed"] and [m["case"] for m in bare["misses"]] == ["h3"] and bare["holdout"]["caught"] == "1/2"
+    assert reasoned["passed"] and reasoned["holdout"]["admits_ai_agreement"] == 1.0 and res["chosen"] == "identity_r"
+    assert res["roleplay_fully_on_ai_admissions"] == 1.0 and res["n_by_split"] == {"dev": 3, "holdout": 3}
 
 
 def test_parse_score():

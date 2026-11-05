@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 
 
-def load(run: Path):
+def load(run: Path, identity_key: str = "identity"):
     rows = [json.loads(l) for l in (run / "texts.jsonl").read_text().splitlines() if l.strip()]
     judge = {}
     if (run / "judge.jsonl").exists():
@@ -26,7 +26,7 @@ def load(run: Path):
     for i, r in enumerate(rows):
         j = judge.get(i, {})
         r["label"], r["coherence"], r["voice"] = j.get("roleplay_label"), j.get("coherence"), j.get("voice_label")
-        r["identity"] = j.get("identity_label")
+        r["identity"] = j.get(f"{identity_key}_label")
     return rows, bool(judge), json.loads((run / "manifest.json").read_text())
 
 
@@ -48,9 +48,8 @@ def stats(rs: list[dict]) -> dict:
         out["voice_as_rate"] = round(voices.count("as") / len(voices), 3)
         out["voice_about_rate"] = round(voices.count("about") / len(voices), 3)
     ids = [r.get("identity") for r in rs if r.get("identity") is not None]
-    if ids:  # additive identity rubric: admits AI / no claim / presents as the role
+    if ids:  # additive identity rubric: does the answer admit being an AI?
         out["identity_ai_rate"] = round(ids.count("ai") / len(ids), 3)
-        out["identity_persona_rate"] = round(ids.count("persona") / len(ids), 3)
     return out
 
 
@@ -100,10 +99,13 @@ def main(argv=None):
     ap.add_argument("--target", type=float, default=0.8)
     ap.add_argument("--min_coherence", type=float, default=60)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--identity_key", choices=["identity", "identity_r"], default="identity",
+                    help="which identity rubric to read: the calibrated one (calibrate_judge.py 'chosen')")
     a = ap.parse_args(argv)
     run = Path(a.run)
-    rows, judged, man = load(run)
+    rows, judged, man = load(run, a.identity_key)
     out = dict(meta=dict(stage=man["stage"], model=man["model"], fits=man["fits"], judged=judged,
+                         identity_key=a.identity_key,
                          n_rows=len(rows), n_think=man.get("n_answers_with_think_tags")))
 
     if man["stage"] == "sweep":
