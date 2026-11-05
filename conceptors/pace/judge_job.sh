@@ -15,7 +15,10 @@ export HF_HUB_OFFLINE=1
 RUN="$CONCEPTORS_DATA/runs/$1"; shift
 # per-job compile caches on node-local disk: concurrent judge jobs sharing the NFS-home cache hit
 # "OSError: [Errno 116] Stale file handle" inside torch inductor
-JOB_TMP="${TMPDIR:-/tmp}/conceptors-judge-${SLURM_JOB_ID:-$$}"
+# (random name, owner-only, ownership checked: the caches hold compiled code, so no predictable shared path)
+JOB_TMP="$(mktemp -d "${TMPDIR:-/tmp}/conceptors-judge-${SLURM_JOB_ID:-$$}.XXXXXXXX")"
+chmod 700 "$JOB_TMP"
+if [ -L "$JOB_TMP" ] || [ "$(stat -c %u "$JOB_TMP")" != "$(id -u)" ]; then echo "unsafe cache dir $JOB_TMP"; exit 1; fi
 export VLLM_CACHE_ROOT="$JOB_TMP/vllm" TORCHINDUCTOR_CACHE_DIR="$JOB_TMP/inductor" TRITON_CACHE_DIR="$JOB_TMP/triton"
 mkdir -p "$VLLM_CACHE_ROOT" "$TORCHINDUCTOR_CACHE_DIR" "$TRITON_CACHE_DIR"
 PORT="${JUDGE_PORT:-$((20000 + RANDOM % 20000))}"
@@ -30,7 +33,7 @@ echo "judge snapshot $(basename "$JUDGE_PATH")"
 "$UV_PROJECT_ENVIRONMENT/bin/vllm" serve "$JUDGE_PATH" --port "$PORT" --host 127.0.0.1 --served-model-name judge \
   --max-model-len 8192 --gpu-memory-utilization 0.90 > "$LOG" 2>&1 &
 SERVER=$!
-trap 'kill $SERVER 2>/dev/null || true; wait $SERVER 2>/dev/null || true' EXIT
+trap 'kill $SERVER 2>/dev/null || true; wait $SERVER 2>/dev/null || true; rm -rf "$JOB_TMP"' EXIT
 owned() {  # is the listener on $PORT our server or one of its children? (ss shows pids only for our own processes)
   local p
   for p in $(ss -Hltnp "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2); do
