@@ -13,3 +13,24 @@ export JUDGE_MODEL="${JUDGE_MODEL:-Qwen/Qwen3-30B-A3B-Instruct-2507}"
 export PYTHONDONTWRITEBYTECODE=1
 export TOKENIZERS_PARALLELISM=false
 PY="$UV_PROJECT_ENVIRONMENT/bin/python"
+
+# The course volume's top level is world-writable with no sticky bit, so another user could rename staff/ aside and
+# plant a look-alike tree. Before a job runs code or loads weights from the volume, every folder from just below the
+# volume root down to the venv, the HF cache and the release it runs from must be ours and closed to other writers.
+CONCEPTORS_VOLUME="${CONCEPTORS_VOLUME:-/storage/ice-shared/cs7634}"
+conceptors_trusted() {
+  local p d
+  for p in "$UV_PROJECT_ENVIRONMENT" "$HF_HOME" "$PWD"; do
+    case "$p" in "$CONCEPTORS_VOLUME"/*) ;; *) continue ;; esac
+    d=$p
+    while [ ! -e "$d" ]; do d=$(dirname "$d"); done
+    while [ "$d" != "$CONCEPTORS_VOLUME" ] && [ "$d" != / ]; do
+      if [ ! -O "$d" ] || [ -n "$(find "$d" -maxdepth 0 -perm /022)" ]; then
+        echo "env.sh: refusing to run, $d is not owned by $(id -un) or is writable by others" >&2
+        return 1
+      fi
+      d=$(dirname "$d")
+    done
+  done
+}
+conceptors_trusted || return 1

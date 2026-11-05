@@ -4,6 +4,7 @@
 # --no-install-project: conceptors/ runs as scripts and never imports pvx, so the venv doesn't point at any one
 # release folder (an editable install would break when that release is pruned).
 set -euo pipefail
+umask 022  # the venv sits on a shared volume: nobody else may write to it (env.sh checks the folders)
 source "$(dirname "$0")/env.sh"
 mkdir -p "$UV_CACHE_DIR" "$(dirname "$UV_PROJECT_ENVIRONMENT")" "$CONCEPTORS_DATA"/{hf_cache,runs,logs,releases}
 uv sync --frozen --no-dev --no-install-project
