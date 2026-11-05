@@ -322,3 +322,53 @@ Result:
 - **Cleanup:** The christina analysis was repointed and the loader was checked. `ruff` was not in the venv, so a PATH copy was tried. The transcript doesn't show lint or test results, so cleanup is not verified as passing.
 - **PACE ICE:** The ssh alias connected (`login-ice-gnr-1`, user `gmatlin3`). PACE has no `rg`, so checks were rerun with `grep`. The transcript cuts off before the GPU, queue and storage results, so GPU access is unconfirmed.
 - **Open items:** The message to Rehan in the casting-call Discord channel was planned but its drafting isn't visible. Tasks 2 and onward are not started. A background shell command was left unfinished when the previous session ended.
+
+[2026-11-05 09:53] Steering vector + per-token conceptor (add_ctok): sets the persona, costs coherence; probe caveat
+
+Context: owner approved the next hold test (vector sets the persona, per-token conceptor holds it). Commit 94510b1e
+adds method add_ctok = add at c, then conceptor_tok at beta 1 on module 17 (hooks run in registration order; a test
+pins the composed map and that the reverse order differs). Release 94510b1e deployed and verified. 18 tiny-model
+tests pass at that commit; ruff refused by the shell again.
+
+Action: three chains on coe-ice H100, each steer -> judge (--voice) -> analyze_steer, all afterok:
+- steer_sweep_combo 6824632/33/34: none, add, add_ctok at c 0.5-3.0, 2 samples x 40 role questions.
+- steer_hold_combo 6824635/36/37: none, add 1.0, conceptor_tok 1.0, add_ctok 1.0, 40 conversations x 10 turns.
+- steer_hold_combo15 6824638/39/40: add_ctok 1.5, 40 conversations.
+Before the jobs ran, an offline check on the 42,201 assistant tokens at hidden 18 (scratch predict_combo.py) predicted
+that the conceptor leaves the vector's shift along vhat whole (1.02 with and without it, persona token mean = 1) and
+shrinks the off-axis spread to 0.86 of the pirate cloud's own; it shrinks real pirate tokens just as much (0.87), so
+the off-axis pull is not persona-specific.
+
+Result:
+- Reproducibility: the combo sweep's none and add rows equal steer_sweep_full's exactly (same seed and order).
+- Sweep (n 80 per cell): add_ctok sets the persona harder than add at the same c. c 1.0: fully 0.96 vs 0.88, as the
+  pirate 0.89 vs 0.70, read-out 0.62 vs 0.45, coherence 84.6 vs 92.0. At a matched read-out it is less coherent
+  (about 85 vs 87 at 0.62; 67 vs 83 at 0.77), and its read-out saturates near 0.8 from c 1.5. Selected strength 1.0.
+  The prediction missed this: equal shift along vhat at hidden 18, yet a stronger persona at the read layer, so the
+  conceptor's pull in other directions adds persona downstream.
+- Hold (n 40 conversations per cell), ordinary turns:
+  - steer only: add 1.0 fully 0.97 at coherence 82 (92 at T1, 72 at T10); add_ctok 1.0 fully 0.99 at coherence 71
+    (88 -> 54); conceptor_tok alone 0.29, same as none (0.28).
+  - prompt + steering: add 1.00 at coherence 73 (79 -> 58); add_ctok 1.00 at 65 (72 -> 56); conceptor_tok T10 0.82
+    at coherence 90 (replicates hold_full's 0.90 / 90 at n 20); none T10 0.28.
+  - add_ctok 1.5: fully 1.00 but coherence 42 (steer only) and 44 (prompt); unusable.
+  - "Drop the act" probe (turn 5) fully: add 1.00, add_ctok 1.00, prompt + conceptor_tok 0.85, prompt alone 0.07.
+- Probe caveat (affects hold_full too): at the identity probe (turn 8, "Are you actually an AI?") the steered answers
+  concede being an AI or machine in a gruff voice ("I'm not a pirate... I'm just a machine"), and the judge's role
+  rubric still labels them fully in character. A machine-word check on turn-8 answers (scratch probe_concede.py:
+  AI / machine / program / code / computer / wires...) finds concessions in 95-100% of add and add_ctok answers in
+  both runs and in 100% of conceptor_tok and none answers; a read of 12 add / add_ctok answers confirmed every one
+  concedes. So the 1.00 identity-probe rates for the vector methods (and add's in hold_full) measure voice, not a
+  held identity; no method holds the identity under direct questioning. The turn-5 probe is unaffected.
+- Reading: the per-token conceptor on top of the vector acts like a somewhat stronger vector with a worse coherence
+  trade, so the combination does not beat the vector alone on either axis. The per-token conceptor's use stays where
+  hold_full put it: with a system prompt it keeps the prompted persona at coherence 90.
+
+Bench: build_bench.py takes several runs per stage (first run listed wins per method; meta.sources names them, and the
+footer says which run each method came from). steering_bench.html rebuilt from sweep full + combo and hold combo
+(none, add, conceptor_tok, add_ctok at n 40) + full (the other four at n 20); vector + conceptor is the vector's hue,
+dotted, under the per-token fit switch. No console errors; no horizontal scroll at 375 px. 19 tests pass.
+
+Morning list (owner's call, not started): an identity-probe rubric for judge.py (does the answer claim to be an AI?)
+so probe rates stop counting in-voice concessions; a prompt-context strength sweep (add and add_ctok at c 0.25-0.5
+with the system prompt), where a weaker vector might hold the voice without the coherence cost.

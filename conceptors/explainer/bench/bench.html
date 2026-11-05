@@ -135,20 +135,22 @@ button:focus-visible{outline:2px solid var(--probe);outline-offset:2px}
 (function(){
 "use strict";
 const D = JSON.parse(document.getElementById('bench-data').textContent);
-const METHODS = ['conceptor','lowrank','meanshift','conceptor_tok','meanshift_tok','cap','add','none'];
+const METHODS = ['conceptor','lowrank','meanshift','conceptor_tok','meanshift_tok','cap','add','add_ctok','none'];
 const NAMES = {conceptor:'Conceptor', lowrank:'Low-rank conceptor', meanshift:'Mean-shift control',
-  conceptor_tok:'Conceptor', meanshift_tok:'Mean-shift control', cap:'Activation cap', add:'Steering vector', none:'No steering'};
+  conceptor_tok:'Conceptor', meanshift_tok:'Mean-shift control', cap:'Activation cap', add:'Steering vector', add_ctok:'Vector + conceptor', none:'No steering'};
 const FULL_NAMES = Object.assign({}, NAMES, {conceptor:'Conceptor, answer-average fit', lowrank:'Low-rank conceptor, answer-average fit',
-  meanshift:'Mean-shift control, answer-average fit', conceptor_tok:'Conceptor, per-token fit', meanshift_tok:'Mean-shift control, per-token fit'});
-const PARAM = {conceptor:'β', lowrank:'β', meanshift:'β', conceptor_tok:'β', meanshift_tok:'β', add:'c', cap:'pct', none:''};
+  meanshift:'Mean-shift control, answer-average fit', conceptor_tok:'Conceptor, per-token fit', meanshift_tok:'Mean-shift control, per-token fit',
+  add_ctok:'Steering vector, then per-token conceptor (β 1)'});
+const PARAM = {conceptor:'β', lowrank:'β', meanshift:'β', conceptor_tok:'β', meanshift_tok:'β', add:'c', add_ctok:'c', cap:'pct', none:''};
 // Only three hues stay apart for every reader on a chart where any two lines can cross (teal, blue, orange validate
 // all-pairs in both modes), so the conceptor family shares teal and line style tells its members apart; the fit
 // switch shows one family at a time.
 const HUE = {conceptor:'conceptor', lowrank:'conceptor', meanshift:'conceptor', conceptor_tok:'conceptor', meanshift_tok:'conceptor',
-  cap:'cap', add:'add', none:'none'};
-const STYLE = {lowrank:'dot', meanshift:'dash', meanshift_tok:'dash', none:'dash'};
+  cap:'cap', add:'add', add_ctok:'add', none:'none'};
+const STYLE = {lowrank:'dot', meanshift:'dash', meanshift_tok:'dash', add_ctok:'dot', none:'dash'};
 const DASH = {dot:'1.5 4', dash:'5 4'};
-const FIT = {conceptor:'avg', lowrank:'avg', meanshift:'avg', conceptor_tok:'tok', meanshift_tok:'tok'};
+// the vector + conceptor shares the vector's hue (dotted) and appears with the per-token fit it uses
+const FIT = {conceptor:'avg', lowrank:'avg', meanshift:'avg', conceptor_tok:'tok', meanshift_tok:'tok', add_ctok:'tok'};
 const $ = id => document.getElementById(id);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const col = m => css('--m-' + HUE[m]);
@@ -412,8 +414,18 @@ if (hold){
   $('allTable').innerHTML = html;
 }
 const b = D.built || {};
+// several runs per stage: name the run each method came from, when there is more than one
+function sourceNote() {
+  return [['Sweep', sweep], ['Hold', hold]].map(([label, d]) => {
+    const src = d && d.meta.sources; if (!src) return '';
+    const [main, ...rest] = [...new Set(Object.values(src))]; if (!rest.length) return '';
+    return rest.map(r => `${label} run ${r}: ` + Object.keys(src).filter(m => src[m] === r).map(m => FULL_NAMES[m]).join('; '))
+      .join('. ') + `; all other methods from ${main}. `;
+  }).join('');
+}
 $('foot').textContent = `Fits from ${fits.source.split('/').slice(-1)[0]} (${fits.n_persona} ${fits.persona} answers judged fully in character, ${fits.n_default} ${fits.default} answers; conceptor rank ${fits.conceptor_rank}, low-rank k ${fits.lowrank_k}` +
   (fits.n_tokens ? `; per-token fit on ${fits.n_tokens.toLocaleString()} tokens from ${fits.tok_rows} answers, rank ${fits.tok_rank}` : '') + `). ` +
-  `Judge: local model, Assistant Axis role rubric and Persona Vectors coherence rubric. Built ${b.date || ''} from commit ${b.commit || ''}.`;
+  `Judge: local model, Assistant Axis role rubric and Persona Vectors coherence rubric. ` + sourceNote() +
+  `Built ${b.date || ''} from commit ${b.commit || ''}.`;
 })();
 </script>

@@ -344,6 +344,28 @@ def test_explainer_thin_points_keeps_alignment():
         assert out["groups"]["resp"][r]["vals"] == [float(i) for i in kept if pts[i]["r"] == r]
 
 
+def test_bench_merge_first_run_wins(tmp: Path):
+    sys.path.insert(0, str(HERE.parent / "explainer"))
+    import build_bench
+
+    def run(name, rows, selected):
+        d = tmp / name
+        d.mkdir()
+        (d / "steer_derived.json").write_text(json.dumps(dict(meta=dict(stage="sweep", name=name), sweep=rows,
+                                                              selected=selected)))
+        return d
+
+    old = run("sweep_old", [dict(method="none", n=1), dict(method="add", n=1), dict(method="cap", n=1)],
+              dict(add=dict(strength=1.0), cap=None))
+    new = run("sweep_new", [dict(method="none", n=2), dict(method="add", n=2), dict(method="add_ctok", n=2)],
+              dict(add=dict(strength=2.0), add_ctok=dict(strength=1.0)))
+    out = build_bench.merge([old, new], "sweep")
+    assert [(r["method"], r["n"]) for r in out["sweep"]] == [("none", 1), ("add", 1), ("cap", 1), ("add_ctok", 2)]
+    assert out["selected"] == dict(add=dict(strength=1.0), cap=None, add_ctok=dict(strength=1.0))
+    assert out["meta"]["name"] == "sweep_old" and out["meta"]["sources"]["add_ctok"] == "sweep_new"
+    assert out["meta"]["sources"]["add"] == "sweep_old" and build_bench.merge(None, "sweep") is None
+
+
 def test_layer_paths():
     from transformers import GPT2Config, GPT2LMHeadModel, GPTNeoXConfig, GPTNeoXForCausalLM
 
