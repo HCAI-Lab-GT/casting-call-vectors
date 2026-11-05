@@ -4,8 +4,8 @@ analyze_steer.py — summarize a steer_eval.py run (judged by judge.py) into ste
 
   sweep     per (method, strength): judge fully/somewhat/not rates, mean coherence, read-out score quartiles,
             AI-break rate, pirate-word rate; plus 'selected': per method the smallest strength whose fully rate
-            reaches --target with mean coherence >= --min_coherence (else the best fully rate with coherence >=
-            --floor_coherence, else none). Without judge scores, the read-out stands in (mean >= --target).
+            reaches --target with mean coherence >= --min_coherence (matched), else its strongest strength that
+            keeps coherence >= --min_coherence (unmatched), else none. Without judge scores, the read-out stands in.
   hold      per (context, method): per-turn curves and T1/T5/T10 with drift T10 - T1 (GCAD protocol), split by
             probe vs ordinary turns.
 
@@ -49,7 +49,14 @@ def stats(rs: list[dict]) -> dict:
     return out
 
 
-def select(table: list[dict], judged: bool, target: float, min_coh: float, floor_coh: float) -> dict:
+def select(table: list[dict], judged: bool, target: float, min_coh: float) -> dict:
+    """Per method, the strength the hold test runs it at.
+
+    Matched: the smallest strength with fully >= target and coherence >= min_coh, so matched methods set the persona
+    up equally well. A method that never gets there runs at its strongest strength that keeps coherence >= min_coh
+    (matched False): the most it can do without breaking the model. The hold test's prompt context can still show
+    whether that keeps a prompted persona from drifting, which is the claim conceptors are meant to win.
+    """
     by_method = defaultdict(list)
     for t in table:
         by_method[t["method"]].append(t)
@@ -59,18 +66,21 @@ def select(table: list[dict], judged: bool, target: float, min_coh: float, floor
             continue
         ts = sorted(ts, key=lambda t: t["strength"])
         if judged:
-            ok = [t for t in ts if (t["fully_rate"] or 0) >= target and (t["coherence"] or 0) >= min_coh]
+            coherent = [t for t in ts if (t["coherence"] or 0) >= min_coh]
+            ok = [t for t in coherent if (t["fully_rate"] or 0) >= target]
             if ok:
-                pick, why = ok[0], f"smallest strength with fully >= {target} and coherence >= {min_coh}"
+                pick, matched, why = ok[0], True, f"smallest strength with fully >= {target} and coherence >= {min_coh}"
+            elif coherent:
+                pick, matched, why = coherent[-1], False, f"never fully >= {target}; strongest with coherence >= {min_coh}"
             else:
-                cand = [t for t in ts if (t["coherence"] or 0) >= floor_coh]
-                pick = max(cand, key=lambda t: t["fully_rate"] or 0) if cand else None
-                why = f"no strength met the target; best fully rate with coherence >= {floor_coh}" if pick else "none usable"
+                pick, matched, why = None, False, f"no strength kept coherence >= {min_coh}"
         else:
             ok = [t for t in ts if t["readout"] >= target]
-            pick, why = (ok[0], f"no judge: smallest strength with readout >= {target}") if ok else (None, "none reached")
-        selected[method] = None if pick is None else dict(strength=pick["strength"], fully_rate=pick["fully_rate"],
-                                                          coherence=pick["coherence"], readout=pick["readout"], rule=why)
+            pick, matched, why = (ok[0], True, f"no judge: smallest strength with readout >= {target}") if ok else \
+                (None, False, "none reached")
+        selected[method] = None if pick is None else dict(
+            strength=pick["strength"], matched=matched, fully_rate=pick["fully_rate"], coherence=pick["coherence"],
+            readout=pick["readout"], rule=why)
     return selected
 
 
@@ -84,7 +94,6 @@ def main(argv=None):
     ap.add_argument("--run", required=True)
     ap.add_argument("--target", type=float, default=0.8)
     ap.add_argument("--min_coherence", type=float, default=60)
-    ap.add_argument("--floor_coherence", type=float, default=50)
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     run = Path(a.run)
@@ -98,7 +107,7 @@ def main(argv=None):
             groups[(r["method"], r["strength"])].append(r)
         table = [dict(method=m, strength=s, **stats(rs), examples=examples(rs)) for (m, s), rs in groups.items()]
         out["sweep"] = table
-        out["selected"] = select(table, judged, a.target, a.min_coherence, a.floor_coherence)
+        out["selected"] = select(table, judged, a.target, a.min_coherence)
     else:
         groups = defaultdict(list)
         for r in rows:

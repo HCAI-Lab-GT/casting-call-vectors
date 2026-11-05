@@ -98,3 +98,24 @@ data (no console errors; one pass of fixes: label only the matched strength, tri
 
 Result: commit 8217e1fc is unsigned: the 1Password signer returned an agent error (likely locked while Glenn is away);
 per the unattended-signing rule only that commit skipped signing.
+
+[2026-11-05 00:10] Pilot sweep diagnosis; token-level conceptor; selection rule
+
+Clock correction: the entries stamped 00:30 and 01:05 above ran ahead of the local clock (EST); from here stamps come
+from `date`.
+
+Context: the judged pilot sweep (runs/steer_sweep_quick, fits from smollm3_quick at module 18) shows the conceptor
+family doing nothing up to beta 0.5 and breaking coherence at 0.8, with the conceptor tracking its own matrix-removed
+control (meanshift) at every strength. add 1.0 reaches 0.925 fully at coherence 90; cap tops out at 0.675.
+
+Action: two causes and their fixes. (1) Rank trap: 200 answer averages in d=2048 give a rank-200 conceptor, and the
+lowrank hook zeroed every direction outside its 16-dim span; the hook now keeps the Ledoit-Wolf floor null_keep
+there. (2) Reference cloud: the conceptor is fitted on answer averages but applied to every token, so it pulls each
+token toward an averaged center; new methods conceptor_tok and meanshift_tok fit on per-token persona activations
+(full run saves them at hidden 18 and 27, so the full-run sweep uses --module 17). The default grid now probes
+beta 0.3-1.0 and cap percentiles 25-99. analyze_steer.select: a method that never reaches the target now runs the
+hold test at its strongest strength with coherence >= 60 (marked matched False) instead of its best fully rate at
+coherence >= 50, which picked beta 0.1 on a three-way tie. Excluding such methods would drop the conceptors from
+the prompt-context hold test, which is the comparison they are meant to win.
+
+Result: 14 tiny-model tests and 5 judge tests pass; ruff could not run (the shell call was refused).

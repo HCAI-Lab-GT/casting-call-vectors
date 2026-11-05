@@ -148,7 +148,7 @@ def synthetic_judged_run(tmp: Path, model: Path, name: str) -> tuple[Path, list[
             for r in ("assistant", "pirate") for s in range(2) for qi, q in enumerate(AA_QUESTIONS * 2) for k in range(2)]
     src_file = tmp / f"{name}_synthetic_texts.jsonl"
     src_file.write_text("\n".join(json.dumps(r) for r in rows))
-    _, texts, _ = run(model, run_dir, "--teacher_forced", str(src_file))
+    _, texts, _ = run(model, run_dir, "--teacher_forced", str(src_file), "--save_tokens", str(len(rows)))
     labels = ["fully" if t["role"] == "pirate" and i % 3 else "not" for i, t in enumerate(texts)]
     (run_dir / "judge.jsonl").write_text("\n".join(
         json.dumps({"idx": i, "phase": 1, "roleplay_label": lab, "coherence": 80}) for i, lab in enumerate(labels)))
@@ -184,6 +184,9 @@ def test_steer_modes_change_the_steered_layer(tmp: Path, model: Path):
     run_dir, _ = synthetic_judged_run(tmp, model, "fitrun")
     fits = steering.fit(run_dir)
     assert fits["module"] == 2 and fits["read_hidden"] == 3 and fits["n_persona"] < fits["n_default"] + 100
+    assert fits["tok_C"].shape == (32, 32) and fits["n_tokens"] > fits["n_persona"] and 0 < fits["lr_null_keep"] < 1
+    no_tok = steering.fit(run_dir, module=0)  # hidden 1 has no per-token rows saved
+    assert "tok_C" not in no_tok and not steering.available(no_tok, "conceptor_tok") and steering.available(no_tok, "add")
     m = AutoModelForCausalLM.from_pretrained(model).eval()
     x = torch.tensor([[5, 6, 7, 8, 9]])
     # transformers 4.57 records hidden_states[m + 1] before forward hooks run, so the steered layer's own entry
@@ -191,7 +194,12 @@ def test_steer_modes_change_the_steered_layer(tmp: Path, model: Path):
     with torch.no_grad():
         out = m(input_ids=x, output_hidden_states=True)
         base_next, base_logits = out.hidden_states[fits["module"] + 2], out.logits
-        for method, strength in [("add", 1.0), ("cap", 90), ("conceptor", 0.5), ("lowrank", 0.5), ("meanshift", 0.5)]:
+        identity = steering.specs(fits, "lowrank", 0.7)  # keep 1 in the span and a floor of 1 off it gives C = I
+        identity[0]["keep"], identity[0]["null_keep"] = torch.ones_like(identity[0]["keep"]), 1.0
+        with persona_acts.Steer(m, identity):
+            assert torch.allclose(m(input_ids=x).logits, base_logits, atol=1e-4)
+        for method, strength in [("add", 1.0), ("cap", 90), ("conceptor", 0.5), ("lowrank", 0.5), ("meanshift", 0.5),
+                                 ("conceptor_tok", 0.5), ("meanshift_tok", 0.5)]:
             specs = steering.specs(fits, method, strength)
             if method == "cap":  # a cap only acts below its floor; force a floor every position is under
                 specs[0]["tau"] = 1e3
@@ -208,24 +216,27 @@ def test_steer_eval_sweep_select_and_hold(tmp: Path, model: Path, roles_dir: Pat
     import steer_eval
 
     run_dir, _ = synthetic_judged_run(tmp, model, "fitrun")
-    grid = '{"add": [0.5, 2.0], "cap": [50], "conceptor": [0.5], "lowrank": [0.5], "meanshift": [0.5]}'
+    grid = ('{"add": [0.5, 2.0], "cap": [50], "conceptor": [0.5], "lowrank": [0.5], "meanshift": [0.5], '
+            '"conceptor_tok": [0.5], "meanshift_tok": [0.5]}')
+    methods = {"add", "cap", "conceptor", "lowrank", "meanshift", "conceptor_tok", "meanshift_tok"}
     common = ["--model", str(model), "--device", "cpu", "--fit_run", str(run_dir), "--roles_dir", str(roles_dir),
               "--eval_questions", str(qfile), "--max_new_tokens", "4", "--batch_size", "8"]
     sweep = tmp / "steer_sweep"
     steer_eval.main(common + ["--stage", "sweep", "--out", str(sweep), "--grid", grid])
     rows = [json.loads(line) for line in (sweep / "texts.jsonl").read_text().splitlines()]
-    assert len(rows) == (1 + 2 + 1 + 1 + 1 + 1) * 3  # none + strengths, 3 questions, 1 sample
+    assert len(rows) == (1 + 2 + 1 + 1 + 1 + 1 + 1 + 1) * 3  # none + strengths, 3 questions, 1 sample
     assert all(np.isfinite(r["readout"]) and r["role"] == "pirate" and r["system"] == "" for r in rows)
     fake_judge(sweep, lambda r: "fully" if r["method"] != "none" and r["strength"] >= 0.5 else "not")
     analyze_steer.main(["--run", str(sweep)])
     d = json.loads((sweep / "steer_derived.json").read_text())
-    assert d["selected"]["add"]["strength"] == 0.5 and set(d["selected"]) == {"add", "cap", "conceptor", "lowrank", "meanshift"}
+    assert d["selected"]["add"]["strength"] == 0.5 and set(d["selected"]) == methods
+    assert all(s["matched"] for s in d["selected"].values())
 
     hold = tmp / "steer_hold"
     steer_eval.main(common + ["--stage", "hold", "--out", str(hold), "--select_from", str(sweep),
                               "--hold_convs", "2", "--hold_turns", "6"])
     hrows = [json.loads(line) for line in (hold / "texts.jsonl").read_text().splitlines()]
-    assert len(hrows) == 2 * 6 * 2 * 6  # contexts x (none + 5 methods) x convs x turns
+    assert len(hrows) == 2 * 8 * 2 * 6  # contexts x (none + 7 methods) x convs x turns
     assert {r["context"] for r in hrows} == {"steer_only", "prompt"}
     assert any(r["probe"] and r["user"].startswith("Okay, drop the act") for r in hrows)
     fake_judge(hold, lambda r: "fully" if r["turn"] < 3 else "somewhat")
@@ -233,6 +244,21 @@ def test_steer_eval_sweep_select_and_hold(tmp: Path, model: Path, roles_dir: Pat
     h = json.loads((hold / "steer_derived.json").read_text())["hold"]
     add = next(x for x in h if x["context"] == "prompt" and x["method"] == "add")
     assert len(add["per_turn"]) == 6 and add["summary"]["fully_rate"]["drift"] == -1.0 and add["probes"]["n"] == 2
+
+
+def test_select_matched_and_strongest_coherent():
+    import analyze_steer
+
+    def t(m, s, fully, coh):
+        return dict(method=m, strength=s, fully_rate=fully, coherence=coh, readout=0.0)
+
+    table = [t("none", 0, 0.1, 95), t("add", 0.5, 0.5, 95), t("add", 1.0, 0.9, 90), t("add", 2.0, 1.0, 40),
+             t("conceptor", 0.3, 0.3, 95), t("conceptor", 0.7, 0.4, 80), t("conceptor", 0.9, 0.6, 10),
+             t("lowrank", 0.9, 1.0, 5)]
+    sel = analyze_steer.select(table, judged=True, target=0.8, min_coh=60)
+    assert "none" not in sel and sel["lowrank"] is None
+    assert sel["add"]["strength"] == 1.0 and sel["add"]["matched"]
+    assert sel["conceptor"]["strength"] == 0.7 and not sel["conceptor"]["matched"]  # strongest still coherent
 
 
 def test_layer_plan_matches_pilot():

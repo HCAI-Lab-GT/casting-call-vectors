@@ -38,7 +38,8 @@ def parse(argv=None):
     ap.add_argument("--fit_run", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--stage", choices=["sweep", "hold"], required=True)
-    ap.add_argument("--methods", nargs="+", default=list(steering.DEFAULT_GRID))
+    ap.add_argument("--methods", nargs="+", default=None,
+                    help="default: every method in the grid the fit run supports (token methods need saved tokens)")
     ap.add_argument("--grid", default=None, help='JSON {method: [strengths]} overriding the default grid')
     ap.add_argument("--persona", default="pirate")
     ap.add_argument("--default_role", default="assistant")
@@ -168,6 +169,13 @@ def main(argv=None):
     if model.config.num_hidden_layers != fits["n_layers"] or model.config.hidden_size != fits["d"]:
         raise SystemExit("fit run and steered model differ in shape; fit on the same model")
     grid = dict(steering.DEFAULT_GRID, **(json.loads(ours.grid) if ours.grid else {}))
+    if ours.methods is None:
+        ours.methods = [m for m in grid if steering.available(fits, m)]
+        skipped = [m for m in grid if m not in ours.methods]
+        if skipped:
+            print(f"[fit] skipping {skipped}: no per-token activations at hidden {fits['module'] + 1}", flush=True)
+    elif missing := [m for m in ours.methods if not steering.available(fits, m)]:
+        raise SystemExit(f"{missing} need per-token activations at hidden {fits['module'] + 1} in {ours.fit_run}")
     print(f"[load] {margs.model} ({dtype}) on {device}; fits from {ours.fit_run}: module {fits['module']}, "
           f"read hidden {fits['read_hidden']}, n_persona {fits['n_persona']}, {time.time() - t0:.0f}s", flush=True)
     if ours.stage == "sweep":

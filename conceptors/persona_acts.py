@@ -321,9 +321,12 @@ class Steer:
             elif spec["mode"] == "conceptor":  # h' = (1-b) h + b (mu + C (h - mu))
                 mu, C, b = spec["mu"].to(x.device), spec["C"].to(x.device), spec["beta"]
                 x = (1 - b) * x + b * (mu + (x - mu) @ C)
-            elif spec["mode"] == "lowrank":  # same with C = U^T diag(keep) U, applied as (h - mu) U^T diag(keep) U
+            elif spec["mode"] == "lowrank":  # C = U^T diag(keep) U + null_keep (I - U^T U): the floor applies off-span
                 mu, U, keep, b = spec["mu"].to(x.device), spec["U"].to(x.device), spec["keep"].to(x.device), spec["beta"]
-                x = (1 - b) * x + b * (mu + (((x - mu) @ U.T) * keep) @ U)
+                xc = x - mu
+                coords = xc @ U.T
+                Cx = (coords * keep) @ U + spec.get("null_keep", 0.0) * (xc - coords @ U)
+                x = (1 - b) * x + b * (mu + Cx)
             elif spec["mode"] == "meanshift":  # matrix-removed control: same center and gain, C = 0
                 mu, b = spec["mu"].to(x.device), spec["beta"]
                 x = (1 - b) * x + b * mu
