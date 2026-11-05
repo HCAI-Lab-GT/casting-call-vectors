@@ -641,3 +641,32 @@ Context: Picking up a conceptor persona-steering project from a cloud session. T
 Action: Read HANDOFF.md, CLAUDE.md and the explainer README, then inventoried the repo's OLMo-3-7B artifacts. I wrote `conceptors/docs/prior_olmo3_inventory.md` (placed under `conceptors/docs/` rather than the repo-root `docs/` so nothing outside the project folder changed) and added a dated line to HANDOFF.md. I resolved the chat-template check from the Hub without downloading the model. I searched Google Drive and OneDrive. The OneDrive dump was compared by path and file size only, without opening files, and I appended findings and a storage recommendation to the inventory doc. After the user said the MATS cluster and Modal volumes hold nothing relevant, and that a message to Rehan in the casting-call Discord channel should be drafted via a "messages" session, I checked the peer sessions (only "Zotero papers" was listed). Cleanup edits were applied: the christina analysis was repointed to the Assistant Axis vectors, and the loader was checked (276 vectors shaped (4096,), chemist included). I then loaded the pace-ice skill and tested the `pace-ice-agent` ssh alias read-only, planning to check GPUs, queue state and storage. The git ground truth also shows uncommitted edits to `conceptors/explainer/build_deck.py`, `deck/results.js`, `deck/slides.html` and `conceptors/tests/test_persona_acts_tiny.py`, a staged deletion of `overleaf`, and a new untracked `conceptors/conceptor_spectrum.py`. The transcript doesn't show what produced these, so I can't tie them to specific steps.
 
 Result: Task 1 is complete with a caveat: the repo has no saved per-sample OLMo-3-7B activations, so nothing can feed a conceptor fit directly. It does hold about 330,000 judged OLMo-3-7B-Instruct answers (275 roles, 5 prompts, 240 questions, one sample each). Teacher-forcing these through the model would regenerate the activation clouds without new generation. Casting Call and trait vectors exist only as pooled means, which work as steering baselines but not as conceptors. Neither Google Drive nor OneDrive had anything new: the OneDrive copy is an older snapshot of what's already in git, and only `persona_data/role_datasets.zip` is missing locally. The judged Q/A answers from the CPU phase and the Assistant Axis generation code were not found on either drive. The data is already in plain git on `origin`, so the recommendation was to leave it there and use a private Hugging Face Storage Bucket for new activation dumps. Whether the Rehan message was drafted is not shown, and the transcript ends before the session confirmed that cleanup lint and tests passed (`ruff` was not in the venv, so I tried the one on PATH). The PACE ICE connection works (login node `login-ice-gnr-1`, user `gmatlin3`), but the GPU, queue and storage checks had barely started and the transcript is truncated there. Task 2 (generalizing `persona_acts.py`) has not started in this transcript. Nothing from the uncommitted deck work is recorded here as verified or committed.
+
+[2026-11-05 16:30] Judge hang fix, the GPU-minute cap, and all PACE storage moved to the CS 7634 volume
+
+Judge hang: the pirate+ghost sweep judge 6826242 hung for 1 h 41 min. vLLM took 18 min to load under NFS load, the
+15-min readiness check gave up, and the cleanup trap's `wait` blocked until the time limit. Cancelled with the
+owner's go-ahead and resubmitted as 6827892 (done in 8.6 min), with holds 6827893-96. judge_job.sh now waits up to
+45 min for vLLM and force-kills the server on exit (commit df5304de).
+
+GPU-minute cap: coe-ice enforces MaxTRESRunMinsPU gres/gpu=1920 on reserved minutes (time limit x GPUs), not on
+minutes used. 10-16 h limits on jobs that take about 1.5 h let only 3 jobs run at once. With `scontrol update
+TimeLimit` to measured durations (holds 3 h, OLMo holds 4 h, sweep judge 1.5 h), 7 ran. Measured judge times are
+8-45 min per run, so the pending genie/alien and bard/consultant hold judges went from 12 h to 5 h (5 GPUs x 12 h
+would have reserved 3,600 GPU-minutes). Lesson: set limits near measured durations at submit time.
+
+Storage: the df5304de deploy failed with "Disk quota exceeded". Scratch was at 300.2 of 300 GB, holding 15 release
+checkouts at 12 GB each (data is tracked in git) plus 11 GB of half-finished `.staging` folders. With approval I
+deleted the 14 checkouts no job used and emptied `.staging`, which took scratch to 137.9 GB (the rest belongs to other
+projects). I kept 566d01b8, which all 28 queued and running conceptor jobs use. Owner decision: everything for this
+repo on PACE goes on the course volume, never scratch. So:
+- env.sh: `UV_CACHE_DIR` and `UV_PROJECT_ENVIRONMENT` now sit under `$CONCEPTORS_DATA` (`uv-cache/`,
+  `venvs/casting-call-vectors/`), and `CONCEPTORS_SCRATCH` is gone. Releases deploy to
+  `$CONCEPTORS_DATA/releases/casting-call-vectors/<sha>`.
+- setup_env.sh: `uv sync --no-install-project`. The old shared venv had an editable `pvx` pointing at release
+  93106652, and nothing in conceptors/ imports pvx.
+- Root AGENTS.md (imported by a new root CLAUDE.md) holds the storage table, the deploy command, and the pruning
+  rule. conceptors/CLAUDE.md points to it.
+- The new venv is built offline from the scratch uv cache (uv.lock is unchanged since 566d01b8). Jobs on 566d01b8
+  keep the scratch venv until they finish. After that, the scratch venv (10 GB), uv cache (10 GB) and the 566d01b8
+  checkout (12 GB) can go, which needs owner approval.
