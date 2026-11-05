@@ -296,6 +296,21 @@ def test_steer_eval_sweep_select_and_hold(tmp: Path, model: Path, roles_dir: Pat
     assert {r["context"] for r in orow} == {"prompt"} and len(orow) == 2 * 3 and "x_pre" not in orow[0]
 
 
+def test_conceptor_spectrum_bins_and_shares(tmp: Path, model: Path):
+    import conceptor_spectrum
+    import steering
+
+    run_dir, _ = synthetic_judged_run(tmp, model, "fitrun_spec")
+    f = steering.fit(run_dir)
+    H = conceptor_spectrum.default_tokens(run_dir, f["module"] + 1)
+    s = conceptor_spectrum.spectrum(f, H, n_bins=8)
+    assert s["d"] == 32 and s["bins"][0]["lo"] == 1 and s["bins"][-1]["hi"] <= 32
+    assert abs(sum(b["v"] for b in s["bins"]) - 1) < 2e-3 and abs(sum(b["gap"] for b in s["bins"]) - 1) < 2e-3
+    keeps = [b["keep"] for b in s["bins"]]
+    assert all(0 <= k <= 1 for k in keeps) and keeps == sorted(keeps, reverse=True)
+    assert abs(s["keep_along_vhat"] - float(f["vhat"] @ f["tok_C"] @ f["vhat"])) < 1e-3
+
+
 def test_probe_schedule_for_long_conversations():
     import steer_eval
 

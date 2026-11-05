@@ -318,6 +318,57 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
   togs();chat();
 })();
 
+/* ---------- mechanism: what the per-token conceptor keeps, direction by direction ---------- */
+(function(){
+  if(!$('skc'))return;
+  const M=DK.mechanism||{};
+  const key=()=>MODEL(PERS)==='SmolLM3-3B'&&M[ROLE(PERS)]?ROLE(PERS):null;
+  $('skp').innerHTML=personaSeg('skps');
+  let hit=[];
+  const f=Canvas('skc',.6,(c,w,h)=>{
+    hit=[];
+    const k=key();
+    if(!k){c.font='12px '+MONO;c.fillStyle=COL.muted;c.textAlign='center';c.textBaseline='middle';
+      c.fillText('No spectrum for this persona yet.',w/2,h/2);return;}
+    const S=M[k],B=S.bins,d=S.d;
+    const L={l:58,r:18},top=[16,Math.round(h*.54)],bot=[Math.round(h*.65),h-50];
+    const X=r=>L.l+Math.log(r)/Math.log(d+1)*(w-L.l-L.r);
+    const Yt=v=>top[0]+(1-v)*(top[1]-top[0]);
+    const vmax=Math.max(...B.map(b=>Math.max(b.v,b.gap)))||1;
+    const Yb=v=>bot[1]-v/vmax*(bot[1]-bot[0]);
+    c.font='10px '+MONO;c.strokeStyle=COL.grid;c.lineWidth=1;c.fillStyle=COL.muted;
+    [0,.25,.5,.75,1].forEach(v=>{c.beginPath();c.moveTo(L.l,Yt(v)+.5);c.lineTo(w-L.r,Yt(v)+.5);c.stroke();c.textAlign='right';c.textBaseline='middle';c.fillText(pct(v),L.l-6,Yt(v));});
+    c.textAlign='left';c.textBaseline='top';c.fillText('kept by the conceptor',L.l+4,2);
+    c.setLineDash([6,4]);c.strokeStyle=COL.assist;c.lineWidth=1.6;c.beginPath();c.moveTo(L.l,Yt(1));c.lineTo(w-L.r,Yt(1));c.stroke();c.setLineDash([]);
+    text(c,'cap: every direction kept',w-L.r-4,Yt(1)+12,{size:10,align:'right',color:COL.ink});
+    c.strokeStyle=COL.pirate;c.lineWidth=2.4;c.beginPath();
+    B.forEach((b,i)=>{const x0=X(b.lo),x1=X(b.hi+1);i?c.lineTo(x0,Yt(b.keep)):c.moveTo(x0,Yt(b.keep));c.lineTo(x1,Yt(b.keep));});c.stroke();
+    c.strokeStyle=COL.grid;c.beginPath();c.moveTo(L.l,bot[1]+.5);c.lineTo(w-L.r,bot[1]+.5);c.stroke();
+    B.forEach(b=>{const x0=X(b.lo)+1,x1=X(b.hi+1)-1,wd=Math.max(1,(x1-x0)/2-.5);
+      c.fillStyle=rgba(COL.muted,.55);c.fillRect(x0,Yb(b.gap),wd,bot[1]-Yb(b.gap));
+      c.fillStyle=COL.orange;c.fillRect(x0+wd,Yb(b.v),wd,bot[1]-Yb(b.v));
+      hit.push({x0:X(b.lo),x1:X(b.hi+1),b});});
+    [1,10,100,1000].filter(r=>r<=d).forEach(r=>{c.fillStyle=COL.muted;c.textAlign='center';c.textBaseline='top';c.fillText(String(r),X(r),h-46);});
+    c.textAlign='right';c.textBaseline='bottom';c.fillText('eigen-direction rank of the persona token cloud (log) →',w-L.r,h-1);
+    text(c,'where it lies: grey = assistant gap, orange = persona direction',L.l+4,bot[0]-8,{size:10,color:COL.ink});
+  });
+  hoverable($('skc'),(px,py,e)=>{const t=hit.find(q=>px>=q.x0&&px<q.x1);if(!t){hideTip();return;}const b=t.b;
+    showTip('<div class="tv">directions '+b.lo+(b.hi>b.lo?'-'+b.hi:'')+'</div><div class="row"><span class="tl">kept by the conceptor</span>&nbsp;<b>'+pct(b.keep)+'</b></div>'+
+      '<div class="row"><span class="tl">share of the persona direction</span>&nbsp;<b>'+(100*b.v).toFixed(1)+'%</b></div>'+
+      '<div class="row"><span class="tl">share of the assistant gap</span>&nbsp;<b>'+(100*b.gap).toFixed(1)+'%</b></div>',e.clientX,e.clientY);},()=>hideTip());
+  function info(){
+    const k=key();
+    if(!k){$('skr').innerHTML='';$('skn').textContent='Spectra so far: SmolLM3 pirate, ghost, bard, consultant.';return;}
+    const S=M[k];
+    rows($('skr'),[['kept along the persona axis',pct(S.keep_along_vhat)],['assistant-gap energy kept',pct(S.gap_energy_kept)],
+      ['gap energy in directions kept < 50%',pct(S.gap_share_in_directions_kept_below_half)],
+      ['directions kept > 90% / < 10%',S.n_kept_above_090+' / '+S.n_kept_below_010+' of '+S.d]]);
+    $('skn').textContent='SmolLM3-3B, '+k+': per-token cloud of '+S.n_tokens.toLocaleString()+' tokens at layer 17, aperture '+S.aperture.toPrecision(3)+'.';
+  }
+  personaHooks.push(()=>{f.draw();info();});
+  info();
+})();
+
 /* ---------- judges slide ---------- */
 (function(){
   if(!$('s14t'))return;

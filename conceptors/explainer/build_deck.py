@@ -149,6 +149,8 @@ def main():
     personas = {p: persona_data(spec) for p, spec in cfg["personas"].items()}
     results = dict(personas=personas, default_persona=cfg.get("default_persona", next(iter(personas))),
                    calib={j: calib_for(pathlib.Path(p)) for j, p in cfg.get("calib", {}).items()})
+    if cfg.get("mechanism") and pathlib.Path(cfg["mechanism"]).exists():  # conceptor_spectrum.py output
+        results["mechanism"] = json.loads(pathlib.Path(cfg["mechanism"]).read_text())
 
     style = re.search(r"<style>(.*?)</style>", (HERE / "src/head.html").read_text(), re.S).group(1)
     body = (HERE / "src/body.html").read_text()
