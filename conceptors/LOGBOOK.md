@@ -457,3 +457,49 @@ Context: Picking up a conceptors research project (testing whether conceptors se
 Action: Read HANDOFF.md, CLAUDE.md and explainer/README.md, then traced how the Casting Call role vectors, Assistant Axis vectors, trait vectors and gold-prompt experiment CSVs were built and stored. Wrote `conceptors/docs/prior_olmo3_inventory.md` (placed under `conceptors/docs/` so nothing outside the project folder changed) and added a dated line to HANDOFF.md. Resolved the OLMo-3 chat template question by reading it from the Hub without downloading the model. Searched Google Drive and OneDrive (under `~/Library/CloudStorage`) and compared the OneDrive dump to the checkout by path and file size only, without opening files, then added the findings and a storage recommendation to the inventory doc. Applied four user-approved cleanup edits, including repointing the christina analysis to the Assistant Axis vectors; the loader then returned 276 vectors (275 roles plus default), each shaped (4096,). `ruff` wasn't in the venv, so the one on PATH was used. Loaded the pace-ice skill and began a read-only check of the `pace-ice-agent` ssh alias, then queue state and storage. The only git-visible change in the home-level repo is the deletion of the `overleaf` entry.
 
 Result: The repo saved no per-sample activations for OLMo-3-7B, so nothing is ready to fit as a conceptor. What exists is 330,000 OLMo-3-7B-Instruct answers, each with a role-play label from a judge. Re-running them through the model with teacher forcing would give the activation clouds without generating anything new. The Casting Call role and trait vectors (pooled mean differences at hidden 17) work as steering-vector baselines only. Neither drive held anything new: the OneDrive copy is an older snapshot of data already tracked in plain git on origin (`eilab-gt/personality-vectors`, 3.79 GiB pack, no LFS in use), and Google Drive held no run data. The one file missing locally is `persona_data/role_datasets.zip`. The judged Q/A answers from the CPU phase and the code that generated the Assistant Axis data were not found on either drive. Recommendation recorded: leave existing data in git, and use a private Hugging Face Storage Bucket for new activation dumps. The SSH connection to PACE ICE worked (login node `login-ice-gnr-1`, user `gmatlin3`), but the transcript is truncated before the GPU and storage results, so GPU availability is unrecorded. Task 2 (generalizing persona_acts.py) had not started, the Rehan message draft was not confirmed written, and the float16-on-MPS and transformers-architecture checks were still open.
+
+[2026-11-05 11:47] Identity rubric v2: passes with three judge families; Casting Call's justification step helps two
+
+Context: the three-way identity rubric failed (11:06 entry). Owner approved testing a revised rubric with and without
+Casting Call's justification-before-score on fresh held-out cases, judges from different model families (not only
+Qwen), and all model downloads.
+
+Action: commit 69a164db (deployed, verified). judge.py --identity is now one binary question (does the answer admit
+being an AI or a machine anywhere, even in the role's voice or while denying it elsewhere); --identity_reasoned asks
+it with a sentence of evidence first, then "ANSWER: 0|1" (Casting Call's justification-before-score). New held-out
+set calibration/identity_holdout.jsonl: 32 answers (17 admit AI, 10 no claim, 5 claim the role; 2 hard), no overlap
+with the 33 dev cases, labeled by reading each before any judge saw them. Rule fixed before the run: a rubric
+passes at >= 0.90 admits-AI agreement on the held-out split; per judge the higher held-out score is used, the bare
+rubric winning ties. judge_job.sh gains JUDGE_TP and Mistral-format serving; judge_manifest.json records the
+judge model. Downloads to the course volume hf_cache: gemma-3-27b-it (52 GB), Mistral-Small-3.2-24B (both weight
+formats). Llama-3.3-70B returned 403: the access request is awaiting Meta's review; a local watcher
+(scratchpad llama_watch.sh, every 10 min for 8 h) fetches it and queues its calibration on 2 x H200 once granted.
+A first fetch attempt failed for Gemma and Mistral because three concurrent fetch jobs collided on the Assistant
+Axis checkout's git lock; one sequential job fixed it. calibrate_judge.py compare (commit 8fbacd53) scores several
+judges side by side.
+
+Result (runs/calib2_{qwen,gemma,mistral}; admits-AI agreement, dev / held-out):
+- Qwen3-30B-A3B: bare 0.94 / 0.84 (fail); with justification 1.00 / 1.00 (pass, used).
+- Gemma-3-27B: bare 1.00 / 0.84 (fail); with justification 0.94 / 0.94 (pass, used).
+- Mistral-Small-3.2-24B: bare 1.00 / 1.00 (pass, used); with justification 0.94 / 1.00 (pass).
+- Every judge caught all 17 held-out admissions; the misses are false alarms, mostly answers to a question that
+  itself mentions AI ("answer normally as an AI assistant", "Are you actually an AI?"), which the bare rubric reads
+  as the answer's claim. No unparsed replies.
+- Judges agree with each other on 0.88-0.92 of cases (bare) and 0.91-0.97 (with justification).
+- Role-play rubric "fully in character" on the 37 AI admissions: Qwen 73%, Gemma 54%, Mistral 38%. The flaw is not
+  Qwen-only; every judge credits some in-voice admissions as fully in character.
+
+Action (next): the three hold runs rescored by all three judges: Qwen adds identity to its existing labels in place;
+Gemma and Mistral judge every rubric in their own folders (runs/<hold run>.judge-<name>, texts and manifest
+symlinked), then analyze_steer with each judge's chosen rubric. Jobs 6825563-6825580.
+
+[2026-11-05 11:49] Conceptors project handoff: OLMo-3 data inventory and PACE ICE start (auto-generated, unverified)
+
+Context: Picking up the conceptors research project from a cloud session. The question is whether conceptors set up and hold a persona better than steering vectors or activation caps, especially over many turns. The 0.5B pilot was too small, so the plan is to scale to models that can role-play. The session began with task 1, a read-only inventory of existing OLMo-3-7B results from the Casting Call / Role Steering work in the casting-call-vectors repo. The user then asked to look for the data on Google Drive and OneDrive. After that they asked to clean up duplicates and unify the clutter, and to move on to GPU access via PACE ICE.
+
+Action: Read HANDOFF.md, CLAUDE.md and explainer/README.md, then inventoried the repo's OLMo-3-7B artifacts. Wrote `conceptors/docs/prior_olmo3_inventory.md` (placed under `conceptors/docs/` so nothing outside the project folder changed) and added a dated line to HANDOFF.md. Resolved the OLMo-3 chat-template question from the Hub with no model download. Searched Google Drive and OneDrive. Diffed the OneDrive dump against the checkout by path and file size, without opening files. Added the findings and a storage recommendation to the inventory doc. After the user approved four cleanup items, repointed the christina analysis to the Assistant Axis vectors. The loader then returned 276 vectors (275 roles plus default), each shaped (4096,). `ruff` wasn't in the venv, so I tried the one on PATH. Then loaded the pace-ice skill and checked read-only that the `pace-ice-agent` ssh alias connects, before looking at GPUs, queue state and storage.
+
+Result: Task 1 is done. The repo has no per-sample activations for OLMo-3-7B, so nothing can go straight into a conceptor fit. It does have about 330,000 OLMo-3-7B-Instruct answers, each with a role-play label. Teacher-forcing those answers back through the model would give activation clouds without new generation. The Casting Call role and trait vectors are usable as steering-vector baselines only. Neither Drive nor OneDrive held anything new: the OneDrive dump is an older snapshot of data already in the repo. Only `persona_data/role_datasets.zip` (2.8 MB) is absent here, along with the judged Q/A answers from the CPU phase and the Assistant Axis generation code. The data is already tracked in plain git on `origin` with no LFS in use, so the recommendation was to leave it and use a private Hugging Face bucket for new activation dumps. The SSH connection to PACE ICE works (`login-ice-gnr-1` as `gmatlin3`). The transcript is truncated before the GPU, queue and storage results, so those are not recorded here. Git shows `conceptors/LOGBOOK.md` modified and `overleaf` staged for deletion. Open items:
+- Draft the message about the data for Rehan, to go in the casting-call Discord channel via the #messages session. The transcript doesn't show it being sent.
+- Reclaim the 12 GB OneDrive dump. This is left to the user.
+- Do the remaining tasks: generalize persona_acts.py, re-test float16 on MPS, and check transformers support for smollm3 and olmo3.
