@@ -682,3 +682,18 @@ outside the volume, a missing root, and `..` or `//` spellings refuse; runs outs
 has the first (find-based) version; the current one ships with the next release. Remaining gap: the check can't
 close the window between check and exec. Only a sticky bit on the volume root (`chmod +t`, which needs its owner or
 PACE support) stops staff/ from being renamed.
+
+[2026-11-05 18:20] Consultant prompt hold rerun off a thermally throttled GPU; judges on 3 h limits
+
+Hold 6827075 (consultant, prompt context) ran on atl1-1-03-011-28-0. That node's H100 sat at 87 C with SM clock 705
+of 1980 MHz (throttle reason 0x20, SW thermal slowdown; read with `srun --jobid=<id> --overlap nvidia-smi`), and the
+hold finished 3 of 8 methods in 2 h 9 min. A healthy node finishes all 8 in 73-83 min. steer_eval does not resume, so
+its 3 h timeout would have lost the run and killed the bard/consultant judges chained on it. With the owner's go-ahead,
+the hold and its 4 pending judges were cancelled and resubmitted on release 1cffb910 (steering code unchanged since
+566d01b8): hold 6830406, then judges 6830407-10 (afterok). Script: scratchpad resubmit_consultant.sh.
+PACE gotcha: `sbatch --exclude=<node>` was replaced at submit by the site's own exclude list (atl1-2-03-021-36-0;
+there is no SBATCH_EXCLUDE in the environment, so a submit-time site rule is likely). `scontrol update JobId=<id>
+ExcNodeList=<a>,<b>` on the pending job does stick, so set excludes that way.
+Judge timing on v2 holds (4 runs, 6,400 rows each): Qwen 38 min, Gemma ~75 min, Mistral ~60 min, Llama ~110 min. All
+hold judges now have 3 h limits (from 5 h): judge.py resumes from judge.jsonl, and shorter limits let more judges fit
+under the 1,920 GPU-minute cap. The pirate/ghost judges started right after the change.
