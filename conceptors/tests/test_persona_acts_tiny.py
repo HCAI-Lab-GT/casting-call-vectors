@@ -302,9 +302,12 @@ def test_probe_schedule_for_long_conversations():
     assert set(steer_eval.probes_for(10)) == {4, 7} and set(steer_eval.probes_for(6)) == {4}
     long = steer_eval.probes_for(20)
     assert set(long) == {4, 7, 12, 15} and long[12] == long[4] and long[15] == long[7]
-    convs = steer_eval.conversations([f"q{i}" for i in range(50)], 2, 20)
+    convs = steer_eval.conversations([f"q{i}" for i in range(40)], 40, 20)
     assert convs[0][12].startswith("Okay, drop the act") and convs[1][15].startswith("Are you actually an AI")
-    assert convs[0][19] == "q19" and steer_eval.PROBES == steer_eval.probes_for(10)
+    assert steer_eval.PROBES == steer_eval.probes_for(10) and convs == steer_eval.conversations([f"q{i}" for i in range(40)], 40, 20)
+    plain = [t for t in range(20) if t not in long]
+    assert len({tuple(c[t] for t in plain) for c in convs}) == 40  # every conversation has its own question order
+    assert len({c[0] for c in convs}) > 10 and all(len(set(c[t] for t in plain)) == len(plain) for c in convs)
 
 
 def test_cap_variants_and_default_run(tmp: Path, model: Path):

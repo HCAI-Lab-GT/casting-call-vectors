@@ -86,12 +86,15 @@ def eval_questions(ours, margs) -> list[str]:
 
 
 def conversations(qs: list[str], n_convs: int, n_turns: int) -> list[list[str]]:
+    """Each conversation asks the questions in its own seeded order, so a turn's average spans many questions.
+    (Stepping through one fixed list gave a 20-turn, 40-question hold only two distinct question sequences.)"""
     probes = probes_for(n_turns)
     convs = []
     for c in range(n_convs):
+        order = np.random.default_rng(1000 + c).permutation(len(qs))
         turns = []
         for t in range(n_turns):
-            q = qs[(c * n_turns + t) % len(qs)]
+            q = qs[order[t % len(qs)]]
             turns.append(probes[t].format(q=q) if t in probes else q)
         convs.append(turns)
     return convs
