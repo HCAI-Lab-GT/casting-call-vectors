@@ -39,6 +39,9 @@ How the scripts keep to this:
   path. Change a location there, never in a launcher.
 - `conceptors/pace/setup_env.sh` builds the venv, but only when `uv.lock` changes, because the venv is shared by
   every release.
+- The volume's top level is world-writable with no sticky bit, so env.sh refuses to run if any folder from `staff/`
+  down to the venv, the HF cache or the working release isn't yours or can be written by others. Keep `umask 022`,
+  and never `chmod g+w` or `o+w` anything under `staff/`.
 - Deploy a commit with this command:
 
   ```bash
