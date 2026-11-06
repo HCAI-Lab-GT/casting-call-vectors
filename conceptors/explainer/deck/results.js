@@ -4,7 +4,8 @@ if(DK.texts)for(const pd of Object.values(DK.personas))for(const rows of Object.
   for(const e of h.examples){if(typeof e.q==='number')e.q=DK.texts[e.q];if(typeof e.a==='number')e.a=DK.texts[e.a];}
 const PERSONAS=Object.keys(DK.personas);
 const PNAME=p=>(DK.personas[p]&&DK.personas[p].label)||p.charAt(0).toUpperCase()+p.slice(1);
-const ROLE=p=>p.replace(/^[a-z0-9]+_/,'');  /* 'olmo_pirate' -> 'pirate' */
+const ROLE=p=>DK.personas[p]&&DK.personas[p].group?'persona':p.replace(/^[a-z0-9]+_/,'');  /* 'olmo_pirate' -> 'pirate' */
+const EXROLE=p=>DK.personas[p]&&DK.personas[p].group?ROLE(DK.personas[p].group[0]):ROLE(p);  /* whose conversations a slide shows */
 const MODEL=p=>(DK.personas[p]&&DK.personas[p].model)||'SmolLM3-3B';
 let PERS=DK.default_persona in DK.personas?DK.default_persona:PERSONAS[0];
 const PD=()=>DK.personas[PERS];
@@ -45,6 +46,34 @@ const holdRowP=(p,j,ctx,m)=>((DK.personas[p]||{hold:{}}).hold[j]||[]).find(h=>h.
 const holdRow=(j,ctx,m)=>holdRowP(PERS,j,ctx,m);
 const turnValP=(p,j,ctx,m,t,key)=>{const h=holdRowP(p,j,ctx,m);if(!h)return null;const q=h.per_turn.find(x=>x.turn===t-1);return q?q[key]:null;};
 const turnVal=(j,ctx,m,t,key)=>turnValP(PERS,j,ctx,m,t,key);
+/* "All SmolLM3" and "All OLMo": each judge's hold rows and the one-turn sweep averaged over that model's personas, so every
+   persona switch can show the model-wide average. A cell joins only when every persona has it; the conversations a slide
+   shows come from the model's first persona, and a hold strength is marked only where every persona picked the same one. */
+(function(){
+  const avg=objs=>{const o={};for(const k of Object.keys(objs[0])){const vs=objs.map(x=>x[k]);
+    o[k]=k!=='turn'&&typeof vs[0]==='number'?mean(vs):vs[0];}return o;};
+  const groups=[['all_smol','All Smol','SmolLM3-3B',PERSONAS.filter(p=>!DK.personas[p].model)],
+    ['all_olmo','All OLMo','OLMo-3-7B',PERSONAS.filter(p=>DK.personas[p].model==='OLMo-3-7B')]];
+  for(const [key,label,model,ms] of groups){
+    if(ms.length<2)continue;
+    const hold={};
+    for(const j of JALL){
+      const cells=new Set();ms.forEach(p=>(DK.personas[p].hold[j]||[]).forEach(h=>cells.add(h.context+'|'+h.method)));
+      const rows=[];
+      for(const c of cells){const [ctx,m]=c.split('|'),hs=ms.map(p=>holdRowP(p,j,ctx,m));if(hs.some(h=>!h))continue;
+        const nt=Math.min(...hs.map(h=>h.per_turn.length));
+        rows.push({context:ctx,method:m,strength:null,per_turn:Array.from({length:nt},(_,i)=>avg(hs.map(h=>h.per_turn[i]))),
+          ordinary:avg(hs.map(h=>h.ordinary)),examples:hs[0].examples});}
+      if(rows.length)hold[j]=rows;}
+    const sw={};ms.forEach(p=>(DK.personas[p].sweep||[]).forEach(r=>{const k=r.method+'|'+r.strength;(sw[k]=sw[k]||[]).push(r);}));
+    const sweep=Object.values(sw).filter(rs=>rs.length===ms.length)
+      .map(rs=>({...avg(rs.map(({examples,...r})=>r)),examples:rs[0].examples}));
+    const selected={};Object.keys(DK.personas[ms[0]].selected||{}).forEach(m=>{const ss=ms.map(p=>(DK.personas[p].selected||{})[m]);
+      if(ss.every(s=>s&&s.strength===ss[0].strength))selected[m]={strength:ss[0].strength};});
+    DK.personas[key]={hold,sweep,selected,floors:{},fits:{},n_turns:DK.personas[ms[0]].n_turns,label,model,group:ms};
+    PERSONAS.push(key);}
+})();
+const REAL=PERSONAS.filter(q=>!DK.personas[q].group);  /* the personas themselves, for anything that averages or counts them */
 const NT=()=>PD().n_turns||10;
 const XS=()=>Array.from({length:NT()},(_,i)=>i+1);
 const probesNow=ctx=>{const j=JUDGES()[0],rows=j?(PD().hold[j]||[]):[];const h=rows.find(r=>r.context===(ctx||'prompt'))||rows[0];
@@ -90,7 +119,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-persona] b
       const good=e.label==='fully',ai=e.identity==='ai';
       return '<span class="pill '+(good?'good':'bad')+'">'+JSHORT[j]+': '+esc(e.label||'–')+'</span>'+(e.identity?'<span class="pill'+(ai?' bad':'')+'">'+JSHORT[j]+': '+(ai?'admits AI':'no AI claim')+'</span>':'');}).join('');
     $('s2chat').innerHTML='<div class="msg user"><span class="who">User · turn '+turn+(PROBE_KIND[turn]&&probesNow().includes(turn)?' · probe':'')+'</span>'+esc(base.q)+'</div>'+
-      '<div class="msg bot"><span class="who">'+esc(MODEL(PERS))+', '+esc(ROLE(PERS))+' prompt, no steering</span>'+esc(base.a)+(base.a.length>=500?' …':'')+'</div>'+
+      '<div class="msg bot"><span class="who">'+esc(MODEL(PERS))+', '+esc(EXROLE(PERS))+' prompt, no steering'+(PD().group?' (one example; curves are the average)':'')+'</span>'+esc(base.a)+(base.a.length>=500?' …':'')+'</div>'+
       '<div class="pills">'+pills+'</div>';
   }
   const ch=LineChart('s2line',{aspect:.56,ml:64,mr:24,xs:XS,yRange:()=>[0,1],yTicks:()=>[0,.5,1],yFmt:pct,xFmt:String,
@@ -440,18 +469,18 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
 
 /* ---------- takeaway numbers, filled from the data (persona 'all' = mean over the main model's personas, judges always
    averaged; a second model's personas, which carry a "model" label, never mix into the headline means) ---------- */
-const MAIN=PERSONAS.filter(q=>!DK.personas[q].model);
+const MAIN=REAL.filter(q=>!DK.personas[q].model);
 const statFor=(p,ctx,m,where,key)=>mean(JUDGES_OF(p).map(j=>{const h=holdRowP(p,j,ctx,m);if(!h)return null;
   if(where==='ordinary')return h.ordinary[key];return turnValP(p,j,ctx,m,+where.slice(1),key);}));
 /* who: 'all' (the main model's personas), 'm:<model>' (one model's personas, e.g. m:OLMo-3-7B) or a persona */
-const GROUP=w=>w==='all'?MAIN:w.startsWith('m:')?PERSONAS.filter(q=>MODEL(q)===w.slice(2)):null;
+const GROUP=w=>w==='all'?MAIN:w.startsWith('m:')?REAL.filter(q=>MODEL(q)===w.slice(2)):null;
 function fillStats(){
   document.querySelectorAll('[data-stat]').forEach(el=>{
     const p=el.dataset.stat.split('|');let v=null;const asNum=p[p.length-1]==='num';
     if(p[0]==='njudges'){const n=JUDGES().length;el.textContent=['zero','one','two','three','four','five'][n]||String(n);return;}
     if(p[0]==='npersonas'){el.textContent=String(MAIN.length);return;}
     if(p[0]==='othermodels'){  /* " · OLMo-3-7B · 3 personas" for each extra model */
-      const by={};PERSONAS.filter(q=>DK.personas[q].model).forEach(q=>{const m=DK.personas[q].model;by[m]=(by[m]||0)+1;});
+      const by={};REAL.filter(q=>DK.personas[q].model).forEach(q=>{const m=DK.personas[q].model;by[m]=(by[m]||0)+1;});
       el.textContent=Object.entries(by).map(([m,n])=>' · '+m+' · '+n+' persona'+(n>1?'s':'')).join('');return;}
     if(p[0]==='sweepsel'){  /* sweepsel|method|key: at each persona's selected strength, mean over personas */
       v=mean(MAIN.map(q=>{const d=DK.personas[q],s=d.selected&&d.selected[p[1]]&&d.selected[p[1]].strength;
@@ -477,7 +506,7 @@ fillStats();
   const XSa=()=>AP.map(a=>Math.log10(a[0]));
   const hasAp=p=>JUDGES_OF(p).some(j=>(DK.personas[p].hold[j]||[]).some(h=>h.context==='prompt'&&h.method==='ctok_k3'));
   let view='persona';
-  const who=()=>(view==='persona'?[PERS]:view==='smol'?GROUP('all'):GROUP('m:OLMo-3-7B')).filter(hasAp);
+  const who=()=>(view==='persona'?(PD().group||[PERS]):view==='smol'?GROUP('all'):GROUP('m:OLMo-3-7B')).filter(hasAp);
   const val=(m,where,key)=>{const ps=who();if(!ps.length)return null;
     return mean(ps.map(p=>where==='push'?mean([statFor(p,'prompt',m,'t5',key),statFor(p,'prompt',m,'t13',key)]):statFor(p,'prompt',m,where,key)));};
   const kFmt=x=>'×'+Math.round(Math.pow(10,x));
