@@ -4,7 +4,8 @@ For every method a hold ran, rebuild the exact operator that ran (the hold's own
 replayed unsteered hold tokens, and score it with persona_screen's readouts. Then compare with what the four judges saw
 in that method's hold (prompt context): in-character rate on ordinary turns, coherence, holding at the "drop the act"
 pushes, and AI admissions at the "are you an AI?" probes. If the screen's numbers track the holds across methods and
-personas, its ranking of operators that never ran (fisher_cap, region, gated_ot, ...) is worth acting on.
+personas, its ranking of operators that never ran (fisher_cap, region, gated_ot, ...) is worth acting on; once
+fisher_cap and region have run (steer_hold_screen_<p>), their rows are the out-of-sample test of that ranking.
 
 cap_aa is skipped: it acts on six later layers, which a single-layer replay cannot reproduce.
 
@@ -30,7 +31,7 @@ def parse(argv=None):
     ap.add_argument("--replay", required=True)
     ap.add_argument("--data", required=True, help="folder with hold runs (fits.npz, manifest.json, texts.jsonl) and "
                                                    "their .judge-<name> folders")
-    ap.add_argument("--holds", nargs="+", default=["steer_hold_v2_{p}_prompt", "steer_hold_v3_{p}"],
+    ap.add_argument("--holds", nargs="+", default=["steer_hold_v2_{p}_prompt", "steer_hold_v3_{p}", "steer_hold_screen_{p}"],
                     help="hold run name patterns, {p} = persona")
     ap.add_argument("--personas", default=",".join(ps.PERSONAS))
     ap.add_argument("--out", required=True)
@@ -74,6 +75,24 @@ def deployed_operator(fits, method, strength):
         return lambda H: (cap(H + strength * v, CAP_HOLD_PCT)[0], ones(H))
     if method == "ctok_cap":
         return lambda H: (cap(concept(H, C_t, 1.0), strength)[0], ones(H))
+    if method == "fisher_cap":
+        w, u, tau_f = fits["fis_w"], fits["fis_push"], float(np.percentile(fits["fis_proj"], strength))
+
+        def fcap(H):
+            g = tau_f - H @ w
+            on = g > 0
+            return H + np.outer(np.where(on, g, 0), u), on
+        return fcap
+    if method == "region":
+        B, qm, Si, G = fits["reg_B"], fits["reg_qm"], fits["reg_Sq_i"], fits["reg_G"]
+        r = max(float(np.percentile(fits["reg_m"], strength)), 1e-6)
+
+        def reg(H):
+            dq = np.clip(H @ B.T - qm, 0, None)
+            m = np.sqrt(np.einsum("ij,jk,ik->i", dq, Si, dq))
+            on = m > r
+            return H + (dq * (np.where(on, r / np.maximum(m, 1e-12), 1.0)[:, None] - 1)) @ G.T, on
+        return reg
     raise ValueError(method)
 
 
@@ -140,7 +159,7 @@ def main(argv=None):
             for meth, oc in outcomes.items():
                 if meth in SKIP or (meth != "none" and meth not in ("add", "cap", "conceptor_tok", "meanshift_tok",
                                                                      "ctok_tight", "diffpull", "add_ctok", "add_cap",
-                                                                     "ctok_cap")):
+                                                                     "ctok_cap", "fisher_cap", "region")):
                     continue
                 ops[meth] = [(f"deployed {oc['strength']:g}", deployed_operator(fits, meth, oc["strength"]))]
             rows, _ = ps.evaluate(F, T, ops, probes)

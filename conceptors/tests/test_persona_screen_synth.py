@@ -114,6 +114,28 @@ def test_region_identity_tokens_and_fit(tmp: Path):
     assert g["n_identity_ai"] == len(Tai) and g["n_identity_role"] == len(Trole)
 
 
+def test_validation_operators_match_the_hooks():
+    import persona_acts
+    import steering
+    import torch
+    import validate_screen
+
+    rng = np.random.default_rng(3)
+    Tp, Ta = rng.normal(1.0, 1.0, (500, D)), rng.normal(0.0, 1.5, (800, D))
+    Tai, Trole = rng.normal(0, 1, (200, D)) + 2 * np.eye(D)[1], rng.normal(0, 1, (200, D))
+    Xp = rng.normal(1.0, 0.5, (40, D))
+    v = Tp.mean(0) - Ta.mean(0)
+    fits = {"module": 0, "v": v, "vhat": v / np.linalg.norm(v), "proj_persona": Xp @ (v / np.linalg.norm(v))}
+    fits |= steering.fisher_fit(Tp, Ta, Xp) | steering.region_fit(Tp, Ta, Tai, Trole)
+    H = rng.normal(0.5, 1.5, (64, D))
+    for method, strength in [("cap", 50), ("fisher_cap", 50), ("region", 50)]:
+        spec = steering.specs(fits, method, strength)[0]
+        hooked = persona_acts.Steer._hook(spec)(None, None, torch.tensor(H, dtype=torch.float32)).double().numpy()
+        mine, on = validate_screen.deployed_operator(fits, method, strength)(H)
+        assert 0 < on.mean() < 1, method
+        assert np.allclose(mine, hooked, atol=1e-4), method
+
+
 def test_screen(tmp: Path):
     root = tmp / "screen_synth"  # the session tmp is shared with the replay tests, which also write tmp/replay
     root.mkdir(exist_ok=True)
