@@ -719,3 +719,50 @@ Context: This session picked up a research project (conceptors vs steering vecto
 Action: Read HANDOFF.md, CLAUDE.md and the explainer README, then inventoried the repo's OLMo-3-7B artifacts. Wrote `conceptors/docs/prior_olmo3_inventory.md` (kept under `conceptors/docs/`, not the repo-root `docs/`, so nothing outside the project folder changed) and added a dated line to HANDOFF.md. Resolved the OLMo-3 chat template question from the Hub without downloading the model. Searched Google Drive (via connector) and OneDrive (under `~/Library/CloudStorage`), diffing the OneDrive dump against the checkout by path and file size without opening files, and appended findings and a storage recommendation to the inventory doc. Checked for a peer "messages" session and only found "Zotero papers". After the user approved four cleanup items, applied the cleanup edits, repointed the christina analysis to the Assistant Axis vectors (loader returns 276 vectors shaped (4096,), chemist included), and checked lint (`ruff` was not in the venv, so the one on PATH was tried). Then loaded the pace-ice skill and began read-only checks over the `pace-ice-agent` ssh alias (connected as `gmatlin3` on `login-ice-gnr-1`). PACE has no `rg`, so the check was rerun with `grep`, along with queue state and storage checks.
 
 Result: Task 1 is done. The repo has no per-sample OLMo-3-7B activations, so nothing can feed a conceptor fit directly. What it does have is about 330,000 judged OLMo-3-7B-Instruct answers (275 roles x 5 prompts x 240 questions, with a 0-3 role-play label), which can be teacher-forced to produce activation clouds. Pooled-mean vectors (Casting Call role and trait vectors at hidden 17, Assistant Axis vectors) are usable as steering-vector baselines only. Neither Google Drive nor OneDrive holds anything new: the OneDrive dump is an older snapshot of data already in git (`persona_data/` and `experiment_data/` on origin, 3.79 GiB, no LFS in use), and only `persona_data/role_datasets.zip` (2.8 MB) is missing locally. The judged CPU-phase Q/A answers and the Assistant Axis generation code were not found on either drive. Recommended leaving existing data in git and using a private Hugging Face Storage Bucket for new activation dumps, and left the 12 GB OneDrive copy untouched for the user to decide. Git shows only a staged deletion of the `overleaf` entry. The transcript is truncated, so the PACE GPU, queue and storage findings, the Rehan message, and tasks 2 onward (generalizing persona_acts.py, float16 and transformers-version checks) are not recorded here and appear unfinished.
+
+[2026-11-05 20:50] Conceptor design screen; overnight v3 run of three new designs
+
+Why: the cap beat the per-token conceptor on holding. The conceptor we built is one form (centered covariance of
+the persona's tokens, persona only, aperture fixed at the median eigenvalue, interpolation at beta <= 1, which can only
+pull toward the persona center). The published recipe (Triantafyllopoulos et al. 2026, arXiv 2605.04980) uses the
+uncentered correlation, pools both poles, sweeps the aperture, and offers Replace (beta C h, beta up to 10). Our own
+HANDOFF plan step 5 also listed a contrastive (AND NOT) and a gated conceptor that were never built. The owner asked
+to check the designs offline and run the promising ones overnight ("thinking about how we build conceptors is
+CRITICAL").
+
+Offline screen (conceptors/conceptor_variants.py, local runs/smollm3_full, hidden 18, every 5th answer held out;
+restore = share of the axis gap closed for real assistant tokens, distort = edit size on in-character tokens over
+their spread, shape = drifted tokens' off-axis spread over the persona's, 1 = normal; ranges over pirate, ghost,
+bard, consultant):
+| operator | restore | distort | shape |
+|---|---|---|---|
+| cap, 25th-50th pct | 0.75-1.15 | 0.02-0.11 | 1.00-1.03 |
+| vector c 1 | 0.94-1.02 | 0.04-0.30 (pushes in-character tokens to 1.8-2.0) | 1.00-1.03 |
+| mean-shift b 1 | 0.97-1.01 | 1.00-1.01 | 0.00 |
+| conceptor_tok (median aperture) | 0.10-0.21 | 0.25-0.28 | 0.86 |
+| conceptor_tok, aperture x10 | 0.25-0.40 | 0.54-0.55 | 0.59-0.66 |
+| uncentered Replace (persona-only or pooled), b 1.5-2 | -0.64 to +2.4 | 0.47-1.10 | 1.3-2.1 |
+| persona AND NOT assistant | 0.62-0.98 | 0.77-0.99 | 0.04-0.22 |
+| difference-subspace pull, aperture x10, b 1 | 0.96-1.01 | 0.40-0.62 | 0.66-0.83 |
+The reference rows match the 20-turn holds (cap holds with little cost; the vector overshoots; mean-shift collapses).
+The centered conceptor cannot target the axis because token variation along it is mostly content that persona and
+assistant share; AND NOT and tighter apertures restore only by collapsing, and the uncentered Replace forms rescale
+the whole residual vector. Only the conceptor on per-question differences restores like the cap without collapse,
+at more distortion than the cap.
+
+New hold methods (commit 44bb9a5b): ctok_cap (conceptor_tok at beta 1, then the cap: does the conceptor add over the
+cap?), ctok_tight (aperture x10; the screen predicts it fails), diffpull (h + b C_d (mu - h), C_d an uncentered
+conceptor at aperture x10 on per-question differences). On real data C_d keeps 1.00 of the pirate axis and 0.95 of
+the consultant's. 23 tiny-model and 7 judge tests pass.
+
+AUTHORITY 2026-11-05 20:50 goal=conceptor-variants-v3
+repo_publish:    allowed on topic branch conceptors/scale-up; default/protected: never
+slurm_submit:    allowed for the v3 chain only: SmolLM3, six personas, 6 sweeps -> 3 Qwen sweep judges -> 6 holds
+                 (both contexts) -> 12 hold judges (4 families); coe-ice H100/H200, --nice 100, prepared end to end in
+                 scratchpad launch_variants_v3.sh
+deploy:          exact-SHA releases via pace-code-release to the course-volume release root only
+delete/cleanup:  prohibited (the scratch venv, uv cache and 566d01b8 checkout wait for owner approval)
+decisions_consumed: owner chose "Offline + GPU overnight" (2026-11-05 ~20:15) for the designs the screen picks;
+                 bounded infra retries (one resubmit per job, bad nodes excluded with scontrol ExcNodeList)
+morning_list_only: final analysis and deck takeaway wording (reserved for the owner), publishing the deck, OLMo v3
+                 runs, designs beyond these three, deleting scratch leftovers
