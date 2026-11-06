@@ -208,6 +208,12 @@ def btc_parts() -> tuple[dict, str, str]:
     alt = "|".join(BTC_IDS)
     body = re.sub(rf'\b(id|for)="({alt})"', r'\1="bc-\2"', (HERE / "btc/body.html").read_text())
     js = re.sub(rf"#({alt})(['\"])", r"#bc-\1\2", (HERE / "btc/page.js").read_text())
+    # its colour tokens live on .btc here, not on :root, so its canvases must read them there or they draw in black
+    root = "getComputedStyle(document.documentElement)"
+    if js.count(root) != 1:
+        raise SystemExit(f"Beyond the Cap reads root styles {js.count(root)} times; expected the one colour loader")
+    js = js.replace(root, "getComputedStyle(document.querySelector('.btc')||document.documentElement)")
+    js = js.replace("getComputedStyle(document.body)", "getComputedStyle(document.querySelector('.btc')||document.body)")
     secs = {m.group(1): m.group(0) for m in
             re.finditer(r'<section class="(?:plate|part)[^"]*" id="([^"]+)">.*?</section>', body, re.S)}
     for m in re.finditer(r'</section>\s*(<div class="tablewrap".*?</table></div>)', body, re.S):  # tables between plates
