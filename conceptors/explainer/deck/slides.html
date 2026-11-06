@@ -2,14 +2,14 @@
   <div class="kicker">Human-Centered AI Lab · lab meeting · 6 November 2026</div>
   <h1>Can a conceptor <em>hold</em> a persona?</h1>
   <p class="lede">We test four ways to keep a model in a role: a system prompt, a steering vector, an activation cap and a conceptor. Each one faces a 20-turn conversation that keeps telling the model to drop the role. The data are real runs on SmolLM3-3B and OLMo-3-7B, scored by four judge models from four labs.</p>
-  <div class="meta"><span>SmolLM3-3B · <span data-stat="npersonas"></span> personas<span data-stat="othermodels"></span> · methods fit on 12,960 judged SmolLM3 answers</span><span>Builds on the Casting Call role-steering work</span><span>Keys: → next · ← back · G all slides</span></div>
+  <div class="meta"><span>SmolLM3-3B · <span data-stat="npersonas"></span> personas<span data-stat="othermodels"></span> · methods fit on 12,960 judged SmolLM3 answers</span><span>Builds on <a href="https://arxiv.org/abs/2608.00023" target="_blank" rel="noopener"><b>Casting Call</b></a> (Song et al. 2026)</span><span>Keys: → next · ← back · G all slides</span></div>
 </section>
 
 <section class="slide" data-title="What we'll cover" data-part="Plan">
   <header class="shead"><div class="kicker">Plan</div><h2>What we'll cover</h2></header>
   <div class="cards five">
     <div class="card"><div class="n">1</div><h3>The problem</h3><p>A system prompt sets a persona, and pushes like "drop the act" break it.</p></div>
-    <div class="card"><div class="n">2</div><h3>The math, on toy data</h3><p>How a steering vector, a cap and a conceptor each move the same activations.</p></div>
+    <div class="card"><div class="n">2</div><h3>The math, on toy data</h3><p>How a steering vector (<a href="https://arxiv.org/abs/2507.21509" target="_blank" rel="noopener"><b>Persona Vectors</b></a>), a cap (<a href="https://arxiv.org/abs/2601.10387" target="_blank" rel="noopener"><b>Assistant Axis</b></a>) and a conceptor (<a href="https://arxiv.org/abs/1403.3369" target="_blank" rel="noopener"><b>Jaeger 2014</b></a>, <a href="https://arxiv.org/abs/2410.16314" target="_blank" rel="noopener"><b>Postmus &amp; Abreu 2024</b></a>, <a href="https://arxiv.org/abs/2605.04980" target="_blank" rel="noopener"><b>Triantafyllopoulos et al. 2026</b></a>) each move the same activations.</p></div>
     <div class="card"><div class="n">3</div><h3>Setting a persona</h3><p>Which methods can create a persona with no prompt, on real SmolLM3 activations.</p></div>
     <div class="card"><div class="n">4</div><h3>Holding a persona</h3><p>20-turn conversations on SmolLM3 and OLMo: holding, coherence, the aperture and identity.</p></div>
     <div class="card"><div class="n">5</div><h3>What we know, and what's next</h3><p>The takeaways, then the follow-ups.</p></div>
