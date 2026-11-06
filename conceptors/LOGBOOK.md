@@ -1026,3 +1026,22 @@ Context: The conceptors pilot on branch conceptors/scale-up found that, on SmolL
 Action: The session invoked the `lit-review:lit-review` skill, and the target file was `conceptors/docs/lit_review_conceptors.md`. Git shows two new untracked paths in the conceptors tree: `conceptors/docs/lit_review/` and `conceptors/docs/lit_review_conceptors.md`. Git also shows an untracked `conceptors/explainer/beyond_the_cap.html`, and a staged deletion of the `overleaf` entry. The transcript is truncated after the skill's setup steps, so the searches, paper downloads, per-paper summaries and citation verification are not visible. Nothing was committed, as instructed.
 
 Result: The review file and a supporting `lit_review/` folder exist on disk as untracked changes. I can't confirm from the visible transcript which citations were verified or what the final design-choice implications say, and the transcript doesn't show that the skill's interactive steps (confirmation, folder choice, research proposal) finished. The `beyond_the_cap.html` explainer and the `overleaf` deletion may belong to other sessions in this group, and I can't attribute them to this one. Open TODO: someone should read the written review and spot-check its citations before the findings drive the next set of variant runs (uncentered/bipolar Replace, AND NOT assistant, gated, aperture sweeps).
+
+[2026-11-06 01:15] goal=extended-turn-results: FINISHED (all four done checks pass)
+
+1. Jobs: all 38 v3 jobs COMPLETED at 00:58, counting the two resubmits (6835445 replaces 6832133, 6835502 replaces
+   6832124). On PACE every v3 hold judge folder has judge.jsonl rows equal to texts.jsonl (6,400 per SmolLM3
+   persona, 3,200 per OLMo persona) and a steer_derived.json, as do the nine v3 sweeps (1,120 each).
+2. Pull: rsync with the v2 filters widened to olmo_*_v*; all 141 paths in scratchpad deck_runs_v3.json exist locally.
+3. Deck: the strict build (no --allow-missing) first came out at 19.2 MB, over the 16 MB artifact limit. Of its
+   15.7 MB of results data, 11.4 MB was hold examples, whose 8.4 MB of question and answer text held only 1.8 MB of
+   unique strings, because all four judges carry the same answers. build_deck.py now stores each string once
+   (results.texts) and results.js expands them at load. Check: the expanded data equals the pre-change build's
+   exactly (build stamp aside). Result: explainer/lab_deck.html, 12.8 MB. In-page tests in the browser pane: deck
+   controls over all nine personas (1,242 clicks), 0 errors, 0 "not judged yet" notes, the v3 methods on 5 slides
+   each; tools/interact_inpage.js returns no errors and no missing elements. ruff findings unchanged (16 before, 16
+   after, all pre-existing).
+4. HANDOFF has a dated line. lab_deck.html is left uncommitted, like every rebuild since 8a162467; rebuild with
+   cd explainer && uv run --no-sync python build_deck.py --config <scratchpad>/deck_runs_v3.json.
+Not done, by design: final analysis, takeaway wording (the headline is still the stale pirate-only one), publishing.
+For the morning: report atl1-1-03-011-13-0 and atl1-1-03-011-28-0 (thermal throttling) to pace-support.

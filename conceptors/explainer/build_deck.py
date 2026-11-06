@@ -130,6 +130,24 @@ def persona_data(spec: dict) -> dict:
     return out
 
 
+def intern_texts(personas: dict) -> list[str]:
+    """Replace each hold example's question and answer with an index into one shared list, which results.js
+    expands at load. The four judges label the same answers, so this stores each string once instead of four times."""
+    index, texts = {}, []
+    for pd in personas.values():
+        for rows in pd["hold"].values():
+            for h in rows:
+                for e in h["examples"]:
+                    for k in ("q", "a"):
+                        s = e.get(k)
+                        if isinstance(s, str):
+                            if s not in index:
+                                index[s] = len(texts)
+                                texts.append(s)
+                            e[k] = index[s]
+    return texts
+
+
 def drop_missing(personas: dict) -> dict:
     """Keep only the run folders analyze_steer has written (for builds while judges are still landing), saying what
     was left out. A persona with no sweep and no hold left is dropped."""
@@ -174,7 +192,8 @@ def main():
 
     personas = {p: persona_data(spec) for p, spec in cfg["personas"].items()}
     default = cfg.get("default_persona")
-    results = dict(personas=personas, default_persona=default if default in personas else next(iter(personas)),
+    results = dict(personas=personas, texts=intern_texts(personas),
+                   default_persona=default if default in personas else next(iter(personas)),
                    calib={j: calib_for(pathlib.Path(p)) for j, p in cfg.get("calib", {}).items()})
     if cfg.get("mechanism") and pathlib.Path(cfg["mechanism"]).exists():  # conceptor_spectrum.py output
         results["mechanism"] = json.loads(pathlib.Path(cfg["mechanism"]).read_text())

@@ -1,5 +1,7 @@
 /* ================= Deck results slides: the problem, setting, why, holding over turns, trajectories, judges ================= */
 const DK=JSON.parse($('deck-data').textContent);
+if(DK.texts)for(const pd of Object.values(DK.personas))for(const rows of Object.values(pd.hold))for(const h of rows)
+  for(const e of h.examples){if(typeof e.q==='number')e.q=DK.texts[e.q];if(typeof e.a==='number')e.a=DK.texts[e.a];}
 const PERSONAS=Object.keys(DK.personas);
 const PNAME=p=>(DK.personas[p]&&DK.personas[p].label)||p.charAt(0).toUpperCase()+p.slice(1);
 const ROLE=p=>p.replace(/^[a-z0-9]+_/,'');  /* 'olmo_pirate' -> 'pirate' */
