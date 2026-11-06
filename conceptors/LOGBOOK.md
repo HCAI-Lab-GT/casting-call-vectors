@@ -766,3 +766,10 @@ decisions_consumed: owner chose "Offline + GPU overnight" (2026-11-05 ~20:15) fo
                  bounded infra retries (one resubmit per job, bad nodes excluded with scontrol ExcNodeList)
 morning_list_only: final analysis and deck takeaway wording (reserved for the owner), publishing the deck, OLMo v3
                  runs, designs beyond these three, deleting scratch leftovers
+
+Launched 21:30 on release 44bb9a5b (verified, trust check passes): sweeps 6832106-11 -> Qwen sweep judges 6832112
+(pirate+ghost), 6832119 (bard+consultant), 6832126 (genie+alien) -> holds 6832113/14, 6832120/21, 6832127/31 -> hold
+judges 6832115-18, 6832122-25, 6832132-35. Both fit paths work at job start: pirate (own baseline) and genie (assistant
+from smollm3_full) reached the new methods with no errors. A login-node watcher stops on the first failed, timed-out
+or killed v3 job. Deck config with the v3 runs: scratchpad deck_runs_v3.json. Morning-list item: the deck is 13.8 MB
+with OLMo, near the 16 MB artifact limit, so example answers need thinning before v3 goes in.
