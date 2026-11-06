@@ -55,6 +55,9 @@ def parse(argv=None):
     ap.add_argument("--default_role", default="assistant")
     ap.add_argument("--module", type=int, default=None, help="steering module (default n_layers // 2)")
     ap.add_argument("--default_run", default=None, help="run folder to take the default role's activations from")
+    ap.add_argument("--identity_replay", default=None,
+                    help="replay_acts.py replay of a judged hold, judge folders beside it; enables region")
+    ap.add_argument("--identity_hold", default=steering.IDENTITY_HOLD, help="that hold's run name, {p} = persona")
     ap.add_argument("--contexts", nargs="+", choices=["steer_only", "prompt"], default=["steer_only", "prompt"],
                     help="hold contexts to run (split them across jobs for long conversations)")
     ap.add_argument("--no_traj", action="store_true", help="skip the steered teacher-forced trajectory pass")
@@ -234,7 +237,9 @@ def main(argv=None):
     device = pa.pick_device(margs.device)
     t0 = time.time()
     fits = steering.fit(Path(ours.fit_run), ours.persona, ours.default_role, ours.module, ours.lowrank_k,
-                        default_run=Path(ours.default_run) if ours.default_run else None)
+                        default_run=Path(ours.default_run) if ours.default_run else None,
+                        identity_replay=Path(ours.identity_replay) if ours.identity_replay else None,
+                        identity_hold=ours.identity_hold)
     tok, model, dtype = pa.load_model(margs, device)
     if model.config.num_hidden_layers != fits["n_layers"] or model.config.hidden_size != fits["d"]:
         raise SystemExit("fit run and steered model differ in shape; fit on the same model")

@@ -346,6 +346,50 @@ def test_fisher_cap_lifts_scores_to_the_floor_along_d(tmp: Path, model: Path):
     assert torch.allclose(a, b)
 
 
+def test_region_hook_moves_outside_tokens_to_the_edge(tmp: Path, model: Path):
+    import torch
+    from transformers import AutoModelForCausalLM
+
+    import steering
+
+    rng = np.random.default_rng(2)
+    e1 = np.eye(32)[1]
+    g = steering.region_fit(rng.normal(1, 1, (500, 32)), rng.normal(0, 1, (800, 32)),
+                            rng.normal(0, 1, (200, 32)) + 2 * e1, rng.normal(0, 1, (200, 32)))
+    spec = steering.specs(dict(g, module=2), "region", 50)
+    assert len(spec) == 1 and spec[0]["mode"] == "region"
+    assert abs(spec[0]["r"] - float(np.percentile(g["reg_m"], 50))) < 1e-9
+    B, G, Si = g["reg_B"], g["reg_G"], g["reg_Sq_i"]
+    m = AutoModelForCausalLM.from_pretrained(model).eval()
+    x = torch.tensor([[5, 6, 7, 8, 9, 10, 11, 12]])
+    seen = {}
+
+    def grab(key):
+        return lambda mod, i, o: seen.update({key: (o[0] if isinstance(o, tuple) else o).clone()})
+    layer = persona_acts.layer_modules(m)[2]
+    with torch.no_grad():
+        h0 = layer.register_forward_hook(grab("before"))
+        m(input_ids=x)
+        h0.remove()
+        hb = seen["before"][0].double().numpy()
+        qm = np.median(hb @ B.T, axis=0)  # center the ellipse on these positions so some sit outside it
+        dist = lambda H: np.sqrt(np.einsum("ij,jk,ik->i", np.clip(H @ B.T - qm, 0, None), Si,
+                                           np.clip(H @ B.T - qm, 0, None)))
+        r = float(np.median(dist(hb)[dist(hb) > 0]))
+        spec[0]["qm"], spec[0]["r"] = torch.tensor(qm, dtype=torch.float32), r
+        with persona_acts.Steer(m, spec):
+            rec = layer.register_forward_hook(grab("after"))
+            m(input_ids=x)
+            rec.remove()
+    ha = seen["after"][0].double().numpy()
+    out = dist(hb) > r
+    assert out.any() and (~out).any()
+    assert np.allclose(ha[~out], hb[~out], atol=1e-5)  # inside the ellipse: untouched
+    assert np.allclose(dist(ha[out]), r, rtol=1e-3, atol=1e-4)  # outside: moved onto its edge
+    dh = ha[out] - hb[out]
+    assert np.allclose(dh, (dh @ B.T) @ G.T, rtol=1e-3, atol=1e-4)  # along G only: the smallest edit in the S metric
+
+
 def test_steer_eval_sweep_select_and_hold(tmp: Path, model: Path, roles_dir: Path, qfile: Path):
     import analyze_steer
     import steer_eval

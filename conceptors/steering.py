@@ -34,6 +34,13 @@ Methods and their strength parameter:
                 whose edit moves along d by (tau - w.h) / (w.d): the smallest change in that metric that lifts the score
                 to the floor. Floor = this percentile of the persona answers' Fisher scores. The offline screen on
                 replayed 20-turn holds (persona_screen.py) found it restores as much as the cap with less distortion
+  region        a one-sided ellipse over two scores, minus the Fisher score and an identity score w_id.h with
+                w_id = S^-1 (mean AI-admission token - mean in-role token) at a prior hold's identity probes (judge
+                consensus, >= 3 of 4, from a replay_acts.py replay of that hold; needs --identity_replay). A token
+                outside the ellipse moves back to its edge by the smallest change in the S = S_W + lam I metric, so the
+                cap's persona floor and an identity floor act together. Radius = this percentile of the persona tokens'
+                one-sided distance from their mean. The screen predicts cap-level restore at less distortion and the
+                only real move on identity, but its identity read-out shares w_id's labels, so the hold is the test
   none          no intervention
 
 Read-out: a persona score from an unsteered teacher-forced pass, projected on the persona axis at the read layer
@@ -65,11 +72,13 @@ DEFAULT_GRID = {  # widened after the first SmolLM3 sweep (5 Nov 2026): the conc
     "ctok_tight": [0.5, 0.7, 0.9, 1.0],
     "diffpull": [0.3, 0.5, 0.7, 1.0],
     "fisher_cap": [25, 50, 75, 90, 99],
+    "region": [25, 50, 75, 90, 99],
 }
 CAP_HOLD_PCT = 25  # add_cap's floor: the Assistant Axis paper caps at the 25th percentile of the role's own range
 TOKEN_METHODS = ("conceptor_tok", "meanshift_tok", "add_ctok", "ctok_cap", "ctok_tight", "diffpull")
-NEEDS = dict.fromkeys(TOKEN_METHODS, "tok_C") | {"fisher_cap": "fis_w"}  # fit key each method needs
+NEEDS = dict.fromkeys(TOKEN_METHODS, "tok_C") | {"fisher_cap": "fis_w", "region": "reg_B"}  # fit key each method needs
 FISHER_SHRINK = 0.3  # fisher_cap's ridge on S_W, x its mean eigenvalue; the screen's most common label-chosen value
+IDENTITY_HOLD = "steer_hold_v2_{p}_prompt"  # the judged hold whose identity probes give region's identity direction
 TIGHT_K = 10.0  # ctok_tight's aperture: a = TIGHT_K x the median eigenvalue (conceptor_tok uses 1)
 DIFF_K = 10.0   # diffpull's aperture on the difference cloud; the offline screen's best restore-for-distortion point
 
@@ -93,9 +102,11 @@ def cap_modules(n_layers: int, band: tuple = CAP_AA_BAND) -> list[int]:
 
 
 def fit(run_dir: Path, persona: str = "pirate", default: str = "assistant", module: int | None = None,
-        lowrank_k: int = 16, use_judge: bool = True, default_run: Path | None = None) -> dict:
+        lowrank_k: int = 16, use_judge: bool = True, default_run: Path | None = None,
+        identity_replay: Path | None = None, identity_hold: str = IDENTITY_HOLD) -> dict:
     """default_run: take the default role's answer averages from another run of the same model (e.g. a run that only
-    collected new personas), instead of from run_dir."""
+    collected new personas), instead of from run_dir. identity_replay: a replay_acts.py replay of a judged hold
+    (identity_hold, {p} = persona), with the hold's .judge-<name> folders beside it; enables region."""
     run_dir = Path(run_dir)
     z = dict(np.load(run_dir / "acts.npz"))  # load once: NpzFile decompresses on every access
     man = json.loads((run_dir / "manifest.json").read_text())
@@ -169,6 +180,10 @@ def fit(run_dir: Path, persona: str = "pirate", default: str = "assistant", modu
     Ta, _ = token_rows(Zd, mand, A, module + 1)
     if Tp is not None and Ta is not None:
         out.update(fisher_fit(Tp, Ta, Xp))
+        if identity_replay is not None:
+            hold = identity_hold.format(p=persona)
+            out.update(region_fit(Tp, Ta, *identity_tokens(Path(identity_replay), hold, module + 1)))
+            out["identity_source"] = f"{identity_replay}:{hold}"
     return out
 
 
@@ -189,12 +204,59 @@ def fisher_fit(Tp: np.ndarray, Ta: np.ndarray, Xp: np.ndarray, shrink: float = F
     """fisher_cap's trigger w, push u and floor scores, from persona tokens Tp, default tokens Ta and persona answer
     means Xp at the steering module. Minimizing (dh)^T S^-1 dh subject to w.(h + dh) = tau gives dh along S w = d,
     so the push u = d / (w.d) is the smallest edit in the S_W + lam I metric that lifts a score to its floor."""
+    d, S = within_metric(Tp, Ta, shrink)
+    w = np.linalg.solve(S, d)
+    return {"fis_w": w, "fis_push": d / float(w @ d), "fis_proj": Xp @ w, "fis_shrink": shrink,
+            "n_tokens_default": len(Ta)}
+
+
+def within_metric(Tp: np.ndarray, Ta: np.ndarray, shrink: float = FISHER_SHRINK) -> tuple[np.ndarray, np.ndarray]:
+    """d = persona minus default token mean, S = their average covariance + shrink x its mean eigenvalue x I."""
     d = Tp.mean(0) - Ta.mean(0)
     Yp, Ya = Tp - Tp.mean(0), Ta - Ta.mean(0)
     Sw = (Yp.T @ Yp / len(Tp) + Ya.T @ Ya / len(Ta)) / 2
-    w = np.linalg.solve(Sw + shrink * np.trace(Sw) / len(d) * np.eye(len(d)), d)
-    return {"fis_w": w, "fis_push": d / float(w @ d), "fis_proj": Xp @ w, "fis_shrink": shrink,
-            "n_tokens_default": len(Ta)}
+    return d, Sw + shrink * np.trace(Sw) / len(d) * np.eye(len(d))
+
+
+def identity_tokens(replay: Path, hold: str, hidden: int, min_tokens: int = 50,
+                    judge_root: Path | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """Tokens of a judged hold's identity-probe answers that >= 3 of 4 judges called an AI admission, and of those they
+    called in role, from a replay_acts.py replay of that hold; the judge folders sit in judge_root (default: beside the
+    replay folder, as in $CONCEPTORS_DATA/runs)."""
+    import persona_screen as ps  # lazy: pulls in sklearn
+
+    rp = ps.Replay(replay)
+    if rp.token_hidden[0] != hidden:
+        raise ValueError(f"{replay} saved tokens at hidden {rp.token_hidden[0]}, the steering module needs {hidden}")
+    labels = ps.consensus(judge_root or replay.parent, hold)
+    rows = {"ai": [], "role": []}
+    for i, r in enumerate(rp.rows):
+        if r["kind"] == "hold" and r["run"] == hold and r["probe"]:
+            ident = labels.get(r["line"], (None, None))[1]
+            if ident in rows:
+                rows[ident].append(i)
+    Tai, Trole = (rp.tokens(rows[k])[0].astype(np.float64) for k in ("ai", "role"))
+    if len(Tai) < min_tokens or len(Trole) < min_tokens:
+        raise ValueError(f"{hold}: {len(Tai)} AI-admission and {len(Trole)} in-role probe tokens, need {min_tokens} each")
+    return Tai, Trole
+
+
+def region_fit(Tp: np.ndarray, Ta: np.ndarray, Tai: np.ndarray, Trole: np.ndarray,
+               shrink: float = FISHER_SHRINK) -> dict:
+    """region's two scores B h (rows: minus the unit Fisher direction, the unit identity direction; larger = worse),
+    their mean qm and inverse covariance over the persona's tokens, G = S B^T (B S B^T)^-1 (a change dq in the scores
+    -> the smallest change in h in the S metric; B G = I), and every persona token's one-sided distance
+    sqrt(dq^T Sq_i dq), dq = max(0, B h - qm), whose percentiles set the radius."""
+    d, S = within_metric(Tp, Ta, shrink)
+    w, w_id = np.linalg.solve(S, d), np.linalg.solve(S, Tai.mean(0) - Trole.mean(0))
+    B = np.stack([-w / np.linalg.norm(w), w_id / np.linalg.norm(w_id)])
+    Q = Tp @ B.T
+    qm = Q.mean(0)
+    Sq_i = np.linalg.inv(np.cov(Q.T))
+    dev = np.clip(Q - qm, 0, None)
+    return {"reg_B": B, "reg_qm": qm, "reg_Sq_i": Sq_i, "reg_G": S @ B.T @ np.linalg.inv(B @ S @ B.T),
+            "reg_m": np.sqrt(np.einsum("ij,jk,ik->i", dev, Sq_i, dev)), "n_identity_ai": len(Tai),
+            "n_identity_role": len(Trole)}
 
 
 def token_fit(z: dict, man: dict, persona_rows: np.ndarray, hidden: int) -> dict:
@@ -248,6 +310,10 @@ def specs(fits: dict, method: str, strength: float, device: str = "cpu") -> list
     if method == "fisher_cap":
         tau = float(np.percentile(fits["fis_proj"], strength))
         return [dict(mode="cap", module=m, vhat=t(fits["fis_w"]), tau=tau, push=t(fits["fis_push"]))]
+    if method == "region":
+        r = max(float(np.percentile(fits["reg_m"], strength)), 1e-6)
+        return [dict(mode="region", module=m, B=t(fits["reg_B"]), qm=t(fits["reg_qm"]), Sq_i=t(fits["reg_Sq_i"]),
+                     G=t(fits["reg_G"]), r=r)]
     if method == "conceptor_tok":
         return [dict(mode="conceptor", module=m, beta=float(strength), mu=t(fits["tok_mu"]), C=t(fits["tok_C"]))]
     if method == "meanshift_tok":
@@ -280,7 +346,7 @@ def summary(fits: dict) -> dict:
             "n_persona_judged_fully", "source", "source_model", "source_snapshot", "conceptor_rank",
             "conceptor_aperture", "lr_delta", "lr_null_keep", "n_tokens", "tok_rows", "tok_rank", "tok_aperture",
             "steer_a0", "steer_p0", "tok_off_ref", "default_source", "n_diff", "diff_k", "tight_k", "fis_shrink",
-            "n_tokens_default")
+            "n_tokens_default", "n_identity_ai", "n_identity_role", "identity_source")
     out = {k: fits[k] for k in keep if k in fits}
     if "ml_modules" in fits:
         out["cap_aa_modules"] = [int(m_) for m_ in fits["ml_modules"]]

@@ -18,7 +18,7 @@ AA_ROLES="$AA_DIR/data/roles/instructions"
 args=()
 while [ $# -gt 0 ]; do
   case "$1" in
-    --fit_run|--out|--select_from|--default_run) args+=("$1" "$RUNS/$2"); shift 2 ;;
+    --fit_run|--out|--select_from|--default_run|--identity_replay) args+=("$1" "$RUNS/$2"); shift 2 ;;
     *) args+=("${1//@AA_ROLES/$AA_ROLES}"); shift ;;
   esac
 done

@@ -84,6 +84,36 @@ def make_data(root: Path):
     return rep, root / "judges"
 
 
+def test_region_identity_tokens_and_fit(tmp: Path):
+    import steering
+
+    root = tmp / "region_synth"
+    root.mkdir(exist_ok=True)
+    rep, judges = make_data(root)
+    Tai, Trole = steering.identity_tokens(rep, "steer_hold_v2_pirate_prompt", HID, judge_root=judges)
+    gap = Tai.mean(0) - Trole.mean(0)
+    assert len(Tai) >= 50 and len(Trole) >= 50
+    assert gap[1] > 1.5 and np.abs(np.delete(gap, 1)).max() < 0.6  # the planted identity direction, dimension 1
+    try:
+        steering.identity_tokens(rep, "steer_hold_v2_pirate_prompt", HID, min_tokens=10 ** 6, judge_root=judges)
+        raise AssertionError("expected too few identity tokens")
+    except ValueError:
+        pass
+    try:
+        steering.identity_tokens(rep, "steer_hold_v2_pirate_prompt", HID + 1, judge_root=judges)
+        raise AssertionError("expected a hidden-index mismatch")
+    except ValueError:
+        pass
+    rng = np.random.default_rng(1)
+    Tp, Ta = rng.normal(1.0, 1.0, (600, D)), rng.normal(0.0, 1.5, (900, D))
+    g = steering.region_fit(Tp, Ta, Tai, Trole)
+    assert g["reg_B"].shape == (2, D) and g["reg_G"].shape == (D, 2)
+    assert np.allclose(g["reg_B"] @ g["reg_G"], np.eye(2))  # G turns a change in the two scores into that change
+    assert np.allclose(np.linalg.norm(g["reg_B"], axis=1), 1) and (g["reg_m"] >= 0).all() and len(g["reg_m"]) == 600
+    assert (g["reg_m"] == 0).mean() < 0.5  # one-sided: only tokens on the good side of both scores sit at zero
+    assert g["n_identity_ai"] == len(Tai) and g["n_identity_role"] == len(Trole)
+
+
 def test_screen(tmp: Path):
     root = tmp / "screen_synth"  # the session tmp is shared with the replay tests, which also write tmp/replay
     root.mkdir(exist_ok=True)

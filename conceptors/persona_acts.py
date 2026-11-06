@@ -292,7 +292,8 @@ def pack_tokens(tokens):
 
 
 class Steer:
-    """Forward hooks on decoder layers. mode: add | cap | conceptor | lowrank | meanshift | pull. Every position."""
+    """Forward hooks on decoder layers. mode: add | cap | conceptor | lowrank | meanshift | pull | region. Every
+    position."""
     def __init__(self, model, specs):
         self.model, self.specs, self.handles = model, specs, []
 
@@ -334,6 +335,12 @@ class Steer:
             elif spec["mode"] == "pull":  # h + b C (mu - h): toward mu only inside C's directions (C symmetric)
                 mu, C, b = spec["mu"].to(x.device), spec["C"].to(x.device), spec["beta"]
                 x = x + b * (mu - x) @ C
+            elif spec["mode"] == "region":  # one-sided ellipse on scores q = B h; outside, h + G (dq') with |dq'| = r
+                B, qm, Si, G = (spec[k].to(x.device) for k in ("B", "qm", "Sq_i", "G"))
+                dq = (x @ B.T - qm).clamp(min=0.0)
+                m = ((dq @ Si) * dq).sum(-1).clamp(min=0.0).sqrt()
+                scale = torch.where(m > spec["r"], spec["r"] / m.clamp(min=1e-12), torch.ones_like(m))
+                x = x + (dq * (scale.unsqueeze(-1) - 1)) @ G.T
             h2 = x.to(dt)
             return (h2,) + tuple(out[1:]) if isinstance(out, tuple) else h2
         return fn
