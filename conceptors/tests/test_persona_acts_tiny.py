@@ -473,6 +473,42 @@ def test_probe_schedule_for_long_conversations():
     assert len({c[0] for c in convs}) > 10 and all(len(set(c[t] for t in plain)) == len(plain) for c in convs)
 
 
+def test_probe_sets_share_questions(tmp: Path, model: Path, roles_dir: Path, qfile: Path):
+    import steer_eval
+
+    qs = [f"q{i}" for i in range(40)]
+    std, unseen, none = (steer_eval.conversations(qs, 8, 20, s) for s in ("standard", "unseen", "none"))
+    assert steer_eval.probes_for(20, "none") == {} and set(steer_eval.probes_for(20, "unseen")) == {4, 7, 12, 15}
+    assert unseen[0][7] != std[0][7] and not unseen[0][4].startswith("Okay, drop the act")
+    plain = [t for t in range(20) if t not in steer_eval.probes_for(20)]
+    assert all(s[t] == u[t] == n[t] for s, u, n in zip(std, unseen, none, strict=True) for t in plain)  # same questions
+    assert all(n[t] in qs for n in none for t in range(20))  # no probes: every turn is an ordinary question
+    run_dir, _ = synthetic_judged_run(tmp, model, "fitrun_probes")
+    out = tmp / "steer_hold_noprobe"
+    steer_eval.main(["--model", str(model), "--device", "cpu", "--fit_run", str(run_dir), "--roles_dir", str(roles_dir),
+                     "--eval_questions", str(qfile), "--max_new_tokens", "4", "--batch_size", "8", "--stage", "hold",
+                     "--out", str(out), "--matched", '{"add": 1.0}', "--methods", "add", "--hold_convs", "1",
+                     "--hold_turns", "6", "--contexts", "prompt", "--no_traj", "--probe_set", "none"])
+    rows = [json.loads(line) for line in (out / "texts.jsonl").read_text().splitlines()]
+    man = json.loads((out / "manifest.json").read_text())
+    assert len(rows) == 2 * 6 and not any(r["probe"] for r in rows)
+    assert man["probe_set"] == "none" and man["probes"] == {}
+
+
+def test_aperture_sweep_conceptors(tmp: Path, model: Path):
+    import steering
+
+    run_dir, _ = synthetic_judged_run(tmp, model, "fitrun_aperture")
+    f = steering.fit(run_dir)
+    assert np.allclose(steering.tok_conceptor(f, 1.0), f["tok_C"], atol=1e-8)
+    assert np.allclose(steering.tok_conceptor(f, steering.TIGHT_K), f["tok_C_tight"], atol=1e-8)
+    traces = [float(np.trace(steering.tok_conceptor(f, k))) for k in (1.0, 3.0, 10.0, 30.0, 100.0)]
+    assert traces == sorted(traces, reverse=True)  # a tighter aperture keeps less of every direction
+    for m in steering.APERTURE_K:
+        (s,) = steering.specs(f, m, 0.7)
+        assert s["mode"] == "conceptor" and s["beta"] == 0.7 and tuple(s["C"].shape) == (f["d"], f["d"])
+
+
 def test_cap_variants_and_default_run(tmp: Path, model: Path):
     import torch
     from transformers import AutoModelForCausalLM

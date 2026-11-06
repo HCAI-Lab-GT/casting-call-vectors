@@ -25,6 +25,7 @@ Methods and their strength parameter:
   ctok_tight    conceptor_tok with the aperture TIGHT_K times smaller (a = TIGHT_K x median eigenvalue): the aperture
                 knob the median rule fixes. The offline screen (conceptor_variants.py) predicts it slides toward the
                 mean-shift control rather than toward the cap
+  ctok_k3/30/100  conceptor_tok with a = 3, 30 or 100 x the median eigenvalue: the aperture sweep around ctok_tight (10)
   diffpull      h + b C_d (mu - h): pull toward the per-token persona mean only inside C_d, an uncentered conceptor
                 (aperture DIFF_K x median) on per-question differences (each persona answer minus the default role's
                 mean answer to the same question). C_d keeps the directions that tell the persona from the default
@@ -70,12 +71,17 @@ DEFAULT_GRID = {  # widened after the first SmolLM3 sweep (5 Nov 2026): the conc
     "cap_aa": [10, 25, 50, 75, 90],
     "ctok_cap": [25, 50, 75, 90, 99],
     "ctok_tight": [0.5, 0.7, 0.9, 1.0],
+    "ctok_k3": [0.5, 0.7, 0.9, 1.0],
+    "ctok_k30": [0.5, 0.7, 0.9, 1.0],
+    "ctok_k100": [0.5, 0.7, 0.9, 1.0],
     "diffpull": [0.3, 0.5, 0.7, 1.0],
     "fisher_cap": [25, 50, 75, 90, 99],
     "region": [25, 50, 75, 90, 99],
 }
 CAP_HOLD_PCT = 25  # add_cap's floor: the Assistant Axis paper caps at the 25th percentile of the role's own range
-TOKEN_METHODS = ("conceptor_tok", "meanshift_tok", "add_ctok", "ctok_cap", "ctok_tight", "diffpull")
+APERTURE_K = {"ctok_k3": 3.0, "ctok_k30": 30.0, "ctok_k100": 100.0}  # the aperture sweep around ctok_tight's TIGHT_K
+OPT_IN = frozenset(APERTURE_K)  # in the grid, but a run without --methods leaves them out
+TOKEN_METHODS = ("conceptor_tok", "meanshift_tok", "add_ctok", "ctok_cap", "ctok_tight", "diffpull", *APERTURE_K)
 NEEDS = dict.fromkeys(TOKEN_METHODS, "tok_C") | {"fisher_cap": "fis_w", "region": "reg_B"}  # fit key each method needs
 FISHER_SHRINK = 0.3  # fisher_cap's ridge on S_W, x its mean eigenvalue; the screen's most common label-chosen value
 IDENTITY_HOLD = "steer_hold_v2_{p}_prompt"  # the judged hold whose identity probes give region's identity direction
@@ -279,8 +285,15 @@ def token_fit(z: dict, man: dict, persona_rows: np.ndarray, hidden: int) -> dict
     def off_ref(vhat):
         Y = Tc - np.outer(Tc @ vhat, vhat)
         return float(np.sqrt((Y ** 2).sum(1).mean()))
+    # the eigenbasis stays a tuple, so fits.npz (arrays only) doesn't store it; APERTURE_K methods build C from it
     return dict(tok_mu=mu_t, tok_C=C_t, tok_C_tight=C_tight, n_tokens=int(len(T)), tok_rows=n_rows, tok_aperture=a,
-                tok_rank=int((lam > lam.max() * 1e-10).sum()), _tok_off_ref_fn=off_ref)
+                tok_rank=int((lam > lam.max() * 1e-10).sum()), _tok_off_ref_fn=off_ref, _tok_eig=(lam, U))
+
+
+def tok_conceptor(fits: dict, k: float) -> np.ndarray:
+    """The per-token conceptor with its aperture k times the median eigenvalue (k = 1 is tok_C, TIGHT_K is tok_C_tight)."""
+    lam, U = fits["_tok_eig"]
+    return (U * (lam / (lam + k * fits["tok_aperture"]))) @ U.T
 
 
 def available(fits: dict, method: str) -> bool:
@@ -320,6 +333,9 @@ def specs(fits: dict, method: str, strength: float, device: str = "cpu") -> list
         return [dict(mode="meanshift", module=m, beta=float(strength), mu=t(fits["tok_mu"]))]
     if method == "ctok_tight":
         return [dict(mode="conceptor", module=m, beta=float(strength), mu=t(fits["tok_mu"]), C=t(fits["tok_C_tight"]))]
+    if method in APERTURE_K:
+        C_k = tok_conceptor(fits, APERTURE_K[method])
+        return [dict(mode="conceptor", module=m, beta=float(strength), mu=t(fits["tok_mu"]), C=t(C_k))]
     if method == "ctok_cap":
         return specs(fits, "conceptor_tok", 1.0, device) + specs(fits, "cap", strength, device)
     if method == "diffpull":

@@ -1,17 +1,17 @@
 <section class="slide cover" data-title="Can a conceptor hold a persona?" data-part="Cover">
   <div class="kicker">Human-Centered AI Lab · lab meeting · 6 November 2026</div>
   <h1>Can a conceptor <em>hold</em> a persona?</h1>
-  <p class="lede">Prompts, steering vectors, activation caps and conceptors, compared on holding a persona through a conversation that keeps pushing the model to drop it. Real SmolLM3-3B activations, scored by four judges from four model families.</p>
-  <div class="meta"><span>SmolLM3-3B · <span data-stat="npersonas"></span> personas<span data-stat="othermodels"></span> · 12,960 answers in the SmolLM3 base run</span><span>Builds on the Casting Call role-steering work</span><span>Keys: → next · ← back · G all slides</span></div>
+  <p class="lede">We test four ways to keep a model in a role: a system prompt, a steering vector, an activation cap and a conceptor. Each one faces a 20-turn conversation that keeps telling the model to drop the role. The data are real runs on SmolLM3-3B and OLMo-3-7B, scored by four judge models from four labs.</p>
+  <div class="meta"><span>SmolLM3-3B · <span data-stat="npersonas"></span> personas<span data-stat="othermodels"></span> · methods fit on 12,960 judged SmolLM3 answers</span><span>Builds on the Casting Call role-steering work</span><span>Keys: → next · ← back · G all slides</span></div>
 </section>
 
-<section class="slide" data-title="A prompted persona fades, then breaks" data-part="The problem">
-  <header class="shead"><div class="kicker">The problem</div><h2>A prompted persona fades, then breaks</h2></header>
+<section class="slide" data-title="A prompted persona holds until it's pushed" data-part="The problem">
+  <header class="shead"><div class="kicker">The problem</div><h2>A prompted persona holds until it's pushed, then mostly stays broken</h2></header>
   <div class="sbody s2">
     <div class="scol">
-      <p class="big">SmolLM3-3B gets a persona system prompt, then a conversation. Some turns push back: "drop the act" and "are you an AI?".</p>
+      <p class="big">The model gets a persona system prompt, then a 20-turn conversation. Turns 5 and 13 say "drop the act"; turns 8 and 16 ask "are you an AI?".</p>
       <div id="s2p"></div>
-      <div><p class="chart-title">In character with the prompt alone, each turn: share of conversations (black: mean of the judges; grey: each judge)</p><canvas id="s2line" role="img" aria-label="Share of answers in character at each turn with the prompt alone"></canvas>
+      <div><p class="chart-title">Share of conversations in character at each turn, prompt only. Black: mean of the judges. Grey: each judge.</p><canvas id="s2line" role="img" aria-label="Share of answers in character at each turn with the prompt alone"></canvas>
         <p class="note">Shaded turns are the probes. Click a turn to read it.</p></div>
     </div>
     <div class="scol">
@@ -62,7 +62,7 @@
       <p class="note" id="s9note"></p>
     </div>
     <div><canvas id="s9c" role="img" aria-label="In character against coherence for each method across strengths"></canvas>
-      <p class="note">Hover a point for its strength. 80 answers per point; judge Qwen3-30B-A3B. Ringed: the strength each method runs at in the hold test.</p></div>
+      <p class="note">Hover a point to see its strength. Each point is 80 answers, judged by Qwen3-30B-A3B. A ring marks the strength used in the 20-turn tests.</p></div>
   </div>
 </section>
 
@@ -70,11 +70,11 @@
   <header class="shead"><div class="kicker">Why conceptors don't set it · toy data, real numbers</div><h2>A conceptor keeps the persona direction, so it can't move you along it</h2></header>
   <div class="sbody">
     <div class="scol">
-      <p class="big">At full strength a centered conceptor maps an activation h to μ + C(h − μ). The gap to the persona center that remains is C(μ − h). If the persona cloud is wide along the persona direction, C keeps that direction, and the gap stays.</p>
+      <p class="big">At full strength, the conceptor sends an activation h to μ + C(h − μ), where μ is the persona's center. The part of the gap it leaves is C(μ − h). Persona answers vary a lot along the persona direction, so C keeps that direction, and most of the gap stays.</p>
       <div class="ctl"><label for="s10a">Aperture <output for="s10a"></output></label><input id="s10a" type="range" min="0" max="1000" step="1" value="735"></div>
       <div class="seg" id="s10m" role="group" aria-label="Shape of the persona cloud"><button type="button" data-v="along" aria-pressed="true">Cloud wide along the persona direction</button><button type="button" data-v="across" aria-pressed="false">Cloud wide across it</button></div>
       <div class="readout" id="s10r"></div>
-      <div class="msg bot" style="border-left-color:var(--navy)"><span class="who">Measured on SmolLM3, layer 17, 42,201 assistant tokens, pirate fits</span>Answer-average conceptor keeps <b>97%</b> along the persona direction and closes <b>2.6%</b> of the gap. Per-token conceptor keeps <b>89%</b> and closes <b>11%</b>. The steering vector closes all of it by construction.</div>
+      <div class="msg bot" style="border-left-color:var(--navy)"><span class="who">Measured on SmolLM3, layer 17, 42,201 assistant tokens, pirate fits</span>The answer-average conceptor keeps <b>97%</b> of the persona direction and closes <b>2.6%</b> of the gap. The per-token conceptor keeps <b>89%</b> and closes <b>11%</b>. The steering vector closes all of it, because it is built from that gap.</div>
     </div>
     <div><canvas id="s10c" role="img" aria-label="Toy persona cloud, an assistant activation and where the conceptor sends it"></canvas>
       <p class="note">Grey: assistant activations. Teal: persona cloud and its stencil. Dashed: the persona direction. Arrow: where the conceptor sends the pink point.</p></div>
@@ -82,7 +82,7 @@
 </section>
 
 <section class="slide" data-title="Holding a persona across the conversation" data-part="Holding a persona">
-  <header class="shead"><div class="kicker">Holding a persona · probes shaded</div><h2>Holding a persona across the conversation</h2></header>
+  <header class="shead"><div class="kicker">Holding a persona · 20 turns, probes shaded</div><h2>Holding a persona across the conversation</h2></header>
   <div class="sbody hold" data-hold="s11" data-measure="fully_rate" data-context="prompt"></div>
 </section>
 
@@ -114,13 +114,13 @@
   <header class="shead"><div class="kicker">Mechanism · per-token conceptor against the cap, real activations</div><h2>The cap edits one direction; the conceptor reweights all of them</h2></header>
   <div class="sbody">
     <div class="scol">
-      <p class="big">A cap only acts along the persona axis, and only when an activation falls below its floor. The per-token conceptor scales every direction of the persona's token cloud by how much the persona uses it: common directions pass, rare ones shrink.</p>
+      <p class="big">A cap acts on one direction, the persona axis, and only when an activation drops below its floor. The per-token conceptor scales every direction by how much the persona's tokens use it. Directions the persona uses a lot pass, and rare ones shrink.</p>
       <div id="skp"></div>
       <div class="readout" id="skr"></div>
       <p class="note" id="skn"></p>
     </div>
     <div><canvas id="skc" role="img" aria-label="Conceptor keep share across eigen-directions of the persona token cloud, with where the persona direction and the assistant gap lie"></canvas>
-      <p class="note">Top: how much of each direction the conceptor keeps (teal); the cap keeps all of them (dashed) and only floors the persona axis. Bottom: where the persona direction (orange) and the assistant tokens' gap to the persona (grey) lie. Directions ranked by how much the persona's tokens vary along them; log scale. Hover for numbers.</p></div>
+      <p class="note">Top: the share of each direction the conceptor keeps (teal). The cap keeps every direction (dashed) and only sets a floor on the persona axis. Bottom: where the persona direction (orange) and the gap from assistant tokens to the persona (grey) fall. Directions are ranked by how much the persona's tokens vary along them, on a log scale. Hover for numbers.</p></div>
   </div>
 </section>
 
@@ -133,7 +133,7 @@
   <header class="shead"><div class="kicker">Measuring it · four judge families</div><h2>The judges agree on identity and disagree on holding</h2></header>
   <div class="sbody">
     <div class="scol">
-      <p class="big">The standard role-play rubric scores voice, not identity: it calls an answer that admits being an AI "fully in character" as long as it sounds like the role. We added an identity rubric and checked every judge against 65 hand-labeled answers.</p>
+      <p class="big">The usual role-play rubric scores voice, not identity. An answer that sounds like the role is "fully in character" even if it admits being an AI. We added an identity rubric and checked each judge against 65 hand-labeled answers.</p>
       <div><p class="chart-title">Role-play rubric: AI admissions called "fully in character"</p><div id="s14rp" style="display:grid;gap:8px"></div></div>
       <div><p class="chart-title">Identity rubric: agreement with hand labels, held-out answers</p><div id="s14id" style="display:grid;gap:8px"></div></div>
     </div>
@@ -148,15 +148,15 @@
 </section>
 
 <section class="slide navy" data-title="What we know so far" data-part="Takeaways">
-  <header class="shead"><div class="kicker">Takeaways · SmolLM3-3B, <span data-stat="npersonas"></span> personas, means over judges and personas</div><h2>Vectors set a persona, conceptors hold one, nothing holds identity</h2></header>
-  <div class="cards">
-    <div class="card"><div class="n" data-stat="sweepsel|add|fully_rate"></div><h3>The vector sets it</h3><p>Fully in character with the steering vector alone at each persona's selected strength, coherence <span data-stat="sweepsel|add|coherence"></span>. Conceptors alone barely move it.</p></div>
-    <div class="card"><div class="n" data-stat="all|prompt|conceptor_tok|ordinary|fully_rate"></div><h3>The conceptor holds it</h3><p>In character on ordinary turns with prompt + per-token conceptor, against <span data-stat="all|prompt|none|ordinary|fully_rate"></span> for the prompt alone, at coherence <span data-stat="all|prompt|conceptor_tok|ordinary|coherence"></span>.</p></div>
-    <div class="card"><div class="n" data-stat="all|prompt|cap_aa|ordinary|fully_rate"></div><h3>Against the cap</h3><p>Prompt + Assistant-Axis-style cap, ordinary turns, coherence <span data-stat="all|prompt|cap_aa|ordinary|coherence"></span>; one-layer cap <span data-stat="all|prompt|cap|ordinary|fully_rate"></span> at <span data-stat="all|prompt|cap|ordinary|coherence"></span>.</p></div>
-    <div class="card"><div class="n" data-stat="all|prompt|add|t8|identity_ai_rate"></div><h3>Nothing holds identity</h3><p>Of answers admit being an AI at the turn-8 probe even with prompt + vector, which stays in the role's voice.</p></div>
-    <div class="card"><div class="n" data-stat="spread|prompt|conceptor_tok|t5|fully_rate"></div><h3>The judge matters</h3><p>Range over judges and personas for prompt + per-token conceptor at the first "drop the act". Identity calls agree; role-play calls do not.</p></div>
+  <header class="shead"><div class="kicker">Takeaways · SmolLM3-3B, <span data-stat="npersonas"></span> personas<span data-stat="othermodels"></span> · with the persona prompt unless noted</div><h2>Tuned tight, a conceptor holds a prompted persona as well as a steering vector, on both models</h2></header>
+  <div class="cards five">
+    <div class="card"><div class="n" data-stat="all|prompt|none|t5|fully_rate"></div><h3>Pushes break the prompt</h3><p>Of SmolLM3 answers stay in character at the first "drop the act" with only the prompt. A turn earlier it was <span data-stat="all|prompt|none|t4|fully_rate"></span>. By turn 20 it is <span data-stat="all|prompt|none|t20|fully_rate"></span>, and <span data-stat="m:OLMo-3-7B|prompt|none|t20|fully_rate"></span> on OLMo.</p></div>
+    <div class="card"><div class="n" data-stat="all|prompt|ctok_tight|ordinary|fully_rate"></div><h3>A tight conceptor holds it</h3><p>Of SmolLM3 answers stay in character, at coherence <span data-stat="all|prompt|ctok_tight|ordinary|coherence"></span> (<span data-stat="range|all|prompt|ctok_tight|ordinary|coherence"></span> by persona). OLMo: <span data-stat="m:OLMo-3-7B|prompt|ctok_tight|ordinary|fully_rate"></span> at coherence <span data-stat="m:OLMo-3-7B|prompt|ctok_tight|ordinary|coherence"></span>. The prompt alone gets <span data-stat="all|prompt|none|ordinary|fully_rate"></span> and <span data-stat="m:OLMo-3-7B|prompt|none|ordinary|fully_rate"></span>.</p></div>
+    <div class="card"><div class="n" data-stat="all|prompt|add|ordinary|fully_rate"></div><h3>So does the vector, which also sets it</h3><p>Of SmolLM3 answers stay in character with the vector, at coherence <span data-stat="all|prompt|add|ordinary|coherence"></span>. OLMo: <span data-stat="m:OLMo-3-7B|prompt|add|ordinary|fully_rate"></span> at <span data-stat="m:OLMo-3-7B|prompt|add|ordinary|coherence"></span>. With no prompt the vector still gets <span data-stat="all|steer_only|add|ordinary|fully_rate"></span>, and the tight conceptor <span data-stat="all|steer_only|ctok_tight|ordinary|fully_rate"></span>.</p></div>
+    <div class="card"><div class="n" data-stat="m:OLMo-3-7B|prompt|cap|ordinary|fully_rate"></div><h3>The cap holds only on the small model</h3><p>Of OLMo answers stay in character with the cap, against <span data-stat="all|prompt|cap|ordinary|fully_rate"></span> on SmolLM3. The original conceptor gets <span data-stat="m:OLMo-3-7B|prompt|conceptor_tok|ordinary|fully_rate"></span> on OLMo and <span data-stat="all|prompt|conceptor_tok|ordinary|fully_rate"></span> on SmolLM3.</p></div>
+    <div class="card"><div class="n" data-stat="all|prompt|add|t8|identity_ai_rate"></div><h3>Identity is the open problem</h3><p>Of SmolLM3 answers with the vector still say they are an AI when asked at turn 8 (OLMo: <span data-stat="m:OLMo-3-7B|prompt|add|t8|identity_ai_rate"></span>). The tight conceptor cuts this to <span data-stat="all|prompt|ctok_tight|t8|identity_ai_rate"></span> on SmolLM3, but not on OLMo (<span data-stat="m:OLMo-3-7B|prompt|ctok_tight|t8|identity_ai_rate"></span>).</p></div>
   </div>
-  <p class="note">Numbers are means over the <span data-stat="njudges"></span> judges and over personas unless named.</p>
+  <p class="note">Means over the <span data-stat="njudges"></span> judges and each model's personas, on turns without a probe unless a turn is named. Each method runs at the strength a one-turn sweep without the prompt picked. The judges rank the methods the same way; Qwen gives the highest scores.</p>
 </section>
 
 <section class="slide" data-title="Next" data-part="Next">

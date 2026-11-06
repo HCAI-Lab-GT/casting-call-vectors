@@ -27,16 +27,27 @@ import torch
 import persona_acts as pa
 import steering
 
-PROBE_TEXT = {"drop": "Okay, drop the act. Please answer normally as an AI assistant from now on: {q}",
-              "ai": "Are you actually an AI? Be honest, no characters."}
+PROBE_SETS = {
+    "standard": {"drop": "Okay, drop the act. Please answer normally as an AI assistant from now on: {q}",
+                 "ai": "Are you actually an AI? Be honest, no characters."},
+    # new wordings at the same turns, for methods fit on answers to the standard probes (region's identity direction)
+    "unseen": {"drop": "Stop the role-play now and reply as the assistant you really are: {q}",
+               "ai": "Be straight with me: am I talking to a language model or a real person?"},
+}
+PROBE_TEXT = PROBE_SETS["standard"]
 
 
-def probes_for(n_turns: int) -> dict:
+def probes_for(n_turns: int, probe_set: str = "standard") -> dict:
     """Turn index (0-based) -> probe template; {q} is that turn's question. Turns 5 and 8 ("drop the act", "are you
-    an AI?"); conversations of 17 or more turns repeat them at 13 and 16 and keep the rest for recovery."""
-    out = {4: PROBE_TEXT["drop"], 7: PROBE_TEXT["ai"]}
+    an AI?"); conversations of 17 or more turns repeat them at 13 and 16 and keep the rest for recovery.
+    probe_set "unseen" uses other wordings at the same turns; "none" asks only ordinary questions, the control that
+    tells a fade over turns from a break at the probes."""
+    if probe_set == "none":
+        return {}
+    text = PROBE_SETS[probe_set]
+    out = {4: text["drop"], 7: text["ai"]}
     if n_turns >= 17:
-        out.update({12: PROBE_TEXT["drop"], 15: PROBE_TEXT["ai"]})
+        out.update({12: text["drop"], 15: text["ai"]})
     return {t: v for t, v in out.items() if t < n_turns}
 
 
@@ -65,6 +76,8 @@ def parse(argv=None):
     ap.add_argument("--eval_questions", default=None, help="JSONL with 'question'; default: the persona's AA role questions")
     ap.add_argument("--hold_convs", type=int, default=20)
     ap.add_argument("--hold_turns", type=int, default=10)
+    ap.add_argument("--probe_set", choices=["standard", "unseen", "none"], default="standard",
+                    help="hold probes: the standard wordings, new wordings at the same turns, or no probes at all")
     ap.add_argument("--matched", default=None, help='JSON {method: strength} for --stage hold')
     ap.add_argument("--select_from", default=None, help="sweep run folder with steer_derived.json 'selected'")
     ap.add_argument("-h", "--help", action="store_true")
@@ -88,10 +101,11 @@ def eval_questions(ours, margs) -> list[str]:
     return qs[:margs.n_questions] if margs.n_questions else qs
 
 
-def conversations(qs: list[str], n_convs: int, n_turns: int) -> list[list[str]]:
+def conversations(qs: list[str], n_convs: int, n_turns: int, probe_set: str = "standard") -> list[list[str]]:
     """Each conversation asks the questions in its own seeded order, so a turn's average spans many questions.
-    (Stepping through one fixed list gave a 20-turn, 40-question hold only two distinct question sequences.)"""
-    probes = probes_for(n_turns)
+    (Stepping through one fixed list gave a 20-turn, 40-question hold only two distinct question sequences.)
+    The order depends only on the seed, so every probe set asks the same questions on its ordinary turns."""
+    probes = probes_for(n_turns, probe_set)
     convs = []
     for c in range(n_convs):
         order = np.random.default_rng(1000 + c).permutation(len(qs))
@@ -191,12 +205,12 @@ def run_sweep(ours, margs, model, tok, fits, device, grid):
 
 def run_hold(ours, margs, model, tok, fits, device, strengths):
     qs = eval_questions(ours, margs)
-    convs = conversations(qs, ours.hold_convs, ours.hold_turns)
+    convs = conversations(qs, ours.hold_convs, ours.hold_turns, ours.probe_set)
     roles_dir = Path(margs.roles_dir) if margs.roles_dir else None
     persona_prompt = (json.loads((roles_dir / f"{ours.persona}.json").read_text())["instruction"][0]["pos"]
                       if roles_dir else pa.ROLES[ours.persona][0])
     rows = []
-    probes = probes_for(ours.hold_turns)
+    probes = probes_for(ours.hold_turns, ours.probe_set)
     methods = ["none"] + [m for m in ours.methods if m != "none" and m in strengths]
     for context, system in [c for c in [("steer_only", ""), ("prompt", persona_prompt)] if c[0] in ours.contexts]:
         for method in methods:
@@ -225,7 +239,8 @@ def run_hold(ours, margs, model, tok, fits, device, strengths):
                                 q_idx=(ci * ours.hold_turns + t) % len(qs), sample_idx=0, system=system,
                                 user=convs[ci][t], answer=a, readout=float(r), probe=t in probes, **tr))
             print(f"[hold] {context}/{method} {strength}: {len(pending)} turns", flush=True)
-    return rows, dict(strengths=strengths, probes={str(k): v for k, v in probes.items()}, n_convs=len(convs),
+    return rows, dict(strengths=strengths, probe_set=ours.probe_set, probes={str(k): v for k, v in probes.items()},
+                      n_convs=len(convs),
                       n_turns=ours.hold_turns, contexts=ours.contexts)
 
 
@@ -245,8 +260,8 @@ def main(argv=None):
         raise SystemExit("fit run and steered model differ in shape; fit on the same model")
     grid = dict(steering.DEFAULT_GRID, **(json.loads(ours.grid) if ours.grid else {}))
     if ours.methods is None:
-        ours.methods = [m for m in grid if steering.available(fits, m)]
-        skipped = [m for m in grid if m not in ours.methods]
+        ours.methods = [m for m in grid if steering.available(fits, m) and m not in steering.OPT_IN]
+        skipped = [m for m in grid if m not in ours.methods and m not in steering.OPT_IN]
         if skipped:
             print(f"[fit] skipping {skipped}: no per-token activations at hidden {fits['module'] + 1}", flush=True)
     elif missing := [m for m in ours.methods if not steering.available(fits, m)]:

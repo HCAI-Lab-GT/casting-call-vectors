@@ -25,7 +25,7 @@ const METH={
   ctok_tight:['Per-token conceptor, tight aperture','con tight','pirate',[10,3]],
   diffpull:['Difference-subspace conceptor','diff-con','pirate',[4,2,1,2]]};
 const MORDER=['none','add','cap','cap_aa','add_cap','ctok_cap','conceptor_tok','ctok_tight','diffpull','add_ctok','meanshift_tok','conceptor','lowrank','meanshift'];
-const DEFAULT_ON=new Set(['none','add','cap','cap_aa','add_cap','ctok_cap','conceptor_tok','diffpull','add_ctok']);
+const DEFAULT_ON=new Set(['none','add','cap','cap_aa','ctok_cap','conceptor_tok','ctok_tight']);
 const MEASURES=[['fully_rate','In character'],['coherence','Coherence'],['identity_ai_rate','Admits being an AI']];
 const PROBE_KIND={5:'drop the act',13:'drop the act',8:'are you an AI?',16:'are you an AI?'};
 const pct=v=>v==null||!isFinite(v)?'–':Math.round(v*100)+'%';
@@ -142,8 +142,8 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-persona] b
     const rs=rows(),sel=PD().selected||{};
     const at=m=>{const s=sel[m]&&sel[m].strength;return s==null?null:rs.find(r=>r.method===m&&Math.abs(r.strength-s)<1e-9);};
     const a=at('add'),con=rs.filter(r=>r.method==='conceptor_tok').sort((x,y)=>y.strength-x.strength)[0];
-    $('s9note').textContent=(a?'Steering vector at c '+a.strength+': '+pct(a.fully_rate)+' in character at coherence '+num(a.coherence)+'. ':'')+
-      (con?'Per-token conceptor at its strongest (β '+con.strength+'): '+pct(con.fully_rate)+'.':'');
+    $('s9note').textContent=(a?'Steering vector at strength '+a.strength+': '+pct(a.fully_rate)+' in character, coherence '+num(a.coherence)+'. ':'')+
+      (con?'Per-token conceptor at its highest strength (β = '+con.strength+'): '+pct(con.fully_rate)+'.':'');
   }
   const pb=$('s9p');if(pb)pb.innerHTML=personaSeg('s9ps');
   personaHooks.push(()=>{togs();note();f.draw();});
@@ -227,7 +227,7 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
     const parts=methodsIn(st.ctx).filter(m=>st.on.has(m)).map(m=>{
       const v=st.judge==='mean'?mean(JUDGES().map(j=>{const h=holdRow(j,st.ctx,m);return h&&h.ordinary[st.measure];})):(holdRow(st.judge,st.ctx,m)||{ordinary:{}}).ordinary[st.measure];
       return METH[m][1]+' '+fmtM(st.measure,v);});
-    $(id+'n').textContent=PNAME(PERS)+', ordinary turns (no probe), '+(st.judge==='mean'?'mean of judges':JNAME[st.judge])+': '+parts.join(' · ')+'.';
+    $(id+'n').textContent=PNAME(PERS)+', turns without a probe, '+(st.judge==='mean'?'mean of the judges':JNAME[st.judge])+': '+parts.join(' · ')+'.';
     $(id+'pn').textContent=probeNote()+' Click a turn'+(st.turn?' to read conversation 1 at that turn.':' to mark it.')+' Mean: average of '+JUDGES().length+' judges.';
   }
   function redraw(){ch.f.draw();transcript();note();}
@@ -320,11 +320,11 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
         return '<div class="msg bot" style="border-left-color:'+COL[METH[m][2]]+'"><span class="who">'+esc(METH[m][0])+pos+' · '+JSHORT[j]+': '+esc(e.label||'–')+
           (e.identity?' · '+(e.identity==='ai'?'admits AI':'no AI claim'):'')+'</span>'+esc(e.a.slice(0,260))+(e.a.length>260?' …':'')+'</div>';}).join('');
     const F=PD().fits||{},band=(F.cap_aa_modules||[]).length?' (modules '+F.cap_aa_modules[0]+'–'+F.cap_aa_modules[F.cap_aa_modules.length-1]+')':'';
-    const where=readLayer()?'at the read layer (hidden '+(F.read_hidden??'?')+'), downstream of the steering layer and where the Assistant Axis cap'+band+' acts; the activation-space panel stays at the steering layer'
-      :'at the steering layer'+(F.module!=null?' (module '+F.module+')':'')+'; faint dashed = before the method\'s edit there, solid = after (the Assistant Axis cap acts later: switch to the read layer)';
-    $('stn').textContent=(st.view==='conv'?'Conversation 1 only. ':'')+(hasTraj()?MODEL(PERS)+'. Turn chart: each method\'s position on the '+ROLE(PERS)+' axis '+where+', 0 = assistant, 1 = '+ROLE(PERS)+'. '
-      :'Turn chart: unsteered read-out of each answer (0 = assistant, 1 = persona). ')+
-      'Click a turn to see that turn in activation space and read conversation 1. Labels: '+JNAME[j]+'.';
+    const where=readLayer()?'at a later layer (hidden '+(F.read_hidden??'?')+'), where the Assistant Axis cap'+band+' acts. The bottom chart stays at the steering layer.'
+      :'at the steering layer'+(F.module!=null?' (module '+F.module+')':'')+'. Dashed: before the edit. Solid: after. The Assistant Axis cap acts later; switch to the read layer to see it.';
+    $('stn').textContent=(st.view==='conv'?'Conversation 1 only. ':'')+(hasTraj()?MODEL(PERS)+'. Top: each method\'s place on the '+ROLE(PERS)+' axis per turn (0 = assistant, 1 = '+ROLE(PERS)+'), '+where
+      :'Top: where each answer sits on the persona axis without steering (0 = assistant, 1 = persona).')+
+      ' Click a turn to see it below and read conversation 1 (labels: '+JNAME[j]+').';
   }
   function redraw(){line.f.draw();plane.draw();chat();}
   $('stcw').addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(!b)return;st.ctx=b.dataset.v;setSeg('stcs',st.ctx);togs();redraw();});
@@ -376,10 +376,10 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
       '<div class="row"><span class="tl">share of the assistant gap</span>&nbsp;<b>'+(100*b.gap).toFixed(1)+'%</b></div>',e.clientX,e.clientY);},()=>hideTip());
   function info(){
     const k=key();
-    if(!k){$('skr').innerHTML='';$('skn').textContent='Spectra so far: SmolLM3 pirate, ghost, bard, consultant.';return;}
+    if(!k){$('skr').innerHTML='';$('skn').textContent='This chart has data only for SmolLM3\'s pirate, ghost, bard and consultant.';return;}
     const S=M[k];
-    rows($('skr'),[['kept along the persona axis',pct(S.keep_along_vhat)],['assistant-gap energy kept',pct(S.gap_energy_kept)],
-      ['gap energy in directions kept < 50%',pct(S.gap_share_in_directions_kept_below_half)],
+    rows($('skr'),[['kept along the persona axis',pct(S.keep_along_vhat)],['share of the assistant gap kept',pct(S.gap_energy_kept)],
+      ['share of the gap in directions cut below 50%',pct(S.gap_share_in_directions_kept_below_half)],
       ['directions kept > 90% / < 10%',S.n_kept_above_090+' / '+S.n_kept_below_010+' of '+S.d]]);
     $('skn').textContent='SmolLM3-3B, '+k+': per-token cloud of '+S.n_tokens.toLocaleString()+' tokens at layer 17, aperture '+S.aperture.toPrecision(3)+'.';
   }
@@ -428,6 +428,8 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
 const MAIN=PERSONAS.filter(q=>!DK.personas[q].model);
 const statFor=(p,ctx,m,where,key)=>mean(JUDGES_OF(p).map(j=>{const h=holdRowP(p,j,ctx,m);if(!h)return null;
   if(where==='ordinary')return h.ordinary[key];return turnValP(p,j,ctx,m,+where.slice(1),key);}));
+/* who: 'all' (the main model's personas), 'm:<model>' (one model's personas, e.g. m:OLMo-3-7B) or a persona */
+const GROUP=w=>w==='all'?MAIN:w.startsWith('m:')?PERSONAS.filter(q=>MODEL(q)===w.slice(2)):null;
 function fillStats(){
   document.querySelectorAll('[data-stat]').forEach(el=>{
     const p=el.dataset.stat.split('|');let v=null;const asNum=p[p.length-1]==='num';
@@ -443,8 +445,11 @@ function fillStats(){
     if(p[0]==='spread'){  /* spread|ctx|method|tN|key: min-max over judges and personas */
       const vs=[];MAIN.forEach(q=>JUDGES_OF(q).forEach(j=>{const x=turnValP(q,j,p[1],p[2],+p[3].slice(1),p[4]);if(x!=null)vs.push(x);}));
       el.textContent=vs.length?pct(Math.min(...vs))+'–'+pct(Math.max(...vs)):'–';return;}
-    const [who,ctx,m,where,key]=p;
-    v=who==='all'?mean(MAIN.map(q=>statFor(q,ctx,m,where,key))):statFor(who,ctx,m,where,key);
+    if(p[0]==='range'){  /* range|who|ctx|method|where|key: lowest-highest persona in the group, judges averaged */
+      const vs=(GROUP(p[1])||[p[1]]).map(q=>statFor(q,p[2],p[3],p[4],p[5])).filter(x=>x!=null);
+      const f=p[5]==='coherence'?num:pct;el.textContent=vs.length?f(Math.min(...vs))+'–'+f(Math.max(...vs)):'–';return;}
+    const [who,ctx,m,where,key]=p;const g=GROUP(who);
+    v=g?mean(g.map(q=>statFor(q,ctx,m,where,key))):statFor(who,ctx,m,where,key);
     el.textContent=asNum||key==='coherence'?num(v):pct(v);
   });
 }
