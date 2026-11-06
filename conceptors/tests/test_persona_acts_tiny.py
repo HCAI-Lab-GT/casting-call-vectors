@@ -200,7 +200,8 @@ def test_steer_modes_change_the_steered_layer(tmp: Path, model: Path):
         with persona_acts.Steer(m, identity):
             assert torch.allclose(m(input_ids=x).logits, base_logits, atol=1e-4)
         for method, strength in [("add", 1.0), ("cap", 90), ("conceptor", 0.5), ("lowrank", 0.5), ("meanshift", 0.5),
-                                 ("conceptor_tok", 0.5), ("meanshift_tok", 0.5)]:
+                                 ("conceptor_tok", 0.5), ("meanshift_tok", 0.5), ("ctok_tight", 0.5), ("diffpull", 0.5),
+                                 ("ctok_cap", 90)]:
             specs = steering.specs(fits, method, strength)
             if method == "cap":  # a cap only acts below its floor; force a floor every position is under
                 specs[0]["tau"] = 1e3
@@ -243,21 +244,63 @@ def test_add_then_conceptor_tok_composes_in_order(tmp: Path, model: Path):
     assert not torch.allclose(reversed_order, expected, atol=1e-4)
 
 
+def test_conceptor_design_variants(tmp: Path, model: Path):
+    import torch
+    from transformers import AutoModelForCausalLM
+
+    import steering
+
+    run_dir, _ = synthetic_judged_run(tmp, model, "fitrun_variants")
+    f = steering.fit(run_dir)
+    C, Ct, Cd = f["tok_C"], f["tok_C_tight"], f["diff_C"]
+    assert Cd.shape == Ct.shape == (32, 32) and f["n_diff"] == f["n_persona"]
+    # a tighter aperture keeps less in every direction; all three are soft projections (eigenvalues in [0, 1])
+    assert np.trace(Ct) < np.trace(C) and np.allclose(Ct, Ct.T) and np.allclose(Cd, Cd.T)
+    for M in (C, Ct, Cd):
+        lam = np.linalg.eigvalsh(M)
+        assert lam.min() > -1e-9 and lam.max() < 1 + 1e-9
+    # the difference conceptor keeps the persona direction near its strongest: v is the mean of the differences
+    assert float(f["vhat"] @ Cd @ f["vhat"]) > 0.5 * np.linalg.eigvalsh(Cd).max()
+    # ctok_cap composes conceptor (beta 1) then the cap at the given percentile
+    cc = steering.specs(f, "ctok_cap", 50)
+    assert [s["mode"] for s in cc] == ["conceptor", "cap"] and cc[0]["beta"] == 1.0
+    assert abs(cc[1]["tau"] - float(np.percentile(f["proj_persona"], 50))) < 1e-9
+    # pull: h + b C (mu - h); with C = I at beta 1 every position lands on mu, at beta 0 nothing changes
+    m = AutoModelForCausalLM.from_pretrained(model).eval()
+    x = torch.tensor([[5, 6, 7, 8, 9]])
+    pull = steering.specs(f, "diffpull", 1.0)
+    assert pull[0]["mode"] == "pull"
+    seen = {}
+    with torch.no_grad():
+        base = m(input_ids=x).logits
+        pull[0]["beta"] = 0.0
+        with persona_acts.Steer(m, pull):
+            assert torch.allclose(m(input_ids=x).logits, base, atol=1e-5)
+        pull[0]["beta"], pull[0]["C"] = 1.0, torch.eye(32)
+        with persona_acts.Steer(m, pull):  # hooks run in registration order, so this recorder sees the pulled output
+            rec = persona_acts.layer_modules(m)[f["module"]].register_forward_hook(
+                lambda mod, i, o: seen.update(h=o[0] if isinstance(o, tuple) else o))
+            m(input_ids=x)
+            rec.remove()
+    assert torch.allclose(seen["h"], pull[0]["mu"].expand_as(seen["h"]), atol=1e-4)
+
+
 def test_steer_eval_sweep_select_and_hold(tmp: Path, model: Path, roles_dir: Path, qfile: Path):
     import analyze_steer
     import steer_eval
 
     run_dir, _ = synthetic_judged_run(tmp, model, "fitrun")
     grid = ('{"add": [0.5, 2.0], "cap": [50], "conceptor": [0.5], "lowrank": [0.5], "meanshift": [0.5], '
-            '"conceptor_tok": [0.5], "meanshift_tok": [0.5], "add_ctok": [1.0], "add_cap": [1.0], "cap_aa": [50]}')
+            '"conceptor_tok": [0.5], "meanshift_tok": [0.5], "add_ctok": [1.0], "add_cap": [1.0], "cap_aa": [50], '
+            '"ctok_cap": [50], "ctok_tight": [0.5], "diffpull": [0.5]}')
     methods = {"add", "cap", "conceptor", "lowrank", "meanshift", "conceptor_tok", "meanshift_tok", "add_ctok", "add_cap",
-               "cap_aa"}
+               "cap_aa", "ctok_cap", "ctok_tight", "diffpull"}
     common = ["--model", str(model), "--device", "cpu", "--fit_run", str(run_dir), "--roles_dir", str(roles_dir),
               "--eval_questions", str(qfile), "--max_new_tokens", "4", "--batch_size", "8"]
     sweep = tmp / "steer_sweep"
     steer_eval.main(common + ["--stage", "sweep", "--out", str(sweep), "--grid", grid])
     rows = [json.loads(line) for line in (sweep / "texts.jsonl").read_text().splitlines()]
-    assert len(rows) == (1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1) * 3  # none + strengths, 3 questions, 1 sample
+    assert len(rows) == (1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 3) * 3  # none + strengths, 3 questions, 1 sample
     assert all(np.isfinite(r["readout"]) and r["role"] == "pirate" and r["system"] == "" for r in rows)
     fake_judge(sweep, lambda r: "fully" if r["method"] != "none" and r["strength"] >= 0.5 else "not")
     analyze_steer.main(["--run", str(sweep)])
@@ -269,7 +312,7 @@ def test_steer_eval_sweep_select_and_hold(tmp: Path, model: Path, roles_dir: Pat
     steer_eval.main(common + ["--stage", "hold", "--out", str(hold), "--select_from", str(sweep),
                               "--hold_convs", "2", "--hold_turns", "6"])
     hrows = [json.loads(line) for line in (hold / "texts.jsonl").read_text().splitlines()]
-    assert len(hrows) == 2 * 11 * 2 * 6  # contexts x (none + 10 methods) x convs x turns
+    assert len(hrows) == 2 * 14 * 2 * 6  # contexts x (none + 13 methods) x convs x turns
     assert {r["context"] for r in hrows} == {"steer_only", "prompt"}
     assert any(r["probe"] and r["user"].startswith("Okay, drop the act") for r in hrows)
     fake_judge(hold, lambda r: "fully" if r["turn"] < 3 else "somewhat", lambda r: "ai" if r["probe"] else "none")

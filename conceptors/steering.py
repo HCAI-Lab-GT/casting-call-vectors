@@ -20,6 +20,15 @@ Methods and their strength parameter:
                 each layer's own persona axis at every module in [0.70 n, 0.85 n), the late-middle band the paper caps
                 (Qwen3-32B layers 46-53 of 64, Llama-3.3-70B 56-71 of 80), each floor at this percentile of the persona's
                 projections at that layer; the paper's own cap is the 25th percentile
+  ctok_cap      conceptor_tok at beta 1, then a cap on the same module (floor at this percentile): does the conceptor add
+                anything over the cap? Paired with cap at the same percentile; strength = the cap percentile
+  ctok_tight    conceptor_tok with the aperture TIGHT_K times smaller (a = TIGHT_K x median eigenvalue): the aperture
+                knob the median rule fixes. The offline screen (conceptor_variants.py) predicts it slides toward the
+                mean-shift control rather than toward the cap
+  diffpull      h + b C_d (mu - h): pull toward the per-token persona mean only inside C_d, an uncentered conceptor
+                (aperture DIFF_K x median) on per-question differences (each persona answer minus the default role's
+                mean answer to the same question). C_d keeps the directions that tell the persona from the default
+                role, a many-direction version of the cap's axis; content directions they share pass untouched
   none          no intervention
 
 Read-out: a persona score from an unsteered teacher-forced pass, projected on the persona axis at the read layer
@@ -47,9 +56,22 @@ DEFAULT_GRID = {  # widened after the first SmolLM3 sweep (5 Nov 2026): the conc
     "add_ctok": [0.5, 1.0, 1.5, 2.0, 3.0],
     "add_cap": [0.5, 1.0, 1.5, 2.0, 3.0],
     "cap_aa": [10, 25, 50, 75, 90],
+    "ctok_cap": [25, 50, 75, 90, 99],
+    "ctok_tight": [0.5, 0.7, 0.9, 1.0],
+    "diffpull": [0.3, 0.5, 0.7, 1.0],
 }
 CAP_HOLD_PCT = 25  # add_cap's floor: the Assistant Axis paper caps at the 25th percentile of the role's own range
-TOKEN_METHODS = ("conceptor_tok", "meanshift_tok", "add_ctok")
+TOKEN_METHODS = ("conceptor_tok", "meanshift_tok", "add_ctok", "ctok_cap", "ctok_tight", "diffpull")
+TIGHT_K = 10.0  # ctok_tight's aperture: a = TIGHT_K x the median eigenvalue (conceptor_tok uses 1)
+DIFF_K = 10.0   # diffpull's aperture on the difference cloud; the offline screen's best restore-for-distortion point
+
+
+def conceptor_matrix(R: np.ndarray, k: float = 1.0) -> np.ndarray:
+    """C = R (R + a I)^-1 with a = k x the median positive eigenvalue of R."""
+    lam, U = np.linalg.eigh(R)
+    lam = np.clip(lam, 0, None)
+    a = k * float(np.median(lam[lam > lam.max() * 1e-10]))
+    return (U * (lam / (lam + a))) @ U.T
 
 
 CAP_AA_BAND = (0.70, 0.85)
@@ -100,6 +122,12 @@ def fit(run_dir: Path, persona: str = "pirate", default: str = "assistant", modu
     mu = Xp.mean(0)
     C, keep, aperture = conceptor_from(Xp - mu)
     lr = lowrank_conceptor(Xp, lowrank_k)
+    # diffpull: per-question differences from the default role's mean answer (its overall mean where a question is
+    # missing, e.g. a default run with other questions)
+    q, qd = z["p1_q_idx"], Zd["p1_q_idx"][A]
+    a_by_q = {qq: Xa[qd == qq].mean(0) for qq in np.unique(qd)}
+    D = np.stack([X[i] - a_by_q.get(q[i], Xa.mean(0)) for i in np.flatnonzero(P)])
+    diff_C = conceptor_matrix(D.T @ D / len(D), DIFF_K)
 
     Xr = z["p1_resp_avg"][:, col(read_hidden), :].astype(np.float64)
     Xra = defaults(read_hidden)
@@ -124,7 +152,7 @@ def fit(run_dir: Path, persona: str = "pirate", default: str = "assistant", modu
         lr_null_keep=lr["null_keep"], read_u=ur, read_a0=a0, read_p0=p0, n_tokens=0,
         steer_a0=float((Xa @ vhat).mean()), steer_p0=float((Xp @ vhat).mean()),
         ml_modules=np.array(mods), ml_vhat=np.stack(ml_vhat), ml_proj=np.stack(ml_proj),
-        default_source=str(default_run or run_dir),
+        default_source=str(default_run or run_dir), diff_C=diff_C, n_diff=len(D), diff_k=DIFF_K, tight_k=TIGHT_K,
     )
     out.update(token_fit(z, man, P, module + 1))
     if "tok_C" in out:  # typical off-axis spread of real persona tokens, the unit for trajectory read-outs
@@ -153,11 +181,12 @@ def token_fit(z: dict, man: dict, persona_rows: np.ndarray, hidden: int) -> dict
     lam = np.clip(lam, 0, None)
     a = float(np.median(lam[lam > lam.max() * 1e-10]))
     C_t = (U * (lam / (lam + a))) @ U.T
+    C_tight = (U * (lam / (lam + TIGHT_K * a))) @ U.T
 
     def off_ref(vhat):
         Y = Tc - np.outer(Tc @ vhat, vhat)
         return float(np.sqrt((Y ** 2).sum(1).mean()))
-    return dict(tok_mu=mu_t, tok_C=C_t, n_tokens=int(len(T)), tok_rows=len(rows), tok_aperture=a,
+    return dict(tok_mu=mu_t, tok_C=C_t, tok_C_tight=C_tight, n_tokens=int(len(T)), tok_rows=len(rows), tok_aperture=a,
                 tok_rank=int((lam > lam.max() * 1e-10).sum()), _tok_off_ref_fn=off_ref)
 
 
@@ -189,6 +218,12 @@ def specs(fits: dict, method: str, strength: float, device: str = "cpu") -> list
         return [dict(mode="conceptor", module=m, beta=float(strength), mu=t(fits["tok_mu"]), C=t(fits["tok_C"]))]
     if method == "meanshift_tok":
         return [dict(mode="meanshift", module=m, beta=float(strength), mu=t(fits["tok_mu"]))]
+    if method == "ctok_tight":
+        return [dict(mode="conceptor", module=m, beta=float(strength), mu=t(fits["tok_mu"]), C=t(fits["tok_C_tight"]))]
+    if method == "ctok_cap":
+        return specs(fits, "conceptor_tok", 1.0, device) + specs(fits, "cap", strength, device)
+    if method == "diffpull":
+        return [dict(mode="pull", module=m, beta=float(strength), mu=t(fits["tok_mu"]), C=t(fits["diff_C"]))]
     if method == "add_ctok":
         return specs(fits, "add", strength, device) + specs(fits, "conceptor_tok", 1.0, device)
     if method == "add_cap":
@@ -210,7 +245,7 @@ def summary(fits: dict) -> dict:
     keep = ("module", "read_hidden", "n_layers", "d", "persona", "default", "n_persona", "n_default",
             "n_persona_judged_fully", "source", "source_model", "source_snapshot", "conceptor_rank",
             "conceptor_aperture", "lr_delta", "lr_null_keep", "n_tokens", "tok_rows", "tok_rank", "tok_aperture",
-            "steer_a0", "steer_p0", "tok_off_ref", "default_source")
+            "steer_a0", "steer_p0", "tok_off_ref", "default_source", "n_diff", "diff_k", "tight_k")
     out = {k: fits[k] for k in keep if k in fits}
     if "ml_modules" in fits:
         out["cap_aa_modules"] = [int(m_) for m_ in fits["ml_modules"]]

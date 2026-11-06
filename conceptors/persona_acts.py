@@ -292,7 +292,7 @@ def pack_tokens(tokens):
 
 
 class Steer:
-    """Forward hooks on decoder layers. mode: add | cap | conceptor. Applied at every position."""
+    """Forward hooks on decoder layers. mode: add | cap | conceptor | lowrank | meanshift | pull. Every position."""
     def __init__(self, model, specs):
         self.model, self.specs, self.handles = model, specs, []
 
@@ -330,6 +330,9 @@ class Steer:
             elif spec["mode"] == "meanshift":  # matrix-removed control: same center and gain, C = 0
                 mu, b = spec["mu"].to(x.device), spec["beta"]
                 x = (1 - b) * x + b * mu
+            elif spec["mode"] == "pull":  # h + b C (mu - h): toward mu only inside C's directions (C symmetric)
+                mu, C, b = spec["mu"].to(x.device), spec["C"].to(x.device), spec["beta"]
+                x = x + b * (mu - x) @ C
             h2 = x.to(dt)
             return (h2,) + tuple(out[1:]) if isinstance(out, tuple) else h2
         return fn

@@ -18,9 +18,12 @@ const METH={
   add_cap:['Vector + cap','vec+cap','assist',[2,4]], conceptor_tok:['Per-token conceptor','conceptor','pirate',null],
   add_ctok:['Vector + per-token conceptor','vec+con','pirate',[2,4]], meanshift_tok:['Mean-shift control, per token','mean-shift','other',[6,3]],
   conceptor:['Conceptor, answer-average fit','con (avg)','pirate',[8,4]], lowrank:['Low-rank conceptor','low-rank','pirate',[2,6]],
-  meanshift:['Mean-shift control, answer-average','ms (avg)','other',[2,3]]};
-const MORDER=['none','add','cap','cap_aa','add_cap','conceptor_tok','add_ctok','meanshift_tok','conceptor','lowrank','meanshift'];
-const DEFAULT_ON=new Set(['none','add','cap','cap_aa','add_cap','conceptor_tok','add_ctok']);
+  meanshift:['Mean-shift control, answer-average','ms (avg)','other',[2,3]],
+  ctok_cap:['Per-token conceptor + cap','con+cap','assist',[12,3,2,3]],
+  ctok_tight:['Per-token conceptor, tight aperture','con tight','pirate',[10,3]],
+  diffpull:['Difference-subspace conceptor','diff-con','pirate',[4,2,1,2]]};
+const MORDER=['none','add','cap','cap_aa','add_cap','ctok_cap','conceptor_tok','ctok_tight','diffpull','add_ctok','meanshift_tok','conceptor','lowrank','meanshift'];
+const DEFAULT_ON=new Set(['none','add','cap','cap_aa','add_cap','ctok_cap','conceptor_tok','diffpull','add_ctok']);
 const MEASURES=[['fully_rate','In character'],['coherence','Coherence'],['identity_ai_rate','Admits being an AI']];
 const PROBE_KIND={5:'drop the act',13:'drop the act',8:'are you an AI?',16:'are you an AI?'};
 const pct=v=>v==null||!isFinite(v)?'–':Math.round(v*100)+'%';
@@ -124,7 +127,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-persona] b
     pts.forEach(p=>{const d=(p.x-px)**2+(p.y-py)**2;if(d<bd){bd=d;best=p;}});
     if(best!==hover){hover=best;f.draw();}
     if(!best){hideTip();return;}
-    const r=best.r,P=['cap','cap_aa'].includes(best.m)?'percentile ':(['add','add_ctok','add_cap'].includes(best.m)?'c ':'β ');
+    const r=best.r,P=['cap','cap_aa','ctok_cap'].includes(best.m)?'percentile ':(['add','add_ctok','add_cap'].includes(best.m)?'c ':'β ');
     showTip('<div class="tv">'+esc(METH[best.m][0])+(best.m==='none'?'':' · '+P+r.strength)+'</div>'+
       '<div class="row"><span class="tl">fully in character</span>&nbsp;<b>'+pct(r.fully_rate)+'</b></div>'+
       '<div class="row"><span class="tl">coherence</span>&nbsp;<b>'+num(r.coherence)+'</b></div>'+
