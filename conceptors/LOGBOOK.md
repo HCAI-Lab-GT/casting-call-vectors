@@ -773,3 +773,11 @@ judges 6832115-18, 6832122-25, 6832132-35. Both fit paths work at job start: pir
 from smollm3_full) reached the new methods with no errors. A login-node watcher stops on the first failed, timed-out
 or killed v3 job. Deck config with the v3 runs: scratchpad deck_runs_v3.json. Morning-list item: the deck is 13.8 MB
 with OLMo, near the 16 MB artifact limit, so example answers need thinning before v3 goes in.
+
+[2026-11-05 21:25] Decision consumed: the owner asked for 20-turn results for every method on every model ("getting
+all results for all models for the extended-turn analysis"), which moves OLMo v3 off the morning list. Launched on
+44bb9a5b with OLMo v2's settings (fits from olmo3_aa, module 15, 20 conversations, batch 10), --nice 150 so SmolLM3
+v3 runs first: sweeps 6832698-700 -> Qwen sweep judge 6832701 -> holds 6832702-04 (both contexts) -> hold judges
+6832705-08 (one per family over the three personas). Queue 32 of 50. deck_runs_v3.json lists the OLMo v3 runs.
+Status at launch: every v2 hold is done; v2 judging is complete except Gemma and Llama on bard/consultant; SmolLM3
+v3 sweeps are done, genie and alien holds are running, the other four wait on their sweep judges.
