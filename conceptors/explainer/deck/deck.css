@@ -149,4 +149,12 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
 .slide .btc .plate>.fig,.slide .btc .plate>figure{max-height:68vh}
 .slide .btc .part>.kicker,.slide .btc .part>h2{display:none}
 .slide:not(.appendix) .btc #ops-table-wrap{display:none}
+/* the aperture plate on its slide: one chart, full width; the hold chart below it repeats the aperture sweep slide */
+.slide:not(.appendix) .btc #aperture{grid-template-columns:minmax(0,1fr)!important}
+.slide:not(.appendix) .btc #aperture .txt,.slide:not(.appendix) .btc #aperture #c2h,.slide:not(.appendix) .btc #aperture .fig>.legend,
+.slide:not(.appendix) .btc #aperture .fig>.controls:has(#bc-s2p),.slide:not(.appendix) .btc #aperture #c2note{display:none}
+/* slides whose own cards explain the plate hide the plate's text */
+.slide.explain .plate .intro{display:none}
+.slide.explain .plate{grid-template-columns:minmax(0,.7fr) minmax(0,1.3fr)}
+.slide .defs{font-size:.8rem;line-height:1.4;margin-top:4px}
 .slide .btc .plate>.fig,.slide .btc .plate>figure{max-height:80vh;overflow:auto}
