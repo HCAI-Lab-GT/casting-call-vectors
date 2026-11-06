@@ -418,23 +418,28 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
   opts();draw();
 })();
 
-/* ---------- takeaway numbers, filled from the data (persona 'all' = mean over personas, judges always averaged) ---------- */
+/* ---------- takeaway numbers, filled from the data (persona 'all' = mean over the main model's personas, judges always
+   averaged; a second model's personas, which carry a "model" label, never mix into the headline means) ---------- */
+const MAIN=PERSONAS.filter(q=>!DK.personas[q].model);
 const statFor=(p,ctx,m,where,key)=>mean(JUDGES_OF(p).map(j=>{const h=holdRowP(p,j,ctx,m);if(!h)return null;
   if(where==='ordinary')return h.ordinary[key];return turnValP(p,j,ctx,m,+where.slice(1),key);}));
 function fillStats(){
   document.querySelectorAll('[data-stat]').forEach(el=>{
     const p=el.dataset.stat.split('|');let v=null;const asNum=p[p.length-1]==='num';
     if(p[0]==='njudges'){const n=JUDGES().length;el.textContent=['zero','one','two','three','four','five'][n]||String(n);return;}
-    if(p[0]==='npersonas'){el.textContent=String(PERSONAS.length);return;}
+    if(p[0]==='npersonas'){el.textContent=String(MAIN.length);return;}
+    if(p[0]==='othermodels'){  /* " · OLMo-3-7B · 3 personas" for each extra model */
+      const by={};PERSONAS.filter(q=>DK.personas[q].model).forEach(q=>{const m=DK.personas[q].model;by[m]=(by[m]||0)+1;});
+      el.textContent=Object.entries(by).map(([m,n])=>' · '+m+' · '+n+' persona'+(n>1?'s':'')).join('');return;}
     if(p[0]==='sweepsel'){  /* sweepsel|method|key: at each persona's selected strength, mean over personas */
-      v=mean(PERSONAS.map(q=>{const d=DK.personas[q],s=d.selected&&d.selected[p[1]]&&d.selected[p[1]].strength;
+      v=mean(MAIN.map(q=>{const d=DK.personas[q],s=d.selected&&d.selected[p[1]]&&d.selected[p[1]].strength;
         if(s==null||!d.sweep)return null;const r=d.sweep.find(r=>r.method===p[1]&&Math.abs(r.strength-s)<1e-9);return r?r[p[2]]:null;}));
       el.textContent=asNum||p[2]==='coherence'?num(v):pct(v);return;}
     if(p[0]==='spread'){  /* spread|ctx|method|tN|key: min-max over judges and personas */
-      const vs=[];PERSONAS.forEach(q=>JUDGES_OF(q).forEach(j=>{const x=turnValP(q,j,p[1],p[2],+p[3].slice(1),p[4]);if(x!=null)vs.push(x);}));
+      const vs=[];MAIN.forEach(q=>JUDGES_OF(q).forEach(j=>{const x=turnValP(q,j,p[1],p[2],+p[3].slice(1),p[4]);if(x!=null)vs.push(x);}));
       el.textContent=vs.length?pct(Math.min(...vs))+'–'+pct(Math.max(...vs)):'–';return;}
     const [who,ctx,m,where,key]=p;
-    v=who==='all'?mean(PERSONAS.map(q=>statFor(q,ctx,m,where,key))):statFor(who,ctx,m,where,key);
+    v=who==='all'?mean(MAIN.map(q=>statFor(q,ctx,m,where,key))):statFor(who,ctx,m,where,key);
     el.textContent=asNum||key==='coherence'?num(v):pct(v);
   });
 }
