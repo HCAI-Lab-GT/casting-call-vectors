@@ -3,7 +3,7 @@
 analyze_steer.py — summarize a steer_eval.py run (judged by judge.py) into steer_derived.json.
 
   sweep     per (method, strength): judge fully/somewhat/not rates, mean coherence, read-out score quartiles,
-            AI-break rate, pirate-word rate; plus 'selected': per method the smallest strength whose fully rate
+            AI-break rate, pirate-word rate; plus 'selected': per method the weakest strength whose fully rate
             reaches --target with mean coherence >= --min_coherence (matched), else its strongest strength that
             keeps coherence >= --min_coherence (unmatched), else none. Without judge scores, the read-out stands in.
   hold      per (context, method): per-turn curves and T1/T5/T10 with drift T10 - T1 (GCAD protocol), split by
@@ -31,6 +31,9 @@ def load(run: Path, identity_key: str = "identity"):
 
 
 TRAJ_KEYS = ("x_pre", "x_post", "off_pre", "off_post", "read_steered")  # steer_eval.trajectories
+# Methods whose strength number falls as the edit grows. region's strength is the percentile of its radius (steering.specs):
+# a larger radius leaves more tokens alone, so 99 is its gentlest setting and 25 its strongest.
+GENTLER_AS_STRENGTH_RISES = {"region"}
 
 
 def stats(rs: list[dict]) -> dict:
@@ -63,10 +66,11 @@ def stats(rs: list[dict]) -> dict:
 def select(table: list[dict], judged: bool, target: float, min_coh: float) -> dict:
     """Per method, the strength the hold test runs it at.
 
-    Matched: the smallest strength with fully >= target and coherence >= min_coh, so matched methods set the persona
+    Matched: the weakest strength with fully >= target and coherence >= min_coh, so matched methods set the persona
     up equally well. A method that never gets there runs at its strongest strength that keeps coherence >= min_coh
     (matched False): the most it can do without breaking the model. The hold test's prompt context can still show
     whether that keeps a prompted persona from drifting, which is the claim conceptors are meant to win.
+    "Weakest" follows the edit, not the number: GENTLER_AS_STRENGTH_RISES methods are ordered from their largest value.
     """
     by_method = defaultdict(list)
     for t in table:
@@ -75,19 +79,19 @@ def select(table: list[dict], judged: bool, target: float, min_coh: float) -> di
     for method, ts in by_method.items():
         if method == "none":
             continue
-        ts = sorted(ts, key=lambda t: t["strength"])
+        ts = sorted(ts, key=lambda t: t["strength"], reverse=method in GENTLER_AS_STRENGTH_RISES)  # weakest edit first
         if judged:
             coherent = [t for t in ts if (t["coherence"] or 0) >= min_coh]
             ok = [t for t in coherent if (t["fully_rate"] or 0) >= target]
             if ok:
-                pick, matched, why = ok[0], True, f"smallest strength with fully >= {target} and coherence >= {min_coh}"
+                pick, matched, why = ok[0], True, f"weakest strength with fully >= {target} and coherence >= {min_coh}"
             elif coherent:
                 pick, matched, why = coherent[-1], False, f"never fully >= {target}; strongest with coherence >= {min_coh}"
             else:
                 pick, matched, why = None, False, f"no strength kept coherence >= {min_coh}"
         else:
             ok = [t for t in ts if t["readout"] >= target]
-            pick, matched, why = (ok[0], True, f"no judge: smallest strength with readout >= {target}") if ok else \
+            pick, matched, why = (ok[0], True, f"no judge: weakest strength with readout >= {target}") if ok else \
                 (None, False, "none reached")
         selected[method] = None if pick is None else dict(
             strength=pick["strength"], matched=matched, fully_rate=pick["fully_rate"], coherence=pick["coherence"],

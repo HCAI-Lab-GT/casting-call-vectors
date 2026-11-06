@@ -522,6 +522,21 @@ def test_select_matched_and_strongest_coherent():
     assert sel["conceptor"]["strength"] == 0.7 and not sel["conceptor"]["matched"]  # strongest still coherent
 
 
+def test_select_orders_region_by_its_edit_not_its_number():
+    import analyze_steer
+
+    def t(m, s, fully):
+        return dict(method=m, strength=s, fully_rate=fully, coherence=95, readout=0.0)
+
+    # region's strength is its radius percentile, so 99 is the gentlest setting (the 6 Nov 2026 sweeps ran it backwards)
+    table = [t("region", 25, 0.95), t("region", 50, 0.85), t("region", 99, 0.5), t("cap", 25, 0.9), t("cap", 99, 0.95)]
+    sel = analyze_steer.select(table, judged=True, target=0.8, min_coh=60)
+    assert sel["region"]["strength"] == 50 and sel["region"]["matched"]  # largest radius that still reaches the target
+    assert sel["cap"]["strength"] == 25
+    weak = analyze_steer.select([t("region", 25, 0.7), t("region", 99, 0.3)], judged=True, target=0.8, min_coh=60)
+    assert weak["region"]["strength"] == 25 and not weak["region"]["matched"]  # never matched: the strongest edit
+
+
 def test_layer_plan_matches_pilot():
     import analyze_acts
 
