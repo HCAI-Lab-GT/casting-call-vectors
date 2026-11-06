@@ -1061,3 +1061,55 @@ Context: The conceptors pilot on branch conceptors/scale-up found that on SmolLM
 Action: The transcript is truncated, and the visible part shows only the task brief and the lit-review skill instructions being loaded. It does not show the searches, paper downloads or writing steps. Git ground truth lists these uncommitted paths under `conceptors/`: a new `conceptors/docs/lit_review_conceptors.md`, a new `conceptors/docs/lit_review/` folder, and a new `conceptors/explainer/beyond_the_cap.html`. It also shows a modified `conceptors/explainer/lab_deck.html` (369 insertions, 113 deletions) and a staged deletion of `overleaf`. The new review file and folder are consistent with the requested deliverable. The other changes are not accounted for in the visible transcript, so this entry cannot say whether this session made them or an earlier or sibling session did.
 
 Result: The review file and the `lit_review/` folder exist as untracked files, and nothing was committed, as instructed. I cannot confirm from the visible transcript that the citations were checked against sources or that each design choice got its implication for `conceptors/steering.py`. I also cannot confirm that the user-confirmation steps in the lit-review skill (output folder, research proposal, check-ins) were completed. The review's contents and findings are not visible here. Treat the review as unverified until someone reads it and spot-checks the citations, including the 2026 arXiv IDs. The `lab_deck.html` edits, the `beyond_the_cap.html` file and the `overleaf` deletion are unexplained by this transcript and may belong to other work. They need a check before any commit so they don't get bundled with the review.
+
+[2026-11-06 02:55] fisher_cap and region 20-turn hold results; screen validated on its own picks (goal=persona-screen-overnight)
+
+Screen chain 6834316-42: all 27 COMPLETED. Corrected-dose region holds 6835610-27: holds and 11 of 12 judges COMPLETED;
+Llama on pirate+ghost (6835615, a slow node, about 40 rows a minute) is still running, so steer_hold_screen_region_pirate
+and _ghost below are three-judge numbers until it finishes (about 04:20). Hold outcomes from scratchpad
+tabulate_holds.py: mean of four judges; ordinary turns exclude the pushes (4, 12) and AI probes (7, 15); late = ordinary
+turns 16-19. Unsteered reruns of the same seeded conversations differ by up to 0.10 in character (genie, prompt), less
+about 0.06 or less elsewhere, which is the noise floor for the gaps below.
+
+Prompt context, in character (late) / coherence / kept at pushes / AI admissions:
+
+| persona | unsteered | cap (v2) | fisher_cap | region, screen hold | region, fixed dose |
+|---|---|---|---|---|---|
+| pirate | 0.43 (0.12) / 90 / 0.03 / 1.00 | 99: 0.96 (0.94) / 78 / 0.63 / 1.00 | 50: 0.74 (0.59) / 84 / 0.23 / 1.00 | 99: 0.97 (0.97) / 85 / 0.42 / 0.31 | 25: 0.98 (0.98) / 84 / 0.68 / 0.36 * |
+| ghost | 0.29 (0.04) / 90 / 0.07 / 1.00 | 75: 0.82 (0.73) / 86 / 0.56 / 0.68 | 25: 0.72 (0.56) / 87 / 0.49 / 0.72 | 25: 0.99 (0.98) / 85 / 0.84 / 0.19 | 99: 0.99 (1.00) / 87 / 0.80 / 0.26 * |
+| bard | 0.62 (0.44) / 91 / 0.02 / 0.97 | 25: 0.93 (0.89) / 90 / 0.35 / 0.96 | 25: 0.93 (0.88) / 90 / 0.34 / 0.94 | 25: 0.99 (0.98) / 89 / 0.82 / 0.14 | 99: 0.96 (0.94) / 90 / 0.63 / 0.35 |
+| consultant | 0.92 (0.89) / 93 / 0.46 / 0.99 | 25: 0.93 (0.87) / 94 / 0.46 / 0.93 | 25: 0.93 (0.91) / 93 / 0.45 / 0.97 | 25: 0.94 (0.91) / 94 / 0.48 / 0.59 | 99: 0.94 (0.90) / 93 / 0.46 / 0.69 |
+| genie | 0.66 (0.49) / 88 / 0.09 / 0.97 | 75: 0.98 (0.98) / 82 / 0.88 / 0.81 | 25: 0.90 (0.87) / 86 / 0.57 / 0.82 | 25: 0.99 (0.99) / 84 / 0.94 / 0.21 | 90: 0.98 (0.97) / 85 / 0.90 / 0.28 |
+| alien | 0.62 (0.51) / 90 / 0.05 / 0.97 | 99: 0.80 (0.72) / 88 / 0.20 / 0.97 | 75: 0.68 (0.55) / 89 / 0.17 / 0.92 | 25: 0.74 (0.65) / 89 / 0.37 / 0.36 | (pick was right; not rerun) |
+
+\* three judges so far.
+
+- region, both doses, on pirate, ghost, bard, genie: 0.96-0.99 in character, 0.94-1.00 at turns 16-19, coherence 1-6
+  points under unsteered, AI admissions 0.14-0.36 against 0.97-1.00 unsteered. Alien: 0.74, below the v2 cap's 0.80.
+  Consultant is at ceiling for every method, but region still lowers its admissions (0.59-0.69 against 0.99).
+- For comparison from v2/v3: add_cap 0.95-1.00 in character at coherence 51-94 (51-62 on pirate, ghost, genie, alien);
+  ctok_tight 0.88-1.00 at coherence 50-93; ctok_cap 0.93-0.99 at 64-91.
+- fisher_cap ran at lower strengths than the v2 cap (pirate 50 vs 99, ghost 25 vs 75, genie 25 vs 75, alien 75 vs 99)
+  because its single-turn sweep reached 0.8 sooner. At those strengths it held less than the cap on pirate (0.74 vs
+  0.96), ghost (0.72 vs 0.82) and alien (0.68 vs 0.80), equal on bard and consultant, and within noise on genie (0.90
+  vs 0.98), at up to 6 points more coherence. It did not lower AI admissions (0.72-1.00).
+- Steer-only context (no persona prompt): region at its strongest grid setting (25) puts ghost, bard and genie in
+  character 0.93, 0.94, 0.81 (cap 0.64, 0.72, 0.75), but pirate 0.28 and alien 0.24 (cap 0.31, 0.25); the gentler
+  fixed doses give ghost 0.83, bard 0.58, genie 0.50. add_cap reaches 0.91-0.99 there, at coherence 55-59 on pirate, ghost,
+  genie and alien.
+
+Screen validation with the screen holds (validate_screen.py on v2 + v3 + screen holds; 14 methods per persona, 84
+pooled; the screen picked fisher_cap and region before any of their holds ran):
+- Within-persona mean: restore vs in-character 0.68, distortion vs coherence -0.81, restore vs pushes 0.74, identity
+  fix vs AI admissions -0.66 (v2 + v3 alone: 0.66, -0.79, 0.70, -0.57). Pooled: 0.55, -0.74, 0.61, -0.70.
+- At the deployed strengths the screen scored fisher_cap's restore below the cap's (pirate 0.88 vs 1.01, ghost 0.20 vs
+  0.58, genie 0.54 vs 0.89, alien 0.98 vs 1.19) at lower distortion (0.03-0.08 vs 0.09-0.24), the same direction as the
+  holds. The screen's earlier claim, more restore than the cap at matched distortion, was not what these holds tested:
+  the sweep matched single-turn in-character rate, not distortion.
+- region's screen identity fix ranked it first on every persona, and the holds agree, but its identity direction was
+  fit on the v2 holds' answers to the same two AI probes the new holds ask, so the admissions result is
+  in-distribution.
+
+Results page: datasets validation/rho (v3), chain (v2, 44 jobs), new holds (v1); page files/index.html v12 adds a
+"What the 20-turn holds showed" section with a context switch. The page needs the owner's sign-in to view, so it is
+still not seen rendered; its script parses (node vm.Script) and the new table logic was checked on holds.json.
