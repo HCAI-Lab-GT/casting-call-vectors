@@ -493,6 +493,12 @@ def test_probe_sets_share_questions(tmp: Path, model: Path, roles_dir: Path, qfi
     man = json.loads((out / "manifest.json").read_text())
     assert len(rows) == 2 * 6 and not any(r["probe"] for r in rows)
     assert man["probe_set"] == "none" and man["probes"] == {}
+    import analyze_steer  # a --no_traj hold has no trajectory fields; the analysis must still summarize it
+
+    fake_judge(out, lambda r: "fully", lambda r: "none")
+    analyze_steer.main(["--run", str(out)])
+    h = json.loads((out / "steer_derived.json").read_text())["hold"]
+    assert {x["method"] for x in h} == {"none", "add"} and "x_pre" not in h[0]["summary"]
 
 
 def test_aperture_sweep_conceptors(tmp: Path, model: Path):
