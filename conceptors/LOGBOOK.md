@@ -991,3 +991,30 @@ other four 25, the lowest grid point, because their sweeps already pass at the w
   (pirate+ghost), 6835618-22 (bard+consultant), 6835624-27 (genie). --nice 100. Queue 36 of 50. This is the second
   chain the AUTHORITY block allows (one per operator; the first chain carried both). Script: scratchpad
   launch_region_fix.sh. A login-node watcher stops on the first failed job.
+
+[2026-11-06 01:10] Screen validation rerun on v2 + v3 holds (goal=persona-screen-overnight)
+
+All 24 v3 hold judges complete (6400 rows each; 6832124 and 6832133 were replaced by 6835502 and 6835445, both
+COMPLETED). validate_screen.py on steer_hold_v2_{p}_prompt + steer_hold_v3_{p}: 11 methods x 6 personas = 66 points
+(v3 adds ctok_cap, ctok_tight, diffpull). The screen's read-outs were trained on v2 labels only, so the v3 rows are a
+partial out-of-sample check.
+
+| | v2 only (42) | v2 + v3 (66) |
+|---|---|---|
+| within-persona mean: restore vs in-character | 0.67 | 0.66 |
+| distortion vs coherence | -0.78 | -0.79 |
+| restore vs holding at pushes | 0.74 | 0.70 |
+| identity fix vs AI admissions | -0.49 | -0.57 |
+| pooled: restore vs in-character | 0.60 | 0.55 |
+| pooled: distortion vs coherence | -0.75 | -0.72 |
+| pooled: identity fix vs AI admissions | -0.62 | -0.67 |
+
+Per persona (restore vs in-character, v2 + v3): ghost 0.82, bard 0.80, genie 0.76, alien 0.60, pirate 0.60 (0.96 on v2
+alone), consultant 0.38.
+- Clearest miss: ctok_tight. The screen scores its restore at 0.22-0.39 on ghost, bard, consultant and genie, but those
+  holds stay 0.88-1.00 in character (coherence 50-93). The screen edits fixed, unsteered tokens, so it cannot see a
+  steered reply keeping the next turn in character; that feedback is a candidate explanation, not tested.
+- diffpull on pirate and alien scores high restore (1.02, 1.21) but its holds lose the persona or coherence (pirate
+  in character 0.62 at coherence 18, alien 0.31 at 60); the screen's distortion is high for both (0.64, 0.45).
+- Results page datasets validation and rho now carry v2 + v3 (versions 2); page text updated (files/index.html v8),
+  including the region strength note.
