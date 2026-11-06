@@ -887,3 +887,52 @@ morning_list_only: final analysis and deck takeaway wording, publishing to the a
                  deleting scratch leftovers, anything the persona-screen goal owns
 heartbeat:       session cron every 30 min plus the login-node watcher; caffeinate keeps the Mac from idle sleep
                  until about 08:30 (a closed lid still sleeps it)
+
+[2026-11-05 23:40] Persona screen validated on v2 holds; fisher_cap and region built and launched (goal=persona-screen-overnight)
+
+Screen (persona_screen.py on runs/replay_smollm3_v2, labels = >= 3 of 4 judges, even conversations fit, odd evaluate):
+- Detection at a 5% false-alarm rate on in-character hold tokens: the Fisher score catches more drifted tokens than the
+  raw persona axis the cap triggers on, for every persona (bard 0.89 vs 0.49, pirate 0.98 vs 0.72, alien 0.36 vs 0.13).
+- Real drift is only partly on the persona axis (squared share 0.06 consultant to 0.48 bard). The AI-admission contrast
+  at the identity probes is almost orthogonal to it (share <= 0.06).
+- At matched distortion (<= 0.10, Fisher shrinkage fixed at 0.3 as deployed), fisher_cap restores more than the cap on
+  five of six personas (pirate 0.99 vs 0.87, alien 1.09 vs 0.81, genie 0.72 vs 0.60, bard 1.07 vs 1.00, ghost 0.64 vs
+  0.59). Consultant is a ceiling case for every operator. The conceptor family (conceptor_tok, ctok_tight, diffpull,
+  gated_diffpull, ctok_cap) never reaches the frontier: it edits every token.
+- region (one-sided ellipse over the Fisher and identity scores) restores like the cap at lower distortion and is the
+  only operator that moves identity, but its identity read-out shares labels with its identity direction, so that
+  number is optimistic; ghost's identity numbers are unstable (86 in-role probe tokens in the evaluation half).
+
+Validation (validate_screen.py: each method rebuilt from the v2 hold's own fits.npz, applied to the replayed unsteered
+tokens, compared with the four judges' hold outcomes; prompt context; 7 methods x 6 personas):
+- Pooled Spearman: restore vs in-character rate 0.60, distortion vs coherence -0.75, identity fix vs AI admissions -0.62
+  (all p < 1e-4, n = 42).
+- Within persona, mean of six: 0.67, -0.78, -0.49; restore vs holding at the "drop the act" pushes 0.74. Five personas
+  track the holds (restore rho 0.67-0.96, distortion -0.75 to -0.99); consultant does not (restore -0.07), because its
+  unsteered hold already stays in character (0.92).
+- Identity fix is the weakest read-out, and low admissions can also come from incoherence (meanshift_tok drives
+  admissions to 0.00-0.21 at coherence 0.17-0.42).
+
+Built (tests: 35 pass; ruff clean on new files, no new findings beyond the project's existing dict() style):
+- 3619fa60: fisher_cap in steering.py (w = (S_W + 0.3 mean-eig I)^-1 d on fit-run tokens; push u = d / (w.d); floors =
+  percentiles of persona answers' Fisher scores). The cap hook takes an optional push vector; plain caps unchanged.
+  persona_screen.py (with --shrink), validate_screen.py and the synthetic screen test committed.
+- f6ca3e72: region (steering.region_fit, identity_tokens; hook mode "region"; steer_eval --identity_replay
+  --identity_hold, default steer_hold_v2_{p}_prompt). Checked on real data before launch: deployed fits restore
+  0.89-1.00 at distortion 0.06-0.11 on pirate/bard, consultant about 0.4 at < 0.02; deployed fisher_cap's direction has
+  cosine 0.92 (pirate), 0.86 (bard) with the screen's.
+- Releases 3619fa60 and f6ca3e72 deployed and verified on the course volume. 3619fa60 is unused (superseded before
+  launch because the 50-job cap fits one combined chain, not two); it is a pruning candidate for the owner.
+
+Launched 23:14 on release f6ca3e72, one chain for both operators (two separate chains would pass the 50-job cap; the
+AUTHORITY block allows both operators): sweeps 6834316-21 (none + fisher_cap + region on the 25th-99th percentile
+grid) -> Qwen sweep judges 6834322 (pirate+ghost), 6834329 (bard+consultant), 6834336 (genie+alien) -> holds 6834323/24,
+6834330/31, 6834337/38 (both contexts, 40 conversations x 20 turns, none reruns as a check) -> hold judges 6834325-28,
+6834332-35, 6834339-42. Runs: steer_sweep_screen_<p>, steer_hold_screen_<p>. --nice 100. Queue 39 of 50. Script:
+scratchpad launch_screen_ops.sh. A login-node watcher stops on the first failed, timed-out or killed job. ETA for all
+hold judges about 04:30-06:30 EST, depending on how fast the v3 and OLMo judges free GPUs.
+Results page (Dashboard type, private): https://claude.ai/artifact/7ZHLHKq7VgMmnZVjk2SzTS. Its in-page check did not
+report a result, so it has not been verified to render.
+Morning list (this goal): prune release 3619fa60 if the owner agrees; OLMo runs of fisher_cap and region; whether
+region's identity direction should come from a held-out hold (it now uses the v2 holds, whose prompts the new holds
+share).
