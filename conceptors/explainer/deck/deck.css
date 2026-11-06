@@ -138,3 +138,15 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
   .sbody,.slide .plate{grid-template-columns:minmax(0,1fr)}
   .slide h2{font-size:clamp(24px,6vw,40px)}
 }
+
+/* Beyond the Cap plates on slides: its stacked layout is built for scrolling, so slides use text left, figures right */
+.slide .btc .plate,.slide .btc .plate.stack{grid-template-columns:minmax(0,.72fr) minmax(0,1.6fr)!important;gap:clamp(12px,2vh,24px) clamp(18px,2.6vw,44px);padding-block:0;border:0}
+.slide .btc .plate .txt{max-height:72vh;overflow:auto;font-size:.92rem}
+.slide .btc .plate .txt>.kicker,.slide .btc .plate .txt>h3{display:none}
+.slide .btc .plate .txt>p:not(.papers):not(.try):not(.opdesc):not(.src):not(:nth-of-type(2)){display:none}
+.slide .btc .part{padding-block:0 6px}
+.slide .btc .part p{font-size:.88rem;line-height:1.4;margin:0 0 4px;max-width:none}
+.slide .btc .plate>.fig,.slide .btc .plate>figure{max-height:68vh}
+.slide .btc .part>.kicker,.slide .btc .part>h2{display:none}
+.slide:not(.appendix) .btc #ops-table-wrap{display:none}
+.slide .btc .plate>.fig,.slide .btc .plate>figure{max-height:80vh;overflow:auto}

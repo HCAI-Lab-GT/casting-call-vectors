@@ -1,6 +1,6 @@
-<section class="slide cover" data-title="Can a conceptor hold a persona?" data-part="Cover">
+<section class="slide cover" data-title="Keeping a model in character over a long conversation" data-part="Cover">
   <div class="kicker">Human-Centered AI Lab · lab meeting · 6 November 2026</div>
-  <h1>Can a conceptor <em>hold</em> a persona?</h1>
+  <h1>Keeping a model in character over a long conversation</h1>
   <p class="lede">We test four ways to keep a model in a role: a system prompt, a steering vector, an activation cap and a conceptor. Each one faces a 20-turn conversation that keeps telling the model to drop the role. The data are real runs on SmolLM3-3B and OLMo-3-7B, scored by four judge models from four labs.</p>
   <div class="meta"><span>SmolLM3-3B · <span data-stat="npersonas"></span> personas<span data-stat="othermodels"></span> · methods fit on 12,960 judged SmolLM3 answers</span><span>Builds on <a href="https://arxiv.org/abs/2608.00023" target="_blank" rel="noopener"><b>Casting Call</b></a> (Song et al. 2026)</span><span>Keys: → next · ← back · G all slides</span></div>
 </section>
@@ -17,14 +17,14 @@
   </div>
 </section>
 
-<section class="slide" data-title="Why a prompted persona should fade" data-part="The problem">
-  <header class="shead"><div class="kicker">The problem · toy dynamics</div><h2>Why a prompted persona should fade over a long conversation</h2></header>
+<section class="slide" data-title="Why prompted personas are expected to fade" data-part="The problem">
+  <header class="shead"><div class="kicker">The problem · toy dynamics</div><h2>Why prompted personas are expected to fade</h2></header>
   <p class="big">A system prompt sets the persona. Three forces wear it down as the chat grows: the prompt becomes a smaller share of what each new token attends to, every steered token stays in the cache and is read again, and each user message pulls the model back toward the assistant. <a href="https://arxiv.org/abs/2402.10962" target="_blank" rel="noopener"><b>Li et al. 2024</b></a> measured system-prompt adherence dropping within 8 rounds. Watch the prompt-only line; the other lines are methods we get to later.</p>
   {{plate:sim}}
 </section>
 
-<section class="slide" data-title="A prompted persona holds until it's pushed" data-part="The problem">
-  <header class="shead"><div class="kicker">The problem</div><h2>A prompted persona holds until it's pushed, then mostly stays broken</h2></header>
+<section class="slide" data-title="The prompt holds until pushed, then rarely recovers" data-part="The problem">
+  <header class="shead"><div class="kicker">The problem</div><h2>The prompt holds until pushed, then rarely recovers</h2></header>
   <div class="sbody s2">
     <div class="scol">
       <p class="big">The model gets a persona system prompt, then a 20-turn conversation. Turns 5 and 13 say "drop the act"; turns 8 and 16 ask "are you an AI?".</p>
@@ -42,17 +42,17 @@
 
 <section class="slide" data-title="A persona is a cloud of hidden states" data-part="Geometry">
   <header class="shead"><div class="kicker">Geometry · toy data</div><h2>A persona is a cloud of hidden states</h2></header>
-  {{btc:legend}}{{btc:sec-start}}{{btc:space}}
+  {{btc:legend}}{{btc:space}}
 </section>
 
-<section class="slide" data-title="A vector pushes every token; a cap guards one line" data-part="Geometry">
-  <header class="shead"><div class="kicker">Geometry · toy data</div><h2>A vector pushes every token; a cap guards one line</h2></header>
+<section class="slide" data-title="Steering vector vs activation cap" data-part="Geometry">
+  <header class="shead"><div class="kicker">Geometry · toy data</div><h2>Steering vector vs activation cap</h2></header>
   {{btc:cap}}
 </section>
 
-<section class="slide" data-title="Ten moves on one canvas" data-part="Geometry">
-  <header class="shead"><div class="kicker">Geometry · toy data, 2D and 3D</div><h2>How to move a token: ten moves on one canvas</h2></header>
-  {{btc:sec-move}}{{btc:moves}}
+<section class="slide" data-title="Ten ways to move a token" data-part="Geometry">
+  <header class="shead"><div class="kicker">Geometry · toy data, 2D and 3D</div><h2>Ten ways to move a token</h2></header>
+  {{btc:moves}}
 </section>
 
 <section class="slide" data-title="The roles separate in SmolLM3's activations" data-part="Real personas">
@@ -66,33 +66,33 @@
   {{plate:strip-plate}}
 </section>
 
-<section class="slide" data-title="The persona is a thin slice of the variance" data-part="Real personas">
-  <header class="shead"><div class="kicker">Real personas · SmolLM3-3B</div><h2>The persona is a thin slice of the variance</h2></header>
+<section class="slide" data-title="The role explains little of the variance" data-part="Real personas">
+  <header class="shead"><div class="kicker">Real personas · SmolLM3-3B</div><h2>The role explains little of the variance</h2></header>
   {{plate:slice-plate}}
 </section>
 
-<section class="slide" data-title="A conceptor is a soft stencil" data-part="The conceptor">
-  <header class="shead"><div class="kicker">How the conceptor works · toy data</div><h2>A conceptor is a soft stencil</h2></header>
+<section class="slide" data-title="How a conceptor reshapes the cloud" data-part="The conceptor">
+  <header class="shead"><div class="kicker">How the conceptor works · toy data</div><h2>How a conceptor reshapes the cloud</h2></header>
   {{plate:stencil}}
 </section>
 
-<section class="slide" data-title="A steering vector forgets the cloud's shape" data-part="The conceptor">
-  <header class="shead"><div class="kicker">How the conceptor works · toy data</div><h2>A steering vector forgets the cloud's shape</h2></header>
+<section class="slide" data-title="A steering vector moves every token the same way" data-part="The conceptor">
+  <header class="shead"><div class="kicker">How the conceptor works · toy data</div><h2>A steering vector moves every token the same way</h2></header>
   {{plate:arrow}}
 </section>
 
-<section class="slide" data-title="Where the cloud sits changes what it learns" data-part="The conceptor">
-  <header class="shead"><div class="kicker">How the conceptor works · toy data</div><h2>Where the cloud sits changes what it learns</h2></header>
+<section class="slide" data-title="Centering changes what the conceptor learns" data-part="The conceptor">
+  <header class="shead"><div class="kicker">How the conceptor works · toy data</div><h2>Centering changes what the conceptor learns</h2></header>
   {{plate:center}}
 </section>
 
-<section class="slide" data-title="Check that the stencil does the work" data-part="The conceptor">
-  <header class="shead"><div class="kicker">How the conceptor works · toy data</div><h2>Check that the stencil does the work</h2></header>
+<section class="slide" data-title="Control: remove the conceptor's matrix" data-part="The conceptor">
+  <header class="shead"><div class="kicker">How the conceptor works · toy data</div><h2>Control: remove the conceptor's matrix</h2></header>
   {{plate:gain}}
 </section>
 
-<section class="slide" data-title="The aperture decides how hard the conceptor pulls" data-part="The conceptor">
-  <header class="shead"><div class="kicker">How the conceptor works · real SmolLM3 spectrum</div><h2>The aperture decides how hard the conceptor pulls</h2></header>
+<section class="slide" data-title="A tighter aperture pulls harder toward the persona" data-part="The conceptor">
+  <header class="shead"><div class="kicker">How the conceptor works · real SmolLM3 spectrum</div><h2>A tighter aperture pulls harder toward the persona</h2></header>
   {{btc:aperture}}
 </section>
 
@@ -111,8 +111,8 @@
   </div>
 </section>
 
-<section class="slide" data-title="A conceptor keeps the persona direction" data-part="Setting a persona">
-  <header class="shead"><div class="kicker">Why conceptors don't set it · toy data, real numbers</div><h2>A conceptor keeps the persona direction, so it can't move you along it</h2></header>
+<section class="slide" data-title="Why the conceptor can't set a persona" data-part="Setting a persona">
+  <header class="shead"><div class="kicker">Why conceptors don't set it · toy data, real numbers</div><h2>Why the conceptor can't set a persona</h2></header>
   <div class="sbody">
     <div class="scol">
       <p class="big">At full strength, the conceptor sends an activation h to μ + C(h − μ), where μ is the persona's center. The part of the gap it leaves is C(μ − h). Persona answers vary a lot along the persona direction, so C keeps that direction, and most of the gap stays.</p>
@@ -172,8 +172,8 @@
   </div>
 </section>
 
-<section class="slide" data-title="What the conceptor keeps, direction by direction" data-part="Holding a persona">
-  <header class="shead"><div class="kicker">Mechanism · per-token conceptor against the cap, real activations</div><h2>The cap edits one direction; the conceptor reweights all of them</h2></header>
+<section class="slide" data-title="Cap vs conceptor, direction by direction" data-part="Holding a persona">
+  <header class="shead"><div class="kicker">Mechanism · per-token conceptor against the cap, real activations</div><h2>Cap vs conceptor, direction by direction</h2></header>
   <div class="sbody">
     <div class="scol">
       <p class="big">A cap acts on one direction, the persona axis, and only when an activation drops below its floor. The per-token conceptor scales every direction by how much the persona's tokens use it. Directions the persona uses a lot pass, and rare ones shrink.</p>
@@ -221,8 +221,8 @@
   <p class="note">Means over the <span data-stat="njudges"></span> judges and each model's personas, on turns without a probe unless a turn is named. Each method runs at the strength a one-turn sweep without the prompt picked. The judges rank the methods the same way; Qwen gives the highest scores. Consultant sits close to the assistant, so it stays at 92-95% with every method: a persona near the assistant gives the methods and the judges little to tell apart.</p>
 </section>
 
-<section class="slide" data-title="Next" data-part="Next">
-  <header class="shead"><div class="kicker">Next</div><h2>Where this goes next</h2></header>
+<section class="slide" data-title="Follow-ups" data-part="Next">
+  <header class="shead"><div class="kicker">Next</div><h2>Follow-ups</h2></header>
   <div class="cards five">
     <div class="card"><h3>Pushes, not length</h3><p>Without pushes a prompted persona held through 20 turns. Next: more kinds of pressure, and conversations past 20 turns.</p></div>
     <div class="card"><h3>Pick the aperture per model</h3><p>10× was the best of 1×, 3×, 10×, 30× and 100× on both models. A finer sweep between 3× and 30×, and a rule that picks it from the data.</p></div>
@@ -233,18 +233,18 @@
   <p class="note">The next slides are the wider menu: the choices every steering method makes, each one something to try. Everything here is reproducible from the conceptors/ folder of casting-call-vectors: runs, judge calibration, and this deck's build script.</p>
 </section>
 
-<section class="slide" data-title="Four more choices every method makes" data-part="Beyond the cap">
-  <header class="shead"><div class="kicker">Next · beyond the cap</div><h2>Four more choices every method makes</h2></header>
+<section class="slide" data-title="Four choices every steering method makes" data-part="Beyond the cap">
+  <header class="shead"><div class="kicker">Next · beyond the cap</div><h2>Four choices every steering method makes</h2></header>
   {{btc:sec-map}}
 </section>
 
-<section class="slide" data-title="When to act" data-part="Beyond the cap">
-  <header class="shead"><div class="kicker">Next · beyond the cap · toy data</div><h2>When to act: six gates, one move</h2></header>
+<section class="slide" data-title="When to act: gating an edit" data-part="Beyond the cap">
+  <header class="shead"><div class="kicker">Next · beyond the cap · toy data</div><h2>When to act: gating an edit</h2></header>
   {{btc:sec-when}}{{btc:gates}}
 </section>
 
-<section class="slide" data-title="Which direction" data-part="Beyond the cap">
-  <header class="shead"><div class="kicker">Next · beyond the cap · toy data</div><h2>Which direction: six ways to find it</h2></header>
+<section class="slide" data-title="Finding the persona direction" data-part="Beyond the cap">
+  <header class="shead"><div class="kicker">Next · beyond the cap · toy data</div><h2>Finding the persona direction</h2></header>
   {{btc:sec-dirs}}{{btc:directions}}
 </section>
 
@@ -254,22 +254,22 @@
 </section>
 
 <section class="slide" data-title="Curved geometry" data-part="Beyond the cap">
-  <header class="shead"><div class="kicker">Next · beyond the cap · toy data</div><h2>Curved geometry: flat and curved, in general</h2></header>
+  <header class="shead"><div class="kicker">Next · beyond the cap · toy data</div><h2>Curved geometry</h2></header>
   {{btc:sec-curved}}{{btc:flatcurved}}
 </section>
 
-<section class="slide" data-title="Straight lines leave curved data" data-part="Beyond the cap">
-  <header class="shead"><div class="kicker">Next · beyond the cap · toy data</div><h2>Straight lines leave curved data</h2></header>
+<section class="slide" data-title="Straight edits leave curved data" data-part="Beyond the cap">
+  <header class="shead"><div class="kicker">Next · beyond the cap · toy data</div><h2>Straight edits leave curved data</h2></header>
   {{btc:manifold}}
 </section>
 
-<section class="slide" data-title="Keep the length, turn the direction" data-part="Beyond the cap">
-  <header class="shead"><div class="kicker">Next · beyond the cap · toy data</div><h2>Keep the length, turn the direction</h2></header>
+<section class="slide" data-title="Steering on the sphere" data-part="Beyond the cap">
+  <header class="shead"><div class="kicker">Next · beyond the cap · toy data</div><h2>Steering on the sphere</h2></header>
   {{btc:sphere}}
 </section>
 
-<section class="slide" data-title="Behavior is sharp in a few directions" data-part="Beyond the cap">
-  <header class="shead"><div class="kicker">Next · beyond the cap · toy data</div><h2>Behavior is sharp in a few directions</h2></header>
+<section class="slide" data-title="Sharp directions in the loss" data-part="Beyond the cap">
+  <header class="shead"><div class="kicker">Next · beyond the cap · toy data</div><h2>Sharp directions in the loss</h2></header>
   {{btc:sharp}}
 </section>
 
