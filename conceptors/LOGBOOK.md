@@ -962,3 +962,32 @@ atl1-1-03-012-8-0). These two IDs now replace 6832133 and 6832124 in the goal's 
 on 6835445, 6835502 and 6832708 (Llama on OLMo, 32 min in on a healthy node) stops on the first failure.
 For the morning: atl1-1-03-011-13-0 joins atl1-1-03-011-28-0 on the list of overheating H100s to report to
 pace-support.
+
+[2026-11-06 00:30] region ran at the wrong strength in five of six screen holds; corrected-dose holds launched (goal=persona-screen-overnight)
+
+The screen chain's sweeps and sweep judges finished (6834316-21, 6834322/29/36). analyze_steer.select picks the smallest
+strength number that reaches 80% fully in character, but region's strength is its radius percentile, so a larger number
+is a gentler edit (pirate sweep: fully 0.79 at 25 falling to 0.44 at 99, read-out 0.33 to 0.13). The rule therefore
+ran region at its strongest grid setting where a gentler one already passed, and at its gentlest where none passed:
+
+| persona | region ran | fixed rule picks | sweep fully at the fixed pick |
+|---|---|---|---|
+| pirate | 99 (gentlest, fully 0.44) | 25 (unmatched: strongest coherent) | 0.79 |
+| ghost | 25 | 99 | 0.89 |
+| bard | 25 | 99 | 0.99 |
+| consultant | 25 | 99 | 1.00 |
+| genie | 25 | 90 | 0.90 |
+| alien | 25 | 25 (unchanged) | 0.83 |
+
+fisher_cap's picks are unaffected (its strength is a floor percentile, larger = stronger): pirate 50, alien 75, the
+other four 25, the lowest grid point, because their sweeps already pass at the weakest setting.
+- Fix: 8ef85c45, analyze_steer.GENTLER_AS_STRENGTH_RISES = {"region"} sorts region from its largest value; new test.
+  37 tests pass. Unsigned (1Password signing still down).
+- The running steer_hold_screen_<p> holds stay as they are: for ghost, bard, consultant and genie they are a high-dose
+  region arm, for pirate an under-dosed one, and their fisher_cap and none rows are correct.
+- Corrected-dose holds, release f6ca3e72 (same executor as the chain), strengths passed with --matched from the fixed
+  rule: steer_hold_screen_region_<p> for pirate, ghost, bard, consultant, genie (none + region, both contexts, 40 x 20,
+  same seeded conversations). Holds 6835610, 6835611, 6835616, 6835617, 6835623; four judges per group, 6835612-15
+  (pirate+ghost), 6835618-22 (bard+consultant), 6835624-27 (genie). --nice 100. Queue 36 of 50. This is the second
+  chain the AUTHORITY block allows (one per operator; the first chain carried both). Script: scratchpad
+  launch_region_fix.sh. A login-node watcher stops on the first failed job.
