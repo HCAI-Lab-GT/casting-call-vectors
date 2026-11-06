@@ -136,7 +136,7 @@ def main(argv=None):
             turns = sorted({r["turn"] for r in rs})
             per_turn = [dict(turn=t, probe=bool(rs_t[0].get("probe")), **stats(rs_t))
                         for t in turns for rs_t in [[r for r in rs if r["turn"] == t]]]
-            pick = lambda t, key: next((p[key] for p in per_turn if p["turn"] == t), None)  # noqa: E731
+            pick = lambda t, key: next((p.get(key) for p in per_turn if p["turn"] == t), None)  # noqa: E731  # --no_traj runs lack x_*
             last = turns[-1]
             summary = {}
             for key in ("fully_rate", "coherence", "readout", "identity_ai_rate", "x_pre", "x_post"):
