@@ -60,17 +60,24 @@ def pick(d: dict, keys) -> dict:
     return {k: d[k] for k in keys if k in d and d[k] is not None}
 
 
+def probe_set(path: str) -> str:
+    man = pathlib.Path(path) / "manifest.json"
+    return json.loads(man.read_text()).get("probe_set", "standard") if man.exists() else "standard"
+
+
 def hold_rows(paths: list[str]) -> list[dict]:
-    """Hold entries from several runs (e.g. one per context), first run winning per (context, method)."""
+    """Hold entries from several runs (e.g. one per context), first run winning per (context, method). A run with
+    other probes (steer_eval --probe_set none or unseen) becomes its own context, e.g. 'prompt_none'."""
     seen, rows = set(), []
     for p in paths:
-        d = load(p)
+        d, ps = load(p), probe_set(p)
         for h in d["hold"]:
-            key = (h["context"], h["method"])
+            ctx = h["context"] if ps == "standard" else h["context"] + "_" + ps
+            key = (ctx, h["method"])
             if key in seen:
                 continue
             seen.add(key)
-            rows.append(dict(context=h["context"], method=h["method"], strength=h["strength"],
+            rows.append(dict(context=ctx, method=h["method"], strength=h["strength"],
                              per_turn=[pick(t, TURN_KEYS) for t in h["per_turn"]],
                              ordinary=pick(h["ordinary"], SUMMARY_KEYS),
                              examples=[dict(pick(e, TRAJ + ("readout",)), q=e["q"], a=e["a"], label=e.get("label"),

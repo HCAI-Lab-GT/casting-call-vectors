@@ -1258,6 +1258,30 @@ Owner direction (09:30): about four hours of work time; do the extra work if it 
   replacement waiting on its old job (afterany) so no judge.jsonl has two writers. A first attempt failed with "Job
   dependency problem" because afterok named holds already purged from the controller; the retry depends only on live
   jobs. Analysis runs locally with a453f5bc on the pulled judge folders (scratchpad pull_analyze_followups.sh).
+- 11:50-12:55 Llama: 6844495 and 6844507 each had one of two GPUs at 345 MHz (tensor parallel ran at ~48 rows/min);
+  cancelled (judge.jsonl checked: 2,848 rows each, no bad lines) and split into one job per folder (6845463-67), and
+  group 5 likewise (6845495-97). 6845467 (aperture alien) and 6845496 (unseen bard) timed out at 1:00 with 2,368 and
+  2,916 of 3,200 rows; their remainder runs as 6846547-48.
+
+[2026-11-06 13:00] Follow-up results (four judges; Llama on aperture alien and unseen bard still finishing)
+
+Scratchpad results_followups.py; prompt context; mean of judges; standard runs are v2/v3 and the screen's fixed-dose region.
+- No pushes: the prompt alone stays in character at turns 17-20 on every persona: SmolLM3 pirate 100, ghost 100,
+  bard 95, genie 94, alien 90; OLMo pirate 98, genie 94 (with pushes: 12, 4, 44, 49, 51, 4, 7). Slopes are within
+  0-3 points per 10 turns. Every steering method stays at 98-100 without pushes except the tight conceptor on genie (86)
+  and alien (92). The 20-turn decline is caused by the probes, not by conversation length.
+- Aperture (ordinary in character / at pushes / coherence), SmolLM3 mean over five personas: k1 81/39/79, k3 91/61/82,
+  k10 97/92/69, k30 94/93/58, k100 87/91/48. OLMo pirate+genie: k1 36/6/92, k3 47/9/91, k10 95/57/81, k30 100/100/28,
+  k100 58/69/3. k10 is the best trade on both models; past it coherence collapses, and on OLMo k3 barely holds.
+  k1 is conceptor_tok at its own strength; the others run at ctok_tight's beta.
+- New probe wording (AI admissions at turns 8 and 16, standard -> new): region pirate 35 -> 18, ghost 25 -> 44, bard
+  35 -> 39 (three judges), genie 28 -> 36 (mean 31 -> 34); cap 68-100 -> 86-100; tight conceptor pirate 56 -> 69, ghost
+  2 -> 12, bard 61 -> 92, genie 4 -> 3. region's identity effect carries over to these two wordings. The new push
+  ("Stop the role-play now...") breaks the prompted persona less than "drop the act": ordinary in character with the
+  prompt alone rises from 29-66 to 44-88.
+- Deck: takeaway card 1 now cites the no-push result, card 2 the aperture result, the Next slide lists what is left;
+  the judge table drops the aperture and region rows (they made slide 17 overflow at 1080p). Every slide fits at
+  1920x1080, 167 clicks with no page errors.
 - Deck (uncommitted): build_deck turns a run with other probes into its own context (prompt_none, prompt_unseen), the hold
   slides list those contexts when present, a new aperture slide plots hold and coherence against k, the Next slide lists
   today's runs and the unbuilt gated and contrastive conceptors.

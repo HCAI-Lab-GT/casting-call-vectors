@@ -23,8 +23,17 @@ const METH={
   meanshift:['Mean-shift control, answer-average','ms (avg)','other',[2,3]],
   ctok_cap:['Per-token conceptor + cap','con+cap','assist',[12,3,2,3]],
   ctok_tight:['Per-token conceptor, tight aperture','con tight','pirate',[10,3]],
+  ctok_k3:['Per-token conceptor, aperture ×3','con ×3','pirate',[3,3]],
+  ctok_k30:['Per-token conceptor, aperture ×30','con ×30','pirate',[14,4]],
+  ctok_k100:['Per-token conceptor, aperture ×100','con ×100','pirate',[1,3]],
+  region:['Region: cap plus an identity floor','region','assist',[3,2]],
   diffpull:['Difference-subspace conceptor','diff-con','pirate',[4,2,1,2]]};
-const MORDER=['none','add','cap','cap_aa','add_cap','ctok_cap','conceptor_tok','ctok_tight','diffpull','add_ctok','meanshift_tok','conceptor','lowrank','meanshift'];
+const MORDER=['none','add','cap','cap_aa','add_cap','region','ctok_cap','conceptor_tok','ctok_k3','ctok_tight','ctok_k30','ctok_k100',
+  'diffpull','add_ctok','meanshift_tok','conceptor','lowrank','meanshift'];
+/* contexts: the two main ones, plus follow-up runs with other probes (steer_eval --probe_set), shown when present */
+const CTXS=[['prompt','Prompt + steering'],['steer_only','Steering only'],['prompt_none','Prompt, no pushes'],
+  ['prompt_unseen','Prompt, new probe wording']];
+const hasCtx=(p,c)=>JUDGES_OF(p).some(j=>DK.personas[p].hold[j].some(h=>h.context===c));
 const DEFAULT_ON=new Set(['none','add','cap','cap_aa','ctok_cap','conceptor_tok','ctok_tight']);
 const MEASURES=[['fully_rate','In character'],['coherence','Coherence'],['identity_ai_rate','Admits being an AI']];
 const PROBE_KIND={5:'drop the act',13:'drop the act',8:'are you an AI?',16:'are you an AI?'};
@@ -38,15 +47,17 @@ const turnValP=(p,j,ctx,m,t,key)=>{const h=holdRowP(p,j,ctx,m);if(!h)return null
 const turnVal=(j,ctx,m,t,key)=>turnValP(PERS,j,ctx,m,t,key);
 const NT=()=>PD().n_turns||10;
 const XS=()=>Array.from({length:NT()},(_,i)=>i+1);
-const probesNow=()=>{const j=JUDGES()[0];const h=j&&(PD().hold[j]||[])[0];return h?h.per_turn.filter(t=>t.probe).map(t=>t.turn+1):[5,8];};
+const probesNow=ctx=>{const j=JUDGES()[0],rows=j?(PD().hold[j]||[]):[];const h=rows.find(r=>r.context===(ctx||'prompt'))||rows[0];
+  return h?h.per_turn.filter(t=>t.probe).map(t=>t.turn+1):[5,8];};
 const series=(judge,ctx,m,key)=>XS().map(t=>judge==='mean'?mean(JUDGES().map(j=>turnVal(j,ctx,m,t,key))):turnVal(judge,ctx,m,t,key));
 const methodsIn=ctx=>MORDER.filter(m=>JUDGES().some(j=>holdRow(j,ctx,m)));
 const nOf=(ctx,m)=>{const h=holdRow(JUDGES()[0],ctx,m);return h&&h.per_turn[0]?h.per_turn[0].n:null;};
 const swatchI=m=>{const d=METH[m][3];return '<i class="'+(d?(d[0]<=2?'dot':'dash'):'')+'" style="color:'+COL[METH[m][2]]+'"></i>';};
 const lineSwatch=m=>{const d=METH[m][3];return '<i style="display:inline-block;width:18px;height:0;margin-right:8px;vertical-align:middle;border-top:3px '+
   (d?(d[0]<=2?'dotted':'dashed'):'solid')+' '+COL[METH[m][2]]+'"></i>';};
-const probeBands=()=>probesNow().map(t=>({x0:t-.45,x1:t+.45,color:rgba(COL.probe,.09),alpha:1}));
-const probeNote=()=>'Shaded: '+probesNow().map(t=>'turn '+t+' "'+(PROBE_KIND[t]||'probe')+'"').join(', ')+'.';
+const probeBands=ctx=>probesNow(ctx).map(t=>({x0:t-.45,x1:t+.45,color:rgba(COL.probe,.09),alpha:1}));
+const probeNote=ctx=>{const pr=probesNow(ctx);if(!pr.length)return 'No probes in these conversations: every turn is an ordinary question.';
+  return 'Shaded: '+pr.map(t=>'turn '+t+' "'+(PROBE_KIND[t]||'probe')+'"').join(', ')+(ctx==='prompt_unseen'?', in new wordings':'')+'.';};
 const segHTML=(id,opts,cur)=>'<div class="seg" id="'+id+'" role="group">'+opts.map(x=>'<button type="button" data-v="'+x[0]+'" aria-pressed="'+(x[0]===cur)+'">'+esc(x[1])+'</button>').join('')+'</div>';
 
 /* one persona switch for the whole deck: every results slide follows it */
@@ -85,7 +96,9 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-persona] b
   const ch=LineChart('s2line',{aspect:.56,ml:64,mr:24,xs:XS,yRange:()=>[0,1],yTicks:()=>[0,.5,1],yFmt:pct,xFmt:String,
     bands:probeBands,selected:()=>turn-1,direct:false,vFmt:v=>pct(v),tipTitle:i=>'turn '+(i+1),
     series:()=>[...JUDGES().map(j=>({name:JNAME[j],color:rgba(COL.muted,.45),width:1.2,values:series(j,'prompt','none','fully_rate')})),
-      {name:'Mean of judges',color:COL.ink,width:2.6,dots:true,values:series('mean','prompt','none','fully_rate')}],
+      {name:'Mean of judges',color:COL.ink,width:2.6,dots:true,values:series('mean','prompt','none','fully_rate')},
+      ...(hasCtx(PERS,'prompt_none')?[{name:'Same questions, no pushes (mean of judges)',color:COL.pirate,width:2.4,dash:[6,4],
+        values:series('mean','prompt_none','none','fully_rate')}]:[])],
     onPick:i=>{turn=i+1;setSeg('s2turns',String(turn));chat();ch.f.draw();}});
   box.addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(!b)return;turn=+b.dataset.v;setSeg('s2turns',String(turn));chat();ch.f.draw();});
   const pb=$('s2p');if(pb)pb.innerHTML=personaSeg('s2ps');
@@ -188,7 +201,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-persona] b
 document.querySelectorAll('.sbody.hold').forEach(root=>{
   const id=root.dataset.hold,st={measure:root.dataset.measure,ctx:root.dataset.context,judge:'mean',
     on:new Set(DEFAULT_ON),turn:+(root.dataset.transcript||0)};
-  const ctxs=[['prompt','Prompt + steering'],['steer_only','Steering only']];
+  const ctxs=CTXS.filter(c=>PERSONAS.some(p=>hasCtx(p,c[0])));
   root.innerHTML='<div class="scol">'+personaSeg(id+'ps')+
     '<div class="ctlrow"><span>Context</span>'+segHTML(id+'c',ctxs,st.ctx)+'</div>'+
     '<div class="ctlrow"><span>Measure</span>'+segHTML(id+'m',MEASURES,st.measure)+'</div>'+
@@ -207,8 +220,9 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
   }
   const yr=()=>st.measure==='coherence'?[0,100]:[0,1];
   const ch=LineChart(id+'cv',{aspect:st.turn?.42:.58,ml:64,mr:24,direct:false,xs:XS,yRange:yr,yTicks:()=>st.measure==='coherence'?[0,25,50,75,100]:[0,.25,.5,.75,1],
-    yFmt:v=>fmtM(st.measure,v),xFmt:t=>String(t),xTicks:()=>XS().filter(t=>NT()<=12||t===1||t%5===0||probesNow().includes(t)),bands:probeBands,selected:()=>st.turn?st.turn-1:-1,
-    tipTitle:i=>'turn '+(i+1)+(probesNow().includes(i+1)?' · '+(PROBE_KIND[i+1]||'probe'):''),vFmt:v=>fmtM(st.measure,v),
+    yFmt:v=>fmtM(st.measure,v),xFmt:t=>String(t),xTicks:()=>XS().filter(t=>NT()<=12||t===1||t%5===0||probesNow(st.ctx).includes(t)),
+    bands:()=>probeBands(st.ctx),selected:()=>st.turn?st.turn-1:-1,
+    tipTitle:i=>'turn '+(i+1)+(probesNow(st.ctx).includes(i+1)?' · '+(PROBE_KIND[i+1]||'probe'):''),vFmt:v=>fmtM(st.measure,v),
     series:()=>methodsIn(st.ctx).filter(m=>st.on.has(m)).map(m=>({name:METH[m][0],short:METH[m][1],color:COL[METH[m][2]],
       dash:METH[m][3]||undefined,width:m==='conceptor_tok'||m==='add'||m==='cap_aa'?2.6:2,values:series(st.judge,st.ctx,m,st.measure)})),
     onPick:i=>{st.turn=i+1;redraw();}});
@@ -224,11 +238,12 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
   }
   function note(){
     if(!JUDGES().length){$(id+'n').textContent=PNAME(PERS)+': the 20-turn hold runs aren\'t judged yet, so there is nothing to plot.';$(id+'pn').textContent='';return;}
+    if(!methodsIn(st.ctx).length){$(id+'n').textContent=PNAME(PERS)+' has no runs in this context.';$(id+'pn').textContent='';return;}
     const parts=methodsIn(st.ctx).filter(m=>st.on.has(m)).map(m=>{
       const v=st.judge==='mean'?mean(JUDGES().map(j=>{const h=holdRow(j,st.ctx,m);return h&&h.ordinary[st.measure];})):(holdRow(st.judge,st.ctx,m)||{ordinary:{}}).ordinary[st.measure];
       return METH[m][1]+' '+fmtM(st.measure,v);});
     $(id+'n').textContent=PNAME(PERS)+', turns without a probe, '+(st.judge==='mean'?'mean of the judges':JNAME[st.judge])+': '+parts.join(' · ')+'.';
-    $(id+'pn').textContent=probeNote()+' Click a turn'+(st.turn?' to read conversation 1 at that turn.':' to mark it.')+' Mean: average of '+JUDGES().length+' judges.';
+    $(id+'pn').textContent=probeNote(st.ctx)+' Click a turn'+(st.turn?' to read conversation 1 at that turn.':' to mark it.')+' Mean: average of '+JUDGES().filter(j=>(PD().hold[j]||[]).some(h=>h.context===st.ctx)).length+' judges.';
   }
   function redraw(){ch.f.draw();transcript();note();}
   togs();
@@ -411,7 +426,7 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
     const cell=v=>{if(v==null)return '<td class="cell">–</td>';const t=coh?v/100:v;
       return '<td class="cell" style="background:'+rgba('#003057',(.06+.62*t).toFixed(2))+';color:'+(t>.55?'#fbfaf7':'#1a1a18')+'">'+(coh?num(v):pct(v))+'</td>';};
     $('s14t').innerHTML='<thead><tr><th>Method</th>'+js.map(j=>'<th>'+JSHORT[j]+'</th>').join('')+'<th>Spread</th></tr></thead><tbody>'+
-      methodsIn(st.ctx).map(m=>{const vs=js.map(j=>val(j,m));const ok=vs.filter(v=>v!=null);
+      methodsIn(st.ctx).filter(m=>!/^ctok_k/.test(m)&&m!=='region').map(m=>{const vs=js.map(j=>val(j,m));const ok=vs.filter(v=>v!=null);  /* the aperture sweep has its own slide; region appears only in the follow-up contexts */
         const spread=ok.length?Math.max(...ok)-Math.min(...ok):null;
         return '<tr><td>'+lineSwatch(m)+esc(METH[m][0])+'</td>'+vs.map(cell).join('')+
           '<td>'+(spread==null?'–':(coh?num(spread):pct(spread)))+'</td></tr>';}).join('')+'</tbody>';
@@ -454,3 +469,34 @@ function fillStats(){
   });
 }
 fillStats();
+
+/* ---------- aperture slide: hold and coherence against the conceptor's aperture multiple k ---------- */
+(function(){
+  if(!$('sapc'))return;
+  const AP=[[1,'conceptor_tok'],[3,'ctok_k3'],[10,'ctok_tight'],[30,'ctok_k30'],[100,'ctok_k100']];
+  const XSa=()=>AP.map(a=>Math.log10(a[0]));
+  const hasAp=p=>JUDGES_OF(p).some(j=>(DK.personas[p].hold[j]||[]).some(h=>h.context==='prompt'&&h.method==='ctok_k3'));
+  let view='persona';
+  const who=()=>(view==='persona'?[PERS]:view==='smol'?GROUP('all'):GROUP('m:OLMo-3-7B')).filter(hasAp);
+  const val=(m,where,key)=>{const ps=who();if(!ps.length)return null;
+    return mean(ps.map(p=>where==='push'?mean([statFor(p,'prompt',m,'t5',key),statFor(p,'prompt',m,'t13',key)]):statFor(p,'prompt',m,where,key)));};
+  const kFmt=x=>'×'+Math.round(Math.pow(10,x));
+  const fitH={get maxH(){return Math.round(innerHeight*.28);}};
+  const hold=LineChart('sapc',{aspect:.42,ml:64,mr:110,canvasOpt:fitH,xs:XSa,yRange:()=>[0,1],yTicks:()=>[0,.25,.5,.75,1],yFmt:pct,xFmt:kFmt,
+    tipTitle:i=>'aperture k = '+AP[i][0],vFmt:pct,xTitle:'aperture multiple k →',
+    series:()=>[{name:'In character, ordinary turns',short:'ordinary turns',color:COL.pirate,width:2.6,dots:true,values:AP.map(a=>val(a[1],'ordinary','fully_rate'))},
+      {name:'In character at "drop the act"',short:'at the pushes',color:COL.pirate,width:2,dash:[6,4],dots:true,values:AP.map(a=>val(a[1],'push','fully_rate'))}]});
+  const coh=LineChart('sapk',{aspect:.3,ml:64,mr:110,canvasOpt:fitH,xs:XSa,yRange:()=>[0,100],yTicks:()=>[0,50,100],yFmt:num,xFmt:kFmt,
+    tipTitle:i=>'aperture k = '+AP[i][0],vFmt:num,
+    series:()=>[{name:'Coherence',short:'coherence',color:COL.ink,width:2.4,dots:true,values:AP.map(a=>val(a[1],'ordinary','coherence'))}]});
+  function note(){
+    const ps=who();
+    $('sapn').textContent=ps.length?(view==='persona'?PNAME(PERS):ps.length+' personas: '+ps.map(PNAME).join(', '))+'.':
+      PNAME(PERS)+' has no aperture runs yet.';
+  }
+  function redraw(){hold.f.draw();coh.f.draw();note();}
+  const pb=$('sap');if(pb)pb.innerHTML=personaSeg('saps');
+  onSeg('sapv',v=>{view=v;redraw();});
+  personaHooks.push(redraw);
+  note();
+})();

@@ -11,7 +11,7 @@
     <div class="scol">
       <p class="big">The model gets a persona system prompt, then a 20-turn conversation. Turns 5 and 13 say "drop the act"; turns 8 and 16 ask "are you an AI?".</p>
       <div id="s2p"></div>
-      <div><p class="chart-title">Share of conversations in character at each turn, prompt only. Black: mean of the judges. Grey: each judge.</p><canvas id="s2line" role="img" aria-label="Share of answers in character at each turn with the prompt alone"></canvas>
+      <div><p class="chart-title">Share of conversations in character at each turn, prompt only. Black: mean of the judges. Grey: each judge. Dashed teal: the same questions with no pushes.</p><canvas id="s2line" role="img" aria-label="Share of answers in character at each turn with the prompt alone"></canvas>
         <p class="note">Shaded turns are the probes. Click a turn to read it.</p></div>
     </div>
     <div class="scol">
@@ -91,6 +91,23 @@
   <div class="sbody hold" data-hold="s12" data-measure="coherence" data-context="prompt"></div>
 </section>
 
+<section class="slide" data-title="How tight should the aperture be?" data-part="Holding a persona">
+  <header class="shead"><div class="kicker">Holding a persona · the aperture knob</div><h2>How tight should the conceptor's aperture be?</h2></header>
+  <div class="sbody">
+    <div class="scol">
+      <p class="big">The aperture decides how much of each direction the conceptor keeps: λ / (λ + k·m), where λ is the persona's spread in that direction and m is the median spread. The original conceptor uses k = 1, and the tight one k = 10. A larger k pulls more directions toward the persona's center.</p>
+      <div id="sap"></div>
+      <div class="ctlrow"><span>Average</span><div class="seg" id="sapv" role="group" aria-label="Average"><button type="button" data-v="persona" aria-pressed="true">This persona</button><button type="button" data-v="smol" aria-pressed="false">SmolLM3 personas</button><button type="button" data-v="olmo" aria-pressed="false">OLMo personas</button></div></div>
+      <p class="note" id="sapn"></p>
+    </div>
+    <div class="scol">
+      <canvas id="sapc" role="img" aria-label="Share in character on ordinary turns and at the pushes, for each aperture"></canvas>
+      <canvas id="sapk" role="img" aria-label="Coherence for each aperture"></canvas>
+      <p class="note">With the persona prompt, 20 turns, mean of the judges. k = 1 is the original conceptor at its own strength; the others run at the tight conceptor's strength.</p>
+    </div>
+  </div>
+</section>
+
 <section class="slide" data-title="Where each method puts the activations" data-part="Holding a persona">
   <header class="shead"><div class="kicker">Mechanism · persona-axis position, turn by turn</div><h2>Where each method puts the activations, turn by turn</h2></header>
   <div class="sbody traj">
@@ -150,8 +167,8 @@
 <section class="slide navy" data-title="What we know so far" data-part="Takeaways">
   <header class="shead"><div class="kicker">Takeaways · SmolLM3-3B, <span data-stat="npersonas"></span> personas<span data-stat="othermodels"></span> · with the persona prompt unless noted</div><h2>Tuned tight, a conceptor holds a prompted persona as well as a steering vector, on both models</h2></header>
   <div class="cards five">
-    <div class="card"><div class="n" data-stat="all|prompt|none|t5|fully_rate"></div><h3>Pushes break the prompt</h3><p>Of SmolLM3 answers stay in character at the first "drop the act" with only the prompt. A turn earlier it was <span data-stat="all|prompt|none|t4|fully_rate"></span>. By turn 20 it is <span data-stat="all|prompt|none|t20|fully_rate"></span>, and <span data-stat="m:OLMo-3-7B|prompt|none|t20|fully_rate"></span> on OLMo.</p></div>
-    <div class="card"><div class="n" data-stat="all|prompt|ctok_tight|ordinary|fully_rate"></div><h3>A tight conceptor holds it</h3><p>Of SmolLM3 answers stay in character, at coherence <span data-stat="all|prompt|ctok_tight|ordinary|coherence"></span> (<span data-stat="range|all|prompt|ctok_tight|ordinary|coherence"></span> by persona). OLMo: <span data-stat="m:OLMo-3-7B|prompt|ctok_tight|ordinary|fully_rate"></span> at coherence <span data-stat="m:OLMo-3-7B|prompt|ctok_tight|ordinary|coherence"></span>. The prompt alone gets <span data-stat="all|prompt|none|ordinary|fully_rate"></span> and <span data-stat="m:OLMo-3-7B|prompt|none|ordinary|fully_rate"></span>.</p></div>
+    <div class="card"><div class="n" data-stat="all|prompt|none|t5|fully_rate"></div><h3>Pushes break the prompt</h3><p>Of SmolLM3 answers stay in character at the first "drop the act" with only the prompt. A turn earlier it was <span data-stat="all|prompt|none|t4|fully_rate"></span>. With no pushes, the same conversations are still <span data-stat="all|prompt_none|none|t20|fully_rate"></span> in character at turn 20 (OLMo: <span data-stat="m:OLMo-3-7B|prompt_none|none|t20|fully_rate"></span>), so the drop comes from the pushes, not the length.</p></div>
+    <div class="card"><div class="n" data-stat="all|prompt|ctok_tight|ordinary|fully_rate"></div><h3>A tight conceptor holds it</h3><p>Of SmolLM3 answers stay in character, at coherence <span data-stat="all|prompt|ctok_tight|ordinary|coherence"></span> (<span data-stat="range|all|prompt|ctok_tight|ordinary|coherence"></span> by persona). OLMo: <span data-stat="m:OLMo-3-7B|prompt|ctok_tight|ordinary|fully_rate"></span> at coherence <span data-stat="m:OLMo-3-7B|prompt|ctok_tight|ordinary|coherence"></span>. The prompt alone gets <span data-stat="all|prompt|none|ordinary|fully_rate"></span> and <span data-stat="m:OLMo-3-7B|prompt|none|ordinary|fully_rate"></span>. Of the apertures tried, 10× is the best trade: looser holds less, tighter loses coherence.</p></div>
     <div class="card"><div class="n" data-stat="all|prompt|add|ordinary|fully_rate"></div><h3>So does the vector, which also sets it</h3><p>Of SmolLM3 answers stay in character with the vector, at coherence <span data-stat="all|prompt|add|ordinary|coherence"></span>. OLMo: <span data-stat="m:OLMo-3-7B|prompt|add|ordinary|fully_rate"></span> at <span data-stat="m:OLMo-3-7B|prompt|add|ordinary|coherence"></span>. With no prompt the vector still gets <span data-stat="all|steer_only|add|ordinary|fully_rate"></span>, and the tight conceptor <span data-stat="all|steer_only|ctok_tight|ordinary|fully_rate"></span>.</p></div>
     <div class="card"><div class="n" data-stat="m:OLMo-3-7B|prompt|cap|ordinary|fully_rate"></div><h3>The cap holds only on the small model</h3><p>Of OLMo answers stay in character with the cap, against <span data-stat="all|prompt|cap|ordinary|fully_rate"></span> on SmolLM3. The original conceptor gets <span data-stat="m:OLMo-3-7B|prompt|conceptor_tok|ordinary|fully_rate"></span> on OLMo and <span data-stat="all|prompt|conceptor_tok|ordinary|fully_rate"></span> on SmolLM3.</p></div>
     <div class="card"><div class="n" data-stat="all|prompt|add|t8|identity_ai_rate"></div><h3>Identity is the open problem</h3><p>Of SmolLM3 answers with the vector still say they are an AI when asked at turn 8 (OLMo: <span data-stat="m:OLMo-3-7B|prompt|add|t8|identity_ai_rate"></span>). The tight conceptor cuts this to <span data-stat="all|prompt|ctok_tight|t8|identity_ai_rate"></span> on SmolLM3, but not on OLMo (<span data-stat="m:OLMo-3-7B|prompt|ctok_tight|t8|identity_ai_rate"></span>).</p></div>
@@ -161,11 +178,12 @@
 
 <section class="slide" data-title="Next" data-part="Next">
   <header class="shead"><div class="kicker">Next</div><h2>Where this goes next</h2></header>
-  <div class="cards">
-    <div class="card"><h3>A bigger model</h3><p>OLMo-3-7B-Instruct, the Casting Call model, fit from its own Assistant Axis answers. Does a 7B model keep its identity under the same pressure?</p></div>
-    <div class="card"><h3>Longer conversations</h3><p>Past twenty turns, with more kinds of pressure, to see whether the conceptor's hold decays or stays flat.</p></div>
-    <div class="card"><h3>More methods</h3><p>Gated and contrastive conceptors (act only when drifting), an aperture sweep, and lower vector strengths with a prompt.</p></div>
-    <div class="card"><h3>Why it works</h3><p>Which directions the conceptor shrinks that the cap leaves alone, and whether those carry the coherence cost.</p></div>
+  <div class="cards five">
+    <div class="card"><h3>Pushes, not length</h3><p>Without pushes a prompted persona held through 20 turns. Next: more kinds of pressure, and conversations past 20 turns.</p></div>
+    <div class="card"><h3>Pick the aperture per model</h3><p>10× was the best of 1×, 3×, 10×, 30× and 100× on both models. A finer sweep between 3× and 30×, and a rule that picks it from the data.</p></div>
+    <div class="card"><h3>Identity on new questions</h3><p><code>region</code>, a cap with an identity floor, kept AI admissions low on two new wordings (31% standard, 34% new). Next: many more wordings, and OLMo.</p></div>
+    <div class="card"><h3>Gated and contrastive conceptors</h3><p>Act only when the model drifts, or keep the in-character directions and drop the broken ones. Neither is built yet.</p></div>
+    <div class="card"><h3>Bigger models</h3><p>Repeat the comparison on a model larger than OLMo-3-7B.</p></div>
   </div>
   <p class="note">Everything here is reproducible from the conceptors/ folder of casting-call-vectors: runs, judge calibration, and this deck's build script.</p>
 </section>
