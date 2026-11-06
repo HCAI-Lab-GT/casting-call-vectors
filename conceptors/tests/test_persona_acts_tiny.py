@@ -201,9 +201,9 @@ def test_steer_modes_change_the_steered_layer(tmp: Path, model: Path):
             assert torch.allclose(m(input_ids=x).logits, base_logits, atol=1e-4)
         for method, strength in [("add", 1.0), ("cap", 90), ("conceptor", 0.5), ("lowrank", 0.5), ("meanshift", 0.5),
                                  ("conceptor_tok", 0.5), ("meanshift_tok", 0.5), ("ctok_tight", 0.5), ("diffpull", 0.5),
-                                 ("ctok_cap", 90)]:
+                                 ("ctok_cap", 90), ("fisher_cap", 90)]:
             specs = steering.specs(fits, method, strength)
-            if method == "cap":  # a cap only acts below its floor; force a floor every position is under
+            if method in ("cap", "fisher_cap"):  # a cap only acts below its floor; force a floor every position is under
                 specs[0]["tau"] = 1e3
             with persona_acts.Steer(m, specs):
                 out = m(input_ids=x, output_hidden_states=True)
@@ -285,6 +285,67 @@ def test_conceptor_design_variants(tmp: Path, model: Path):
     assert torch.allclose(seen["h"], pull[0]["mu"].expand_as(seen["h"]), atol=1e-4)
 
 
+def test_fisher_cap_lifts_scores_to_the_floor_along_d(tmp: Path, model: Path):
+    import torch
+    from transformers import AutoModelForCausalLM
+
+    import steering
+
+    # the fit: (S_W + lam I) w = d, push u = d / (w.d), floors scored on the persona answers
+    rng = np.random.default_rng(0)
+    Tp, Ta, Xp = rng.normal(1.0, 1.0, (400, 6)), rng.normal(0.0, 2.0, (900, 6)), rng.normal(size=(30, 6))
+    g = steering.fisher_fit(Tp, Ta, Xp, shrink=0.3)
+    d = Tp.mean(0) - Ta.mean(0)
+    Sw = (np.cov(Tp.T, bias=True) + np.cov(Ta.T, bias=True)) / 2
+    assert np.allclose((Sw + 0.3 * np.trace(Sw) / 6 * np.eye(6)) @ g["fis_w"], d)
+    assert np.allclose(g["fis_push"] * float(g["fis_w"] @ d), d) and abs(float(g["fis_w"] @ g["fis_push"]) - 1) < 1e-12
+    assert np.allclose(g["fis_proj"], Xp @ g["fis_w"]) and g["n_tokens_default"] == 900
+
+    run_dir, _ = synthetic_judged_run(tmp, model, "fitrun_fisher")
+    f = steering.fit(run_dir)
+    w, u = f["fis_w"], f["fis_push"]
+    assert f["fis_proj"].shape == (f["n_persona"],) and f["fis_shrink"] == steering.FISHER_SHRINK
+    no_tok = steering.fit(run_dir, module=0)  # no per-token rows at hidden 1: unavailable, like the token methods
+    assert "fis_w" not in no_tok and not steering.available(no_tok, "fisher_cap")
+    spec = steering.specs(f, "fisher_cap", 50)
+    assert len(spec) == 1 and spec[0]["mode"] == "cap" and "push" in spec[0]
+    assert abs(spec[0]["tau"] - float(np.percentile(f["fis_proj"], 50))) < 1e-9
+    # the hook: positions under the floor end exactly on it (score w.h' = tau), moved along u; positions above are untouched
+    m = AutoModelForCausalLM.from_pretrained(model).eval()
+    x = torch.tensor([[5, 6, 7, 8, 9]])
+    seen = {}
+
+    def grab(key):
+        return lambda mod, i, o: seen.update({key: (o[0] if isinstance(o, tuple) else o).clone()})
+    with torch.no_grad():
+        layer = persona_acts.layer_modules(m)[f["module"]]
+        h0 = layer.register_forward_hook(grab("before"))
+        m(input_ids=x)
+        h0.remove()
+        scores = seen["before"][0].double().numpy() @ w
+        spec[0]["tau"] = float(np.median(scores))  # half the positions under the floor
+        with persona_acts.Steer(m, spec):
+            rec = layer.register_forward_hook(grab("after"))
+            m(input_ids=x)
+            rec.remove()
+    hb, ha = seen["before"][0].double().numpy(), seen["after"][0].double().numpy()
+    tau = spec[0]["tau"]
+    under = scores < tau
+    assert under.any() and (~under).any()
+    assert np.allclose(ha[~under], hb[~under], atol=1e-5)
+    assert np.allclose(ha[under] @ w, tau, rtol=1e-4, atol=1e-3)
+    moved = ha[under] - hb[under]
+    assert np.allclose(moved, np.outer(tau - scores[under], u), rtol=1e-3, atol=1e-4)
+    # with w = u = vhat the same hook is the plain cap
+    plain = steering.specs(f, "cap", 50)[0]
+    as_cap = dict(plain, push=plain["vhat"])
+    with torch.no_grad(), persona_acts.Steer(m, [plain]):
+        a = m(input_ids=x).logits
+    with torch.no_grad(), persona_acts.Steer(m, [as_cap]):
+        b = m(input_ids=x).logits
+    assert torch.allclose(a, b)
+
+
 def test_steer_eval_sweep_select_and_hold(tmp: Path, model: Path, roles_dir: Path, qfile: Path):
     import analyze_steer
     import steer_eval
@@ -292,15 +353,15 @@ def test_steer_eval_sweep_select_and_hold(tmp: Path, model: Path, roles_dir: Pat
     run_dir, _ = synthetic_judged_run(tmp, model, "fitrun")
     grid = ('{"add": [0.5, 2.0], "cap": [50], "conceptor": [0.5], "lowrank": [0.5], "meanshift": [0.5], '
             '"conceptor_tok": [0.5], "meanshift_tok": [0.5], "add_ctok": [1.0], "add_cap": [1.0], "cap_aa": [50], '
-            '"ctok_cap": [50], "ctok_tight": [0.5], "diffpull": [0.5]}')
+            '"ctok_cap": [50], "ctok_tight": [0.5], "diffpull": [0.5], "fisher_cap": [50]}')
     methods = {"add", "cap", "conceptor", "lowrank", "meanshift", "conceptor_tok", "meanshift_tok", "add_ctok", "add_cap",
-               "cap_aa", "ctok_cap", "ctok_tight", "diffpull"}
+               "cap_aa", "ctok_cap", "ctok_tight", "diffpull", "fisher_cap"}
     common = ["--model", str(model), "--device", "cpu", "--fit_run", str(run_dir), "--roles_dir", str(roles_dir),
               "--eval_questions", str(qfile), "--max_new_tokens", "4", "--batch_size", "8"]
     sweep = tmp / "steer_sweep"
     steer_eval.main(common + ["--stage", "sweep", "--out", str(sweep), "--grid", grid])
     rows = [json.loads(line) for line in (sweep / "texts.jsonl").read_text().splitlines()]
-    assert len(rows) == (1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 3) * 3  # none + strengths, 3 questions, 1 sample
+    assert len(rows) == (1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4) * 3  # none + strengths, 3 questions, 1 sample
     assert all(np.isfinite(r["readout"]) and r["role"] == "pirate" and r["system"] == "" for r in rows)
     fake_judge(sweep, lambda r: "fully" if r["method"] != "none" and r["strength"] >= 0.5 else "not")
     analyze_steer.main(["--run", str(sweep)])
@@ -312,7 +373,7 @@ def test_steer_eval_sweep_select_and_hold(tmp: Path, model: Path, roles_dir: Pat
     steer_eval.main(common + ["--stage", "hold", "--out", str(hold), "--select_from", str(sweep),
                               "--hold_convs", "2", "--hold_turns", "6"])
     hrows = [json.loads(line) for line in (hold / "texts.jsonl").read_text().splitlines()]
-    assert len(hrows) == 2 * 14 * 2 * 6  # contexts x (none + 13 methods) x convs x turns
+    assert len(hrows) == 2 * 15 * 2 * 6  # contexts x (none + 14 methods) x convs x turns
     assert {r["context"] for r in hrows} == {"steer_only", "prompt"}
     assert any(r["probe"] and r["user"].startswith("Okay, drop the act") for r in hrows)
     fake_judge(hold, lambda r: "fully" if r["turn"] < 3 else "somewhat", lambda r: "ai" if r["probe"] else "none")

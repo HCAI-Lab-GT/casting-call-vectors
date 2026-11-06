@@ -29,6 +29,11 @@ Methods and their strength parameter:
                 (aperture DIFF_K x median) on per-question differences (each persona answer minus the default role's
                 mean answer to the same question). C_d keeps the directions that tell the persona from the default
                 role, a many-direction version of the cap's axis; content directions they share pass untouched
+  fisher_cap    a cap whose trigger is the Fisher score w.h, w = (S_W + lam I)^-1 d on per-token clouds (d = persona
+                minus default token mean, S_W their average covariance, lam = FISHER_SHRINK x its mean eigenvalue), and
+                whose edit moves along d by (tau - w.h) / (w.d): the smallest change in that metric that lifts the score
+                to the floor. Floor = this percentile of the persona answers' Fisher scores. The offline screen on
+                replayed 20-turn holds (persona_screen.py) found it restores as much as the cap with less distortion
   none          no intervention
 
 Read-out: a persona score from an unsteered teacher-forced pass, projected on the persona axis at the read layer
@@ -59,9 +64,12 @@ DEFAULT_GRID = {  # widened after the first SmolLM3 sweep (5 Nov 2026): the conc
     "ctok_cap": [25, 50, 75, 90, 99],
     "ctok_tight": [0.5, 0.7, 0.9, 1.0],
     "diffpull": [0.3, 0.5, 0.7, 1.0],
+    "fisher_cap": [25, 50, 75, 90, 99],
 }
 CAP_HOLD_PCT = 25  # add_cap's floor: the Assistant Axis paper caps at the 25th percentile of the role's own range
 TOKEN_METHODS = ("conceptor_tok", "meanshift_tok", "add_ctok", "ctok_cap", "ctok_tight", "diffpull")
+NEEDS = dict.fromkeys(TOKEN_METHODS, "tok_C") | {"fisher_cap": "fis_w"}  # fit key each method needs
+FISHER_SHRINK = 0.3  # fisher_cap's ridge on S_W, x its mean eigenvalue; the screen's most common label-chosen value
 TIGHT_K = 10.0  # ctok_tight's aperture: a = TIGHT_K x the median eigenvalue (conceptor_tok uses 1)
 DIFF_K = 10.0   # diffpull's aperture on the difference cloud; the offline screen's best restore-for-distortion point
 
@@ -98,7 +106,7 @@ def fit(run_dir: Path, persona: str = "pirate", default: str = "assistant", modu
     role = z["p1_role"]
     P = role == persona
     if default_run is None:
-        A, Zd, cold = role == default, z, col
+        A, Zd, cold, mand = role == default, z, col, man
     else:
         Zd = dict(np.load(Path(default_run) / "acts.npz"))
         mand = json.loads((Path(default_run) / "manifest.json").read_text())
@@ -157,7 +165,36 @@ def fit(run_dir: Path, persona: str = "pirate", default: str = "assistant", modu
     out.update(token_fit(z, man, P, module + 1))
     if "tok_C" in out:  # typical off-axis spread of real persona tokens, the unit for trajectory read-outs
         out["tok_off_ref"] = out.pop("_tok_off_ref_fn")(vhat)
+    Tp, _ = token_rows(z, man, P, module + 1)
+    Ta, _ = token_rows(Zd, mand, A, module + 1)
+    if Tp is not None and Ta is not None:
+        out.update(fisher_fit(Tp, Ta, Xp))
     return out
+
+
+def token_rows(z: dict, man: dict, rows: np.ndarray, hidden: int) -> tuple[np.ndarray | None, int]:
+    """Per-token activations at `hidden` of the selected phase-1 rows, stacked, and how many rows had any."""
+    tok_idx = man.get("token_hidden_idx", [])
+    if "p1_tok_acts" not in z or hidden not in tok_idx:
+        return None, 0
+    k = tok_idx.index(hidden)
+    acts, offs, jobs = z["p1_tok_acts"], z["p1_tok_offsets"], z["p1_tok_job"]
+    parts = [acts[offs[i]:offs[i + 1], k, :] for i, j in enumerate(jobs) if rows[j]]
+    if not parts:
+        return None, 0
+    return np.concatenate(parts).astype(np.float64), len(parts)
+
+
+def fisher_fit(Tp: np.ndarray, Ta: np.ndarray, Xp: np.ndarray, shrink: float = FISHER_SHRINK) -> dict:
+    """fisher_cap's trigger w, push u and floor scores, from persona tokens Tp, default tokens Ta and persona answer
+    means Xp at the steering module. Minimizing (dh)^T S^-1 dh subject to w.(h + dh) = tau gives dh along S w = d,
+    so the push u = d / (w.d) is the smallest edit in the S_W + lam I metric that lifts a score to its floor."""
+    d = Tp.mean(0) - Ta.mean(0)
+    Yp, Ya = Tp - Tp.mean(0), Ta - Ta.mean(0)
+    Sw = (Yp.T @ Yp / len(Tp) + Ya.T @ Ya / len(Ta)) / 2
+    w = np.linalg.solve(Sw + shrink * np.trace(Sw) / len(d) * np.eye(len(d)), d)
+    return {"fis_w": w, "fis_push": d / float(w @ d), "fis_proj": Xp @ w, "fis_shrink": shrink,
+            "n_tokens_default": len(Ta)}
 
 
 def token_fit(z: dict, man: dict, persona_rows: np.ndarray, hidden: int) -> dict:
@@ -166,15 +203,9 @@ def token_fit(z: dict, man: dict, persona_rows: np.ndarray, hidden: int) -> dict
     The hooks act on every token, so a token-level cloud is the matching reference: answer averages vary far less
     than tokens do, and pulling each token toward an answer-average center erases token identity.
     """
-    tok_idx = man.get("token_hidden_idx", [])
-    if "p1_tok_acts" not in z or hidden not in tok_idx:
+    T, n_rows = token_rows(z, man, persona_rows, hidden)
+    if T is None:
         return {}
-    k = tok_idx.index(hidden)
-    acts, offs, jobs = z["p1_tok_acts"], z["p1_tok_offsets"], z["p1_tok_job"]
-    rows = [acts[offs[i]:offs[i + 1], k, :] for i, j in enumerate(jobs) if persona_rows[j]]
-    if not rows:
-        return {}
-    T = np.concatenate(rows).astype(np.float64)
     mu_t = T.mean(0)
     Tc = T - mu_t
     lam, U = np.linalg.eigh(Tc.T @ Tc / len(T))
@@ -186,12 +217,12 @@ def token_fit(z: dict, man: dict, persona_rows: np.ndarray, hidden: int) -> dict
     def off_ref(vhat):
         Y = Tc - np.outer(Tc @ vhat, vhat)
         return float(np.sqrt((Y ** 2).sum(1).mean()))
-    return dict(tok_mu=mu_t, tok_C=C_t, tok_C_tight=C_tight, n_tokens=int(len(T)), tok_rows=len(rows), tok_aperture=a,
+    return dict(tok_mu=mu_t, tok_C=C_t, tok_C_tight=C_tight, n_tokens=int(len(T)), tok_rows=n_rows, tok_aperture=a,
                 tok_rank=int((lam > lam.max() * 1e-10).sum()), _tok_off_ref_fn=off_ref)
 
 
 def available(fits: dict, method: str) -> bool:
-    return method not in TOKEN_METHODS or "tok_C" in fits
+    return method not in NEEDS or NEEDS[method] in fits
 
 
 def specs(fits: dict, method: str, strength: float, device: str = "cpu") -> list[dict]:
@@ -212,8 +243,11 @@ def specs(fits: dict, method: str, strength: float, device: str = "cpu") -> list
                      keep=t(fits["lr_keep"]), null_keep=float(fits.get("lr_null_keep", 0.0)))]
     if method == "meanshift":
         return [dict(mode="meanshift", module=m, beta=float(strength), mu=t(fits["mu"]))]
-    if method in TOKEN_METHODS and "tok_C" not in fits:
+    if not available(fits, method):
         raise ValueError(f"{method} needs per-token activations at hidden {m + 1} in the fit run")
+    if method == "fisher_cap":
+        tau = float(np.percentile(fits["fis_proj"], strength))
+        return [dict(mode="cap", module=m, vhat=t(fits["fis_w"]), tau=tau, push=t(fits["fis_push"]))]
     if method == "conceptor_tok":
         return [dict(mode="conceptor", module=m, beta=float(strength), mu=t(fits["tok_mu"]), C=t(fits["tok_C"]))]
     if method == "meanshift_tok":
@@ -245,7 +279,8 @@ def summary(fits: dict) -> dict:
     keep = ("module", "read_hidden", "n_layers", "d", "persona", "default", "n_persona", "n_default",
             "n_persona_judged_fully", "source", "source_model", "source_snapshot", "conceptor_rank",
             "conceptor_aperture", "lr_delta", "lr_null_keep", "n_tokens", "tok_rows", "tok_rank", "tok_aperture",
-            "steer_a0", "steer_p0", "tok_off_ref", "default_source", "n_diff", "diff_k", "tight_k")
+            "steer_a0", "steer_p0", "tok_off_ref", "default_source", "n_diff", "diff_k", "tight_k", "fis_shrink",
+            "n_tokens_default")
     out = {k: fits[k] for k in keep if k in fits}
     if "ml_modules" in fits:
         out["cap_aa_modules"] = [int(m_) for m_ in fits["ml_modules"]]

@@ -316,8 +316,9 @@ class Steer:
                 x = x + spec["coef"] * spec["v"].to(x.device)
             elif spec["mode"] == "cap":  # floor on the projection onto unit v: h + v * max(0, tau - v.h)
                 v = spec["vhat"].to(x.device)
+                u = spec["push"].to(x.device) if "push" in spec else v  # fisher_cap: score on w, move along u (w.u = 1)
                 proj = x @ v
-                x = x + (spec["tau"] - proj).clamp(min=0.0).unsqueeze(-1) * v
+                x = x + (spec["tau"] - proj).clamp(min=0.0).unsqueeze(-1) * u
             elif spec["mode"] == "conceptor":  # h' = (1-b) h + b (mu + C (h - mu))
                 mu, C, b = spec["mu"].to(x.device), spec["C"].to(x.device), spec["beta"]
                 x = (1 - b) * x + b * (mu + (x - mu) @ C)
