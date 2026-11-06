@@ -1137,3 +1137,52 @@ Context: The conceptors pilot on the branch conceptors/scale-up found that on Sm
 Action: The session invoked the lit-review skill (`lit-review:lit-review`), which opened with its step-by-step welcome and setup flow. The git ground truth shows the new untracked paths `conceptors/docs/lit_review_conceptors.md` and `conceptors/docs/lit_review/`, which match the requested review file and a likely working folder for downloaded papers and summaries. Git also shows an untracked `conceptors/explainer/beyond_the_cap.html`, a modified `conceptors/explainer/lab_deck.html`, and a staged deletion of `overleaf`. The transcript is truncated, so I can't tie those three changes to this session. They may come from sibling sessions. Nothing was committed by this session, and recent commits are only automatic logbook entries and earlier results commits.
 
 Result: The review file and its supporting folder exist in the working tree, but the transcript doesn't show the searches, the citation verification, or the final content. I can't confirm that every requested topic was covered, that the citations were checked, or that each design choice got an implication for `conceptors/steering.py`. Those points are unverified. The variant tests the review was meant to inform (uncentered and bipolar Replace, AND NOT assistant, gated, aperture sweeps) have not been run as far as the record shows. Nothing was committed, as instructed. The follow-up is to read the review file and spot-check its citations before relying on it.
+
+[2026-11-06 04:05] All jobs done; final validation; morning summary (goal=persona-screen-overnight)
+
+6835615 (Llama, region fixed dose, pirate+ghost) COMPLETED at 02:17:53 on a slow node, so all 44 jobs of both chains
+are COMPLETED and every hold has four judges. With the fourth judge the fixed-dose region rows in the 02:55 entry move
+slightly: pirate (25) 0.98 (0.98) / 84 / 0.65 / 0.35, ghost (99) 0.99 (1.00) / 86 / 0.78 / 0.25; steer-only pirate (25)
+0.21 (the 02:55 entry's 0.28 was three judges). Region's coherence on pirate, ghost, bard and genie is now 1.0-6.1
+points under unsteered.
+
+Final validation (validate_screen.py on v2 + v3 + screen + fixed-dose region holds, 94 pooled points, 14-16 per
+persona): within-persona mean restore vs in-character 0.70, distortion vs coherence -0.81, restore vs pushes 0.75,
+identity fix vs AI admissions -0.69; pooled 0.59, -0.74, 0.64, -0.72. Per persona, restore vs in-character: genie 0.82,
+ghost 0.81, bard 0.79, pirate 0.70, alien 0.59, consultant 0.48.
+
+Morning summary (facts; takeaway wording is the owner's):
+- Screen: built on real SmolLM3 replays (persona_screen.py), validated against every SmolLM3 20-turn hold
+  (validate_screen.py). Its rankings track the judged holds within persona, including the two operators it picked
+  before their holds ran. Its clearest miss is ctok_tight, which it scores low on restore but which holds 0.88-1.00.
+- fisher_cap: at its sweep-picked strength it held less than the cap on pirate, ghost and alien, equal elsewhere, with
+  slightly higher coherence and no change in AI admissions. The screen's frontier claim (more restore at matched
+  distortion) was not tested, because the sweep matched single-turn in-character rate, not distortion.
+- region: 0.96-0.99 in character on pirate, ghost, bard and genie at both doses, 0.94-1.00 at turns 16-19, coherence
+  1-6 points under unsteered, AI admissions 0.14-0.36 against 0.97-1.00 unsteered; alien 0.74 (cap 0.80); consultant
+  at ceiling. Without a persona prompt it creates the persona only on ghost, bard and genie at its strongest setting.
+- Bug found and fixed in the night: the sweep's strength rule ran region backwards (8ef85c45); corrected-dose holds
+  were run, and both doses are reported.
+- Results page (private, Dashboard type): https://claude.ai/artifact/7ZHLHKq7VgMmnZVjk2SzTS. It needs the owner's
+  sign-in, so it has never been seen rendered; its script parses and its new table logic was checked on the data.
+- Commits on conceptors/scale-up, all pushed: 3619fa60, f6ca3e72 (signed); 3a2ef859, c08daef1, 8ef85c45, 88a38ff1,
+  ee9f285f, 43f24982 and this entry (unsigned: 1Password signing failed all night, so these used
+  -c commit.gpgsign=false for that commit only).
+- Local analysis glue (not committed) in the session scratchpad: tabulate_holds.py, make_hold_data.py,
+  make_dash_data.py, chain_status.sh, launch_screen_ops.sh, launch_region_fix.sh, validate_* outputs.
+
+Morning list (owner decisions):
+1. region cuts the model's admissions that it is an AI when asked directly. That is what holding the persona means in
+   these holds; whether it is wanted is the owner's call.
+2. region's identity direction was fit on the v2 holds' answers to the same two AI probes the new holds ask, so the
+   admissions result is in-distribution. Held-out probes (new wording, new turns) are the open test.
+3. fisher_cap at a dose matched on distortion (or on the cap's strength) is untested; the current holds only test the
+   sweep's single-turn match.
+4. OLMo runs of fisher_cap and region (reserved for the owner by the AUTHORITY block).
+5. Release 3619fa60 on the course volume is unused (superseded before launch); prune if agreed. f6ca3e72 ran both
+   chains; no job is queued on either.
+6. PACE home is at 27.6 of 30 GB (91.9%, WARNING); scratch 127 of 300 GB.
+7. Slow or hot H100 nodes seen tonight: atl1-1-03-011-13-0 (Gemma 6834326 ran at about 60 rows a minute) joins the
+   other session's list; Llama 6835615 on atl1-1-03-015-9-0 ran at about 40 rows a minute.
+8. Still uncommitted by request: conceptors/docs/lit_review_conceptors.md, conceptors/docs/lit_review/,
+   conceptors/explainer/beyond_the_cap.html. The overleaf deletion is still staged and was never committed.
