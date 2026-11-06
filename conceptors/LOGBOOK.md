@@ -944,3 +944,21 @@ Context: The conceptors pilot (branch conceptors/scale-up) found that on SmolLM3
 Action: The transcript is truncated and shows only the setup. It contains the task brief and the lit-review skill's opening steps (welcome, output folder, research proposal). It contains no search, download, summarization or writing steps. The git ground truth shows these uncommitted paths: `conceptors/docs/lit_review/` (a new folder), `conceptors/docs/lit_review_conceptors.md` (the review file), and `conceptors/explainer/beyond_the_cap.html`. It also shows a staged deletion of `overleaf`. The recent commits (fisher_cap, region, validate_screen, replay_acts) were made before this session and are not part of it. Nothing was committed, as instructed.
 
 Result: The review file and its supporting folder exist in the working tree, so the review was at least drafted. The visible transcript does not show how many papers were found, which citations were verified, or what implications were written for `conceptors/steering.py`. I can't confirm the review's content or that every citation was checked. The `overleaf` deletion and the `beyond_the_cap.html` explainer are not explained by the visible transcript and may come from other work. Someone needs to open `conceptors/docs/lit_review_conceptors.md` and spot-check the citations (Jaeger 2014, arXiv 2410.16314, 2605.04980, 2608.00023) before relying on it to choose which conceptor variants to run.
+
+[2026-11-06 00:25] goal=extended-turn-results: two v3 judges moved off thermally throttled GPUs (INFRA_FAILURE)
+
+At 00:17, 35 of 38 v3 jobs were COMPLETED. Two hold judges were running at a fifth of normal speed. nvidia-smi
+through srun --overlap showed both GPUs at 94-95 C with the SM clock at 345 MHz (thermal slowdown flags set):
+- 6832133 judge-hold-v3-gemma-genie-alien on atl1-1-03-011-28-0 (the node that throttled the consultant hold
+  yesterday): 6,302 of 6,400 genie rows after 1h55, alien not started. The other Gemma v3 judges finished both
+  folders (12,800 rows) in 49 min, so this one was certain to hit its 3 h limit.
+- 6832124 judge-hold-v3-mistral-bard-consultant on atl1-1-03-011-13-0 (new hot node): bard done, consultant 1,472
+  of 6,400 at 85 rows/min, which projected about 25 min of margin.
+Repair under the AUTHORITY block (one resubmit per job, same arguments and release 44bb9a5b): scancel, confirm
+every judge.jsonl line parses (0 bad lines, so judge.py resumes from the finished rows), sbatch --hold, scontrol
+update ExcNodeList=atl1-2-03-021-36-0,atl1-1-03-011-28-0,atl1-1-03-011-13-0, release. Replacements: 6835445
+(Gemma genie+alien, running on atl1-1-03-011-23-0 at 35 C) and 6835502 (Mistral bard+consultant, running on
+atl1-1-03-012-8-0). These two IDs now replace 6832133 and 6832124 in the goal's done check. A login-node watcher
+on 6835445, 6835502 and 6832708 (Llama on OLMo, 32 min in on a healthy node) stops on the first failure.
+For the morning: atl1-1-03-011-13-0 joins atl1-1-03-011-28-0 on the list of overheating H100s to report to
+pace-support.
