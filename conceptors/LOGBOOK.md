@@ -805,3 +805,85 @@ Context: The conceptors pilot on the conceptors/scale-up branch found that on Sm
 Action: The lit-review skill was loaded, and a few other hook and tool notices appeared as the session started. Git ground truth shows two new untracked paths: conceptors/docs/lit_review_conceptors.md and the conceptors/docs/lit_review/ folder. A third untracked file, conceptors/explainer/beyond_the_cap.html, also shows up. I can't tell from the truncated transcript whether this session created it. The overleaf entry shows as a staged deletion, and nothing in the transcript ties it to this work. The searches, paper fetches, summaries and verification steps are not in the transcript, so I can't say which sources were consulted or how citations were checked.
 
 Result: The review file and its supporting folder exist on disk as uncommitted changes, which matches the no-commit instruction. The transcript is truncated before any search or writing step, so I can't confirm that every named source (Jaeger 2014, arXiv 2410.16314, arXiv 2605.04980, the LessWrong post, Casting Call, GCAD, the Assistant Axis work) was covered or that its citations were verified. I also can't state the review's findings or the design implications it gives for conceptors/steering.py. Before anyone relies on the review, someone should read it and spot-check the citations. The overleaf deletion and the explainer HTML need a separate check on where they came from.
+
+[2026-11-05 22:50] Persona-steering screen on real activations; overnight goal
+
+Correction to the three auto-generated entries above: the literature review is complete
+(conceptors/docs/lit_review_conceptors.md, 622 records screened, 44 full-text summaries, citations resolved through
+the arXiv API). The explainer page conceptors/explainer/beyond_the_cap.html is the interactive 2D/3D demo of the
+alternatives, published privately at https://claude.ai/artifact/Bv9ziL1n4PVsmhfZxyykqF. The staged overleaf deletion
+predates this session and is still staged, uncommitted.
+
+Built today, on the owner's go-ahead ("build the screen ... only once we have all the data"; PACE H100 replay chosen;
+"run now, validate later"):
+- replay_acts.py + pace/replay_job.sh + tests/test_replay_acts_tiny.py (commit 6ef991b2, pushed, release deployed and
+  verified). Job 6833649 replayed the unsteered v2 holds (6 personas x prompt/steer_only x 40 conv x 20 turns) and
+  300 judged answers per role through SmolLM3 in 12 min: runs/replay_smollm3_v2 (12,000 rows, 1.03M tokens at
+  hidden 18, answer means at all 37 hidden indices). Check: replayed answer means on each run's persona axis match the
+  x_pre the holds recorded during generation, r = 1.00000 in all 12 runs, max |diff| 0.008 (fp16).
+- persona_screen.py + tests/test_persona_screen_synth.py (uncommitted until results are checked): operators scored
+  on real drifted hold tokens against judge-consensus labels (>= 3 of 4 judges), with readouts trained on the judges'
+  labels rather than the edited axis.
+
+GOAL persona-screen-overnight, unattended until 09:00 EST 2026-11-06
+Objective: finish the screen on real SmolLM3 activations, validate its predictions against the v3 20-turn holds, and
+run 20-turn holds for the new operator(s) the screen supports, with results ready in the morning.
+Done means: screen.json and figures for all 6 personas; a validation table of screen metrics against v3 hold
+outcomes from all 4 judges; for any operator the screen supports, a tested steering.py method, a deployed release
+and its sweep -> Qwen sweep judge -> 20-turn hold -> 4-judge chain finished or running with a stated ETA; a results
+page; this LOGBOOK updated; a morning summary.
+
+AUTHORITY 2026-11-05 22:50 goal=persona-screen-overnight
+repo_publish:    allowed on topic branch conceptors/scale-up, committing only files this run changes (never the
+                 staged overleaf deletion); default/protected: never
+slurm_submit:    allowed on coe-ice H100/H200 for replay or screen jobs, and for at most two new operators one SmolLM3
+                 chain each (6 personas: sweep -> Qwen sweep judge -> holds in both contexts -> 4 judge families),
+                 --nice 100 so the v3 judges keep priority; only jobs this run created
+deploy:          exact-SHA releases via pace-code-release to the course-volume release root only
+delete/cleanup:  prohibited (old releases, scratch leftovers and other sessions' files stay)
+decisions_consumed: PACE replay (owner, 2026-11-05 ~22:00); run now and validate later (same); overnight
+                 continuation without direction (owner, 2026-11-05 22:45); the bounded chain above
+morning_list_only: final analysis and deck takeaway wording (owner's), OLMo runs of new operators, attention-level
+                 methods (split-softmax, GCAD-style), any change to methods the v2/v3 runs used, deletion, merging
+infra retries:   one resubmit per failed job, bad nodes excluded with scontrol ExcNodeList
+
+[2026-11-05 22:55] Overnight goal for the extended-turn data (both models)
+
+Status at 22:41: every v2 job is COMPLETED, including the last Gemma and Llama judges on bard/consultant. SmolLM3
+v3: sweeps, sweep judges and all six holds COMPLETED; hold judges 7 running, 5 pending. OLMo v3: sweeps and sweep
+judge COMPLETED; holds 6832702-04 running at 1h07 of 3h with 5-8 of 8 conditions done; judges 6832705-08 wait on
+them. Queue 19 of 50. overnight-preflight: 0 failures, 0 warnings.
+
+GOAL extended-turn-results, unattended until 09:00 EST 2026-11-06
+Objective: every method on both models has 20-turn holds judged by all four judges, pulled locally, and the deck
+builds strictly from them, ready for the owner's final analysis.
+Authority: the AUTHORITY block below. For the two v3 chains it replaces goal=conceptor-variants-v3. The other
+session's goal=persona-screen-overnight keeps its own block, jobs and files.
+Decisions consumed: owner asked to "continue work overnight even without my direction and finish our objectives"
+(2026-11-05 22:45) and for "all results for all models for the extended-turn analysis" (21:20).
+Morning list triggers: final analysis, takeaway wording, publishing, new methods or runs, deletion.
+Done means:
+1. sacct shows COMPLETED for the 27 SmolLM3 v3 jobs (6832106-35) and the 11 OLMo v3 jobs (6832698-708), or each
+   failed job was repaired and its resubmit COMPLETED.
+2. Every run folder in scratchpad deck_runs_v3.json has its steer_derived.json locally (rsync pull, same filters
+   as the v2 pull plus olmo_*_v3).
+3. build_deck.py --config deck_runs_v3.json builds without --allow-missing, the page is under 15 MB, and the
+   in-page interaction test reports no errors. The built deck stays local.
+4. HANDOFF Update line, a LOGBOOK result entry and a morning summary; topic-branch commit and push.
+
+AUTHORITY 2026-11-05 22:55 goal=extended-turn-results
+repo_publish:    allowed on topic branch conceptors/scale-up, committing only files this run changes (never the
+                 staged overleaf deletion or the other session's uncommitted files); default/protected: never
+slurm_submit:    resubmits of failed jobs in the two v3 chains only, one per job, same arguments, dependents
+                 re-chained on the new ID; check squeue < 50 first; bad nodes excluded with scontrol ExcNodeList
+deploy:          only to repair a code fault in these chains: patch, test, exact-SHA release via
+                 pace-code-release to the course-volume release root, then resubmit that persona's remaining chain
+cancel:          only jobs of these two chains; never comma-length, hf-secret-scan, hf-colm-release or the
+                 persona-screen session's jobs
+deck:            local build and size fixes that drop no data any chart or number uses; no publish
+delete/cleanup:  prohibited
+decisions_consumed: the two owner quotes above; bounded infra retries as in goal=conceptor-variants-v3
+morning_list_only: final analysis and deck takeaway wording, publishing to the artifact link, new methods or runs,
+                 deleting scratch leftovers, anything the persona-screen goal owns
+heartbeat:       session cron every 30 min plus the login-node watcher; caffeinate keeps the Mac from idle sleep
+                 until about 08:30 (a closed lid still sleeps it)
