@@ -8,12 +8,19 @@
 <section class="slide" data-title="What we'll cover" data-part="Plan">
   <header class="shead"><div class="kicker">Plan</div><h2>What we'll cover</h2></header>
   <div class="cards five">
-    <div class="card"><div class="n">1</div><h3>The problem</h3><p>A system prompt sets a persona, and pushes like "drop the act" break it.</p></div>
-    <div class="card"><div class="n">2</div><h3>The math, on toy data</h3><p>How a steering vector (<a href="https://arxiv.org/abs/2507.21509" target="_blank" rel="noopener"><b>Persona Vectors</b></a>), a cap (<a href="https://arxiv.org/abs/2601.10387" target="_blank" rel="noopener"><b>Assistant Axis</b></a>) and a conceptor (<a href="https://arxiv.org/abs/1403.3369" target="_blank" rel="noopener"><b>Jaeger 2014</b></a>, <a href="https://arxiv.org/abs/2410.16314" target="_blank" rel="noopener"><b>Postmus &amp; Abreu 2024</b></a>, <a href="https://arxiv.org/abs/2605.04980" target="_blank" rel="noopener"><b>Triantafyllopoulos et al. 2026</b></a>) each move the same activations.</p></div>
-    <div class="card"><div class="n">3</div><h3>Setting a persona</h3><p>Which methods can create a persona with no prompt, on real SmolLM3 activations.</p></div>
-    <div class="card"><div class="n">4</div><h3>Holding a persona</h3><p>20-turn conversations on SmolLM3 and OLMo: holding, coherence, the aperture and identity.</p></div>
-    <div class="card"><div class="n">5</div><h3>What we know, and what's next</h3><p>The takeaways, then the follow-ups.</p></div>
+    <div class="card"><div class="n">1</div><h3>The problem</h3><p>A system prompt sets a persona. Why it should fade over a conversation, and how ours actually broke.</p></div>
+    <div class="card"><div class="n">2</div><h3>Geometry, on toys</h3><p>A persona is a cloud of hidden states. How a steering vector (<a href="https://arxiv.org/abs/2507.21509" target="_blank" rel="noopener"><b>Persona Vectors</b></a>), a cap (<a href="https://arxiv.org/abs/2601.10387" target="_blank" rel="noopener"><b>Assistant Axis</b></a>) and eight other moves shift its tokens.</p></div>
+    <div class="card"><div class="n">3</div><h3>Real personas</h3><p>The roles in SmolLM3's activations, where near-assistant roles land, and how thin a slice the persona is.</p></div>
+    <div class="card"><div class="n">4</div><h3>How the conceptor works</h3><p>A soft stencil (<a href="https://arxiv.org/abs/1403.3369" target="_blank" rel="noopener"><b>Jaeger 2014</b></a>, <a href="https://arxiv.org/abs/2410.16314" target="_blank" rel="noopener"><b>Postmus &amp; Abreu 2024</b></a>, <a href="https://arxiv.org/abs/2605.04980" target="_blank" rel="noopener"><b>Triantafyllopoulos et al. 2026</b></a>), and why a tighter aperture pulls harder.</p></div>
+    <div class="card"><div class="n">5</div><h3>What we found</h3><p>Setting and holding a persona on SmolLM3-3B and OLMo-3-7B: coherence, the aperture, identity and four judges.</p></div>
+    <div class="card"><div class="n">6</div><h3>What to try next</h3><p>Our follow-ups, then the four choices every steering method makes beyond the cap.</p></div>
   </div>
+</section>
+
+<section class="slide" data-title="Why a prompted persona should fade" data-part="The problem">
+  <header class="shead"><div class="kicker">The problem · toy dynamics</div><h2>Why a prompted persona should fade over a long conversation</h2></header>
+  <p class="big">A system prompt sets the persona. Three forces wear it down as the chat grows: the prompt becomes a smaller share of what each new token attends to, every steered token stays in the cache and is read again, and each user message pulls the model back toward the assistant. <a href="https://arxiv.org/abs/2402.10962" target="_blank" rel="noopener"><b>Li et al. 2024</b></a> measured system-prompt adherence dropping within 8 rounds. Watch the prompt-only line; the other lines are methods we get to later.</p>
+  {{plate:sim}}
 </section>
 
 <section class="slide" data-title="A prompted persona holds until it's pushed" data-part="The problem">
@@ -23,7 +30,8 @@
       <p class="big">The model gets a persona system prompt, then a 20-turn conversation. Turns 5 and 13 say "drop the act"; turns 8 and 16 ask "are you an AI?".</p>
       <div id="s2p"></div>
       <div><p class="chart-title">Share of conversations in character at each turn, prompt only. Black: mean of the judges. Grey: each judge. Dashed teal: the same questions with no pushes.</p><canvas id="s2line" role="img" aria-label="Share of answers in character at each turn with the prompt alone"></canvas>
-        <p class="note">Shaded turns are the probes. Click a turn to read it.</p></div>
+        <p class="note">Shaded turns are the probes. Click a turn to read it.</p>
+        <p class="note"><b>Length alone didn't break it.</b> With no pushes (dashed), the prompt keeps the persona through turn 20 on both models. The pushes did, and it mostly stayed broken. The fading prompt on the last slide would explain why it doesn't come back; we haven't measured that.</p></div>
     </div>
     <div class="scol">
       <div class="ctlrow"><span>Turn of conversation 1</span><div class="turns" id="s2turns" role="group" aria-label="Turn"></div></div>
@@ -32,34 +40,60 @@
   </div>
 </section>
 
-<section class="slide" data-title="Five ways to edit the same activations" data-part="The math, live">
-  <header class="shead"><div class="kicker">The math, live · toy data</div><h2>Five ways to edit the same activations</h2></header>
-  {{plate:edits}}
+<section class="slide" data-title="A persona is a cloud of hidden states" data-part="Geometry">
+  <header class="shead"><div class="kicker">Geometry · toy data</div><h2>A persona is a cloud of hidden states</h2></header>
+  {{btc:legend}}{{btc:sec-start}}{{btc:space}}
 </section>
 
-<section class="slide" data-title="A conceptor is a soft stencil" data-part="The math, live">
-  <header class="shead"><div class="kicker">The math, live · toy data</div><h2>A conceptor is a soft stencil</h2></header>
+<section class="slide" data-title="A vector pushes every token; a cap guards one line" data-part="Geometry">
+  <header class="shead"><div class="kicker">Geometry · toy data</div><h2>A vector pushes every token; a cap guards one line</h2></header>
+  {{btc:cap}}
+</section>
+
+<section class="slide" data-title="Ten moves on one canvas" data-part="Geometry">
+  <header class="shead"><div class="kicker">Geometry · toy data, 2D and 3D</div><h2>How to move a token: ten moves on one canvas</h2></header>
+  {{btc:sec-move}}{{btc:moves}}
+</section>
+
+<section class="slide" data-title="The roles separate in SmolLM3's activations" data-part="Real personas">
+  <header class="shead"><div class="kicker">Real personas · SmolLM3-3B, 10 roles, 240 questions, 12,960 judged answers</div><h2>The roles separate in SmolLM3's activations</h2></header>
+  {{plate:map-plate}}
+  <p class="note">OLMo-3-7B has no map like this yet; its activations show up turn by turn on the mechanism slide in the results.</p>
+</section>
+
+<section class="slide" data-title="Where near-assistant roles land" data-part="Real personas">
+  <header class="shead"><div class="kicker">Real personas · SmolLM3-3B, layer 19</div><h2>Near-assistant roles sit with the assistant on the persona axis</h2></header>
+  {{plate:strip-plate}}
+</section>
+
+<section class="slide" data-title="The persona is a thin slice of the variance" data-part="Real personas">
+  <header class="shead"><div class="kicker">Real personas · SmolLM3-3B</div><h2>The persona is a thin slice of the variance</h2></header>
+  {{plate:slice-plate}}
+</section>
+
+<section class="slide" data-title="A conceptor is a soft stencil" data-part="The conceptor">
+  <header class="shead"><div class="kicker">How the conceptor works · toy data</div><h2>A conceptor is a soft stencil</h2></header>
   {{plate:stencil}}
 </section>
 
-<section class="slide" data-title="A steering vector forgets the cloud's shape" data-part="The math, live">
-  <header class="shead"><div class="kicker">The math, live · toy data</div><h2>A steering vector forgets the cloud's shape</h2></header>
+<section class="slide" data-title="A steering vector forgets the cloud's shape" data-part="The conceptor">
+  <header class="shead"><div class="kicker">How the conceptor works · toy data</div><h2>A steering vector forgets the cloud's shape</h2></header>
   {{plate:arrow}}
 </section>
 
-<section class="slide" data-title="Where the cloud sits changes what it learns" data-part="The math, live">
-  <header class="shead"><div class="kicker">The math, live · toy data</div><h2>Where the cloud sits changes what it learns</h2></header>
+<section class="slide" data-title="Where the cloud sits changes what it learns" data-part="The conceptor">
+  <header class="shead"><div class="kicker">How the conceptor works · toy data</div><h2>Where the cloud sits changes what it learns</h2></header>
   {{plate:center}}
 </section>
 
-<section class="slide" data-title="Check that the stencil does the work" data-part="The math, live">
-  <header class="shead"><div class="kicker">The math, live · toy data</div><h2>Check that the stencil does the work</h2></header>
+<section class="slide" data-title="Check that the stencil does the work" data-part="The conceptor">
+  <header class="shead"><div class="kicker">How the conceptor works · toy data</div><h2>Check that the stencil does the work</h2></header>
   {{plate:gain}}
 </section>
 
-<section class="slide" data-title="The roles separate in SmolLM3's activations" data-part="Real data">
-  <header class="shead"><div class="kicker">Real data · SmolLM3-3B, 10 roles, 240 questions, 12,960 judged answers</div><h2>The roles separate in SmolLM3's activations</h2></header>
-  {{plate:map-plate}}
+<section class="slide" data-title="The aperture decides how hard the conceptor pulls" data-part="The conceptor">
+  <header class="shead"><div class="kicker">How the conceptor works · real SmolLM3 spectrum</div><h2>The aperture decides how hard the conceptor pulls</h2></header>
+  {{btc:aperture}}
 </section>
 
 <section class="slide" data-title="Setting a persona in one turn" data-part="Setting a persona">
@@ -194,12 +228,52 @@
     <div class="card"><h3>Pick the aperture per model</h3><p>10× was the best of 1×, 3×, 10×, 30× and 100× on both models. A finer sweep between 3× and 30×, and a rule that picks it from the data.</p></div>
     <div class="card"><h3>Identity on new questions</h3><p><code>region</code>, a cap with an identity floor, kept AI admissions low on two new wordings (31% standard, 35% new). Next: many more wordings, and OLMo.</p></div>
     <div class="card"><h3>Gated and contrastive conceptors</h3><p>Act only when the model drifts, or keep the in-character directions and drop the broken ones. Neither is built yet.</p></div>
-    <div class="card"><h3>Bigger models</h3><p>Repeat the comparison on a model larger than OLMo-3-7B.</p></div>
+    <div class="card"><h3>Bigger models</h3><p>Repeat the comparison on a model larger than OLMo-3-7B, and map OLMo's personas the way act 3 maps SmolLM3's.</p></div>
   </div>
-  <p class="note">More on the methods, with toys and paper links: <a href="https://claude.ai/artifact/Bv9ziL1n4PVsmhfZxyykqF" target="_blank" rel="noopener">Beyond the Cap</a>. Everything here is reproducible from the conceptors/ folder of casting-call-vectors: runs, judge calibration, and this deck's build script.</p>
+  <p class="note">The next slides are the wider menu: the choices every steering method makes, each one something to try. Everything here is reproducible from the conceptors/ folder of casting-call-vectors: runs, judge calibration, and this deck's build script.</p>
+</section>
+
+<section class="slide" data-title="Four more choices every method makes" data-part="Beyond the cap">
+  <header class="shead"><div class="kicker">Next · beyond the cap</div><h2>Four more choices every method makes</h2></header>
+  {{btc:sec-map}}
+</section>
+
+<section class="slide" data-title="When to act" data-part="Beyond the cap">
+  <header class="shead"><div class="kicker">Next · beyond the cap · toy data</div><h2>When to act: six gates, one move</h2></header>
+  {{btc:sec-when}}{{btc:gates}}
+</section>
+
+<section class="slide" data-title="Which direction" data-part="Beyond the cap">
+  <header class="shead"><div class="kicker">Next · beyond the cap · toy data</div><h2>Which direction: six ways to find it</h2></header>
+  {{btc:sec-dirs}}{{btc:directions}}
+</section>
+
+<section class="slide" data-title="Move the whole cloud" data-part="Beyond the cap">
+  <header class="shead"><div class="kicker">Next · beyond the cap · toy data</div><h2>Move the whole cloud</h2></header>
+  {{btc:sec-dist}}{{btc:transport}}
+</section>
+
+<section class="slide" data-title="Curved geometry" data-part="Beyond the cap">
+  <header class="shead"><div class="kicker">Next · beyond the cap · toy data</div><h2>Curved geometry: flat and curved, in general</h2></header>
+  {{btc:sec-curved}}{{btc:flatcurved}}
+</section>
+
+<section class="slide" data-title="Straight lines leave curved data" data-part="Beyond the cap">
+  <header class="shead"><div class="kicker">Next · beyond the cap · toy data</div><h2>Straight lines leave curved data</h2></header>
+  {{btc:manifold}}
+</section>
+
+<section class="slide" data-title="Keep the length, turn the direction" data-part="Beyond the cap">
+  <header class="shead"><div class="kicker">Next · beyond the cap · toy data</div><h2>Keep the length, turn the direction</h2></header>
+  {{btc:sphere}}
+</section>
+
+<section class="slide" data-title="Behavior is sharp in a few directions" data-part="Beyond the cap">
+  <header class="shead"><div class="kicker">Next · beyond the cap · toy data</div><h2>Behavior is sharp in a few directions</h2></header>
+  {{btc:sharp}}
 </section>
 
 <section class="slide" data-title="Appendix: the field guide's other plates" data-part="Appendix">
-  <header class="shead"><div class="kicker">Appendix</div><h2>Every other plate of the field guide, for questions</h2></header>
-  <p class="big">Press G for the full list. The appendix holds the data recipe, the judge, the layer sweep, the rank trap, conceptor logic, the method zoo and the toy multi-turn dynamics.</p>
+  <header class="shead"><div class="kicker">Appendix</div><h2>Every other plate, for questions</h2></header>
+  <p class="big">Press G for the full list. The appendix holds the field guide's other plates (five ways to edit, the data recipe, the judge, the layer sweep, the rank trap, conceptor logic, the method zoo), then the references, the table of every method, and three more of our operators: a Fisher trigger, a region and holding as control.</p>
 </section>

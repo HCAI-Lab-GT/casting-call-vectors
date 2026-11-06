@@ -177,6 +177,53 @@ def drop_missing(personas: dict) -> dict:
     return out
 
 
+BTC_IDS = ("c1", "c3", "c4", "c5", "c6", "c8", "m3", "m4", "m5", "m8", "s2p")  # ids the field guide or deck also use
+BTC_FONT = ('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;'
+            '9..144,600&display=swap">\n')
+
+
+def scope_css(css: str, scope: str) -> str:
+    """Prefix every selector with scope, so Beyond the Cap's rules stay inside its plates (one level of @media)."""
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+
+    def one(sel: str) -> str:
+        sel = sel.strip()
+        if sel in (":root", "html", "body"):
+            return scope
+        return f"{sel} {scope}" if sel.startswith(":root") else f"{scope} {sel}"
+
+    out, end = [], 0
+    for m in re.finditer(r"([^{}]*)([{}])", css):
+        text, br = m.groups()
+        if br == "{" and not text.strip().startswith("@"):
+            out.append(",".join(one(s) for s in text.split(",")) + "{")
+        else:
+            out.append(text + br)
+        end = m.end()
+    return "".join(out) + css[end:]
+
+
+def btc_parts() -> tuple[dict, str, str]:
+    """Beyond the Cap's sections by id (plus its colour legend), its scoped CSS and its script, ids de-clashed."""
+    alt = "|".join(BTC_IDS)
+    body = re.sub(rf'\b(id|for)="({alt})"', r'\1="bc-\2"', (HERE / "btc/body.html").read_text())
+    js = re.sub(rf"#({alt})(['\"])", r"#bc-\1\2", (HERE / "btc/page.js").read_text())
+    secs = {m.group(1): m.group(0) for m in
+            re.finditer(r'<section class="(?:plate|part)[^"]*" id="([^"]+)">.*?</section>', body, re.S)}
+    for m in re.finditer(r'</section>\s*(<div class="tablewrap".*?</table></div>)', body, re.S):  # tables between plates
+        sid = re.findall(r'<section class="[^"]*" id="([^"]+)"', body[:m.start()])[-1]
+        secs[sid] += "\n" + m.group(1)
+    legend = re.search(r'<div class="legend" aria-label="Legend">.*?</div>', body, re.S)
+    if legend:
+        secs["legend"] = legend.group(0)
+    return secs, scope_css((HERE / "btc/style.css").read_text(), ".btc"), js
+
+
+def sec_title(html: str) -> str:
+    m = re.search(r"<h[23][^>]*>(.*?)</h[23]>", html, re.S)
+    return re.sub(r"<[^>]+>", "", m.group(1)).strip() if m else "Beyond the cap"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", type=pathlib.Path, required=True)
@@ -218,6 +265,17 @@ def main():
         f'<section class="slide appendix" data-title="{plate_title(pid, html)}" data-part="Appendix">\n'
         f'<header class="shead"><div class="kicker">Appendix</div><h2>{plate_title(pid, html)}</h2></header>\n{html}\n</section>'
         for pid, html in all_plates.items() if pid not in used)
+    # Beyond the Cap: '{{btc:ID}}' pulls one of its sections; the rest go to the appendix, since its script binds them all
+    secs, btc_css, btc_js = btc_parts()
+    used_btc = set(re.findall(r"\{\{btc:([\w-]+)\}\}", slides))
+    if used_btc - set(secs):
+        raise SystemExit(f"slides name Beyond the Cap sections it doesn't have: {sorted(used_btc - set(secs))}")
+    slides = re.sub(r"\{\{btc:([\w-]+)\}\}", lambda m: f'<div class="btc">{secs[m.group(1)]}</div>', slides)
+    appendix += "\n" + "\n".join(
+        f'<section class="slide appendix" data-title="{sec_title(h)}" data-part="Appendix">\n'
+        f'<header class="shead"><div class="kicker">Appendix</div><h2>{sec_title(h)}</h2></header>\n'
+        f'<div class="btc">{h}</div>\n</section>'
+        for sid, h in secs.items() if sid not in used_btc and sid != "legend")
 
     try:
         commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=HERE, capture_output=True, text=True).stdout.strip()
@@ -234,13 +292,14 @@ def main():
     js = "\n".join((HERE / p).read_text() for p in ["src/lib.js", "src/toy.js", "src/real.js"])
     js += "\n{ /* deck slides in their own block: their helpers may shadow the field guide's names */\n" + \
           (HERE / "deck/results.js").read_text() + "\n}\n"
-    html = (head + "<style>\n" + style + "\n" + css + "\n</style>\n"
+    html = (head + BTC_FONT + "<style>\n" + style + "\n" + css + "\n</style>\n<style>\n" + btc_css + "\n</style>\n"
             + '<div class="deck" id="deck">\n' + slides + "\n" + appendix + "\n</div>\n"
             + '<div class="tip" id="tip" hidden></div>\n'
             + '<script type="application/json" id="derived-data">' + blob(guide) + "</script>\n"
             + '<script type="application/json" id="deck-data">' + blob(results) + "</script>\n"
             + "<script>\n" + nav + "\n</script>\n"
-            + '<script>\n(function(){\n"use strict";\n' + js + "\n})();\n</script>\n")
+            + '<script>\n(function(){\n"use strict";\n' + js + "\n})();\n</script>\n"
+            + "<script>\n(function(){\n" + re.sub(r"</(script)", r"<\\/\1", btc_js, flags=re.I) + "\n})();\n</script>\n")
 
     ids = re.findall(r'\sid="([^"]+)"', html)
     dup = sorted({i for i in ids if ids.count(i) > 1})
@@ -248,6 +307,7 @@ def main():
         raise SystemExit(f"duplicate element ids: {dup}")
     # the field guide's scripts bind elements by id at load and stop at the first missing one
     refs = set(re.findall(r"""(?:\$|Fig|Canvas|LineChart|onRange|onSeg|out|dataTable)\(\s*['"]([\w-]+)['"]""", js))
+    refs |= set(re.findall(r"""\$\(\s*['"]#([\w-]+)['"]""", btc_js))
     gone = sorted(refs - set(ids) - {"zooOpt"})  # zooOpt is looked up optionally
     if gone:
         raise SystemExit(f"scripts reference ids the deck lacks: {gone}")
