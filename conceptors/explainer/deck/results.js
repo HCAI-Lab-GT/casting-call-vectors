@@ -28,7 +28,7 @@ const METH={
   ctok_k100:['Per-token conceptor, aperture ×100','con ×100','pirate',[1,3]],
   region:['Region: cap plus an identity floor','region','assist',[3,2]],
   diffpull:['Difference-subspace conceptor','diff-con','pirate',[4,2,1,2]]};
-const MORDER=['none','add','cap','cap_aa','add_cap','region','ctok_cap','conceptor_tok','ctok_k3','ctok_tight','ctok_k30','ctok_k100',
+const MORDER=['none','add','cap','cap_aa','add_cap','ctok_cap',  /* region stays on the Next slide with the other follow-ups */'conceptor_tok','ctok_k3','ctok_tight','ctok_k30','ctok_k100',
   'diffpull','add_ctok','meanshift_tok','conceptor','lowrank','meanshift'];
 /* contexts: the two main ones, plus follow-up runs with other probes (steer_eval --probe_set), shown when present */
 const CTXS=[['prompt','Prompt + steering'],['steer_only','Steering only'],['prompt_none','Prompt, no pushes'],

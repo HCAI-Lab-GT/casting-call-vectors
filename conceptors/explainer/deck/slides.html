@@ -173,7 +173,7 @@
     <div class="card"><div class="n" data-stat="m:OLMo-3-7B|prompt|cap|ordinary|fully_rate"></div><h3>The cap holds only on the small model</h3><p>Of OLMo answers stay in character with the cap, against <span data-stat="all|prompt|cap|ordinary|fully_rate"></span> on SmolLM3. The original conceptor gets <span data-stat="m:OLMo-3-7B|prompt|conceptor_tok|ordinary|fully_rate"></span> on OLMo and <span data-stat="all|prompt|conceptor_tok|ordinary|fully_rate"></span> on SmolLM3.</p></div>
     <div class="card"><div class="n" data-stat="all|prompt|add|t8|identity_ai_rate"></div><h3>Identity is the open problem</h3><p>Of SmolLM3 answers with the vector still say they are an AI when asked at turn 8 (OLMo: <span data-stat="m:OLMo-3-7B|prompt|add|t8|identity_ai_rate"></span>). The tight conceptor cuts this to <span data-stat="all|prompt|ctok_tight|t8|identity_ai_rate"></span> on SmolLM3, but not on OLMo (<span data-stat="m:OLMo-3-7B|prompt|ctok_tight|t8|identity_ai_rate"></span>).</p></div>
   </div>
-  <p class="note">Means over the <span data-stat="njudges"></span> judges and each model's personas, on turns without a probe unless a turn is named. Each method runs at the strength a one-turn sweep without the prompt picked. The judges rank the methods the same way; Qwen gives the highest scores.</p>
+  <p class="note">Means over the <span data-stat="njudges"></span> judges and each model's personas, on turns without a probe unless a turn is named. Each method runs at the strength a one-turn sweep without the prompt picked. The judges rank the methods the same way; Qwen gives the highest scores. Consultant sits close to the assistant, so it stays at 92-95% with every method: a persona near the assistant gives the methods and the judges little to tell apart.</p>
 </section>
 
 <section class="slide" data-title="Next" data-part="Next">
@@ -181,11 +181,11 @@
   <div class="cards five">
     <div class="card"><h3>Pushes, not length</h3><p>Without pushes a prompted persona held through 20 turns. Next: more kinds of pressure, and conversations past 20 turns.</p></div>
     <div class="card"><h3>Pick the aperture per model</h3><p>10× was the best of 1×, 3×, 10×, 30× and 100× on both models. A finer sweep between 3× and 30×, and a rule that picks it from the data.</p></div>
-    <div class="card"><h3>Identity on new questions</h3><p><code>region</code>, a cap with an identity floor, kept AI admissions low on two new wordings (31% standard, 34% new). Next: many more wordings, and OLMo.</p></div>
+    <div class="card"><h3>Identity on new questions</h3><p><code>region</code>, a cap with an identity floor, kept AI admissions low on two new wordings (31% standard, 35% new). Next: many more wordings, and OLMo.</p></div>
     <div class="card"><h3>Gated and contrastive conceptors</h3><p>Act only when the model drifts, or keep the in-character directions and drop the broken ones. Neither is built yet.</p></div>
     <div class="card"><h3>Bigger models</h3><p>Repeat the comparison on a model larger than OLMo-3-7B.</p></div>
   </div>
-  <p class="note">Everything here is reproducible from the conceptors/ folder of casting-call-vectors: runs, judge calibration, and this deck's build script.</p>
+  <p class="note">More on the methods, with toys and paper links: <a href="https://claude.ai/artifact/Bv9ziL1n4PVsmhfZxyykqF" target="_blank" rel="noopener">Beyond the Cap</a>. Everything here is reproducible from the conceptors/ folder of casting-call-vectors: runs, judge calibration, and this deck's build script.</p>
 </section>
 
 <section class="slide" data-title="Appendix: the field guide's other plates" data-part="Appendix">
