@@ -161,11 +161,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
 .slide .btc .part>.kicker,.slide .btc .part>h2{display:none}
 .slide:not(.appendix) .btc #ops-table-wrap{display:none}
 /* each canvas keeps its own shape until it reaches the height budget, then grows only in width */
-.slide .btc canvas{height:auto;max-height:var(--cvh,58vh)}
-.slide .btc .duo canvas{--cvh:48vh}
-.slide .btc #moves .duo canvas{--cvh:32vh}
-.slide .btc #cap canvas{--cvh:47vh}
-.slide .btc #gates canvas{--cvh:54vh}
+.slide .btc canvas{height:auto;max-height:var(--cvh,50vh)}
+.slide .btc .duo canvas{--cvh:44vh}
+.slide .btc #moves .duo canvas{--cvh:25vh}
+.slide:not(.appendix) .btc #moves .txt{max-height:56vh}
+.slide .btc #cap canvas{--cvh:38vh}
+.slide .btc #sharp canvas{--cvh:50vh}
+.slide .btc #gates canvas{--cvh:44vh}
 /* the moves slide's lead paragraph already explains the two framings */
 .slide:not(.appendix) .btc #f_mv{display:none}
 .slide .btc #trigger #bc-c3{--cvh:46vh}
@@ -173,11 +175,11 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
 /* square-ish drawings (the globe, the arc) sit left with their controls and readouts beside them, not under them */
 .slide .btc :is(#sphere,#manifold)>.fig{grid-template-columns:minmax(0,1.45fr) minmax(230px,1fr);align-items:start;column-gap:clamp(14px,1.8vw,28px)}
 .slide .btc :is(#sphere,#manifold)>.fig>.side .read{grid-template-columns:1fr 1fr}
-.slide .btc #sphere #c_sp{aspect-ratio:1/1;--cvh:68vh}
-.slide .btc #manifold #c_mf{aspect-ratio:4/3;--cvh:66vh}
+.slide .btc #sphere #c_sp{aspect-ratio:1/1;--cvh:58vh}
+.slide .btc #manifold #c_mf{aspect-ratio:4/3;--cvh:60vh}
 .slide .btc #manifold #c_mf2{aspect-ratio:16/10;--cvh:30vh}
 .slide .btc #flatcurved .duo{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}
-.slide .btc #flatcurved .duo canvas{--cvh:56vh}
+.slide .btc #flatcurved .duo canvas{--cvh:50vh}
 .slide:not(.appendix) .btc #moves .duo+.duo{display:none}
 .slide .btc .fig{gap:8px}
 .slide .btc .read{grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:4px 14px}
@@ -185,7 +187,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
 .slide .btc .read span{font-size:.76rem;line-height:1.3;display:block}
 .slide .btc .legend.plate-key{font-size:.78rem}
 /* the aperture chart shares its slide with four readouts and a slider, so it stops short of the bottom bar on 16:9 */
-.slide:not(.appendix) .btc #aperture canvas{--cvh:50vh}
+.slide:not(.appendix) .btc #aperture canvas{--cvh:35vh}
 /* the aperture plate on its slide: one chart, full width; the hold chart below it repeats the aperture sweep slide */
 .slide:not(.appendix) .btc #aperture{grid-template-columns:minmax(0,1fr)!important}
 .slide:not(.appendix) .btc #aperture .txt,.slide:not(.appendix) .btc #aperture #c2h,.slide:not(.appendix) .btc #aperture .fig>.legend,
@@ -202,7 +204,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
 /* the shape-check slide: the four points and the controls in one column, the circle full height beside them */
 .sbody.explain2{grid-template-columns:minmax(0,.95fr) minmax(0,1.3fr);grid-template-rows:auto minmax(0,1fr)}
 .sbody.explain2>.plate{display:contents}
-.sbody.explain2>.cards.steps{grid-column:1;grid-row:1;display:grid;grid-template-columns:minmax(0,1fr);gap:2px}
+.sbody.explain2>.cards.steps{grid-column:1;grid-row:1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 16px}
 .sbody.explain2 .panel{grid-column:1;grid-row:2}
 .sbody.explain2 .fig{grid-column:2;grid-row:1/3}
 .cards.steps .card{grid-template-columns:auto minmax(0,1fr);gap:0 10px;padding:4px 0;border-top:1px solid var(--hair)}
@@ -235,6 +237,56 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
 .choice h3{font-family:var(--f-display);font-weight:600;font-size:1.25rem;margin:0;line-height:1.2}
 .choice p{font-size:.95rem;max-width:none}
 .choice.c-gate{border-top-color:var(--violet)} .choice.c-dir{border-top-color:var(--navy)} .choice.c-move{border-top-color:var(--edit-ink)}
+
+/* the takeaway line: one sentence under the title on every data slide, since the deck is read without a presenter */
+.sowhat{font-size:1.08rem;line-height:1.42;margin:0;max-width:none;padding:2px 0 2px 14px;border-left:3px solid var(--navy);color:var(--ink)}
+.sowhat b{color:var(--navy)}
+.slide.navy .sowhat{border-left-color:var(--buzz);color:var(--on-dark)}
+
+/* the roadmap: four claims, each with the slides that prove it */
+.roadmap{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(14px,2.2vw,32px);align-content:start}
+.roadmap .card .n{font-size:clamp(28px,2.6vw,48px)}
+.roadmap .card h3{font-size:1.3rem}
+.roadmap .card p{font-size:1.02rem;line-height:1.45}
+.roadmap .card .where{font:600 .72rem/1.3 var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.roadmap .card .where a{color:var(--navy);text-decoration:none;border-bottom:1px solid var(--hairline)}
+.card p .where{display:block;margin-top:6px}
+.cards .card p a.sl{color:var(--navy);text-decoration:none;border-bottom:1px solid var(--hairline);white-space:nowrap}
+.slide.navy .cards .card p a.sl{color:var(--buzz);border-bottom-color:var(--buzz)}
+
+/* how we score it: three definition cards beside the judge calibration bars */
+.defcards{display:grid;gap:10px}
+.defcard{display:grid;gap:4px;padding:10px 14px;border-left:3px solid var(--pirate);background:var(--sunk)}
+.defcard h3{font-family:var(--f-display);font-weight:600;font-size:1.15rem;margin:0}
+.defcard p{font-size:.92rem;line-height:1.42;max-width:none}
+.defcard.coh{border-left-color:var(--navy)} .defcard.ai{border-left-color:var(--probe)}
+#score .hbar{font-size:.9rem}
+#score .scol>p.chart-title{margin:0}
+
+/* the answers slide: three cards in a row (assistant, pirate, the assistant describing a pirate), question picker only */
+#read .plate{grid-template-columns:minmax(0,1fr);grid-template-areas:"panel" "fig"}
+#read .plate .intro{display:none}
+#read .plate .panel{display:flex;gap:20px;align-items:end;flex-wrap:wrap}
+#read .plate .panel .ctl{flex:1 1 420px}
+#read .plate .panel .ctl:has(#rolesel),#read .plate .panel .note{display:none}
+#read .answers{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
+#read .ans:nth-child(3),#read .ans:nth-child(5){display:none}
+#read .ans .txt{font-size:1rem;line-height:1.5}
+#read .ans{padding:14px 16px}
+
+/* the map slide: the takeaway replaces the plate's long first paragraph; the TRY line stays */
+#map .plate .intro p:not(.try){display:none}
+/* the judges slide keeps only its agreement table, full width */
+#judges .jtable{font-size:.86rem}
+#judges .jtable th,#judges .jtable td{padding:4px 10px}
+.cards.steps .card{padding:3px 0}
+.cards.steps .card p{font-size:.78rem;line-height:1.3}
+.cards.steps .card h3{font-size:.9rem}
+.sbody.explain2 .panel .scale{display:none}   /* the bars carry their own numbers */
+.sbody.explain2 .panel .ctl{gap:2px}
+#read .plate figcaption{display:none}
+.roadmap .card h3{font-size:1.4rem}
+.roadmap .card p{font-size:1.08rem}
 
 /* the appendix divider lists its slides as buttons */
 .applist{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr));gap:8px}

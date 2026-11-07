@@ -171,7 +171,7 @@ const fig16=Canvas('cStrip',.62,(c,w,h)=>{
     text(c,G[g].mean.toFixed(2),w-M16.r+8,y,{size:10,color:COL.ink,halo:false});
   });
   if(s16.hover){const [k,j]=s16.hover,v=G[GROUPS[k]].vals[j];c.beginPath();c.arc(X(v),Yc(k),7.5,0,2*Math.PI);c.lineWidth=2;c.strokeStyle=COL.ink;c.stroke();}
-},{minH:300});
+},{minH:300,get maxH(){return window.FIG_MAX_H?Math.round(innerHeight*.8):500;}});  /* ten rows: on a slide the strip may take 80% of the height */
 hoverable(fig16.cv,(px,py,e)=>{
   if(!scale16)return;const G=D.groups[s16.pool];
   const k=Math.floor((py-M16.t)/scale16.rowH);

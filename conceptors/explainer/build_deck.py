@@ -31,6 +31,8 @@ from build_bench import load, merge  # noqa: E402
 
 PLATE_RE = re.compile(r'<section class="(?:plate|zoo)[^"]*"(?: id="([^"]+)")?>')
 TITLES = {"zoo-explorer": "The method zoo: twelve steering methods on one toy space"}  # sections without an h3
+# plates the deck leaves out: the scripts still bind their ids, so they are kept in a hidden block, not as slides
+PARKED = {"realturns"}  # the twelve-turn pilot; the 20-turn runs supersede it
 TRAJ = ("x_pre", "x_post", "off_pre", "off_post", "read_steered")
 TURN_KEYS = ("turn", "probe", "n", "fully_rate", "coherence", "identity_ai_rate", "voice_as_rate", "readout") + TRAJ
 SUMMARY_KEYS = ("n", "fully_rate", "coherence", "identity_ai_rate", "voice_as_rate", "readout") + TRAJ
@@ -292,7 +294,8 @@ def main():
     appendix = "\n".join(
         f'<section class="slide appendix" data-title="{attr(plate_title(pid, html))}" data-part="Appendix">\n'
         f'<header class="shead"><div class="kicker">Appendix</div><h2>{plate_title(pid, html)}</h2></header>\n{html}\n</section>'
-        for pid, html in all_plates.items() if pid not in used)
+        for pid, html in all_plates.items() if pid not in used and pid not in PARKED)
+    parked = "\n".join(all_plates[pid] for pid in PARKED if pid in all_plates)
     # Beyond the Cap: '{{btc:ID}}' pulls one of its sections; the rest go to the appendix, since its script binds them all
     secs, btc_css, btc_js = btc_parts()
     used_btc = set(re.findall(r"\{\{btc:([\w-]+)\}\}", slides))
@@ -326,6 +329,7 @@ def main():
           (HERE / "deck/results.js").read_text() + "\n}\n"
     html = (head + BTC_FONT + "<style>\n" + style + "\n" + css + "\n</style>\n<style>\n" + btc_css + "\n</style>\n"
             + '<div class="deck" id="deck">\n' + slides + "\n" + appendix + "\n</div>\n"
+            + '<div class="parked" hidden>\n' + parked + "\n</div>\n"
             + '<div class="tip" id="tip" hidden></div>\n'
             + '<script type="application/json" id="derived-data">' + blob(guide) + "</script>\n"
             + '<script type="application/json" id="deck-data">' + blob(results) + "</script>\n"

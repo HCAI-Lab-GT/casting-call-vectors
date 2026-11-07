@@ -6,7 +6,7 @@ const fontDesc=Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototyp
 let FS=1;
 function fit(){
   FS=Math.max(1.1,Math.min(1.55,innerWidth/1100));
-  window.FIG_MAX_H=Math.max(240,Math.round(innerHeight*.68));
+  window.FIG_MAX_H=Math.max(240,Math.round(innerHeight*.62));
 }
 fit();addEventListener('resize',fit);
 if(fontDesc&&fontDesc.set){

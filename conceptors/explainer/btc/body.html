@@ -27,10 +27,24 @@
   <p>A language model turns each token it reads into a hidden state, a list of a few thousand numbers. Tokens the model writes in character land in one region of that space, and tokens it writes as the assistant land in another. So each persona is a cloud of points, and steering means editing hidden states to move tokens toward the persona's cloud. The two plates in this part set up the picture the rest of the page uses.</p>
 </section>
 
-<section class="plate" id="space">
+<!-- the deck's slide: the same clouds with the shared core and each persona's own offset, no view switch -->
+<section class="plate" id="space-main">
   <div class="txt">
     <div class="kicker">Toy · 3D</div>
     <h3>Five personas and the assistant, as clouds</h3>
+    <p class="lead">Real hidden states have thousands of dimensions; three are enough to show the idea. Each dot is one token. Every persona sits along one shared direction away from the assistant, the <b>shared core</b> (gold arrow), plus an offset of its own (the thin arrows): the pirate goes one way, the ghost another. A steering vector is the arrow from the assistant's cloud to one persona's cloud, and the <b>persona axis</b> on the next slides is that arrow.</p>
+    <p class="try"><b>Try:</b> drag to turn the clouds. The consultant sits closest to the assistant: a persona near the default gives a steering method little to do, and the judges little to tell apart.</p>
+  </div>
+  <div class="fig">
+    <canvas id="c8m" class="r3d" tabindex="0" aria-label="3D persona space: five persona clouds, the assistant, the shared core and each persona's own offset"></canvas>
+    <div class="read" id="m8m"></div>
+  </div>
+</section>
+
+<section class="plate" id="space">
+  <div class="txt">
+    <div class="kicker">Toy · 3D · four more views</div>
+    <h3>Which directions matter: four views of the same clouds</h3>
     <p class="lead">Real hidden states have thousands of dimensions; three are enough to show the idea. Each dot is one token. Every persona sits partly along one shared direction away from the assistant, the <b>shared core</b> (gold arrow), plus an offset of its own: the pirate goes one way, the ghost another. A steering vector is an arrow from the assistant's cloud toward one persona's cloud.</p>
     <p>The other views ask which directions matter. The part on picking a direction comes back to them.</p>
     <ul class="try">

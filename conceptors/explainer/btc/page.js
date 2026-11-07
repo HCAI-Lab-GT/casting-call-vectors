@@ -907,6 +907,14 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
     else{rd=[['6','groups'],[String(NPER),'tokens each']]}
     pl.arrow(mA,add(mA,core),A(COL.gold,.95),2.2);pl.text(add(mA,scl(core,.5)),'shared core',COL.ochre,'600 11px');
     reads('#m8',rd)}
+  // the deck's main slide: the same clouds, the shared core and each persona's own offset from the core line
+  const cm=$('#c8m'),plm=cm&&new Plot3D(cm,drawMain,{yaw:-.75,pitch:.35,span:4.8});
+  function drawMain(){if(!plm||!plm.ready())return;loadCols();plm.clear();plm.fit(ALL8);plm.axes3([-4,-3.6,-2.2],1,['x','y','z']);
+    const pts=[];G.forEach(gr=>gr.pts.forEach(p=>pts.push({p,r:2.2,fill:A(COL[gr.c],.75)})));plm.points(pts);
+    G.forEach((gr,i)=>{if(i)plm.arrow(add(mA,scl(core,gr.f)),means[i],A(COL[gr.c],.9),1.4)});
+    plm.arrow(mA,add(mA,core),A(COL.gold,.95),2.4);plm.text(add(mA,scl(core,.5)),'shared core',COL.ochre,'600 11px');
+    G.forEach((gr,i)=>plm.text(add(means[i],[0,0,gr.n==='consultant'||gr.n==='bard'?-1.05:1.05]),gr.n,COL[gr.c]));
+    reads('#m8m',[['6','groups'],[String(NPER),'tokens each'],['1 + 5','shared core + own offsets']])}
   seg('#s8v',[['clouds','Clouds'],['pca','PCA of means'],['lda','Discriminant axes'],['or','Persona space (OR)'],['andnot','AND NOT the rest']],view,v=>{view=v;draw()});
   seg('#s8p',personas.map(i=>[i,G[i].n]),sel,v=>{sel=v;draw()});
   slider('r8a',v=>Math.pow(10,v/100).toFixed(2),v=>{k=Math.pow(10,v/100);draw()});

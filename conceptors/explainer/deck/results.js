@@ -131,7 +131,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-persona] b
       '<div class="pills">'+pills+'</div>';
   }
   /* capped so the chart, its title and the three notes under it fit above the bar on a 16:9 screen */
-  const ch=LineChart('s2line',{aspect:.56,ml:64,mr:24,canvasOpt:{get maxH(){return Math.round(innerHeight*.4);}},xs:XS,yRange:()=>[0,1],yTicks:()=>[0,.5,1],yFmt:pct,xFmt:String,
+  const ch=LineChart('s2line',{aspect:.56,ml:64,mr:24,canvasOpt:{get maxH(){return Math.round(innerHeight*.3);}},xs:XS,yRange:()=>[0,1],yTicks:()=>[0,.5,1],yFmt:pct,xFmt:String,
     bands:probeBands,selected:()=>turn-1,direct:false,vFmt:v=>pct(v),tipTitle:i=>'turn '+(i+1),
     series:()=>[...JUDGES().map(j=>({name:JNAME[j],color:rgba(COL.muted,.45),width:1.2,values:series(j,'prompt','none','fully_rate')})),
       {name:'Mean of judges',color:COL.ink,width:2.6,dots:true,values:series('mean','prompt','none','fully_rate')},
@@ -153,7 +153,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-persona] b
   function togs(){tog.innerHTML=togHTML(MORDER.filter(m=>rows().some(r=>r.method===m)),on,more);}
   /* every method is coherent above 80, so the chart opens on the 60-100 range; "All" shows the full axis */
   let pts=[],hover=null,zoom=true;
-  const f=Canvas('s9c',.68,(c,w,h)=>{
+  const f=Canvas('s9c',.68,(c,w,h)=>{  // capped below so the takeaway, chart and note fit a 16:9 screen
     const x0=zoom?60:0,M={l:64,r:18,t:30,b:40},X=v=>M.l+(Math.max(x0,v)-x0)/(100-x0)*(w-M.l-M.r),Y=v=>M.t+(1-v)*(h-M.t-M.b);  /* t leaves room for the labels of methods at 100% */
     c.strokeStyle=COL.grid;c.lineWidth=1;c.font='10px '+MONO;c.fillStyle=COL.muted;
     [0,.25,.5,.75,1].forEach(v=>{c.beginPath();c.moveTo(M.l,Y(v)+.5);c.lineTo(w-M.r,Y(v)+.5);c.stroke();c.textAlign='right';c.textBaseline='middle';c.fillText(pct(v),M.l-8,Y(v));});
@@ -178,7 +178,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-persona] b
     for(let i=1;i<labels.length;i++){const p=labels[i-1],q=labels[i];if(Math.abs(q.x-p.x)<70&&p.y-q.y<12)q.y=p.y-12;}
     labels.forEach(l=>text(c,l.t,l.x,l.y,{size:10,color:COL.ink}));
     if(hover){c.beginPath();c.arc(hover.x,hover.y,6,0,2*Math.PI);c.lineWidth=2;c.strokeStyle=COL.ink;c.stroke();}
-  });
+  },{get maxH(){return Math.round(innerHeight*.5);}});
   hoverable(cv,(px,py,e)=>{
     let best=null,bd=22*22;
     pts.forEach(p=>{const d=(p.x-px)**2+(p.y-py)**2;if(d<bd){bd=d;best=p;}});
@@ -234,7 +234,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-persona] b
     const g=sub(MP,s.h),rem=mv(C,g),closed=1-dot(VH,rem)/dot(VH,g),keep=dot(VH,mv(C,VH));
     rows($('s10r'),[['kept along the persona direction',pct(keep)],['gap closed along it',isFinite(closed)?pct(closed):'–'],
       ['aperture α',alpha().toFixed(2)]]);
-  });
+  },{get maxH(){return Math.round(innerHeight*.52);}});
   draggable(fig,()=>s.h,p=>{s.h=p;fig.draw();},BND);
   onRange('s10a',v=>{s.a=v;out('s10a',alpha().toFixed(2));fig.draw();});out('s10a',alpha().toFixed(2));
   onSeg('s10m',v=>{s.mode=v;fig.draw();});
@@ -329,7 +329,7 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
   /* a "before" line only for methods that edit the steering layer (the AA cap and no steering never do) */
   const edits=m=>!readLayer()&&hasTraj()&&XS().some(t=>{const a=val(m,t,'x_pre'),b=val(m,t,'x_post');return a!=null&&b!=null&&Math.abs(a-b)>1e-4;});
   /* two charts and a note share the right column: cap each so the slide fits a 16:9 screen without scrolling */
-  const fitH={get maxH(){return Math.round(innerHeight*.27);}};
+  const fitH={get maxH(){return Math.round(innerHeight*.21);}};
   const line=LineChart('stc',{aspect:.34,ml:64,mr:24,direct:false,canvasOpt:fitH,xs:XS,yRange:()=>{
       const vals=ms().flatMap(m=>XS().flatMap(t=>[val(m,t,key()),edits(m)?val(m,t,'x_pre'):null])).filter(v=>v!=null);
       return [Math.min(-.25,Math.floor((Math.min(...vals,0))*4)/4),Math.max(1.25,Math.ceil((Math.max(...vals,1))*4)/4)];},
@@ -433,7 +433,7 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
     [1,10,100,1000].filter(r=>r<=d).forEach(r=>{c.fillStyle=COL.muted;c.textAlign='center';c.textBaseline='top';c.fillText(String(r),X(r),h-46);});
     c.textAlign='right';c.textBaseline='bottom';c.fillText('eigen-direction rank of the persona token cloud (log) →',w-L.r,h-1);
     text(c,'where it lies: grey = assistant gap, orange = persona direction',L.l+4,bot[0]-8,{size:10,color:COL.ink});
-  });
+  },{get maxH(){return Math.round(innerHeight*.5);}});
   hoverable($('skc'),(px,py,e)=>{const t=hit.find(q=>px>=q.x0&&px<q.x1);if(!t){hideTip();return;}const b=t.b;
     showTip('<div class="tv">directions '+b.lo+(b.hi>b.lo?'-'+b.hi:'')+'</div><div class="row"><span class="tl">kept by the conceptor</span>&nbsp;<b>'+pct(b.keep)+'</b></div>'+
       '<div class="row"><span class="tl">share of the persona direction</span>&nbsp;<b>'+(100*b.v).toFixed(1)+'%</b></div>'+
