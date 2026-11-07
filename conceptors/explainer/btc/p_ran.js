@@ -7,7 +7,7 @@
   const pl=new Plot2D($('#c1'),BOX2,draw);pl.handles.push({get:()=>probe.p,set:w=>probe.p=w});
   function draw(){if(!pl.ready())return;loadCols();pl.clear();
     if(mode==='cap'){pl.halfplane(W2.vhat,tau(),A(COL.navy,.06));pl.boundary(W2.vhat,tau(),COL.navy,1.8,null,'floor τ')}
-    drawAxis(pl);drawClouds(pl);const m=metrics(edit);drawEdits(pl,m,.55);
+    drawAxis(pl);const m=metrics(edit);drawMove(pl,m);
     const e=edit(probe.p);pl.ring(probe.p);if(e.on)pl.arrow(probe.p,e.h,COL.edit,2.4,9);
     reads('#m1',[[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)'],[pct(m.caught),'drifted tokens edited'],[pct(m.ftr),'in-character tokens edited']])}
   seg('#s1',[['none','No steering'],['vector','Vector'],['cap','Cap']],mode,v=>{mode=v;draw()});
@@ -95,7 +95,7 @@
     W2.P.forEach(p=>{const on=trig(p);pl.dot(p,2.6,A(COL.persona,.8),on?COL.ink:null,1.1)});
     W2.Dr.forEach(p=>{const on=trig(p);on?pl.dot(p,2.7,A(COL.drift,.85)):pl.dot(p,2.7,null,A(COL.drift,.85),1.2)});
     pl.arrow(W2.mP,add(W2.mP,scl(wFu,1.4)),COL.violet,2,8);pl.text(add(W2.mP,scl(wFu,1.65)),'w',COL.violet,{font:'700 13px',align:'center'});
-    const fp=fis(probe.p);pl.ring(probe.p);
+    axisLabels(pl);const fp=fis(probe.p);pl.ring(probe.p);
     if(fp<tf){const delta=metric==='mahal'?scl(mv(SW,wF),(tf-fp)/dot(wF,mv(SW,wF))):scl(wF,(tf-fp)/dot(wF,wF));pl.arrow(probe.p,add(probe.p,delta),COL.edit,2.6,9)}
     const dM=h=>{if(fis(h)>=tf)return 0;const de=scl(mv(SW,wF),(tf-fis(h))/dot(wF,mv(SW,wF)));return Math.sqrt(dot(de,mv(SWi,de)))};
     const dE=h=>{if(fis(h)>=tf)return 0;const de=scl(wF,(tf-fis(h))/dot(wF,wF));return Math.sqrt(dot(de,mv(SWi,de)))};

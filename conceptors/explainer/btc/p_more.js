@@ -9,16 +9,16 @@
   const w2=(m1,S1,m2,S2)=>{const S2h=sqrtm(S2);const X=sqrtm(mm(mm(S2h,S1),S2h));const tr=M=>M[0][0]+M[1][1];return Math.sqrt(Math.max(0,dot(sub(m1,m2),sub(m1,m2))+tr(S1)+tr(S2)-2*tr(X)))};
   const pl=new Plot2D($('#c5'),BOX2,draw);let anim=null;
   function draw(){if(!pl.ready())return;loadCols();pl.clear();drawAxis(pl);
-    if(mode==='gated'){W2.A.forEach(p=>pl.dot(p,2.3,A(COL.assist,.45)));drawClouds(pl,{assist:false});
-      const ed=h=>{const g=piA(h);return{h:add(h,scl(sub(T(h),h),g)),on:g>.02}};
-      W2.A.forEach(h=>{const e=ed(h);if(e.on)pl.arrow(h,e.h,A(COL.edit,.35),1,5)});
-      const m=metrics(ed);drawEdits(pl,m,.6);const moved=avg(W2.A.map(h=>sCoord(ed(h).h)>.5?1:0));
-      reads('#m5',[[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)'],[pct(moved),'assistant tokens carried past halfway'],[pct(avg(W2.P.map(h=>piA(h)))),'mean gate on in-character tokens']])}
+    // gated: the tokens of a persona conversation (in character and drifted) get the map in proportion to how
+    // assistant-like they look; the assistant cloud is only the reference the map was fit on, so it stays still
+    if(mode==='gated'){const ed=h=>{const g=piA(h);return{h:add(h,scl(sub(T(h),h),g)),on:g>.02,g}};
+      const m=metrics(ed);drawMove(pl,m);
+      reads('#m5',[[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)'],[pct(avg(m.De.map(e=>e.g))),'mean gate on drifted tokens'],[pct(avg(m.Pe.map(e=>e.g))),'mean gate on in-character tokens']])}
     else{W2.P.forEach(p=>pl.dot(p,2.4,A(COL.persona,.35)));pl.covEllipse(W2.mP,W2.SigP,2,COL.persona,{w:2,dash:[5,4]});
       const moved=W2.A.map(h=>mode==='ot'?add(scl(h,1-t),scl(T(h),t)):add(h,scl(W2.d,t)));
       moved.forEach(p=>pl.dot(p,2.6,A(COL.assist,.75)));const mm_=meanOf(moved),Sm=covOf(moved);pl.covEllipse(mm_,Sm,2,COL.edit,{w:2.2});
       for(let i=0;i<W2.A.length;i+=6)pl.line(W2.A[i],moved[i],A(COL.edit,.25),1);
-      const shapeErr=w2([0,0],Sm,[0,0],W2.SigP);
+      const shapeErr=w2([0,0],Sm,[0,0],W2.SigP);axisLabels(pl);
       reads('#m5',[[f2(w2(mm_,Sm,W2.mP,W2.SigP)),'distance to persona cloud (W₂)'],[f2(shapeErr),'shape mismatch alone (W₂, means aligned)'],[f2(t),'progress t'],[mode==='ot'?'shift + reshape':'shift only','what moves']])}}
   seg('#s5',[['vector','Shift (vector)'],['ot','Transport'],['gated','Gated transport']],mode,v=>{mode=v;draw()});
   slider('r5t',v=>(v/100).toFixed(2),v=>{t=v/100;draw()});slider('r5g',v=>(v/100).toFixed(2),v=>{sharp=v/100;draw()});
@@ -33,14 +33,16 @@
   const UV=[];for(let i=0;i<N;i++)UV.push([2*rnd()-1,2*rnd()-1,randn(rnd)]);const Aq=[-.85,-.55],Bq=[.85,.55];
   const geom=()=>{const ph=Math.max(1e-4,bend*Math.PI),R=Lu/ph,zc=R*(1-Math.cos(ph/2))/2;
     const at=(u,v,n=0)=>{const th=u*Lu/2/R;return[R*Math.sin(th)+n*Math.sin(th),v*Ly/2,R*(1-Math.cos(th))-zc-n*Math.cos(th)]};return{at,R}};
-  const pl3=new Plot3D($('#c_fc3'),draw,{yaw:-.55,pitch:.38,span:3.4});const pl2=new Plot2D($('#c_fc2'),{x0:-3.6,x1:3.6,y0:-2.3,y1:2.3},draw);
+  const pl3=new Plot3D($('#c_fc3'),draw,{yaw:-.55,pitch:.38,span:3.4});const pl2=new Plot2D($('#c_fc2'),{x0:-3.4,x1:3.4,y0:-1.7,y1:1.7},draw);
+  // the box every bend fits in (flat: x ±3; fully bent: z ±1), so the 3D zoom holds while the bend changes
+  const FCB=[];for(const x of[-3,3])for(const y of[-1.5,1.5])for(const z of[-1,1])FCB.push([x,y,z]);
   function draw(){loadCols();const G=geom();const a=G.at(...Aq),b=G.at(...Bq);
     const chord=Array.from({length:41},(_,i)=>add(a,scl(sub(b,a),i/40)));const geo=Array.from({length:41},(_,i)=>{const s=i/40;return G.at(Aq[0]+(Bq[0]-Aq[0])*s,Aq[1]+(Bq[1]-Aq[1])*s)});
     const grid=[];for(let i=0;i<=120;i++)for(let j=0;j<=24;j++)grid.push(G.at(-1+i/60,-1+j/12));
     const gapOf=q=>Math.min(...grid.map(g=>nrm(sub(g,q))));const gaps=chord.map(gapOf);
     const dS=nrm(sub(b,a)),dG=Math.hypot((Bq[0]-Aq[0])*Lu/2,(Bq[1]-Aq[1])*Ly/2);
     const ms=add(a,scl(sub(b,a),t)),mg=G.at(Aq[0]+(Bq[0]-Aq[0])*t,Aq[1]+(Bq[1]-Aq[1])*t);
-    if(pl3.ready()){pl3.clear();pl3.axes3([-3.1,-2.4,-1.9],.8,['x','y','z']);
+    if(pl3.ready()){pl3.clear();pl3.fit(FCB);pl3.axes3([-3.1,-2.4,-1.9],.8,['x','y','z']);
       for(let i=0;i<=12;i++){const u=-1+i/6;pl3.poly(Array.from({length:13},(_,j)=>G.at(u,-1+j/6)),A(COL.navy,.18),1)}
       for(let j=0;j<=4;j++){const v=-1+j/2;pl3.poly(Array.from({length:61},(_,i)=>G.at(-1+i/30,v)),A(COL.navy,.18),1)}
       pl3.points(UV.map(([u,v,n])=>({p:G.at(u,v,sig*n),r:1.9,fill:A(COL.persona,.55)})));
@@ -51,7 +53,7 @@
       pl2.path(Array.from({length:61},(_,i)=>P2(G.at(-1+i/30,0))),A(COL.navy,.35),1);
       pl2.path(chord.map(P2),COL.edit,2,[6,4]);pl2.path(geo.map(P2),COL.navy,2.4);
       pl2.dot(P2(a),6,COL.ochre,COL.paper,1.5);pl2.dot(P2(b),6,COL.violet,COL.paper,1.5);pl2.dot(P2(ms),5,COL.paper,COL.edit,2.2);pl2.dot(P2(mg),5,COL.paper,COL.navy,2.2);
-      pl2.text([-3.45,2.05],'end-on: x across, z up',COL.muted)}
+      pl2.text([-3.25,1.5],'end-on: x across, z up',COL.muted)}
     reads('#m_fc',[[f2(dS),'straight-line distance'],[f2(dG),'distance along the sheet (never changes)'],[f2(dG/dS),'ratio: along the sheet / straight'],[f2(Math.max(...gaps)),'largest gap between the straight path and the sheet']])}
   slider('r_fcb',v=>(v/100).toFixed(2),v=>{bend=v/100;draw()});slider('r_fct',v=>(v/100).toFixed(2),v=>{t=v/100;draw()});
 })();
@@ -100,7 +102,9 @@
   const slerp=(a,b,s)=>{const th=Math.acos(clamp(dot(a,b),-1,1));if(th<1e-6)return a;return add(scl(a,Math.sin((1-s)*th)/Math.sin(th)),scl(b,Math.sin(s*th)/Math.sin(th)))};
   const angDeg=(a,b)=>Math.acos(clamp(dot(unit(a),unit(b)),-1,1))*180/Math.PI;
   const pl=new Plot3D($('#c_sp'),draw,{yaw:-.45,pitch:.3,span:1.5});
-  function draw(){if(!pl.ready())return;loadCols();pl.clear();
+  // points just outside the unit sphere, where the labels sit, so the globe and its labels fill the canvas
+  const SPB=[];for(let i=0;i<40;i++){const z=-1+2*(i+.5)/40,rr=Math.sqrt(1-z*z),a=i*2.4;SPB.push(scl([rr*Math.cos(a),rr*Math.sin(a),z],1.2))}
+  function draw(){if(!pl.ready())return;loadCols();pl.clear();pl.fit(SPB);
     for(let lat=-60;lat<=60;lat+=30){const z=Math.sin(lat*Math.PI/180),rr=Math.cos(lat*Math.PI/180),ring=[];for(let i=0;i<=72;i++){const a=i/72*2*Math.PI;ring.push([rr*Math.cos(a),rr*Math.sin(a),z])}pl.poly(ring,A(COL.muted,.22),1)}
     for(let lon=0;lon<180;lon+=30){const a=lon*Math.PI/180,mer=[];for(let i=0;i<=72;i++){const b=i/72*2*Math.PI;mer.push([Math.cos(b)*Math.cos(a),Math.cos(b)*Math.sin(a),Math.sin(b)])}pl.poly(mer,A(COL.muted,.22),1)}
     pl.poly([[0,0,0],aDir],A(COL.assist,.6),1.2,{dash:[3,3]});pl.poly([[0,0,0],pm],A(COL.persona,.6),1.2,{dash:[3,3]});

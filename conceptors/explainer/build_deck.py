@@ -29,20 +29,34 @@ sys.path.insert(0, str(HERE))
 from build import thin_points  # noqa: E402
 from build_bench import load, merge  # noqa: E402
 
-PLATE_RE = re.compile(r'<section class="(?:plate|zoo)[^"]*"(?: id="([^"]+)")?>.*?</section>', re.S)
+PLATE_RE = re.compile(r'<section class="(?:plate|zoo)[^"]*"(?: id="([^"]+)")?>')
 TITLES = {"zoo-explorer": "The method zoo: twelve steering methods on one toy space"}  # sections without an h3
 TRAJ = ("x_pre", "x_post", "off_pre", "off_post", "read_steered")
 TURN_KEYS = ("turn", "probe", "n", "fully_rate", "coherence", "identity_ai_rate", "voice_as_rate", "readout") + TRAJ
 SUMMARY_KEYS = ("n", "fully_rate", "coherence", "identity_ai_rate", "voice_as_rate", "readout") + TRAJ
 
 
+def section_end(s: str, start: int) -> int:
+    """Index just past the </section> that closes the <section> opening at start, counting nested sections."""
+    depth = 0
+    for t in re.finditer(r"<section\b|</section>", s[start:]):
+        depth += 1 if t.group(0) == "<section" else -1
+        if depth == 0:
+            return start + t.end()
+    raise SystemExit(f"unclosed <section> at offset {start}")
+
+
 def plates(body: str) -> dict:
-    """Every plate section of the field guide, by id (plates without an id get one from their position)."""
-    out = {}
+    """Every plate section of the field guide, by id (plates without an id get one from their position).
+    A plate can hold its own <section>s, so each one ends at its matching </section>, not the first one."""
+    out, pos = {}, 0
     for i, m in enumerate(PLATE_RE.finditer(body)):
+        if m.start() < pos:
+            raise SystemExit(f"a plate opens inside another plate at offset {m.start()}")
+        pos = section_end(body, m.start())
+        whole = body[m.start():pos]
         pid = m.group(1) or f"plate{i}"
-        html = m.group(0) if m.group(1) else re.sub(r'<section class="', f'<section id="{pid}" class="', m.group(0), count=1)
-        out[pid] = html
+        out[pid] = whole if m.group(1) else re.sub(r'<section class="', f'<section id="{pid}" class="', whole, count=1)
     return out
 
 
@@ -276,7 +290,9 @@ def main():
     used_btc = set(re.findall(r"\{\{btc:([\w-]+)\}\}", slides))
     if used_btc - set(secs):
         raise SystemExit(f"slides name Beyond the Cap sections it doesn't have: {sorted(used_btc - set(secs))}")
-    slides = re.sub(r"\{\{btc:([\w-]+)\}\}", lambda m: f'<div class="btc">{secs[m.group(1)]}</div>', slides)
+    # adjacent placeholders share one wrapper, so a section intro and its plate can be laid out together on the slide
+    slides = re.sub(r"(?:\{\{btc:[\w-]+\}\})+", lambda m: '<div class="btc">' + "".join(
+        secs[s] for s in re.findall(r"\{\{btc:([\w-]+)\}\}", m.group(0))) + "</div>", slides)
     appendix += "\n" + "\n".join(
         f'<section class="slide appendix" data-title="{sec_title(h)}" data-part="Appendix">\n'
         f'<header class="shead"><div class="kicker">Appendix</div><h2>{sec_title(h)}</h2></header>\n'

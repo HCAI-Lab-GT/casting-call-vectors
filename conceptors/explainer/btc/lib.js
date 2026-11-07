@@ -144,7 +144,8 @@ class Plot2D{
     if(out.length<3)return;const g=this.g;g.beginPath();out.forEach((p,i)=>{const s=this.S(p);i?g.lineTo(s[0],s[1]):g.moveTo(s[0],s[1])});g.closePath();g.fillStyle=fill;g.fill()}
   boundary(n,tau,col,w=1.6,dash,label){const u=unit(n);const p0=scl(u,tau/nrm(n));const t=[-u[1],u[0]];this.line(add(p0,scl(t,-30)),add(p0,scl(t,30)),col,w,dash);
     if(label){const b=this.box;let best=null;for(let k=-30;k<=30;k+=.25){const p=add(p0,scl(t,k));if(p[1]<=b.y1-.25&&p[1]>=b.y0&&p[0]>=b.x0&&p[0]<=b.x1){if(!best||p[1]>best[1])best=p}}if(best)this.text(add(best,[.12,-.05]),label,col,{font:'600 12px'})}}
-  text(p,str,col,{align='left',font='500 12px',base='middle'}={}){const g=this.g,s=this.S(p);g.fillStyle=col;g.font=`${font} ${FONT()}`;g.textAlign=align;g.textBaseline=base;g.fillText(str,s[0],s[1])}
+  text(p,str,col,{align='left',font='500 12px',base='middle',halo=false}={}){const g=this.g,s=this.S(p);g.font=`${font} ${FONT()}`;g.textAlign=align;g.textBaseline=base;
+    if(halo){g.save();g.lineWidth=4;g.lineJoin='round';g.strokeStyle=A(COL.paper,.92);g.strokeText(str,s[0],s[1]);g.restore()}g.fillStyle=col;g.fillText(str,s[0],s[1])}
   ring(p){this.dot(p,9,A(COL.paper,.85),COL.ink,2);this.dot(p,3,COL.ink)}
 }
 
@@ -158,7 +159,7 @@ class Plot3D{
     canvas.addEventListener('keydown',e=>{const k={ArrowLeft:[-.12,0],ArrowRight:[.12,0],ArrowUp:[0,-.12],ArrowDown:[0,.12]}[e.key];if(k){this.yaw+=k[0];this.pitch=clamp(this.pitch+k[1],-1.45,1.45);this.draw();e.preventDefault()}});
     watch(canvas,()=>{this.resize();this.draw()})}
   resize(){const r=this.c.getBoundingClientRect();if(!r.width)return;const dpr=window.devicePixelRatio||1;this.W=r.width;this.H=r.height;
-    this.c.width=Math.round(this.W*dpr);this.c.height=Math.round(this.H*dpr);this.g.setTransform(dpr,0,0,dpr,0,0);this.s=Math.min(this.W,this.H)/(2*this.span);this.cx=this.W/2;this.cy=this.H/2}
+    this.c.width=Math.round(this.W*dpr);this.c.height=Math.round(this.H*dpr);this.g.setTransform(dpr,0,0,dpr,0,0);this.s=Math.min(this.W,this.H)/(2*this.span);this.cx=this.W/2;this.cy=this.H/2;this._fk=null}
   ready(){if(!(this.W>0))this.resize();return this.W>0}
   P(p){const cy=Math.cos(this.yaw),sy=Math.sin(this.yaw);const X=cy*p[0]-sy*p[1],Y=sy*p[0]+cy*p[1],Z=p[2];
     const cp=Math.cos(this.pitch),sp=Math.sin(this.pitch);const Y2=cp*Y+sp*Z,Z2=-sp*Y+cp*Z;return[this.cx+this.s*X,this.cy-this.s*Z2,Y2]}
@@ -166,16 +167,25 @@ class Plot3D{
   poly(pts,col,w=1,{close=false,dash=null,fill=null}={}){const g=this.g;g.save();g.beginPath();pts.forEach((p,i)=>{const s=this.P(p);i?g.lineTo(s[0],s[1]):g.moveTo(s[0],s[1])});if(close)g.closePath();
     if(fill){g.fillStyle=fill;g.fill()}if(col){g.strokeStyle=col;g.lineWidth=w;if(dash)g.setLineDash(dash);g.stroke()}g.restore()}
   arrow(a,b,col,w=2,head=9){const s=this.P(a),t=this.P(b);arrowPx(this.g,s[0],s[1],t[0],t[1],col,w,head)}
-  fit(pts){this.cx=0;this.cy=0;let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;pts.forEach(p=>{const s=this.P(p);x0=Math.min(x0,s[0]);x1=Math.max(x1,s[0]);y0=Math.min(y0,s[1]);y1=Math.max(y1,s[1])});
-    this.cx=this.W/2-(x0+x1)/2;this.cy=this.H/2+10-(y0+y1)/2}
+  bbox(pts){let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;pts.forEach(p=>{const s=this.P(p);x0=Math.min(x0,s[0]);x1=Math.max(x1,s[0]);y0=Math.min(y0,s[1]);y1=Math.max(y1,s[1])});return{x0,x1,y0,y1}}
+  // centre the points; once per canvas size, also zoom so they fill the canvas at every yaw, so turning never clips them
+  fit(pts){this.cx=0;this.cy=0;const key=this.W+'x'+this.H;
+    if(this._fk!==key){this._fk=key;const y0=this.yaw;let k=Infinity;
+      for(let i=0;i<8;i++){this.yaw=y0+i*Math.PI/4;const b=this.bbox(pts);k=Math.min(k,this.W*.9/Math.max(b.x1-b.x0,1e-6),this.H*.84/Math.max(b.y1-b.y0,1e-6))}
+      this.yaw=y0;this.s*=k}
+    const b=this.bbox(pts);this.cx=this.W/2-(b.x0+b.x1)/2;this.cy=this.H/2-(b.y0+b.y1)/2}
   label(x,y,str,col){const g=this.g;g.fillStyle=col;g.font=`600 12px ${FONT()}`;g.textAlign='left';g.textBaseline='middle';g.fillText(str,x,y)}
-  text(p,str,col,font='600 12px'){const s=this.P(p),g=this.g;g.fillStyle=col;g.font=`${font} ${FONT()}`;g.textAlign='center';g.textBaseline='middle';g.fillText(str,s[0],s[1])}
+  text(p,str,col,font='600 12px'){const s=this.P(p),g=this.g;g.font=`${font} ${FONT()}`;g.textAlign='center';g.textBaseline='middle';
+    g.save();g.lineWidth=4;g.lineJoin='round';g.strokeStyle=A(COL.paper,.92);g.strokeText(str,s[0],s[1]);g.restore();g.fillStyle=col;g.fillText(str,s[0],s[1])}
   points(list){const pr=list.map(o=>({o,s:this.P(o.p)}));pr.sort((a,b)=>b.s[2]-a.s[2]);const g=this.g;
     for(const{o,s}of pr){g.beginPath();g.arc(s[0],s[1],o.r||2.6,0,2*Math.PI);if(o.fill){g.fillStyle=o.fill;g.fill()}if(o.stroke){g.strokeStyle=o.stroke;g.lineWidth=o.lw||1.2;g.stroke()}}}
   ellipsoid(c,vecs,axes,col){const pt=(u,v)=>add(c,add(add(scl(vecs[0],axes[0]*Math.cos(v)*Math.cos(u)),scl(vecs[1],axes[1]*Math.cos(v)*Math.sin(u))),scl(vecs[2],axes[2]*Math.sin(v))));
     for(const v of[-1,-.5,0,.5,1]){const ring=[];for(let i=0;i<=48;i++)ring.push(pt(i/48*2*Math.PI,v));this.poly(ring,col,1)}
     for(let m=0;m<6;m++){const u=m/6*Math.PI;const mer=[];for(let i=0;i<=48;i++)mer.push(pt(u,-Math.PI/2+i/48*2*Math.PI));this.poly(mer,col,1)}}
-  axes3(o,len,labels){const e=[[1,0,0],[0,1,0],[0,0,1]];e.forEach((v,i)=>{this.arrow(o,add(o,scl(v,len)),A(COL.muted,.8),1.2);this.text(add(o,scl(v,len*1.18)),labels[i],COL.muted,'500 11px')})}
+  // an orientation key pinned to the bottom-left corner: each arrow is a unit axis as this view projects it
+  axes3(o,len,labels){const g=this.g,ox=30,oy=this.H-30,L=22,p0=this.P([0,0,0]);
+    [[1,0,0],[0,1,0],[0,0,1]].forEach((v,i)=>{const q=this.P(v),dx=(q[0]-p0[0])/this.s,dy=(q[1]-p0[1])/this.s;
+      arrowPx(g,ox,oy,ox+L*dx,oy+L*dy,A(COL.muted,.85),1.2,5);g.fillStyle=COL.muted;g.font=`500 11px ${FONT()}`;g.textAlign='center';g.textBaseline='middle';g.fillText(labels[i],ox+(L+9)*dx,oy+(L+9)*dy)})}
 }
 
 /* ================= small line chart (real data and reported numbers) ================= */
@@ -233,7 +243,18 @@ function drawClouds(pl,{assist=true,persona=true,drift=true,af=.28}={}){
   if(persona)W2.P.forEach(p=>pl.dot(p,2.6,A(COL.persona,.75)));
   if(drift)W2.Dr.forEach(p=>pl.dot(p,2.6,A(COL.drift,.75)))}
 function drawAxis(pl){pl.line(add(W2.mA,scl(W2.d,-.45)),add(W2.mP,scl(W2.d,.32)),A(COL.navy,.55),1.2,[5,4]);
-  pl.dot(W2.mA,4.5,COL.assist,COL.paper,1.5);pl.dot(W2.mP,4.5,COL.persona,COL.paper,1.5);
-  pl.text(add(W2.mA,[0,-.42]),'assistant mean',COL.assist,{align:'center',font:'600 12px'});pl.text(add(W2.mP,[0,-.42]),'persona mean',COL.persona,{align:'center',font:'600 12px'})}
-function drawEdits(pl,m,alpha=.5){m.De.forEach((e,i)=>{if(e.on)pl.arrow(W2.Dr[i],e.h,A(COL.edit,alpha),1,5)});m.Pe.forEach((e,i)=>{if(e.on)pl.arrow(W2.P[i],e.h,A(COL.edit,alpha*.8),1,5)})}
+  pl.dot(W2.mA,4.5,COL.assist,COL.paper,1.5);pl.dot(W2.mP,4.5,COL.persona,COL.paper,1.5)}
+// drawn last, over the dots, so the two labels stay readable
+function axisLabels(pl){[[W2.mA,'assistant mean',COL.assist],[W2.mP,'persona mean',COL.persona]].forEach(([p,t,c])=>{
+  pl.dot(p,4.5,c,COL.paper,1.5);pl.text(add(p,[0,-.5]),t,c,{align:'center',font:'600 13px',halo:true})})}
+// One picture for every toy move. Assistant tokens are a fixed, faint reference. In-character tokens stay where they are,
+// with a dark ring when the move shifts them too (darker the further it shifts them; the distortion readout says how far).
+// Drifted tokens are drawn where the move puts them, with a faint ghost where they started and an arrow on every third.
+const shift=(a,b)=>nrm(sub(a,b))/nrm(W2.d);
+function drawMove(pl,m,{every=4,assist=true}={}){
+  if(assist)W2.A.forEach(p=>pl.dot(p,2.2,A(COL.assist,.24)));
+  W2.P.forEach((p,i)=>{const s=shift(m.Pe[i].h,p);pl.dot(p,2.6,A(COL.persona,.72),s>.01?A(COL.ink,.2+.45*Math.min(1,s/.3)):null,1)});
+  W2.Dr.forEach((p,i)=>{if(shift(m.De[i].h,p)>.01)pl.dot(p,2.3,A(COL.drift,.16))});
+  W2.Dr.forEach((p,i)=>{if(i%every===0&&shift(m.De[i].h,p)>.01)pl.arrow(p,m.De[i].h,A(COL.edit,.7),1.3,6)});
+  m.De.forEach(e=>pl.dot(e.h,2.8,A(COL.drift,.85)));axisLabels(pl)}
 linkRefs();

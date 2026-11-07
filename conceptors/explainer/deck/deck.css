@@ -139,16 +139,44 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
   .slide h2{font-size:clamp(24px,6vw,40px)}
 }
 
-/* Beyond the Cap plates on slides: its stacked layout is built for scrolling, so slides use text left, figures right */
-.slide .btc .plate,.slide .btc .plate.stack{grid-template-columns:minmax(0,1fr) minmax(0,min(58vw,76vh))!important;gap:clamp(12px,2vh,24px) clamp(18px,2.6vw,44px);padding-block:0;border:0}
-.slide .btc .plate .txt{max-height:72vh;overflow:auto;font-size:.92rem}
+/* Beyond the Cap plates on slides. The figure gets most of the width and a set height; the text is a narrow column
+   beside it, with a section intro (.part) above the plate's own text. Every plate redraws its canvases to the box
+   they get, so an explicit height here doesn't distort them. */
+.slide .btc .plate,.slide .btc .plate.stack{grid-template-columns:minmax(230px,28%) minmax(0,1fr)!important;gap:clamp(10px,1.6vh,20px) clamp(16px,2.2vw,36px);padding-block:0;border:0}
+.slide .btc:has(>.part+.plate){display:grid;grid-template-columns:minmax(230px,28%) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:clamp(8px,1.2vh,14px) clamp(16px,2.2vw,36px);align-items:start;min-height:0}
+.slide .btc:has(>.part+.plate)>.plate{display:contents}
+.slide .btc:has(>.part+.plate)>.part{grid-column:1;grid-row:1}
+.slide .btc:has(>.part+.plate)>.plate>.txt{grid-column:1;grid-row:2}
+.slide .btc:has(>.part+.plate)>.plate>.fig{grid-column:2;grid-row:1/3}
+.slide .btc .plate .txt{max-height:64vh;overflow:auto;font-size:.84rem;line-height:1.45;gap:9px}
+.slide .btc .plate .txt .eq{font-size:.72rem;white-space:pre-wrap}
 .slide .btc .plate .txt>.kicker,.slide .btc .plate .txt>h3{display:none}
-.slide .btc .plate .txt>p:not(.papers):not(.try):not(.opdesc):not(.src):not(:nth-of-type(2)){display:none}
-.slide .btc .part{padding-block:0 6px}
-.slide .btc .part p{font-size:.88rem;line-height:1.4;margin:0 0 4px;max-width:none}
-.slide .btc .plate>.fig,.slide .btc .plate>figure{max-height:68vh}
+/* a slide shows a plate's papers line, its lead paragraphs (class "lead" in the plate), the live description and the hint */
+.slide .btc .plate .txt>p:not(.papers,.lead,.opdesc,.src,.try){display:none}
+.slide .btc .part{padding-block:0;border-top:0;gap:4px}
+.slide .btc .part p{font-size:.84rem;line-height:1.45;margin:0;max-width:none}
 .slide .btc .part>.kicker,.slide .btc .part>h2{display:none}
 .slide:not(.appendix) .btc #ops-table-wrap{display:none}
+/* each canvas keeps its own shape until it reaches the height budget, then grows only in width */
+.slide .btc canvas{height:auto;max-height:var(--cvh,58vh)}
+.slide .btc .duo canvas{--cvh:48vh}
+.slide .btc #moves .duo canvas{--cvh:35vh}
+.slide .btc #cap canvas{--cvh:50vh}
+.slide .btc #gates canvas{--cvh:54vh}
+/* square-ish drawings (the globe, the arc) sit left with their controls and readouts beside them, not under them */
+.slide .btc :is(#sphere,#manifold)>.fig{grid-template-columns:minmax(0,1.45fr) minmax(230px,1fr);align-items:start;column-gap:clamp(14px,1.8vw,28px)}
+.slide .btc :is(#sphere,#manifold)>.fig>.side .read{grid-template-columns:1fr 1fr}
+.slide .btc #sphere #c_sp{aspect-ratio:1/1;--cvh:68vh}
+.slide .btc #manifold #c_mf{aspect-ratio:4/3;--cvh:66vh}
+.slide .btc #manifold #c_mf2{aspect-ratio:16/10;--cvh:30vh}
+.slide .btc #flatcurved .duo{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}
+.slide .btc #flatcurved .duo canvas{--cvh:56vh}
+.slide:not(.appendix) .btc #moves .duo+.duo{display:none}
+.slide .btc .fig{gap:8px}
+.slide .btc .read{grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:4px 14px}
+.slide .btc .read b{font-size:1.08rem}
+.slide .btc .read span{font-size:.7rem;line-height:1.3;display:block}
+.slide .btc .legend.plate-key{font-size:.74rem}
 /* the aperture plate on its slide: one chart, full width; the hold chart below it repeats the aperture sweep slide */
 .slide:not(.appendix) .btc #aperture{grid-template-columns:minmax(0,1fr)!important}
 .slide:not(.appendix) .btc #aperture .txt,.slide:not(.appendix) .btc #aperture #c2h,.slide:not(.appendix) .btc #aperture .fig>.legend,
@@ -161,4 +189,3 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
 .slide .defs{font-size:.8rem;line-height:1.4;margin-top:4px}
 /* the persona switch carries the two model averages too, so its buttons run a little smaller */
 .slide [data-persona] button{font-size:.76rem;padding-inline:8px}
-.slide .btc .plate>.fig,.slide .btc .plate>figure{max-height:80vh;overflow:auto}

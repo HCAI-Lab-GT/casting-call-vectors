@@ -145,7 +145,8 @@ class Plot2D{
     if(out.length<3)return;const g=this.g;g.beginPath();out.forEach((p,i)=>{const s=this.S(p);i?g.lineTo(s[0],s[1]):g.moveTo(s[0],s[1])});g.closePath();g.fillStyle=fill;g.fill()}
   boundary(n,tau,col,w=1.6,dash,label){const u=unit(n);const p0=scl(u,tau/nrm(n));const t=[-u[1],u[0]];this.line(add(p0,scl(t,-30)),add(p0,scl(t,30)),col,w,dash);
     if(label){const b=this.box;let best=null;for(let k=-30;k<=30;k+=.25){const p=add(p0,scl(t,k));if(p[1]<=b.y1-.25&&p[1]>=b.y0&&p[0]>=b.x0&&p[0]<=b.x1){if(!best||p[1]>best[1])best=p}}if(best)this.text(add(best,[.12,-.05]),label,col,{font:'600 12px'})}}
-  text(p,str,col,{align='left',font='500 12px',base='middle'}={}){const g=this.g,s=this.S(p);g.fillStyle=col;g.font=`${font} ${FONT()}`;g.textAlign=align;g.textBaseline=base;g.fillText(str,s[0],s[1])}
+  text(p,str,col,{align='left',font='500 12px',base='middle',halo=false}={}){const g=this.g,s=this.S(p);g.font=`${font} ${FONT()}`;g.textAlign=align;g.textBaseline=base;
+    if(halo){g.save();g.lineWidth=4;g.lineJoin='round';g.strokeStyle=A(COL.paper,.92);g.strokeText(str,s[0],s[1]);g.restore()}g.fillStyle=col;g.fillText(str,s[0],s[1])}
   ring(p){this.dot(p,9,A(COL.paper,.85),COL.ink,2);this.dot(p,3,COL.ink)}
 }
 
@@ -159,7 +160,7 @@ class Plot3D{
     canvas.addEventListener('keydown',e=>{const k={ArrowLeft:[-.12,0],ArrowRight:[.12,0],ArrowUp:[0,-.12],ArrowDown:[0,.12]}[e.key];if(k){this.yaw+=k[0];this.pitch=clamp(this.pitch+k[1],-1.45,1.45);this.draw();e.preventDefault()}});
     watch(canvas,()=>{this.resize();this.draw()})}
   resize(){const r=this.c.getBoundingClientRect();if(!r.width)return;const dpr=window.devicePixelRatio||1;this.W=r.width;this.H=r.height;
-    this.c.width=Math.round(this.W*dpr);this.c.height=Math.round(this.H*dpr);this.g.setTransform(dpr,0,0,dpr,0,0);this.s=Math.min(this.W,this.H)/(2*this.span);this.cx=this.W/2;this.cy=this.H/2}
+    this.c.width=Math.round(this.W*dpr);this.c.height=Math.round(this.H*dpr);this.g.setTransform(dpr,0,0,dpr,0,0);this.s=Math.min(this.W,this.H)/(2*this.span);this.cx=this.W/2;this.cy=this.H/2;this._fk=null}
   ready(){if(!(this.W>0))this.resize();return this.W>0}
   P(p){const cy=Math.cos(this.yaw),sy=Math.sin(this.yaw);const X=cy*p[0]-sy*p[1],Y=sy*p[0]+cy*p[1],Z=p[2];
     const cp=Math.cos(this.pitch),sp=Math.sin(this.pitch);const Y2=cp*Y+sp*Z,Z2=-sp*Y+cp*Z;return[this.cx+this.s*X,this.cy-this.s*Z2,Y2]}
@@ -167,16 +168,25 @@ class Plot3D{
   poly(pts,col,w=1,{close=false,dash=null,fill=null}={}){const g=this.g;g.save();g.beginPath();pts.forEach((p,i)=>{const s=this.P(p);i?g.lineTo(s[0],s[1]):g.moveTo(s[0],s[1])});if(close)g.closePath();
     if(fill){g.fillStyle=fill;g.fill()}if(col){g.strokeStyle=col;g.lineWidth=w;if(dash)g.setLineDash(dash);g.stroke()}g.restore()}
   arrow(a,b,col,w=2,head=9){const s=this.P(a),t=this.P(b);arrowPx(this.g,s[0],s[1],t[0],t[1],col,w,head)}
-  fit(pts){this.cx=0;this.cy=0;let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;pts.forEach(p=>{const s=this.P(p);x0=Math.min(x0,s[0]);x1=Math.max(x1,s[0]);y0=Math.min(y0,s[1]);y1=Math.max(y1,s[1])});
-    this.cx=this.W/2-(x0+x1)/2;this.cy=this.H/2+10-(y0+y1)/2}
+  bbox(pts){let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;pts.forEach(p=>{const s=this.P(p);x0=Math.min(x0,s[0]);x1=Math.max(x1,s[0]);y0=Math.min(y0,s[1]);y1=Math.max(y1,s[1])});return{x0,x1,y0,y1}}
+  // centre the points; once per canvas size, also zoom so they fill the canvas at every yaw, so turning never clips them
+  fit(pts){this.cx=0;this.cy=0;const key=this.W+'x'+this.H;
+    if(this._fk!==key){this._fk=key;const y0=this.yaw;let k=Infinity;
+      for(let i=0;i<8;i++){this.yaw=y0+i*Math.PI/4;const b=this.bbox(pts);k=Math.min(k,this.W*.9/Math.max(b.x1-b.x0,1e-6),this.H*.84/Math.max(b.y1-b.y0,1e-6))}
+      this.yaw=y0;this.s*=k}
+    const b=this.bbox(pts);this.cx=this.W/2-(b.x0+b.x1)/2;this.cy=this.H/2-(b.y0+b.y1)/2}
   label(x,y,str,col){const g=this.g;g.fillStyle=col;g.font=`600 12px ${FONT()}`;g.textAlign='left';g.textBaseline='middle';g.fillText(str,x,y)}
-  text(p,str,col,font='600 12px'){const s=this.P(p),g=this.g;g.fillStyle=col;g.font=`${font} ${FONT()}`;g.textAlign='center';g.textBaseline='middle';g.fillText(str,s[0],s[1])}
+  text(p,str,col,font='600 12px'){const s=this.P(p),g=this.g;g.font=`${font} ${FONT()}`;g.textAlign='center';g.textBaseline='middle';
+    g.save();g.lineWidth=4;g.lineJoin='round';g.strokeStyle=A(COL.paper,.92);g.strokeText(str,s[0],s[1]);g.restore();g.fillStyle=col;g.fillText(str,s[0],s[1])}
   points(list){const pr=list.map(o=>({o,s:this.P(o.p)}));pr.sort((a,b)=>b.s[2]-a.s[2]);const g=this.g;
     for(const{o,s}of pr){g.beginPath();g.arc(s[0],s[1],o.r||2.6,0,2*Math.PI);if(o.fill){g.fillStyle=o.fill;g.fill()}if(o.stroke){g.strokeStyle=o.stroke;g.lineWidth=o.lw||1.2;g.stroke()}}}
   ellipsoid(c,vecs,axes,col){const pt=(u,v)=>add(c,add(add(scl(vecs[0],axes[0]*Math.cos(v)*Math.cos(u)),scl(vecs[1],axes[1]*Math.cos(v)*Math.sin(u))),scl(vecs[2],axes[2]*Math.sin(v))));
     for(const v of[-1,-.5,0,.5,1]){const ring=[];for(let i=0;i<=48;i++)ring.push(pt(i/48*2*Math.PI,v));this.poly(ring,col,1)}
     for(let m=0;m<6;m++){const u=m/6*Math.PI;const mer=[];for(let i=0;i<=48;i++)mer.push(pt(u,-Math.PI/2+i/48*2*Math.PI));this.poly(mer,col,1)}}
-  axes3(o,len,labels){const e=[[1,0,0],[0,1,0],[0,0,1]];e.forEach((v,i)=>{this.arrow(o,add(o,scl(v,len)),A(COL.muted,.8),1.2);this.text(add(o,scl(v,len*1.18)),labels[i],COL.muted,'500 11px')})}
+  // an orientation key pinned to the bottom-left corner: each arrow is a unit axis as this view projects it
+  axes3(o,len,labels){const g=this.g,ox=30,oy=this.H-30,L=22,p0=this.P([0,0,0]);
+    [[1,0,0],[0,1,0],[0,0,1]].forEach((v,i)=>{const q=this.P(v),dx=(q[0]-p0[0])/this.s,dy=(q[1]-p0[1])/this.s;
+      arrowPx(g,ox,oy,ox+L*dx,oy+L*dy,A(COL.muted,.85),1.2,5);g.fillStyle=COL.muted;g.font=`500 11px ${FONT()}`;g.textAlign='center';g.textBaseline='middle';g.fillText(labels[i],ox+(L+9)*dx,oy+(L+9)*dy)})}
 }
 
 /* ================= small line chart (real data and reported numbers) ================= */
@@ -234,9 +244,20 @@ function drawClouds(pl,{assist=true,persona=true,drift=true,af=.28}={}){
   if(persona)W2.P.forEach(p=>pl.dot(p,2.6,A(COL.persona,.75)));
   if(drift)W2.Dr.forEach(p=>pl.dot(p,2.6,A(COL.drift,.75)))}
 function drawAxis(pl){pl.line(add(W2.mA,scl(W2.d,-.45)),add(W2.mP,scl(W2.d,.32)),A(COL.navy,.55),1.2,[5,4]);
-  pl.dot(W2.mA,4.5,COL.assist,COL.paper,1.5);pl.dot(W2.mP,4.5,COL.persona,COL.paper,1.5);
-  pl.text(add(W2.mA,[0,-.42]),'assistant mean',COL.assist,{align:'center',font:'600 12px'});pl.text(add(W2.mP,[0,-.42]),'persona mean',COL.persona,{align:'center',font:'600 12px'})}
-function drawEdits(pl,m,alpha=.5){m.De.forEach((e,i)=>{if(e.on)pl.arrow(W2.Dr[i],e.h,A(COL.edit,alpha),1,5)});m.Pe.forEach((e,i)=>{if(e.on)pl.arrow(W2.P[i],e.h,A(COL.edit,alpha*.8),1,5)})}
+  pl.dot(W2.mA,4.5,COL.assist,COL.paper,1.5);pl.dot(W2.mP,4.5,COL.persona,COL.paper,1.5)}
+// drawn last, over the dots, so the two labels stay readable
+function axisLabels(pl){[[W2.mA,'assistant mean',COL.assist],[W2.mP,'persona mean',COL.persona]].forEach(([p,t,c])=>{
+  pl.dot(p,4.5,c,COL.paper,1.5);pl.text(add(p,[0,-.5]),t,c,{align:'center',font:'600 13px',halo:true})})}
+// One picture for every toy move. Assistant tokens are a fixed, faint reference. In-character tokens stay where they are,
+// with a dark ring when the move shifts them too (darker the further it shifts them; the distortion readout says how far).
+// Drifted tokens are drawn where the move puts them, with a faint ghost where they started and an arrow on every third.
+const shift=(a,b)=>nrm(sub(a,b))/nrm(W2.d);
+function drawMove(pl,m,{every=4,assist=true}={}){
+  if(assist)W2.A.forEach(p=>pl.dot(p,2.2,A(COL.assist,.24)));
+  W2.P.forEach((p,i)=>{const s=shift(m.Pe[i].h,p);pl.dot(p,2.6,A(COL.persona,.72),s>.01?A(COL.ink,.2+.45*Math.min(1,s/.3)):null,1)});
+  W2.Dr.forEach((p,i)=>{if(shift(m.De[i].h,p)>.01)pl.dot(p,2.3,A(COL.drift,.16))});
+  W2.Dr.forEach((p,i)=>{if(i%every===0&&shift(m.De[i].h,p)>.01)pl.arrow(p,m.De[i].h,A(COL.edit,.7),1.3,6)});
+  m.De.forEach(e=>pl.dot(e.h,2.8,A(COL.drift,.85)));axisLabels(pl)}
 linkRefs();
 
 /* ================= what we ran: vector and cap ================= */
@@ -248,7 +269,7 @@ linkRefs();
   const pl=new Plot2D($('#c1'),BOX2,draw);pl.handles.push({get:()=>probe.p,set:w=>probe.p=w});
   function draw(){if(!pl.ready())return;loadCols();pl.clear();
     if(mode==='cap'){pl.halfplane(W2.vhat,tau(),A(COL.navy,.06));pl.boundary(W2.vhat,tau(),COL.navy,1.8,null,'floor τ')}
-    drawAxis(pl);drawClouds(pl);const m=metrics(edit);drawEdits(pl,m,.55);
+    drawAxis(pl);const m=metrics(edit);drawMove(pl,m);
     const e=edit(probe.p);pl.ring(probe.p);if(e.on)pl.arrow(probe.p,e.h,COL.edit,2.4,9);
     reads('#m1',[[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)'],[pct(m.caught),'drifted tokens edited'],[pct(m.ftr),'in-character tokens edited']])}
   seg('#s1',[['none','No steering'],['vector','Vector'],['cap','Cap']],mode,v=>{mode=v;draw()});
@@ -336,7 +357,7 @@ linkRefs();
     W2.P.forEach(p=>{const on=trig(p);pl.dot(p,2.6,A(COL.persona,.8),on?COL.ink:null,1.1)});
     W2.Dr.forEach(p=>{const on=trig(p);on?pl.dot(p,2.7,A(COL.drift,.85)):pl.dot(p,2.7,null,A(COL.drift,.85),1.2)});
     pl.arrow(W2.mP,add(W2.mP,scl(wFu,1.4)),COL.violet,2,8);pl.text(add(W2.mP,scl(wFu,1.65)),'w',COL.violet,{font:'700 13px',align:'center'});
-    const fp=fis(probe.p);pl.ring(probe.p);
+    axisLabels(pl);const fp=fis(probe.p);pl.ring(probe.p);
     if(fp<tf){const delta=metric==='mahal'?scl(mv(SW,wF),(tf-fp)/dot(wF,mv(SW,wF))):scl(wF,(tf-fp)/dot(wF,wF));pl.arrow(probe.p,add(probe.p,delta),COL.edit,2.6,9)}
     const dM=h=>{if(fis(h)>=tf)return 0;const de=scl(mv(SW,wF),(tf-fis(h))/dot(wF,mv(SW,wF)));return Math.sqrt(dot(de,mv(SWi,de)))};
     const dE=h=>{if(fis(h)>=tf)return 0;const de=scl(wF,(tf-fis(h))/dot(wF,wF));return Math.sqrt(dot(de,mv(SWi,de)))};
@@ -405,7 +426,7 @@ const MOVES=(function(){const d=W2.d,vh=W2.vhat,wFu=unit(FIS_W);
   const tpar={label:'Strength t',min:0,max:100,val:100,fmt:v=>(v/100).toFixed(2)};
   return[
     {id:'none',label:'None',param:null,eq:'h′ = h',desc:'No steering: the drifted tokens stay where they are.',src:'',f:h=>({h,on:false})},
-    {id:'add',label:'Add',one:'v',param:{label:'Strength c',min:0,max:150,val:100,fmt:v=>(v/100).toFixed(2)},eq:'h′ = h + c·d',
+    {id:'add',label:'Add',one:'v',param:{label:'Strength c',min:0,max:150,val:60,fmt:v=>(v/100).toFixed(2)},eq:'h′ = h + c·d',
       desc:'Adds the same vector to every token. The whole cloud shifts and keeps its shape, and tokens already in character get pushed past the persona.',
       src:`${cite('actadd','ActAdd')} (Turner et al. 2023), ${cite('caa','CAA')} (Panickssery et al. 2024), ${cite('pv','persona vectors')} (Chen et al. 2025). Our steering vector.`,
       f:(h,p)=>({h:add(h,scl(d,p/100)),on:p>0})},
@@ -493,17 +514,20 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
     if(o.id==='ot'){const{vals:ev,vecs}=symEig(W3.SigP);pl3.ellipsoid(W3.mP,vecs,ev.map(v=>2*Math.sqrt(Math.max(v,0))),A(COL.persona,.45))}
     if(o.id==='rotate'){const R=nrm(sub(W3.mP,Z3));[[1,0,0],[0,1,0],[0,0,1]].forEach((ax,i)=>{const u=[[0,1,0],[0,0,1],[1,0,0]][i],w=cross(ax,u);const ring=[];for(let j=0;j<=72;j++){const a=j/72*2*Math.PI;ring.push(add(Z3,add(scl(u,R*Math.cos(a)),scl(w,R*Math.sin(a)))))}pl3.poly(ring,A(COL.navy,.25),1,{dash:[3,4]})})}
     pl3.poly([sub(Z3,[.2,0,0]),add(Z3,[.2,0,0])],COL.ink,1.6);pl3.poly([sub(Z3,[0,.2,0]),add(Z3,[0,.2,0])],COL.ink,1.6);pl3.poly([sub(Z3,[0,0,.2]),add(Z3,[0,0,.2])],COL.ink,1.6);pl3.text(add(Z3,[0,0,-.4]),'zero vector',COL.muted,'500 11px');
-    const eP=W3.P.map(f),eD=W3.Dr.map(f);const pts=[];W3.A.forEach(h=>pts.push({p:h,r:1.9,fill:A(COL.assist,.28)}));
-    W3.P.forEach(h=>pts.push({p:h,r:2.3,fill:A(COL.persona,.75)}));W3.Dr.forEach(h=>pts.push({p:h,r:2.3,fill:A(COL.drift,.75)}));
-    eD.forEach(e=>{if(e.on)pts.push({p:e.h,r:2.2,stroke:A(COL.drift,.85),lw:1})});eP.forEach(e=>{if(e.on)pts.push({p:e.h,r:2.2,stroke:A(COL.persona,.85),lw:1})});pl3.points(pts);
-    eD.forEach((e,i)=>{if(e.on)pl3.arrow(W3.Dr[i],e.h,A(COL.edit,.45),1,4)});eP.forEach((e,i)=>{if(e.on)pl3.arrow(W3.P[i],e.h,A(COL.edit,.35),1,4)});
+    // same rule as the 2D drawMove: only drifted tokens move; in-character tokens a move shifts get a dark ring
+    const eP=W3.P.map(f),eD=W3.Dr.map(f);const sh=(a,b)=>nrm(sub(a,b))/nrm(W3.d);const pts=[];
+    W3.A.forEach(h=>pts.push({p:h,r:1.9,fill:A(COL.assist,.24)}));
+    W3.P.forEach((h,i)=>{const s=sh(eP[i].h,h);pts.push({p:h,r:2.4,fill:A(COL.persona,.72),stroke:s>.01?A(COL.ink,.2+.45*Math.min(1,s/.3)):null,lw:1})});
+    W3.Dr.forEach((h,i)=>{if(sh(eD[i].h,h)>.01)pts.push({p:h,r:2.1,fill:A(COL.drift,.16)})});
+    eD.forEach(e=>pts.push({p:e.h,r:2.6,fill:A(COL.drift,.85)}));pl3.points(pts);
+    eD.forEach((e,i)=>{if(i%4===0&&sh(e.h,W3.Dr[i])>.01)pl3.arrow(W3.Dr[i],e.h,A(COL.edit,.7),1.3,6)});
     pl3.text(add(W3.mA,[0,0,-1.25]),'assistant',COL.assist);pl3.text(add(W3.mP,[0,0,-1.25]),'persona',COL.persona);
     const sdz=a=>{const m=avg(a);return Math.sqrt(avg(a.map(x=>(x-m)**2)))};
     const zb=sdz(W3.Dr.map(h=>h[2])),za=sdz(eD.map(e=>e.h[2])),pb=sdz(W3.P.map(h=>h[2])),pa=sdz(eP.map(e=>e.h[2]));
     const lc=avg(eD.map((e,i)=>nrm(sub(e.h,Z3))/nrm(sub(W3.Dr[i],Z3))-1));
     reads('#m_mv3',[[f2(zb)+' → '+f2(za),'drifted tokens: spread along z'],[f2(pb)+' → '+f2(pa),'in-character tokens: spread along z'],[(lc>=0?'+':'')+(100*lc).toFixed(0)+'%','length change in 3D (drifted, from zero)']])}
   $('#b_mv3').addEventListener('click',()=>{pl3.yaw=0;pl3.pitch=-1.45;draw3()});
-  seg('#s_mv3r',[['sphere','Great circle (spherical steering)'],['plane','Fixed plane (angular steering)']],MOVES3.st.rot,v=>{MOVES3.st.rot=v;draw3()});
+  seg('#s_mv3r',[['sphere','Great circle'],['plane','Fixed plane']],MOVES3.st.rot,v=>{MOVES3.st.rot=v;draw3()});
   function setOp(id){op=id;const o=cur();$('#s_mv3r').hidden=id!=='rotate';$('#d_mv').textContent=o.desc;$('#eq_mv').textContent=o.eq;$('#src_mv').innerHTML=o.src;
     if(o.param){wrap.hidden=false;lbl.textContent=o.param.label;rng.min=o.param.min;rng.max=o.param.max;rng.value=vals[o.id];out.textContent=o.param.fmt(vals[o.id])}else wrap.hidden=true;draw()}
   rng.addEventListener('input',()=>{const o=cur();if(!o.param)return;vals[o.id]=+rng.value;out.textContent=o.param.fmt(+rng.value);draw()});
@@ -547,8 +571,7 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
     if(o.id==='erase'||o.id==='scale')pl.boundary(W2.vhat,dot(W2.vhat,ZERO),COL.navy,1.6,[6,4],'persona coordinate = 0');
     if(o.id==='pin')pl.boundary(W2.vhat,dot(W2.vhat,W2.mP),COL.persona,1.6,[6,4],'persona mean’s coordinate');
     pl.line(sub(ZERO,[.18,0]),add(ZERO,[.18,0]),COL.ink,1.6);pl.line(sub(ZERO,[0,.18]),add(ZERO,[0,.18]),COL.ink,1.6);pl.text(add(ZERO,[.28,.02]),'zero vector',COL.muted);
-    drawAxis(pl);drawClouds(pl);const m=metrics(edit);drawEdits(pl,m,.5);
-    m.De.forEach(e=>{if(e.on)pl.dot(e.h,2.3,null,A(COL.drift,.8),1)});m.Pe.forEach(e=>{if(e.on)pl.dot(e.h,2.3,null,A(COL.persona,.8),1)});
+    drawAxis(pl);const m=metrics(edit);drawMove(pl,m);
     reads('#m_mv',[[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)'],[(m.normCh>=0?'+':'')+(100*m.normCh).toFixed(0)+'%','length change (drifted, from zero)'],[pct(m.landed),'drifted tokens landing in the persona’s 2σ ellipse']])}
   seg('#s_mv',MOVES.map(o=>[o.id,o.label]),op,v=>setOp(v));
   const tb=$('#t_ops');tb.innerHTML='<thead><tr><th>Move</th><th>Formula</th><th>What it does</th><th>Source</th></tr></thead><tbody>'+
@@ -593,13 +616,7 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
     if(o.id==='near'){const n=sub(W2.mP,W2.mA),t=dot(n,scl(add(W2.mP,W2.mA),.5));pl.halfplane(n,t,A(COL.navy,.06));pl.boundary(n,t,COL.navy,1.6,[5,4],'equal distance')}
     if(o.id==='dsas'){const n=scl(LOG_A.w,-1);pl.boundary(n,LOG_A.b,COL.navy,1.6,[5,4],'g = ½')}
     if(o.id==='gaps'){nstat.forEach((s,i)=>{pl.line(scl(s.e,-7),scl(s.e,7),A(COL.muted,.6),1,[4,4]);pl.text(scl(s.e,i?2.9:4.6),`neuron ${i+1}`+(Math.abs(s.auc-.5)>tv.gaps/100?'':' (masked)'),COL.muted)})}
-    drawAxis(pl);
-    W2.A.forEach(p=>pl.dot(p,2.2,A(COL.assist,.22)));
-    const eP=W2.P.map(edit),eD=W2.Dr.map(edit);
-    W2.P.forEach((p,i)=>pl.dot(p,2.6,A(COL.persona,.8),eP[i].g>.02?A(COL.ink,.3+.7*eP[i].g):null,1.1));
-    W2.Dr.forEach((p,i)=>pl.dot(p,2.7,A(COL.drift,.15+.8*eD[i].g),COL.drift,1));
-    eD.forEach((e,i)=>{if(e.on)pl.arrow(W2.Dr[i],e.h,A(COL.edit,.5),1,5)});eP.forEach((e,i)=>{if(e.on)pl.arrow(W2.P[i],e.h,A(COL.edit,.4),1,5)});
-    const m=metrics(h=>edit(h));
+    drawAxis(pl);const m=metrics(h=>edit(h)),eP=m.Pe,eD=m.De;drawMove(pl,m,{every:2});
     reads('#m_gt',[[pct(avg(eD.map(e=>e.g))),'mean gate on drifted tokens'],[pct(avg(eP.map(e=>e.g))),'mean gate on in-character tokens'],[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)']])}
   seg('#s_gt',G.map(o=>[o.id,o.label]),gate,v=>setGate(v));
   setGate(gate);
@@ -649,16 +666,16 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
   const w2=(m1,S1,m2,S2)=>{const S2h=sqrtm(S2);const X=sqrtm(mm(mm(S2h,S1),S2h));const tr=M=>M[0][0]+M[1][1];return Math.sqrt(Math.max(0,dot(sub(m1,m2),sub(m1,m2))+tr(S1)+tr(S2)-2*tr(X)))};
   const pl=new Plot2D($('#c5'),BOX2,draw);let anim=null;
   function draw(){if(!pl.ready())return;loadCols();pl.clear();drawAxis(pl);
-    if(mode==='gated'){W2.A.forEach(p=>pl.dot(p,2.3,A(COL.assist,.45)));drawClouds(pl,{assist:false});
-      const ed=h=>{const g=piA(h);return{h:add(h,scl(sub(T(h),h),g)),on:g>.02}};
-      W2.A.forEach(h=>{const e=ed(h);if(e.on)pl.arrow(h,e.h,A(COL.edit,.35),1,5)});
-      const m=metrics(ed);drawEdits(pl,m,.6);const moved=avg(W2.A.map(h=>sCoord(ed(h).h)>.5?1:0));
-      reads('#m5',[[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)'],[pct(moved),'assistant tokens carried past halfway'],[pct(avg(W2.P.map(h=>piA(h)))),'mean gate on in-character tokens']])}
+    // gated: the tokens of a persona conversation (in character and drifted) get the map in proportion to how
+    // assistant-like they look; the assistant cloud is only the reference the map was fit on, so it stays still
+    if(mode==='gated'){const ed=h=>{const g=piA(h);return{h:add(h,scl(sub(T(h),h),g)),on:g>.02,g}};
+      const m=metrics(ed);drawMove(pl,m);
+      reads('#m5',[[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)'],[pct(avg(m.De.map(e=>e.g))),'mean gate on drifted tokens'],[pct(avg(m.Pe.map(e=>e.g))),'mean gate on in-character tokens']])}
     else{W2.P.forEach(p=>pl.dot(p,2.4,A(COL.persona,.35)));pl.covEllipse(W2.mP,W2.SigP,2,COL.persona,{w:2,dash:[5,4]});
       const moved=W2.A.map(h=>mode==='ot'?add(scl(h,1-t),scl(T(h),t)):add(h,scl(W2.d,t)));
       moved.forEach(p=>pl.dot(p,2.6,A(COL.assist,.75)));const mm_=meanOf(moved),Sm=covOf(moved);pl.covEllipse(mm_,Sm,2,COL.edit,{w:2.2});
       for(let i=0;i<W2.A.length;i+=6)pl.line(W2.A[i],moved[i],A(COL.edit,.25),1);
-      const shapeErr=w2([0,0],Sm,[0,0],W2.SigP);
+      const shapeErr=w2([0,0],Sm,[0,0],W2.SigP);axisLabels(pl);
       reads('#m5',[[f2(w2(mm_,Sm,W2.mP,W2.SigP)),'distance to persona cloud (W₂)'],[f2(shapeErr),'shape mismatch alone (W₂, means aligned)'],[f2(t),'progress t'],[mode==='ot'?'shift + reshape':'shift only','what moves']])}}
   seg('#s5',[['vector','Shift (vector)'],['ot','Transport'],['gated','Gated transport']],mode,v=>{mode=v;draw()});
   slider('r5t',v=>(v/100).toFixed(2),v=>{t=v/100;draw()});slider('r5g',v=>(v/100).toFixed(2),v=>{sharp=v/100;draw()});
@@ -673,14 +690,16 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
   const UV=[];for(let i=0;i<N;i++)UV.push([2*rnd()-1,2*rnd()-1,randn(rnd)]);const Aq=[-.85,-.55],Bq=[.85,.55];
   const geom=()=>{const ph=Math.max(1e-4,bend*Math.PI),R=Lu/ph,zc=R*(1-Math.cos(ph/2))/2;
     const at=(u,v,n=0)=>{const th=u*Lu/2/R;return[R*Math.sin(th)+n*Math.sin(th),v*Ly/2,R*(1-Math.cos(th))-zc-n*Math.cos(th)]};return{at,R}};
-  const pl3=new Plot3D($('#c_fc3'),draw,{yaw:-.55,pitch:.38,span:3.4});const pl2=new Plot2D($('#c_fc2'),{x0:-3.6,x1:3.6,y0:-2.3,y1:2.3},draw);
+  const pl3=new Plot3D($('#c_fc3'),draw,{yaw:-.55,pitch:.38,span:3.4});const pl2=new Plot2D($('#c_fc2'),{x0:-3.4,x1:3.4,y0:-1.7,y1:1.7},draw);
+  // the box every bend fits in (flat: x ±3; fully bent: z ±1), so the 3D zoom holds while the bend changes
+  const FCB=[];for(const x of[-3,3])for(const y of[-1.5,1.5])for(const z of[-1,1])FCB.push([x,y,z]);
   function draw(){loadCols();const G=geom();const a=G.at(...Aq),b=G.at(...Bq);
     const chord=Array.from({length:41},(_,i)=>add(a,scl(sub(b,a),i/40)));const geo=Array.from({length:41},(_,i)=>{const s=i/40;return G.at(Aq[0]+(Bq[0]-Aq[0])*s,Aq[1]+(Bq[1]-Aq[1])*s)});
     const grid=[];for(let i=0;i<=120;i++)for(let j=0;j<=24;j++)grid.push(G.at(-1+i/60,-1+j/12));
     const gapOf=q=>Math.min(...grid.map(g=>nrm(sub(g,q))));const gaps=chord.map(gapOf);
     const dS=nrm(sub(b,a)),dG=Math.hypot((Bq[0]-Aq[0])*Lu/2,(Bq[1]-Aq[1])*Ly/2);
     const ms=add(a,scl(sub(b,a),t)),mg=G.at(Aq[0]+(Bq[0]-Aq[0])*t,Aq[1]+(Bq[1]-Aq[1])*t);
-    if(pl3.ready()){pl3.clear();pl3.axes3([-3.1,-2.4,-1.9],.8,['x','y','z']);
+    if(pl3.ready()){pl3.clear();pl3.fit(FCB);pl3.axes3([-3.1,-2.4,-1.9],.8,['x','y','z']);
       for(let i=0;i<=12;i++){const u=-1+i/6;pl3.poly(Array.from({length:13},(_,j)=>G.at(u,-1+j/6)),A(COL.navy,.18),1)}
       for(let j=0;j<=4;j++){const v=-1+j/2;pl3.poly(Array.from({length:61},(_,i)=>G.at(-1+i/30,v)),A(COL.navy,.18),1)}
       pl3.points(UV.map(([u,v,n])=>({p:G.at(u,v,sig*n),r:1.9,fill:A(COL.persona,.55)})));
@@ -691,7 +710,7 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
       pl2.path(Array.from({length:61},(_,i)=>P2(G.at(-1+i/30,0))),A(COL.navy,.35),1);
       pl2.path(chord.map(P2),COL.edit,2,[6,4]);pl2.path(geo.map(P2),COL.navy,2.4);
       pl2.dot(P2(a),6,COL.ochre,COL.paper,1.5);pl2.dot(P2(b),6,COL.violet,COL.paper,1.5);pl2.dot(P2(ms),5,COL.paper,COL.edit,2.2);pl2.dot(P2(mg),5,COL.paper,COL.navy,2.2);
-      pl2.text([-3.45,2.05],'end-on: x across, z up',COL.muted)}
+      pl2.text([-3.25,1.5],'end-on: x across, z up',COL.muted)}
     reads('#m_fc',[[f2(dS),'straight-line distance'],[f2(dG),'distance along the sheet (never changes)'],[f2(dG/dS),'ratio: along the sheet / straight'],[f2(Math.max(...gaps)),'largest gap between the straight path and the sheet']])}
   slider('r_fcb',v=>(v/100).toFixed(2),v=>{bend=v/100;draw()});slider('r_fct',v=>(v/100).toFixed(2),v=>{t=v/100;draw()});
 })();
@@ -740,7 +759,9 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
   const slerp=(a,b,s)=>{const th=Math.acos(clamp(dot(a,b),-1,1));if(th<1e-6)return a;return add(scl(a,Math.sin((1-s)*th)/Math.sin(th)),scl(b,Math.sin(s*th)/Math.sin(th)))};
   const angDeg=(a,b)=>Math.acos(clamp(dot(unit(a),unit(b)),-1,1))*180/Math.PI;
   const pl=new Plot3D($('#c_sp'),draw,{yaw:-.45,pitch:.3,span:1.5});
-  function draw(){if(!pl.ready())return;loadCols();pl.clear();
+  // points just outside the unit sphere, where the labels sit, so the globe and its labels fill the canvas
+  const SPB=[];for(let i=0;i<40;i++){const z=-1+2*(i+.5)/40,rr=Math.sqrt(1-z*z),a=i*2.4;SPB.push(scl([rr*Math.cos(a),rr*Math.sin(a),z],1.2))}
+  function draw(){if(!pl.ready())return;loadCols();pl.clear();pl.fit(SPB);
     for(let lat=-60;lat<=60;lat+=30){const z=Math.sin(lat*Math.PI/180),rr=Math.cos(lat*Math.PI/180),ring=[];for(let i=0;i<=72;i++){const a=i/72*2*Math.PI;ring.push([rr*Math.cos(a),rr*Math.sin(a),z])}pl.poly(ring,A(COL.muted,.22),1)}
     for(let lon=0;lon<180;lon+=30){const a=lon*Math.PI/180,mer=[];for(let i=0;i<=72;i++){const b=i/72*2*Math.PI;mer.push([Math.cos(b)*Math.cos(a),Math.cos(b)*Math.sin(a),Math.sin(b)])}pl.poly(mer,A(COL.muted,.22),1)}
     pl.poly([[0,0,0],aDir],A(COL.assist,.6),1.2,{dash:[3,3]});pl.poly([[0,0,0],pm],A(COL.persona,.6),1.2,{dash:[3,3]});
