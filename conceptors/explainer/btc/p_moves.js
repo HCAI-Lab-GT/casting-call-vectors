@@ -20,7 +20,7 @@ const MOVES=(function(){const d=W2.d,vh=W2.vhat,wFu=unit(FIS_W);
   const beta={label:'Strength β',min:0,max:100,val:100,fmt:v=>(v/100).toFixed(2)};
   const tpar={label:'Strength t',min:0,max:100,val:100,fmt:v=>(v/100).toFixed(2)};
   return[
-    {id:'none',label:'None',param:null,eq:'h′ = h',desc:'No steering: the drifted tokens stay where they are.',src:'',f:h=>({h,on:false})},
+    {id:'none',label:'None',param:null,eq:'h′ = h',desc:'No steering: every token stays where it is.',src:'',f:h=>({h,on:false})},
     {id:'add',label:'Add',one:'v',param:{label:'Strength c',min:0,max:150,val:60,fmt:v=>(v/100).toFixed(2)},eq:'h′ = h + c·d',
       desc:'Adds the same vector to every token. The whole cloud shifts and keeps its shape, and tokens already in character get pushed past the persona.',
       src:`${cite('actadd','ActAdd')} (Turner et al. 2023), ${cite('caa','CAA')} (Panickssery et al. 2024), ${cite('pv','persona vectors')} (Chen et al. 2025). Our steering vector.`,
@@ -92,45 +92,52 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
       const rr=Math.hypot(v[0],v[1]),a2=a+t*da;return{h:[Z3[0]+rr*Math.cos(a2),Z3[1]+rr*Math.sin(a2),h[2]],on:t>0}}};
   return{F,st,projP,fisP,wu,getC}})();
 
-(function(){let op='add';const vals={};MOVES.forEach(o=>{if(o.param)vals[o.id]=o.param.val});
+(function(){let op='add',F='set';
+  // each framing keeps its own slider values: Add starts at full strength from the assistant, and at 0.6 for a hold,
+  // where full strength throws the drifted tokens past the persona
+  const vals={set:{},hold:{}};MOVES.forEach(o=>{if(o.param){vals.set[o.id]=o.param.val;vals.hold[o.id]=o.param.val}});vals.set.add=100;
+  const V=id=>vals[F][id];
   const pl=new Plot2D($('#c_mv'),BOX2,draw);const rng=$('#r_mvp'),out=$('#o_mvp'),lbl=$('#lbl_mvp'),wrap=rng.closest('label');
   const cur=()=>MOVES.find(o=>o.id===op);
   // 3D twin: same move, same slider value, drawn on W3
   const pl3=new Plot3D($('#c_mv3'),()=>draw3(),{yaw:-.5,pitch:.42,span:5.4});const ALL3=W3.P.concat(W3.A,W3.Dr);
+  const TOK3={set:W3.A.slice(0,40),hold:W3.P.slice(0,28).concat(W3.Dr.slice(0,12))};
   const plane3=(n,tau,c0,col,label)=>{const o0=add(c0,scl(n,tau-dot(n,c0)));let e1=cross(n,[0,0,1]);if(nrm(e1)<1e-6)e1=[1,0,0];e1=unit(e1);const e2=cross(n,e1);
     const q=(a,b)=>add(o0,add(scl(e1,a),scl(e2,b)));pl3.poly([q(-3.6,-2.6),q(3.6,-2.6),q(3.6,2.6),q(-3.6,2.6)],A(col,.75),1.2,{close:true,fill:A(col,.06)});if(label)pl3.text(q(0,2.85),label,col,'600 11px')};
-  function draw3(){if(!pl3.ready())return;loadCols();pl3.clear();const o=cur(),p=vals[o.id];const f=h=>MOVES3.F[o.id](h,p);const Z3=W3.ZERO,vh=W3.vhat;
+  function draw3(){if(!pl3.ready())return;loadCols();pl3.clear();const o=cur(),p=V(o.id);const f=h=>MOVES3.F[o.id](h,p);const Z3=W3.ZERO,vh=W3.vhat;
     pl3.fit(ALL3);pl3.axes3([-5.4,-3.9,-2.6],1.1,['x','y','z']);const cen=scl(add(W3.mP,W3.mA),.5);
+    pl3.blob(W3.mA,W3.SigA,2,A(COL.assist,.8),{fill:A(COL.assist,.08)});pl3.blob(W3.mP,W3.SigP,2,A(COL.persona,.85),{fill:A(COL.persona,.11)});
     if(o.id==='cap')plane3(vh,quantile(MOVES3.projP,p/100),cen,COL.navy,'floor');
     if(o.id==='band'){plane3(MOVES3.wu,quantile(MOVES3.fisP,p/100),cen,COL.violet,'band floor');plane3(MOVES3.wu,quantile(MOVES3.fisP,.99),cen,COL.violet,null)}
     if(o.id==='pin')plane3(vh,dot(vh,W3.mP),W3.mP,COL.persona,'persona mean’s coordinate');
     if(o.id==='erase'||o.id==='scale')plane3(vh,dot(vh,Z3),cen,COL.navy,'persona coordinate = 0');
-    if(o.id==='shrink'){const C=MOVES3.getC(Math.pow(10,p/100));const{vals:ev,vecs}=symEig(C);pl3.ellipsoid(W3.mP,vecs,ev.map(v=>Math.max(v,.02)*2.1),A(COL.persona,.55))}
-    if(o.id==='ot'){const{vals:ev,vecs}=symEig(W3.SigP);pl3.ellipsoid(W3.mP,vecs,ev.map(v=>2*Math.sqrt(Math.max(v,0))),A(COL.persona,.45))}
+        if(o.id==='shrink'){const C=MOVES3.getC(Math.pow(10,p/100));pl3.blob(W3.mP,mm(C,C),2.1,COL.persona,{w:1.6,dash:[5,4]})}
     if(o.id==='rotate'){const R=nrm(sub(W3.mP,Z3));[[1,0,0],[0,1,0],[0,0,1]].forEach((ax,i)=>{const u=[[0,1,0],[0,0,1],[1,0,0]][i],w=cross(ax,u);const ring=[];for(let j=0;j<=72;j++){const a=j/72*2*Math.PI;ring.push(add(Z3,add(scl(u,R*Math.cos(a)),scl(w,R*Math.sin(a)))))}pl3.poly(ring,A(COL.navy,.25),1,{dash:[3,4]})})}
     pl3.poly([sub(Z3,[.2,0,0]),add(Z3,[.2,0,0])],COL.ink,1.6);pl3.poly([sub(Z3,[0,.2,0]),add(Z3,[0,.2,0])],COL.ink,1.6);pl3.poly([sub(Z3,[0,0,.2]),add(Z3,[0,0,.2])],COL.ink,1.6);pl3.text(add(Z3,[0,0,-.4]),'zero vector',COL.muted,'500 11px');
-    // same rule as the 2D drawMove: only drifted tokens move; in-character tokens a move shifts get a dark ring
-    const eP=W3.P.map(f),eD=W3.Dr.map(f);const sh=(a,b)=>nrm(sub(a,b))/nrm(W3.d);const pts=[];
-    W3.A.forEach(h=>pts.push({p:h,r:1.9,fill:A(COL.assist,.24)}));
-    W3.P.forEach((h,i)=>{const s=sh(eP[i].h,h);pts.push({p:h,r:2.4,fill:A(COL.persona,.72),stroke:s>.01?A(COL.ink,.2+.45*Math.min(1,s/.3)):null,lw:1})});
-    W3.Dr.forEach((h,i)=>{if(sh(eD[i].h,h)>.01)pts.push({p:h,r:2.1,fill:A(COL.drift,.16)})});
-    eD.forEach(e=>pts.push({p:e.h,r:2.6,fill:A(COL.drift,.85)}));pl3.points(pts);
-    eD.forEach((e,i)=>{if(i%4===0&&sh(e.h,W3.Dr[i])>.01)pl3.arrow(W3.Dr[i],e.h,A(COL.edit,.7),1.3,6)});
-    pl3.text(add(W3.mA,[0,0,-1.25]),'assistant',COL.assist);pl3.text(add(W3.mP,[0,0,-1.25]),'persona',COL.persona);
+    // the same picture as the 2D drawSteer: shaded regions, and one colour for the tokens being steered
+    const sh=(a,b)=>nrm(sub(a,b))/nrm(W3.d),from=TOK3[F],to=from.map(h=>f(h).h);
+    if(F==='set'){const all=W3.A.map(h=>f(h).h);if(all.some((h,i)=>sh(h,W3.A[i])>.01))pl3.blob(meanOf(all),covOf(all),2,COL.edit,{w:1.6,dash:[6,4]})}
+    const pts=[];from.forEach((h,i)=>{if(sh(to[i],h)>.01)pts.push({p:h,r:2.6,stroke:A(COL.muted,.8),lw:1})});to.forEach(h=>pts.push({p:h,r:3.1,fill:A(COL.ink,.88)}));pl3.points(pts);
+    from.forEach((h,i)=>{if(sh(to[i],h)>.01)pl3.arrow(h,to[i],A(COL.edit,.8),1.4,6)});
+    pl3.text(add(W3.mA,[0,0,-1.4]),'assistant (the default)',COL.assist);pl3.text(add(W3.mP,[0,0,-1.4]),'persona',COL.persona);
     const sdz=a=>{const m=avg(a);return Math.sqrt(avg(a.map(x=>(x-m)**2)))};
+    if(F==='set'){const eA=W3.A.map(f),lc=avg(eA.map((e,i)=>nrm(sub(e.h,Z3))/nrm(sub(W3.A[i],Z3))-1));
+      reads('#m_mv3',[[f2(sdz(W3.A.map(h=>h[2])))+' → '+f2(sdz(eA.map(e=>e.h[2]))),'spread along z (the persona’s: '+f2(sdz(W3.P.map(h=>h[2])))+')'],[pctSigned(lc),'length change in 3D (from zero)']]);return}
+    const eP=W3.P.map(f),eD=W3.Dr.map(f);
     const zb=sdz(W3.Dr.map(h=>h[2])),za=sdz(eD.map(e=>e.h[2])),pb=sdz(W3.P.map(h=>h[2])),pa=sdz(eP.map(e=>e.h[2]));
     const lc=avg(eD.map((e,i)=>nrm(sub(e.h,Z3))/nrm(sub(W3.Dr[i],Z3))-1));
-    reads('#m_mv3',[[f2(zb)+' → '+f2(za),'drifted tokens: spread along z'],[f2(pb)+' → '+f2(pa),'in-character tokens: spread along z'],[(lc>=0?'+':'')+(100*lc).toFixed(0)+'%','length change in 3D (drifted, from zero)']])}
+    reads('#m_mv3',[[f2(zb)+' → '+f2(za),'drifted tokens: spread along z'],[f2(pb)+' → '+f2(pa),'in-character tokens: spread along z'],[pctSigned(lc),'length change in 3D (drifted, from zero)']])}
   $('#b_mv3').addEventListener('click',()=>{pl3.yaw=0;pl3.pitch=-1.45;draw3()});
   seg('#s_mv3r',[['sphere','Great circle'],['plane','Fixed plane']],MOVES3.st.rot,v=>{MOVES3.st.rot=v;draw3()});
   function setOp(id){op=id;const o=cur();$('#s_mv3r').hidden=id!=='rotate';$('#d_mv').textContent=o.desc;$('#eq_mv').textContent=o.eq;$('#src_mv').innerHTML=o.src;
-    if(o.param){wrap.hidden=false;lbl.textContent=o.param.label;rng.min=o.param.min;rng.max=o.param.max;rng.value=vals[o.id];out.textContent=o.param.fmt(vals[o.id])}else wrap.hidden=true;draw()}
-  rng.addEventListener('input',()=>{const o=cur();if(!o.param)return;vals[o.id]=+rng.value;out.textContent=o.param.fmt(+rng.value);draw()});
+    if(o.param){wrap.hidden=false;lbl.textContent=o.param.label;rng.min=o.param.min;rng.max=o.param.max;rng.value=V(o.id);out.textContent=o.param.fmt(V(o.id))}else wrap.hidden=true;draw()}
+  rng.addEventListener('input',()=>{const o=cur();if(!o.param)return;vals[F][o.id]=+rng.value;out.textContent=o.param.fmt(+rng.value);draw()});
   $('#k_mvf').addEventListener('change',()=>draw());
+  seg('#s_mvf',FRAMES,F,v=>{F=v;$('#f_mv').textContent=FRAME_TXT[F];setOp(op)});$('#f_mv').textContent=FRAME_TXT[F];
   // before/after chart: each token's coordinate along the move's axis, measured from the zero vector.
   // A one-axis move puts every token on one curve (its rule); a move that touches other directions scatters them.
   const rc=$('#c_mvr'),rg=rc.getContext('2d');watch(rc,()=>drawRule());
-  function drawRule(){const r=fitCanvas(rc,rg);if(!r)return;loadCols();const o=cur(),p=vals[o.id];const W=r.width,H=r.height,font=FONT();
+  function drawRule(){const r=fitCanvas(rc,rg);if(!r)return;loadCols();const o=cur(),p=V(o.id);const W=r.width,H=r.height,font=FONT();
     const ax=o.one==='w'?unit(FIS_W):W2.vhat;const sOf=h=>dot(sub(h,ZERO),ax);
     const groups=[[W2.A,COL.assist,.3,1.8],[W2.P,COL.persona,.65,2.1],[W2.Dr,COL.drift,.75,2.1]];const pts=[];
     groups.forEach(([G,col,al,rad])=>G.forEach(h=>pts.push([sOf(h),sOf(o.f(h,p).h),A(col,al),rad])));
@@ -153,7 +160,8 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
     rg.font=`500 11px ${font}`;rg.fillStyle=COL.muted;rg.textAlign='center';rg.textBaseline='bottom';
     rg.fillText((o.one==='w'?'Fisher score':'persona coordinate')+' before',pad.l+(W-pad.l-pad.r)/2,H-1);
     rg.save();rg.translate(12,pad.t+(H-pad.t-pad.b)/2);rg.rotate(-Math.PI/2);rg.textAlign='center';rg.textBaseline='middle';rg.fillText('after',0,0);rg.restore()}
-  function draw(){drawRule();draw3();if(!pl.ready())return;loadCols();pl.clear();const o=cur();const p=vals[o.id];const edit=h=>o.f(h,p);
+  function draw(){drawRule();draw3();if(!pl.ready())return;loadCols();pl.clear();const o=cur();const p=V(o.id);const edit=h=>o.f(h,p);
+    drawRegions(pl);
     if($('#k_mvf').checked){const st=.8,G=[];for(let x=BOX2.x0+.4;x<=BOX2.x1;x+=st)for(let y=BOX2.y0+.4;y<=BOX2.y1;y+=st)G.push([x,y]);
       const D=G.map(g=>sub(edit(g).h,g));const L=D.map(nrm).filter(x=>x>1e-6).sort((a,b)=>a-b);
       if(L.length){const q=quantile(L,.9),s=Math.min(1,.85*st/q);let clipped=0;
@@ -161,13 +169,15 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
         pl.text([BOX2.x1-.15,BOX2.y1-.3],(s<1?`grid arrows at ${(100*s).toFixed(0)}% length`:'grid arrows at full length')+(clipped?', longest ones clipped':''),COL.muted,{align:'right'})}}
     if(o.id==='cap'){const t=quantile(o.projP,p/100);pl.halfplane(W2.vhat,t,A(COL.navy,.06));pl.boundary(W2.vhat,t,COL.navy,1.8,null,'floor')}
     if(o.id==='band'){const lo=quantile(o.fisP,p/100),hi=quantile(o.fisP,.99);pl.boundary(o.wFu,lo,COL.violet,1.8,null,'band floor');pl.boundary(o.wFu,hi,COL.violet,1.2,[5,4],'band ceiling')}
-    if(o.id==='shrink'){const C=o.getC(Math.pow(10,p/100));const{vals:ev,vecs}=symEig(C);pl.ellipse(W2.mP,vecs,ev.map(v=>Math.max(v,.02)*2.1),COL.persona,{w:2,fill:A(COL.persona,.07)})}
+    if(o.id==='shrink'){const C=o.getC(Math.pow(10,p/100));const{vals:ev,vecs}=symEig(C);pl.ellipse(W2.mP,vecs,ev.map(v=>Math.max(v,.02)*2.1),COL.persona,{w:1.8,dash:[5,4]})}
     if(o.id==='rotate'){const R=nrm(sub(W2.mP,ZERO));pl.ellipse(ZERO,[[1,0],[0,1]],[R,R],A(COL.navy,.35),{w:1,dash:[3,4]})}
     if(o.id==='erase'||o.id==='scale')pl.boundary(W2.vhat,dot(W2.vhat,ZERO),COL.navy,1.6,[6,4],'persona coordinate = 0');
     if(o.id==='pin')pl.boundary(W2.vhat,dot(W2.vhat,W2.mP),COL.persona,1.6,[6,4],'persona mean’s coordinate');
     pl.line(sub(ZERO,[.18,0]),add(ZERO,[.18,0]),COL.ink,1.6);pl.line(sub(ZERO,[0,.18]),add(ZERO,[0,.18]),COL.ink,1.6);pl.text(add(ZERO,[.28,.02]),'zero vector',COL.muted);
-    drawAxis(pl);const m=metrics(edit);drawMove(pl,m);
-    reads('#m_mv',[[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)'],[(m.normCh>=0?'+':'')+(100*m.normCh).toFixed(0)+'%','length change (drifted, from zero)'],[pct(m.landed),'drifted tokens landing in the persona’s 2σ ellipse']])}
+    drawAxis(pl);drawSteer(pl,edit,F);
+    if(F==='set'){const s=setMetrics(edit);reads('#m_mv',[[f2(s.pos),'persona-axis position after (0 = assistant, 1 = persona)'],[pct(s.landed),'tokens landing in the persona region'],[pctSigned(s.normCh),'length change (from zero)']]);return}
+    const m=metrics(edit);
+    reads('#m_mv',[[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)'],[pctSigned(m.normCh),'length change (drifted, from zero)'],[pct(m.landed),'drifted tokens landing in the persona region']])}
   seg('#s_mv',MOVES.map(o=>[o.id,o.label]),op,v=>setOp(v));
   const tb=$('#t_ops');tb.innerHTML='<thead><tr><th>Move</th><th>Formula</th><th>What it does</th><th>Source</th></tr></thead><tbody>'+
     MOVES.filter(o=>o.id!=='none').map(o=>`<tr><td><b>${o.label}</b></td><td><code>${o.eq.replace(/</g,'&lt;')}</code></td><td>${o.desc}</td><td>${o.src}</td></tr>`).join('')+'</tbody>';
@@ -205,13 +215,13 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
   rng.addEventListener('input',()=>{const o=cur();if(!o.param)return;tv[o.id]=+rng.value;out.textContent=o.param.fmt(+rng.value);draw()});
   slider('r_gtc',v=>(v/100).toFixed(2),v=>{c=v/100;draw()});
   function edit(h){const{g,v}=gateOf(h);if(gate==='gaps'){const vv=scl(v,c*g);return{h:add(h,vv),on:g>.02,g}}return{h:add(h,scl(v,c*g)),on:g>.02,g}}
-  function draw(){if(!pl.ready())return;loadCols();pl.clear();const o=cur();
+  function draw(){if(!pl.ready())return;loadCols();pl.clear();const o=cur();drawRegions(pl);
     if(o.id==='raw'){const t=quantile(rawP,tv.raw/100);pl.halfplane(vh,t,A(COL.navy,.06));pl.boundary(vh,t,COL.navy,1.8,null,'raw floor')}
     if(o.id==='fisher'){const t=quantile(fisP,tv.fisher/100);pl.halfplane(FIS_W,t,A(COL.violet,.06));pl.boundary(FIS_W,t,COL.violet,1.8,null,'Fisher floor')}
     if(o.id==='near'){const n=sub(W2.mP,W2.mA),t=dot(n,scl(add(W2.mP,W2.mA),.5));pl.halfplane(n,t,A(COL.navy,.06));pl.boundary(n,t,COL.navy,1.6,[5,4],'equal distance')}
     if(o.id==='dsas'){const n=scl(LOG_A.w,-1);pl.boundary(n,LOG_A.b,COL.navy,1.6,[5,4],'g = ½')}
     if(o.id==='gaps'){nstat.forEach((s,i)=>{pl.line(scl(s.e,-7),scl(s.e,7),A(COL.muted,.6),1,[4,4]);pl.text(scl(s.e,i?2.9:4.6),`neuron ${i+1}`+(Math.abs(s.auc-.5)>tv.gaps/100?'':' (masked)'),COL.muted)})}
-    drawAxis(pl);const m=metrics(h=>edit(h)),eP=m.Pe,eD=m.De;drawMove(pl,m,{every:2});
+    drawAxis(pl);const m=metrics(h=>edit(h)),eP=m.Pe,eD=m.De;drawSteer(pl,edit,'hold');
     reads('#m_gt',[[pct(avg(eD.map(e=>e.g))),'mean gate on drifted tokens'],[pct(avg(eP.map(e=>e.g))),'mean gate on in-character tokens'],[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)']])}
   seg('#s_gt',G.map(o=>[o.id,o.label]),gate,v=>setGate(v));
   setGate(gate);
@@ -239,7 +249,7 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
   function draw(){if(!pl.ready())return;loadCols();pl.clear();
     pl.line(sub(mG,scl(W2.u1,6)),add(mG,scl(W2.u1,6)),A(COL.muted,.7),1.2,[2,4]);pl.text(add(mG,scl(W2.u1,3.6)),'content',COL.muted);
     pl.line(sub(W2.mP,scl(W2.w1,1.6)),add(W2.mP,scl(W2.w1,1.6)),A(COL.persona,.7),1.2,[2,4]);pl.text(add(W2.mP,scl(W2.w1,1.95)),'persona style',COL.persona);
-    drawClouds(pl,{drift:false,af:.3});pl.dot(W2.mA,4.5,COL.assist,COL.paper,1.5);pl.dot(W2.mP,4.5,COL.persona,COL.paper,1.5);
+    drawRegions(pl);pl.dot(W2.mA,4.5,COL.assist,COL.paper,1.5);pl.dot(W2.mP,4.5,COL.persona,COL.paper,1.5);
     E.forEach(o=>{const v=unit(orient(o.v()));const on=o.id===est;pl.arrow(mG,add(mG,scl(v,on?2.6:2.1)),on?COL[o.col]:A(COL[o.col],.35),on?2.8:1.4,on?10:6);
       if(on)pl.text(add(mG,scl(v,2.95)),o.label,COL[o.col],{align:'center',font:'600 12px'})});
     const o=E.find(x=>x.id===est);const v=unit(orient(o.v()));

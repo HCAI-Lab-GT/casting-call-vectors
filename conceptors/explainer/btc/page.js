@@ -183,6 +183,13 @@ class Plot3D{
   ellipsoid(c,vecs,axes,col){const pt=(u,v)=>add(c,add(add(scl(vecs[0],axes[0]*Math.cos(v)*Math.cos(u)),scl(vecs[1],axes[1]*Math.cos(v)*Math.sin(u))),scl(vecs[2],axes[2]*Math.sin(v))));
     for(const v of[-1,-.5,0,.5,1]){const ring=[];for(let i=0;i<=48;i++)ring.push(pt(i/48*2*Math.PI,v));this.poly(ring,col,1)}
     for(let m=0;m<6;m++){const u=m/6*Math.PI;const mer=[];for(let i=0;i<=48;i++)mer.push(pt(u,-Math.PI/2+i/48*2*Math.PI));this.poly(mer,col,1)}}
+  // the kσ region of a 3D Gaussian as this view shows it: under this projection an ellipsoid's outline is the ellipse
+  // whose covariance is J S Jᵀ, J being the screen offsets of the three unit axes
+  blob(c,S,k,col,{fill=null,w=1.4,dash=null}={}){const o=this.P(c),J=[[1,0,0],[0,1,0],[0,0,1]].map(e=>{const q=this.P(add(c,e));return[q[0]-o[0],q[1]-o[1]]});
+    const M=[[0,0],[0,0]];for(let i=0;i<3;i++)for(let j=0;j<3;j++){M[0][0]+=S[i][j]*J[i][0]*J[j][0];M[0][1]+=S[i][j]*J[i][0]*J[j][1];M[1][1]+=S[i][j]*J[i][1]*J[j][1]}M[1][0]=M[0][1];
+    const{vals,vecs}=symEig(M),a=vals.map(v=>k*Math.sqrt(Math.max(v,0))),g=this.g;g.save();g.beginPath();
+    for(let t=0;t<=72;t++){const th=t/72*2*Math.PI,x=o[0]+a[0]*Math.cos(th)*vecs[0][0]+a[1]*Math.sin(th)*vecs[1][0],y=o[1]+a[0]*Math.cos(th)*vecs[0][1]+a[1]*Math.sin(th)*vecs[1][1];t?g.lineTo(x,y):g.moveTo(x,y)}
+    g.closePath();if(fill){g.fillStyle=fill;g.fill()}g.strokeStyle=col;g.lineWidth=w;if(dash)g.setLineDash(dash);g.stroke();g.restore()}
   // an orientation key pinned to the bottom-left corner: each arrow is a unit axis as this view projects it
   axes3(o,len,labels){const g=this.g,ox=30,oy=this.H-30,L=22,p0=this.P([0,0,0]);
     [[1,0,0],[0,1,0],[0,0,1]].forEach((v,i)=>{const q=this.P(v),dx=(q[0]-p0[0])/this.s,dy=(q[1]-p0[1])/this.s;
@@ -239,41 +246,54 @@ function metrics(edit){const Pe=W2.P.map(edit),De=W2.Dr.map(edit);
   const normCh=avg(De.map((e,i)=>nrm(sub(e.h,ZERO))/nrm(sub(W2.Dr[i],ZERO))-1));
   return{restore:(sa-sb)/(1-sb),dist,caught:avg(De.map(e=>e.on?1:0)),ftr:avg(Pe.map(e=>e.on?1:0)),normCh,landed:avg(De.map(e=>inside2s(e.h)?1:0)),Pe,De}}
 const BOX2={x0:-5.6,x1:5.8,y0:-3.7,y1:3.7};
-function drawClouds(pl,{assist=true,persona=true,drift=true,af=.28}={}){
-  if(assist)W2.A.forEach(p=>pl.dot(p,2.3,A(COL.assist,af)));
-  if(persona)W2.P.forEach(p=>pl.dot(p,2.6,A(COL.persona,.75)));
-  if(drift)W2.Dr.forEach(p=>pl.dot(p,2.6,A(COL.drift,.75)))}
 function drawAxis(pl){pl.line(add(W2.mA,scl(W2.d,-.45)),add(W2.mP,scl(W2.d,.32)),A(COL.navy,.55),1.2,[5,4]);
   pl.dot(W2.mA,4.5,COL.assist,COL.paper,1.5);pl.dot(W2.mP,4.5,COL.persona,COL.paper,1.5)}
 // drawn last, over the dots, so the two labels stay readable
-function axisLabels(pl){[[W2.mA,'assistant mean',COL.assist],[W2.mP,'persona mean',COL.persona]].forEach(([p,t,c])=>{
-  pl.dot(p,4.5,c,COL.paper,1.5);pl.text(add(p,[0,-.5]),t,c,{align:'center',font:'600 13px',halo:true})})}
-// One picture for every toy move. Assistant tokens are a fixed, faint reference. In-character tokens stay where they are,
-// with a dark ring when the move shifts them too (darker the further it shifts them; the distortion readout says how far).
-// Drifted tokens are drawn where the move puts them, with a faint ghost where they started and an arrow on every third.
+function axisLabels(pl){[[W2.mA,'assistant (the default)',COL.assist],[W2.mP,'persona',COL.persona]].forEach(([p,t,c])=>{
+  pl.dot(p,4.5,c,COL.paper,1.5);pl.text(add(p,[0,.5]),t,c,{align:'center',font:'600 13px',halo:true})})}
+
+/* ================= one picture for every toy move ================= */
+// The two reference clouds are shaded 2σ regions, not dots. Blue is where the assistant's tokens sit with no persona
+// prompt, the model's default; teal is where the persona's sit. The only dots are the tokens being steered, all one
+// colour, so a token's position alone says whether it is in character. Two framings:
+//   set:  the steered tokens start as the assistant, and the move should carry them into the persona region;
+//   hold: they are one prompted persona conversation, 28 in character and 12 slid back toward the assistant,
+//         and a good hold moves only those 12.
+// Readouts still use the full 150-token clouds, so the numbers don't depend on which 40 are drawn.
+const TOK={set:W2.A.slice(0,40),hold:W2.P.slice(0,28).concat(W2.Dr.slice(0,12))};
 const shift=(a,b)=>nrm(sub(a,b))/nrm(W2.d);
-function drawMove(pl,m,{every=4,assist=true}={}){
-  if(assist)W2.A.forEach(p=>pl.dot(p,2.2,A(COL.assist,.24)));
-  W2.P.forEach((p,i)=>{const s=shift(m.Pe[i].h,p);pl.dot(p,2.6,A(COL.persona,.72),s>.01?A(COL.ink,.2+.45*Math.min(1,s/.3)):null,1)});
-  W2.Dr.forEach((p,i)=>{if(shift(m.De[i].h,p)>.01)pl.dot(p,2.3,A(COL.drift,.16))});
-  W2.Dr.forEach((p,i)=>{if(i%every===0&&shift(m.De[i].h,p)>.01)pl.arrow(p,m.De[i].h,A(COL.edit,.7),1.3,6)});
-  m.De.forEach(e=>pl.dot(e.h,2.8,A(COL.drift,.85)));axisLabels(pl)}
+function drawRegions(pl){pl.covEllipse(W2.mA,W2.SigA,2,A(COL.assist,.8),{w:1.5,fill:A(COL.assist,.1)});
+  pl.covEllipse(W2.mP,W2.SigP,2,A(COL.persona,.85),{w:1.5,fill:A(COL.persona,.12)})}
+// edit: h -> {h, on}; framing: 'set' or 'hold'. In 'set' a dashed orange outline marks where the whole cloud ends up.
+function drawSteer(pl,edit,framing){const from=TOK[framing],to=from.map(h=>edit(h).h);
+  if(framing==='set'){const all=W2.A.map(h=>edit(h).h);if(all.some((h,i)=>shift(h,W2.A[i])>.01))pl.covEllipse(meanOf(all),covOf(all),2,COL.edit,{w:1.6,dash:[6,4]})}
+  from.forEach((p,i)=>{if(shift(to[i],p)>.01){pl.dot(p,2.6,null,A(COL.muted,.8),1);pl.arrow(p,to[i],A(COL.edit,.8),1.4,6)}});
+  to.forEach(h=>pl.dot(h,3.3,A(COL.ink,.88)));axisLabels(pl)}
+// readouts for the 'set' framing, over all 150 assistant tokens
+function setMetrics(edit){const E=W2.A.map(edit);return{pos:avg(E.map(e=>sCoord(e.h))),landed:avg(E.map(e=>inside2s(e.h)?1:0)),
+  normCh:avg(E.map((e,i)=>nrm(sub(e.h,ZERO))/nrm(sub(W2.A[i],ZERO))-1)),edited:avg(E.map(e=>e.on?1:0))}}
+const FRAMES=[['set','Set a persona'],['hold','Hold a persona']];
+const FRAME_TXT={set:'Set a persona: the dots start as the assistant, the default with no persona prompt.',
+  hold:'Hold a persona: one prompted conversation, where a few tokens slid back toward the assistant.'};
+const pctSigned=x=>(x>=0?'+':'')+(100*x).toFixed(0)+'%';
 linkRefs();
 
 /* ================= what we ran: vector and cap ================= */
-(function(){let mode='cap',pc=25,c=1;const probe={p:[0.2,-0.9]};
+(function(){let mode='cap',pc=25,c=1,F='hold';const probe={p:[0.2,-0.9]};
   const projP=W2.P.map(h=>dot(h,W2.vhat)).sort((a,b)=>a-b);
   const tau=()=>quantile(projP,pc/100);
   const edit=h=>{if(mode==='none')return{h,on:false};if(mode==='vector')return{h:add(h,scl(W2.d,c)),on:true};
     const p=dot(h,W2.vhat),t=tau();return p<t?{h:add(h,scl(W2.vhat,t-p)),on:true}:{h,on:false}};
   const pl=new Plot2D($('#c1'),BOX2,draw);pl.handles.push({get:()=>probe.p,set:w=>probe.p=w});
-  function draw(){if(!pl.ready())return;loadCols();pl.clear();
+  function draw(){if(!pl.ready())return;loadCols();pl.clear();drawRegions(pl);
     if(mode==='cap'){pl.halfplane(W2.vhat,tau(),A(COL.navy,.06));pl.boundary(W2.vhat,tau(),COL.navy,1.8,null,'floor τ')}
-    drawAxis(pl);const m=metrics(edit);drawMove(pl,m);
+    drawAxis(pl);drawSteer(pl,edit,F);
     const e=edit(probe.p);pl.ring(probe.p);if(e.on)pl.arrow(probe.p,e.h,COL.edit,2.4,9);
-    reads('#m1',[[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)'],[pct(m.caught),'drifted tokens edited'],[pct(m.ftr),'in-character tokens edited']])}
+    if(F==='set'){const s=setMetrics(edit);reads('#m1',[[f2(s.pos),'persona-axis position after (0 = assistant, 1 = persona)'],[pct(s.landed),'tokens landing in the persona region'],[pct(s.edited),'tokens edited']]);return}
+    const m=metrics(edit);reads('#m1',[[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)'],[pct(m.caught),'drifted tokens edited'],[pct(m.ftr),'in-character tokens edited']])}
   seg('#s1',[['none','No steering'],['vector','Vector'],['cap','Cap']],mode,v=>{mode=v;draw()});
   slider('r1t',v=>v+'th',v=>{pc=v;draw()});slider('r1c',v=>(v/100).toFixed(2),v=>{c=v/100;draw()});
+  seg('#s_capf',FRAMES,F,v=>{F=v;$('#f_cap').textContent=FRAME_TXT[F];draw()});$('#f_cap').textContent=FRAME_TXT[F];
 })();
 
 /* ================= what we ran: the aperture, on real SmolLM3 activations ================= */
@@ -347,15 +367,13 @@ linkRefs();
     hg.font=`600 12px ${FONT()}`;hg.fillStyle=COL.ink;hg.textBaseline='top';hg.textAlign='left';
     hg.fillText((gate==='fisher'?'Fisher score w·h':'raw score v̂·h')+'   ← assistant-like   persona-like →',pad.l,4);
     hg.fillStyle=COL.muted;hg.textAlign='right';hg.fillText('floor',X(tau)-4,pad.t);hg.strokeStyle=COL.hair;hg.lineWidth=1;hg.beginPath();hg.moveTo(pad.l,H-pad.b);hg.lineTo(W-pad.r,H-pad.b);hg.stroke()}
-  function draw(){if(!pl.ready())return;loadCols();pl.clear();
+  function draw(){if(!pl.ready())return;loadCols();pl.clear();drawRegions(pl);
     const tr=quantile(rawP,pc/100),tf=quantile(fisP,pc/100);
     pl.halfplane(gate==='fisher'?wF:W2.vhat,gate==='fisher'?tf:tr,A(gate==='fisher'?COL.violet:COL.navy,.06));
     pl.boundary(W2.vhat,tr,COL.navy,1.6,[6,4],'raw floor');pl.boundary(wF,tf,COL.violet,2,null,'Fisher floor');
     drawAxis(pl);
     const trig=h=>gate==='fisher'?fis(h)<tf:raw(h)<tr;
-    W2.A.forEach(p=>pl.dot(p,2.2,A(COL.assist,.22)));
-    W2.P.forEach(p=>{const on=trig(p);pl.dot(p,2.6,A(COL.persona,.8),on?COL.ink:null,1.1)});
-    W2.Dr.forEach(p=>{const on=trig(p);on?pl.dot(p,2.7,A(COL.drift,.85)):pl.dot(p,2.7,null,A(COL.drift,.85),1.2)});
+    TOK.hold.forEach(h=>trig(h)?pl.dot(h,3.3,A(COL.ink,.88)):pl.dot(h,3.1,A(COL.paper,.9),A(COL.ink,.8),1.2));
     pl.arrow(W2.mP,add(W2.mP,scl(wFu,1.4)),COL.violet,2,8);pl.text(add(W2.mP,scl(wFu,1.65)),'w',COL.violet,{font:'700 13px',align:'center'});
     axisLabels(pl);const fp=fis(probe.p);pl.ring(probe.p);
     if(fp<tf){const delta=metric==='mahal'?scl(mv(SW,wF),(tf-fp)/dot(wF,mv(SW,wF))):scl(wF,(tf-fp)/dot(wF,wF));pl.arrow(probe.p,add(probe.p,delta),COL.edit,2.6,9)}
@@ -375,7 +393,7 @@ linkRefs();
   const tok=mu=>add(mu,add(add(scl(u1,1.15*randn(r)),scl(u2,.25*randn(r))),[0,0,.24*randn(r)]));
   const N=120,P=[],As=[],DA=[],DB=[];for(let i=0;i<N;i++){P.push(tok(muP));As.push(tok(muA))}
   for(let i=0;i<60;i++){DA.push(sub(tok(muP),[4*(.3+.5*r()),0,0]));DB.push(add(tok(muP),[0,0,.9+.9*r()]))}
-  const mP=meanOf(P),mA3=meanOf(As),d3=sub(mP,mA3);const xs=P.map(p=>p[0]).sort((a,b)=>a-b);const tau=quantile(xs,.25);
+  const mP=meanOf(P),mA3=meanOf(As),d3=sub(mP,mA3),SigP4=covOf(P),SigA4=covOf(As),T4=P.slice(0,24).concat(DA.slice(0,10),DB.slice(0,10));const xs=P.map(p=>p[0]).sort((a,b)=>a-b);const tau=quantile(xs,.25);
   const SW3=mscl(madd(covOf(P),covOf(As)),.5),w3=mv(inv(SW3),d3),wd=dot(w3,d3);
   const coords=h=>[dot(w3,h),h[2]];const Q=P.map(coords);const qm=meanOf(Q);const S=covOf(Q),Si=inv(S),Sh=symFn(S,v=>Math.sqrt(Math.max(v,0)));
   const free=unit([-w3[1],w3[0],0]);
@@ -392,12 +410,13 @@ linkRefs();
       for(const t of[0,Math.PI/2,Math.PI,3*Math.PI/2])pl.poly([ringAt(-3.4,t),ringAt(3.4,t)],A(COL.navy,.4),1);
       pl.label(12,18,'navy cylinder: the region, unbounded along content',COL.navy)}
     if(mode==='cap')pl.label(12,18,'navy plane: the cap floor on the raw persona axis',COL.navy);
-    const pts=[];As.forEach(p=>pts.push({p,r:2.1,fill:A(COL.assist,.3)}));P.forEach(p=>pts.push({p,r:2.6,fill:A(COL.persona,.8)}));
-    DA.forEach(p=>pts.push({p,r:2.8,fill:A(COL.drift,.8)}));DB.forEach(p=>pts.push({p,r:2.8,fill:A(COL.paper,.9),stroke:COL.drift,lw:1.4}));pl.points(pts);
-    let cA=0,cB=0,fp=0,dd=0;DA.forEach(h=>{const e=edit(h);if(e.on){cA++;pl.arrow(h,e.h,A(COL.edit,.6),1)}});DB.forEach(h=>{const e=edit(h);if(e.on){cB++;pl.arrow(h,e.h,A(COL.edit,.6),1)}});
+    pl.blob(mA3,SigA4,2,A(COL.assist,.8),{fill:A(COL.assist,.08)});pl.blob(mP,SigP4,2,A(COL.persona,.85),{fill:A(COL.persona,.11)});
+    const E4=T4.map(edit),pts=[];T4.forEach((h,i)=>{if(E4[i].on)pts.push({p:h,r:2.6,stroke:A(COL.muted,.8),lw:1})});E4.forEach(e=>pts.push({p:e.h,r:3.1,fill:A(COL.ink,.88)}));pl.points(pts);
+    T4.forEach((h,i)=>{if(E4[i].on)pl.arrow(h,E4[i].h,A(COL.edit,.8),1.4,6)});
+    let cA=0,cB=0,fp=0,dd=0;DA.forEach(h=>{if(edit(h).on)cA++});DB.forEach(h=>{if(edit(h).on)cB++});
     P.forEach(h=>{const e=edit(h);if(e.on){fp++;dd+=dot(sub(e.h,h),sub(e.h,h))}});const spread=Math.sqrt(avg(P.map(h=>dot(sub(h,mP),sub(h,mP)))));
-    pl.text(add(muA,[0,0,-1.2]),'assistant',COL.assist);pl.text(add(mP,[0,0,-1.25]),'persona',COL.persona);
-    reads('#m4',[[pct(cA/DA.length),'back-to-assistant drift edited (filled)'],[pct(cB/DB.length),'identity slips edited (hollow)'],[pct(fp/P.length),'in-character tokens edited'],[f2(Math.sqrt(dd/P.length)/spread),'distortion (in character)']])}
+    pl.text(add(muA,[0,0,-1.2]),'assistant (the default)',COL.assist);pl.text(add(mP,[0,0,-1.25]),'persona',COL.persona);
+    reads('#m4',[[pct(cA/DA.length),'tokens slid toward the assistant, edited'],[pct(cB/DB.length),'tokens slipped off along identity, edited'],[pct(fp/P.length),'in-character tokens edited'],[f2(Math.sqrt(dd/P.length)/spread),'distortion (in character)']])}
   seg('#s4',[['none','No steering'],['cap','Cap'],['region','Region']],mode,v=>{mode=v;draw()});
   slider('r4r',v=>(v/100).toFixed(2),v=>{rad=v/100;draw()});
   $('#b4v').addEventListener('click',()=>{pl.yaw=Math.atan2(free[0],free[1]);pl.pitch=0;draw()});
@@ -425,7 +444,7 @@ const MOVES=(function(){const d=W2.d,vh=W2.vhat,wFu=unit(FIS_W);
   const beta={label:'Strength β',min:0,max:100,val:100,fmt:v=>(v/100).toFixed(2)};
   const tpar={label:'Strength t',min:0,max:100,val:100,fmt:v=>(v/100).toFixed(2)};
   return[
-    {id:'none',label:'None',param:null,eq:'h′ = h',desc:'No steering: the drifted tokens stay where they are.',src:'',f:h=>({h,on:false})},
+    {id:'none',label:'None',param:null,eq:'h′ = h',desc:'No steering: every token stays where it is.',src:'',f:h=>({h,on:false})},
     {id:'add',label:'Add',one:'v',param:{label:'Strength c',min:0,max:150,val:60,fmt:v=>(v/100).toFixed(2)},eq:'h′ = h + c·d',
       desc:'Adds the same vector to every token. The whole cloud shifts and keeps its shape, and tokens already in character get pushed past the persona.',
       src:`${cite('actadd','ActAdd')} (Turner et al. 2023), ${cite('caa','CAA')} (Panickssery et al. 2024), ${cite('pv','persona vectors')} (Chen et al. 2025). Our steering vector.`,
@@ -497,45 +516,52 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
       const rr=Math.hypot(v[0],v[1]),a2=a+t*da;return{h:[Z3[0]+rr*Math.cos(a2),Z3[1]+rr*Math.sin(a2),h[2]],on:t>0}}};
   return{F,st,projP,fisP,wu,getC}})();
 
-(function(){let op='add';const vals={};MOVES.forEach(o=>{if(o.param)vals[o.id]=o.param.val});
+(function(){let op='add',F='set';
+  // each framing keeps its own slider values: Add starts at full strength from the assistant, and at 0.6 for a hold,
+  // where full strength throws the drifted tokens past the persona
+  const vals={set:{},hold:{}};MOVES.forEach(o=>{if(o.param){vals.set[o.id]=o.param.val;vals.hold[o.id]=o.param.val}});vals.set.add=100;
+  const V=id=>vals[F][id];
   const pl=new Plot2D($('#c_mv'),BOX2,draw);const rng=$('#r_mvp'),out=$('#o_mvp'),lbl=$('#lbl_mvp'),wrap=rng.closest('label');
   const cur=()=>MOVES.find(o=>o.id===op);
   // 3D twin: same move, same slider value, drawn on W3
   const pl3=new Plot3D($('#c_mv3'),()=>draw3(),{yaw:-.5,pitch:.42,span:5.4});const ALL3=W3.P.concat(W3.A,W3.Dr);
+  const TOK3={set:W3.A.slice(0,40),hold:W3.P.slice(0,28).concat(W3.Dr.slice(0,12))};
   const plane3=(n,tau,c0,col,label)=>{const o0=add(c0,scl(n,tau-dot(n,c0)));let e1=cross(n,[0,0,1]);if(nrm(e1)<1e-6)e1=[1,0,0];e1=unit(e1);const e2=cross(n,e1);
     const q=(a,b)=>add(o0,add(scl(e1,a),scl(e2,b)));pl3.poly([q(-3.6,-2.6),q(3.6,-2.6),q(3.6,2.6),q(-3.6,2.6)],A(col,.75),1.2,{close:true,fill:A(col,.06)});if(label)pl3.text(q(0,2.85),label,col,'600 11px')};
-  function draw3(){if(!pl3.ready())return;loadCols();pl3.clear();const o=cur(),p=vals[o.id];const f=h=>MOVES3.F[o.id](h,p);const Z3=W3.ZERO,vh=W3.vhat;
+  function draw3(){if(!pl3.ready())return;loadCols();pl3.clear();const o=cur(),p=V(o.id);const f=h=>MOVES3.F[o.id](h,p);const Z3=W3.ZERO,vh=W3.vhat;
     pl3.fit(ALL3);pl3.axes3([-5.4,-3.9,-2.6],1.1,['x','y','z']);const cen=scl(add(W3.mP,W3.mA),.5);
+    pl3.blob(W3.mA,W3.SigA,2,A(COL.assist,.8),{fill:A(COL.assist,.08)});pl3.blob(W3.mP,W3.SigP,2,A(COL.persona,.85),{fill:A(COL.persona,.11)});
     if(o.id==='cap')plane3(vh,quantile(MOVES3.projP,p/100),cen,COL.navy,'floor');
     if(o.id==='band'){plane3(MOVES3.wu,quantile(MOVES3.fisP,p/100),cen,COL.violet,'band floor');plane3(MOVES3.wu,quantile(MOVES3.fisP,.99),cen,COL.violet,null)}
     if(o.id==='pin')plane3(vh,dot(vh,W3.mP),W3.mP,COL.persona,'persona mean’s coordinate');
     if(o.id==='erase'||o.id==='scale')plane3(vh,dot(vh,Z3),cen,COL.navy,'persona coordinate = 0');
-    if(o.id==='shrink'){const C=MOVES3.getC(Math.pow(10,p/100));const{vals:ev,vecs}=symEig(C);pl3.ellipsoid(W3.mP,vecs,ev.map(v=>Math.max(v,.02)*2.1),A(COL.persona,.55))}
-    if(o.id==='ot'){const{vals:ev,vecs}=symEig(W3.SigP);pl3.ellipsoid(W3.mP,vecs,ev.map(v=>2*Math.sqrt(Math.max(v,0))),A(COL.persona,.45))}
+        if(o.id==='shrink'){const C=MOVES3.getC(Math.pow(10,p/100));pl3.blob(W3.mP,mm(C,C),2.1,COL.persona,{w:1.6,dash:[5,4]})}
     if(o.id==='rotate'){const R=nrm(sub(W3.mP,Z3));[[1,0,0],[0,1,0],[0,0,1]].forEach((ax,i)=>{const u=[[0,1,0],[0,0,1],[1,0,0]][i],w=cross(ax,u);const ring=[];for(let j=0;j<=72;j++){const a=j/72*2*Math.PI;ring.push(add(Z3,add(scl(u,R*Math.cos(a)),scl(w,R*Math.sin(a)))))}pl3.poly(ring,A(COL.navy,.25),1,{dash:[3,4]})})}
     pl3.poly([sub(Z3,[.2,0,0]),add(Z3,[.2,0,0])],COL.ink,1.6);pl3.poly([sub(Z3,[0,.2,0]),add(Z3,[0,.2,0])],COL.ink,1.6);pl3.poly([sub(Z3,[0,0,.2]),add(Z3,[0,0,.2])],COL.ink,1.6);pl3.text(add(Z3,[0,0,-.4]),'zero vector',COL.muted,'500 11px');
-    // same rule as the 2D drawMove: only drifted tokens move; in-character tokens a move shifts get a dark ring
-    const eP=W3.P.map(f),eD=W3.Dr.map(f);const sh=(a,b)=>nrm(sub(a,b))/nrm(W3.d);const pts=[];
-    W3.A.forEach(h=>pts.push({p:h,r:1.9,fill:A(COL.assist,.24)}));
-    W3.P.forEach((h,i)=>{const s=sh(eP[i].h,h);pts.push({p:h,r:2.4,fill:A(COL.persona,.72),stroke:s>.01?A(COL.ink,.2+.45*Math.min(1,s/.3)):null,lw:1})});
-    W3.Dr.forEach((h,i)=>{if(sh(eD[i].h,h)>.01)pts.push({p:h,r:2.1,fill:A(COL.drift,.16)})});
-    eD.forEach(e=>pts.push({p:e.h,r:2.6,fill:A(COL.drift,.85)}));pl3.points(pts);
-    eD.forEach((e,i)=>{if(i%4===0&&sh(e.h,W3.Dr[i])>.01)pl3.arrow(W3.Dr[i],e.h,A(COL.edit,.7),1.3,6)});
-    pl3.text(add(W3.mA,[0,0,-1.25]),'assistant',COL.assist);pl3.text(add(W3.mP,[0,0,-1.25]),'persona',COL.persona);
+    // the same picture as the 2D drawSteer: shaded regions, and one colour for the tokens being steered
+    const sh=(a,b)=>nrm(sub(a,b))/nrm(W3.d),from=TOK3[F],to=from.map(h=>f(h).h);
+    if(F==='set'){const all=W3.A.map(h=>f(h).h);if(all.some((h,i)=>sh(h,W3.A[i])>.01))pl3.blob(meanOf(all),covOf(all),2,COL.edit,{w:1.6,dash:[6,4]})}
+    const pts=[];from.forEach((h,i)=>{if(sh(to[i],h)>.01)pts.push({p:h,r:2.6,stroke:A(COL.muted,.8),lw:1})});to.forEach(h=>pts.push({p:h,r:3.1,fill:A(COL.ink,.88)}));pl3.points(pts);
+    from.forEach((h,i)=>{if(sh(to[i],h)>.01)pl3.arrow(h,to[i],A(COL.edit,.8),1.4,6)});
+    pl3.text(add(W3.mA,[0,0,-1.4]),'assistant (the default)',COL.assist);pl3.text(add(W3.mP,[0,0,-1.4]),'persona',COL.persona);
     const sdz=a=>{const m=avg(a);return Math.sqrt(avg(a.map(x=>(x-m)**2)))};
+    if(F==='set'){const eA=W3.A.map(f),lc=avg(eA.map((e,i)=>nrm(sub(e.h,Z3))/nrm(sub(W3.A[i],Z3))-1));
+      reads('#m_mv3',[[f2(sdz(W3.A.map(h=>h[2])))+' → '+f2(sdz(eA.map(e=>e.h[2]))),'spread along z (the persona’s: '+f2(sdz(W3.P.map(h=>h[2])))+')'],[pctSigned(lc),'length change in 3D (from zero)']]);return}
+    const eP=W3.P.map(f),eD=W3.Dr.map(f);
     const zb=sdz(W3.Dr.map(h=>h[2])),za=sdz(eD.map(e=>e.h[2])),pb=sdz(W3.P.map(h=>h[2])),pa=sdz(eP.map(e=>e.h[2]));
     const lc=avg(eD.map((e,i)=>nrm(sub(e.h,Z3))/nrm(sub(W3.Dr[i],Z3))-1));
-    reads('#m_mv3',[[f2(zb)+' → '+f2(za),'drifted tokens: spread along z'],[f2(pb)+' → '+f2(pa),'in-character tokens: spread along z'],[(lc>=0?'+':'')+(100*lc).toFixed(0)+'%','length change in 3D (drifted, from zero)']])}
+    reads('#m_mv3',[[f2(zb)+' → '+f2(za),'drifted tokens: spread along z'],[f2(pb)+' → '+f2(pa),'in-character tokens: spread along z'],[pctSigned(lc),'length change in 3D (drifted, from zero)']])}
   $('#b_mv3').addEventListener('click',()=>{pl3.yaw=0;pl3.pitch=-1.45;draw3()});
   seg('#s_mv3r',[['sphere','Great circle'],['plane','Fixed plane']],MOVES3.st.rot,v=>{MOVES3.st.rot=v;draw3()});
   function setOp(id){op=id;const o=cur();$('#s_mv3r').hidden=id!=='rotate';$('#d_mv').textContent=o.desc;$('#eq_mv').textContent=o.eq;$('#src_mv').innerHTML=o.src;
-    if(o.param){wrap.hidden=false;lbl.textContent=o.param.label;rng.min=o.param.min;rng.max=o.param.max;rng.value=vals[o.id];out.textContent=o.param.fmt(vals[o.id])}else wrap.hidden=true;draw()}
-  rng.addEventListener('input',()=>{const o=cur();if(!o.param)return;vals[o.id]=+rng.value;out.textContent=o.param.fmt(+rng.value);draw()});
+    if(o.param){wrap.hidden=false;lbl.textContent=o.param.label;rng.min=o.param.min;rng.max=o.param.max;rng.value=V(o.id);out.textContent=o.param.fmt(V(o.id))}else wrap.hidden=true;draw()}
+  rng.addEventListener('input',()=>{const o=cur();if(!o.param)return;vals[F][o.id]=+rng.value;out.textContent=o.param.fmt(+rng.value);draw()});
   $('#k_mvf').addEventListener('change',()=>draw());
+  seg('#s_mvf',FRAMES,F,v=>{F=v;$('#f_mv').textContent=FRAME_TXT[F];setOp(op)});$('#f_mv').textContent=FRAME_TXT[F];
   // before/after chart: each token's coordinate along the move's axis, measured from the zero vector.
   // A one-axis move puts every token on one curve (its rule); a move that touches other directions scatters them.
   const rc=$('#c_mvr'),rg=rc.getContext('2d');watch(rc,()=>drawRule());
-  function drawRule(){const r=fitCanvas(rc,rg);if(!r)return;loadCols();const o=cur(),p=vals[o.id];const W=r.width,H=r.height,font=FONT();
+  function drawRule(){const r=fitCanvas(rc,rg);if(!r)return;loadCols();const o=cur(),p=V(o.id);const W=r.width,H=r.height,font=FONT();
     const ax=o.one==='w'?unit(FIS_W):W2.vhat;const sOf=h=>dot(sub(h,ZERO),ax);
     const groups=[[W2.A,COL.assist,.3,1.8],[W2.P,COL.persona,.65,2.1],[W2.Dr,COL.drift,.75,2.1]];const pts=[];
     groups.forEach(([G,col,al,rad])=>G.forEach(h=>pts.push([sOf(h),sOf(o.f(h,p).h),A(col,al),rad])));
@@ -558,7 +584,8 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
     rg.font=`500 11px ${font}`;rg.fillStyle=COL.muted;rg.textAlign='center';rg.textBaseline='bottom';
     rg.fillText((o.one==='w'?'Fisher score':'persona coordinate')+' before',pad.l+(W-pad.l-pad.r)/2,H-1);
     rg.save();rg.translate(12,pad.t+(H-pad.t-pad.b)/2);rg.rotate(-Math.PI/2);rg.textAlign='center';rg.textBaseline='middle';rg.fillText('after',0,0);rg.restore()}
-  function draw(){drawRule();draw3();if(!pl.ready())return;loadCols();pl.clear();const o=cur();const p=vals[o.id];const edit=h=>o.f(h,p);
+  function draw(){drawRule();draw3();if(!pl.ready())return;loadCols();pl.clear();const o=cur();const p=V(o.id);const edit=h=>o.f(h,p);
+    drawRegions(pl);
     if($('#k_mvf').checked){const st=.8,G=[];for(let x=BOX2.x0+.4;x<=BOX2.x1;x+=st)for(let y=BOX2.y0+.4;y<=BOX2.y1;y+=st)G.push([x,y]);
       const D=G.map(g=>sub(edit(g).h,g));const L=D.map(nrm).filter(x=>x>1e-6).sort((a,b)=>a-b);
       if(L.length){const q=quantile(L,.9),s=Math.min(1,.85*st/q);let clipped=0;
@@ -566,13 +593,15 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
         pl.text([BOX2.x1-.15,BOX2.y1-.3],(s<1?`grid arrows at ${(100*s).toFixed(0)}% length`:'grid arrows at full length')+(clipped?', longest ones clipped':''),COL.muted,{align:'right'})}}
     if(o.id==='cap'){const t=quantile(o.projP,p/100);pl.halfplane(W2.vhat,t,A(COL.navy,.06));pl.boundary(W2.vhat,t,COL.navy,1.8,null,'floor')}
     if(o.id==='band'){const lo=quantile(o.fisP,p/100),hi=quantile(o.fisP,.99);pl.boundary(o.wFu,lo,COL.violet,1.8,null,'band floor');pl.boundary(o.wFu,hi,COL.violet,1.2,[5,4],'band ceiling')}
-    if(o.id==='shrink'){const C=o.getC(Math.pow(10,p/100));const{vals:ev,vecs}=symEig(C);pl.ellipse(W2.mP,vecs,ev.map(v=>Math.max(v,.02)*2.1),COL.persona,{w:2,fill:A(COL.persona,.07)})}
+    if(o.id==='shrink'){const C=o.getC(Math.pow(10,p/100));const{vals:ev,vecs}=symEig(C);pl.ellipse(W2.mP,vecs,ev.map(v=>Math.max(v,.02)*2.1),COL.persona,{w:1.8,dash:[5,4]})}
     if(o.id==='rotate'){const R=nrm(sub(W2.mP,ZERO));pl.ellipse(ZERO,[[1,0],[0,1]],[R,R],A(COL.navy,.35),{w:1,dash:[3,4]})}
     if(o.id==='erase'||o.id==='scale')pl.boundary(W2.vhat,dot(W2.vhat,ZERO),COL.navy,1.6,[6,4],'persona coordinate = 0');
     if(o.id==='pin')pl.boundary(W2.vhat,dot(W2.vhat,W2.mP),COL.persona,1.6,[6,4],'persona mean’s coordinate');
     pl.line(sub(ZERO,[.18,0]),add(ZERO,[.18,0]),COL.ink,1.6);pl.line(sub(ZERO,[0,.18]),add(ZERO,[0,.18]),COL.ink,1.6);pl.text(add(ZERO,[.28,.02]),'zero vector',COL.muted);
-    drawAxis(pl);const m=metrics(edit);drawMove(pl,m);
-    reads('#m_mv',[[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)'],[(m.normCh>=0?'+':'')+(100*m.normCh).toFixed(0)+'%','length change (drifted, from zero)'],[pct(m.landed),'drifted tokens landing in the persona’s 2σ ellipse']])}
+    drawAxis(pl);drawSteer(pl,edit,F);
+    if(F==='set'){const s=setMetrics(edit);reads('#m_mv',[[f2(s.pos),'persona-axis position after (0 = assistant, 1 = persona)'],[pct(s.landed),'tokens landing in the persona region'],[pctSigned(s.normCh),'length change (from zero)']]);return}
+    const m=metrics(edit);
+    reads('#m_mv',[[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)'],[pctSigned(m.normCh),'length change (drifted, from zero)'],[pct(m.landed),'drifted tokens landing in the persona region']])}
   seg('#s_mv',MOVES.map(o=>[o.id,o.label]),op,v=>setOp(v));
   const tb=$('#t_ops');tb.innerHTML='<thead><tr><th>Move</th><th>Formula</th><th>What it does</th><th>Source</th></tr></thead><tbody>'+
     MOVES.filter(o=>o.id!=='none').map(o=>`<tr><td><b>${o.label}</b></td><td><code>${o.eq.replace(/</g,'&lt;')}</code></td><td>${o.desc}</td><td>${o.src}</td></tr>`).join('')+'</tbody>';
@@ -610,13 +639,13 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
   rng.addEventListener('input',()=>{const o=cur();if(!o.param)return;tv[o.id]=+rng.value;out.textContent=o.param.fmt(+rng.value);draw()});
   slider('r_gtc',v=>(v/100).toFixed(2),v=>{c=v/100;draw()});
   function edit(h){const{g,v}=gateOf(h);if(gate==='gaps'){const vv=scl(v,c*g);return{h:add(h,vv),on:g>.02,g}}return{h:add(h,scl(v,c*g)),on:g>.02,g}}
-  function draw(){if(!pl.ready())return;loadCols();pl.clear();const o=cur();
+  function draw(){if(!pl.ready())return;loadCols();pl.clear();const o=cur();drawRegions(pl);
     if(o.id==='raw'){const t=quantile(rawP,tv.raw/100);pl.halfplane(vh,t,A(COL.navy,.06));pl.boundary(vh,t,COL.navy,1.8,null,'raw floor')}
     if(o.id==='fisher'){const t=quantile(fisP,tv.fisher/100);pl.halfplane(FIS_W,t,A(COL.violet,.06));pl.boundary(FIS_W,t,COL.violet,1.8,null,'Fisher floor')}
     if(o.id==='near'){const n=sub(W2.mP,W2.mA),t=dot(n,scl(add(W2.mP,W2.mA),.5));pl.halfplane(n,t,A(COL.navy,.06));pl.boundary(n,t,COL.navy,1.6,[5,4],'equal distance')}
     if(o.id==='dsas'){const n=scl(LOG_A.w,-1);pl.boundary(n,LOG_A.b,COL.navy,1.6,[5,4],'g = ½')}
     if(o.id==='gaps'){nstat.forEach((s,i)=>{pl.line(scl(s.e,-7),scl(s.e,7),A(COL.muted,.6),1,[4,4]);pl.text(scl(s.e,i?2.9:4.6),`neuron ${i+1}`+(Math.abs(s.auc-.5)>tv.gaps/100?'':' (masked)'),COL.muted)})}
-    drawAxis(pl);const m=metrics(h=>edit(h)),eP=m.Pe,eD=m.De;drawMove(pl,m,{every:2});
+    drawAxis(pl);const m=metrics(h=>edit(h)),eP=m.Pe,eD=m.De;drawSteer(pl,edit,'hold');
     reads('#m_gt',[[pct(avg(eD.map(e=>e.g))),'mean gate on drifted tokens'],[pct(avg(eP.map(e=>e.g))),'mean gate on in-character tokens'],[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)']])}
   seg('#s_gt',G.map(o=>[o.id,o.label]),gate,v=>setGate(v));
   setGate(gate);
@@ -644,7 +673,7 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
   function draw(){if(!pl.ready())return;loadCols();pl.clear();
     pl.line(sub(mG,scl(W2.u1,6)),add(mG,scl(W2.u1,6)),A(COL.muted,.7),1.2,[2,4]);pl.text(add(mG,scl(W2.u1,3.6)),'content',COL.muted);
     pl.line(sub(W2.mP,scl(W2.w1,1.6)),add(W2.mP,scl(W2.w1,1.6)),A(COL.persona,.7),1.2,[2,4]);pl.text(add(W2.mP,scl(W2.w1,1.95)),'persona style',COL.persona);
-    drawClouds(pl,{drift:false,af:.3});pl.dot(W2.mA,4.5,COL.assist,COL.paper,1.5);pl.dot(W2.mP,4.5,COL.persona,COL.paper,1.5);
+    drawRegions(pl);pl.dot(W2.mA,4.5,COL.assist,COL.paper,1.5);pl.dot(W2.mP,4.5,COL.persona,COL.paper,1.5);
     E.forEach(o=>{const v=unit(orient(o.v()));const on=o.id===est;pl.arrow(mG,add(mG,scl(v,on?2.6:2.1)),on?COL[o.col]:A(COL[o.col],.35),on?2.8:1.4,on?10:6);
       if(on)pl.text(add(mG,scl(v,2.95)),o.label,COL[o.col],{align:'center',font:'600 12px'})});
     const o=E.find(x=>x.id===est);const v=unit(orient(o.v()));
@@ -665,17 +694,15 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
   const sqrtm=M=>symFn(M,v=>Math.sqrt(Math.max(v,0)));
   const w2=(m1,S1,m2,S2)=>{const S2h=sqrtm(S2);const X=sqrtm(mm(mm(S2h,S1),S2h));const tr=M=>M[0][0]+M[1][1];return Math.sqrt(Math.max(0,dot(sub(m1,m2),sub(m1,m2))+tr(S1)+tr(S2)-2*tr(X)))};
   const pl=new Plot2D($('#c5'),BOX2,draw);let anim=null;
-  function draw(){if(!pl.ready())return;loadCols();pl.clear();drawAxis(pl);
+  function draw(){if(!pl.ready())return;loadCols();pl.clear();drawRegions(pl);drawAxis(pl);
     // gated: the tokens of a persona conversation (in character and drifted) get the map in proportion to how
     // assistant-like they look; the assistant cloud is only the reference the map was fit on, so it stays still
     if(mode==='gated'){const ed=h=>{const g=piA(h);return{h:add(h,scl(sub(T(h),h),g)),on:g>.02,g}};
-      const m=metrics(ed);drawMove(pl,m);
+      const m=metrics(ed);drawSteer(pl,ed,'hold');
       reads('#m5',[[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)'],[pct(avg(m.De.map(e=>e.g))),'mean gate on drifted tokens'],[pct(avg(m.Pe.map(e=>e.g))),'mean gate on in-character tokens']])}
-    else{W2.P.forEach(p=>pl.dot(p,2.4,A(COL.persona,.35)));pl.covEllipse(W2.mP,W2.SigP,2,COL.persona,{w:2,dash:[5,4]});
-      const moved=W2.A.map(h=>mode==='ot'?add(scl(h,1-t),scl(T(h),t)):add(h,scl(W2.d,t)));
-      moved.forEach(p=>pl.dot(p,2.6,A(COL.assist,.75)));const mm_=meanOf(moved),Sm=covOf(moved);pl.covEllipse(mm_,Sm,2,COL.edit,{w:2.2});
-      for(let i=0;i<W2.A.length;i+=6)pl.line(W2.A[i],moved[i],A(COL.edit,.25),1);
-      const shapeErr=w2([0,0],Sm,[0,0],W2.SigP);axisLabels(pl);
+    else{const go=h=>mode==='ot'?add(scl(h,1-t),scl(T(h),t)):add(h,scl(W2.d,t));
+      const moved=W2.A.map(go),mm_=meanOf(moved),Sm=covOf(moved);drawSteer(pl,h=>({h:go(h),on:t>0}),'set');
+      const shapeErr=w2([0,0],Sm,[0,0],W2.SigP);
       reads('#m5',[[f2(w2(mm_,Sm,W2.mP,W2.SigP)),'distance to persona cloud (W₂)'],[f2(shapeErr),'shape mismatch alone (W₂, means aligned)'],[f2(t),'progress t'],[mode==='ot'?'shift + reshape':'shift only','what moves']])}}
   seg('#s5',[['vector','Shift (vector)'],['ot','Transport'],['gated','Gated transport']],mode,v=>{mode=v;draw()});
   slider('r5t',v=>(v/100).toFixed(2),v=>{t=v/100;draw()});slider('r5g',v=>(v/100).toFixed(2),v=>{sharp=v/100;draw()});
@@ -846,11 +873,11 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
 /* ================= persona space (3D) ================= */
 (function(){const r=mulberry32(21);const muA=[-1.8,0,0],core=[3.6,0,0];
   const G=[{n:'assistant',c:'assist',mu:muA,sp:[0,0,0]},
-    {n:'pirate',c:'persona',f:1,sp:[0,1.4,.5]},{n:'ghost',c:'violet',f:.95,sp:[0,-.7,1.4]},{n:'bard',c:'edit',f:.9,sp:[0,1.1,-1]},
+    {n:'pirate',c:'persona',f:1,sp:[0,1.4,.5]},{n:'ghost',c:'violet',f:.95,sp:[0,-.7,1.4]},{n:'bard',c:'olive',f:.9,sp:[0,1.1,-1]},
     {n:'genie',c:'drift',f:1.05,sp:[0,-1.3,-.6]},{n:'consultant',c:'ochre',f:.35,sp:[0,-.3,-.4]}];
   G.forEach(gr=>{if(gr.n!=='assistant')gr.mu=add(add(muA,scl(core,gr.f)),gr.sp)});
   const cu=unit([.45,.75,.48]);let o1=unit([-cu[1],cu[0],0]);const o2=[cu[1]*o1[2]-cu[2]*o1[1],cu[2]*o1[0]-cu[0]*o1[2],cu[0]*o1[1]-cu[1]*o1[0]];
-  G.forEach(gr=>{gr.pts=[];for(let i=0;i<70;i++)gr.pts.push(add(gr.mu,add(add(scl(cu,.9*randn(r)),scl(o1,.22*randn(r))),scl(o2,.22*randn(r)))))});
+  const NPER=45;G.forEach(gr=>{gr.pts=[];for(let i=0;i<NPER;i++)gr.pts.push(add(gr.mu,add(add(scl(cu,.9*randn(r)),scl(o1,.22*randn(r))),scl(o2,.22*randn(r)))))});
   const mA=meanOf(G[0].pts);const means=G.map(gr=>meanOf(gr.pts));const gm=meanOf(means);
   const SigB=covOf(means);let SigW=[[0,0,0],[0,0,0],[0,0,0]];G.forEach(gr=>{SigW=madd(SigW,covOf(gr.pts))});SigW=mscl(SigW,1/G.length);
   const pca=symEig(SigB);const Wih=symFn(SigW,v=>1/Math.sqrt(Math.max(v,1e-9)));const lda=symEig(mm(mm(Wih,SigB),Wih));const ldaDirs=lda.vecs.map(v=>unit(mv(Wih,v)));
@@ -875,7 +902,7 @@ const MOVES3=(function(){const W=W3,Z3=W.ZERO,vh=W.vhat;const projP=W.P.map(h=>d
       const Ci=conceptor(Rs[sel],k),Co=conceptor(Ro,k),Cx=andNot(Ci,Co);drawC(Ci,COL[G[sel].c]);drawC(Cx,COL.ink);
       const{vals,vecs}=symEig(Cx);const off=G[sel].sp;let v0=vecs[0];if(dot(v0,sub(means[sel],mA))<0)v0=scl(v0,-1);pl.arrow(mA,add(mA,scl(v0,Math.max(vals[0],.08)*3.6*1.4)),COL.ink,2.6);
       rd=[[f2(quota(Ci))+' → '+f2(quota(Cx)),'quota: '+G[sel].n+' → AND NOT rest'],[f2(Math.abs(dot(v0,unit(off)))),'cos(kept direction, true '+G[sel].n+' offset)'],[f2(Math.abs(dot(v0,unit(core)))),'cos(kept direction, shared core)']]}
-    else{rd=[['6','groups'],['70','tokens each']]}
+    else{rd=[['6','groups'],[String(NPER),'tokens each']]}
     pl.arrow(mA,add(mA,core),A(COL.gold,.95),2.2);pl.text(add(mA,scl(core,.5)),'shared core',COL.ochre,'600 11px');
     reads('#m8',rd)}
   seg('#s8v',[['clouds','Clouds'],['pca','PCA of means'],['lda','Discriminant axes'],['or','Persona space (OR)'],['andnot','AND NOT the rest']],view,v=>{view=v;draw()});

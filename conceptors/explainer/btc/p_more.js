@@ -8,17 +8,15 @@
   const sqrtm=M=>symFn(M,v=>Math.sqrt(Math.max(v,0)));
   const w2=(m1,S1,m2,S2)=>{const S2h=sqrtm(S2);const X=sqrtm(mm(mm(S2h,S1),S2h));const tr=M=>M[0][0]+M[1][1];return Math.sqrt(Math.max(0,dot(sub(m1,m2),sub(m1,m2))+tr(S1)+tr(S2)-2*tr(X)))};
   const pl=new Plot2D($('#c5'),BOX2,draw);let anim=null;
-  function draw(){if(!pl.ready())return;loadCols();pl.clear();drawAxis(pl);
+  function draw(){if(!pl.ready())return;loadCols();pl.clear();drawRegions(pl);drawAxis(pl);
     // gated: the tokens of a persona conversation (in character and drifted) get the map in proportion to how
     // assistant-like they look; the assistant cloud is only the reference the map was fit on, so it stays still
     if(mode==='gated'){const ed=h=>{const g=piA(h);return{h:add(h,scl(sub(T(h),h),g)),on:g>.02,g}};
-      const m=metrics(ed);drawMove(pl,m);
+      const m=metrics(ed);drawSteer(pl,ed,'hold');
       reads('#m5',[[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)'],[pct(avg(m.De.map(e=>e.g))),'mean gate on drifted tokens'],[pct(avg(m.Pe.map(e=>e.g))),'mean gate on in-character tokens']])}
-    else{W2.P.forEach(p=>pl.dot(p,2.4,A(COL.persona,.35)));pl.covEllipse(W2.mP,W2.SigP,2,COL.persona,{w:2,dash:[5,4]});
-      const moved=W2.A.map(h=>mode==='ot'?add(scl(h,1-t),scl(T(h),t)):add(h,scl(W2.d,t)));
-      moved.forEach(p=>pl.dot(p,2.6,A(COL.assist,.75)));const mm_=meanOf(moved),Sm=covOf(moved);pl.covEllipse(mm_,Sm,2,COL.edit,{w:2.2});
-      for(let i=0;i<W2.A.length;i+=6)pl.line(W2.A[i],moved[i],A(COL.edit,.25),1);
-      const shapeErr=w2([0,0],Sm,[0,0],W2.SigP);axisLabels(pl);
+    else{const go=h=>mode==='ot'?add(scl(h,1-t),scl(T(h),t)):add(h,scl(W2.d,t));
+      const moved=W2.A.map(go),mm_=meanOf(moved),Sm=covOf(moved);drawSteer(pl,h=>({h:go(h),on:t>0}),'set');
+      const shapeErr=w2([0,0],Sm,[0,0],W2.SigP);
       reads('#m5',[[f2(w2(mm_,Sm,W2.mP,W2.SigP)),'distance to persona cloud (W₂)'],[f2(shapeErr),'shape mismatch alone (W₂, means aligned)'],[f2(t),'progress t'],[mode==='ot'?'shift + reshape':'shift only','what moves']])}}
   seg('#s5',[['vector','Shift (vector)'],['ot','Transport'],['gated','Gated transport']],mode,v=>{mode=v;draw()});
   slider('r5t',v=>(v/100).toFixed(2),v=>{t=v/100;draw()});slider('r5g',v=>(v/100).toFixed(2),v=>{sharp=v/100;draw()});
@@ -189,11 +187,11 @@
 /* ================= persona space (3D) ================= */
 (function(){const r=mulberry32(21);const muA=[-1.8,0,0],core=[3.6,0,0];
   const G=[{n:'assistant',c:'assist',mu:muA,sp:[0,0,0]},
-    {n:'pirate',c:'persona',f:1,sp:[0,1.4,.5]},{n:'ghost',c:'violet',f:.95,sp:[0,-.7,1.4]},{n:'bard',c:'edit',f:.9,sp:[0,1.1,-1]},
+    {n:'pirate',c:'persona',f:1,sp:[0,1.4,.5]},{n:'ghost',c:'violet',f:.95,sp:[0,-.7,1.4]},{n:'bard',c:'olive',f:.9,sp:[0,1.1,-1]},
     {n:'genie',c:'drift',f:1.05,sp:[0,-1.3,-.6]},{n:'consultant',c:'ochre',f:.35,sp:[0,-.3,-.4]}];
   G.forEach(gr=>{if(gr.n!=='assistant')gr.mu=add(add(muA,scl(core,gr.f)),gr.sp)});
   const cu=unit([.45,.75,.48]);let o1=unit([-cu[1],cu[0],0]);const o2=[cu[1]*o1[2]-cu[2]*o1[1],cu[2]*o1[0]-cu[0]*o1[2],cu[0]*o1[1]-cu[1]*o1[0]];
-  G.forEach(gr=>{gr.pts=[];for(let i=0;i<70;i++)gr.pts.push(add(gr.mu,add(add(scl(cu,.9*randn(r)),scl(o1,.22*randn(r))),scl(o2,.22*randn(r)))))});
+  const NPER=45;G.forEach(gr=>{gr.pts=[];for(let i=0;i<NPER;i++)gr.pts.push(add(gr.mu,add(add(scl(cu,.9*randn(r)),scl(o1,.22*randn(r))),scl(o2,.22*randn(r)))))});
   const mA=meanOf(G[0].pts);const means=G.map(gr=>meanOf(gr.pts));const gm=meanOf(means);
   const SigB=covOf(means);let SigW=[[0,0,0],[0,0,0],[0,0,0]];G.forEach(gr=>{SigW=madd(SigW,covOf(gr.pts))});SigW=mscl(SigW,1/G.length);
   const pca=symEig(SigB);const Wih=symFn(SigW,v=>1/Math.sqrt(Math.max(v,1e-9)));const lda=symEig(mm(mm(Wih,SigB),Wih));const ldaDirs=lda.vecs.map(v=>unit(mv(Wih,v)));
@@ -218,7 +216,7 @@
       const Ci=conceptor(Rs[sel],k),Co=conceptor(Ro,k),Cx=andNot(Ci,Co);drawC(Ci,COL[G[sel].c]);drawC(Cx,COL.ink);
       const{vals,vecs}=symEig(Cx);const off=G[sel].sp;let v0=vecs[0];if(dot(v0,sub(means[sel],mA))<0)v0=scl(v0,-1);pl.arrow(mA,add(mA,scl(v0,Math.max(vals[0],.08)*3.6*1.4)),COL.ink,2.6);
       rd=[[f2(quota(Ci))+' → '+f2(quota(Cx)),'quota: '+G[sel].n+' → AND NOT rest'],[f2(Math.abs(dot(v0,unit(off)))),'cos(kept direction, true '+G[sel].n+' offset)'],[f2(Math.abs(dot(v0,unit(core)))),'cos(kept direction, shared core)']]}
-    else{rd=[['6','groups'],['70','tokens each']]}
+    else{rd=[['6','groups'],[String(NPER),'tokens each']]}
     pl.arrow(mA,add(mA,core),A(COL.gold,.95),2.2);pl.text(add(mA,scl(core,.5)),'shared core',COL.ochre,'600 11px');
     reads('#m8',rd)}
   seg('#s8v',[['clouds','Clouds'],['pca','PCA of means'],['lda','Discriminant axes'],['or','Persona space (OR)'],['andnot','AND NOT the rest']],view,v=>{view=v;draw()});

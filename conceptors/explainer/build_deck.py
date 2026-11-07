@@ -272,7 +272,8 @@ def main():
     if cfg.get("mechanism") and pathlib.Path(cfg["mechanism"]).exists():  # conceptor_spectrum.py output
         results["mechanism"] = json.loads(pathlib.Path(cfg["mechanism"]).read_text())
 
-    style = re.search(r"<style>(.*?)</style>", (HERE / "src/head.html").read_text(), re.S).group(1)
+    # every <style> block: the later ones hold fixes (the method zoo's two columns among them)
+    style = "\n".join(re.findall(r"<style>(.*?)</style>", (HERE / "src/head.html").read_text(), re.S))
     body = (HERE / "src/body.html").read_text()
     all_plates = plates(body)
     slides = (HERE / "deck/slides.html").read_text()

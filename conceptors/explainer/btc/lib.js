@@ -182,6 +182,13 @@ class Plot3D{
   ellipsoid(c,vecs,axes,col){const pt=(u,v)=>add(c,add(add(scl(vecs[0],axes[0]*Math.cos(v)*Math.cos(u)),scl(vecs[1],axes[1]*Math.cos(v)*Math.sin(u))),scl(vecs[2],axes[2]*Math.sin(v))));
     for(const v of[-1,-.5,0,.5,1]){const ring=[];for(let i=0;i<=48;i++)ring.push(pt(i/48*2*Math.PI,v));this.poly(ring,col,1)}
     for(let m=0;m<6;m++){const u=m/6*Math.PI;const mer=[];for(let i=0;i<=48;i++)mer.push(pt(u,-Math.PI/2+i/48*2*Math.PI));this.poly(mer,col,1)}}
+  // the kσ region of a 3D Gaussian as this view shows it: under this projection an ellipsoid's outline is the ellipse
+  // whose covariance is J S Jᵀ, J being the screen offsets of the three unit axes
+  blob(c,S,k,col,{fill=null,w=1.4,dash=null}={}){const o=this.P(c),J=[[1,0,0],[0,1,0],[0,0,1]].map(e=>{const q=this.P(add(c,e));return[q[0]-o[0],q[1]-o[1]]});
+    const M=[[0,0],[0,0]];for(let i=0;i<3;i++)for(let j=0;j<3;j++){M[0][0]+=S[i][j]*J[i][0]*J[j][0];M[0][1]+=S[i][j]*J[i][0]*J[j][1];M[1][1]+=S[i][j]*J[i][1]*J[j][1]}M[1][0]=M[0][1];
+    const{vals,vecs}=symEig(M),a=vals.map(v=>k*Math.sqrt(Math.max(v,0))),g=this.g;g.save();g.beginPath();
+    for(let t=0;t<=72;t++){const th=t/72*2*Math.PI,x=o[0]+a[0]*Math.cos(th)*vecs[0][0]+a[1]*Math.sin(th)*vecs[1][0],y=o[1]+a[0]*Math.cos(th)*vecs[0][1]+a[1]*Math.sin(th)*vecs[1][1];t?g.lineTo(x,y):g.moveTo(x,y)}
+    g.closePath();if(fill){g.fillStyle=fill;g.fill()}g.strokeStyle=col;g.lineWidth=w;if(dash)g.setLineDash(dash);g.stroke();g.restore()}
   // an orientation key pinned to the bottom-left corner: each arrow is a unit axis as this view projects it
   axes3(o,len,labels){const g=this.g,ox=30,oy=this.H-30,L=22,p0=this.P([0,0,0]);
     [[1,0,0],[0,1,0],[0,0,1]].forEach((v,i)=>{const q=this.P(v),dx=(q[0]-p0[0])/this.s,dy=(q[1]-p0[1])/this.s;
@@ -238,23 +245,34 @@ function metrics(edit){const Pe=W2.P.map(edit),De=W2.Dr.map(edit);
   const normCh=avg(De.map((e,i)=>nrm(sub(e.h,ZERO))/nrm(sub(W2.Dr[i],ZERO))-1));
   return{restore:(sa-sb)/(1-sb),dist,caught:avg(De.map(e=>e.on?1:0)),ftr:avg(Pe.map(e=>e.on?1:0)),normCh,landed:avg(De.map(e=>inside2s(e.h)?1:0)),Pe,De}}
 const BOX2={x0:-5.6,x1:5.8,y0:-3.7,y1:3.7};
-function drawClouds(pl,{assist=true,persona=true,drift=true,af=.28}={}){
-  if(assist)W2.A.forEach(p=>pl.dot(p,2.3,A(COL.assist,af)));
-  if(persona)W2.P.forEach(p=>pl.dot(p,2.6,A(COL.persona,.75)));
-  if(drift)W2.Dr.forEach(p=>pl.dot(p,2.6,A(COL.drift,.75)))}
 function drawAxis(pl){pl.line(add(W2.mA,scl(W2.d,-.45)),add(W2.mP,scl(W2.d,.32)),A(COL.navy,.55),1.2,[5,4]);
   pl.dot(W2.mA,4.5,COL.assist,COL.paper,1.5);pl.dot(W2.mP,4.5,COL.persona,COL.paper,1.5)}
 // drawn last, over the dots, so the two labels stay readable
-function axisLabels(pl){[[W2.mA,'assistant mean',COL.assist],[W2.mP,'persona mean',COL.persona]].forEach(([p,t,c])=>{
-  pl.dot(p,4.5,c,COL.paper,1.5);pl.text(add(p,[0,-.5]),t,c,{align:'center',font:'600 13px',halo:true})})}
-// One picture for every toy move. Assistant tokens are a fixed, faint reference. In-character tokens stay where they are,
-// with a dark ring when the move shifts them too (darker the further it shifts them; the distortion readout says how far).
-// Drifted tokens are drawn where the move puts them, with a faint ghost where they started and an arrow on every third.
+function axisLabels(pl){[[W2.mA,'assistant (the default)',COL.assist],[W2.mP,'persona',COL.persona]].forEach(([p,t,c])=>{
+  pl.dot(p,4.5,c,COL.paper,1.5);pl.text(add(p,[0,.5]),t,c,{align:'center',font:'600 13px',halo:true})})}
+
+/* ================= one picture for every toy move ================= */
+// The two reference clouds are shaded 2σ regions, not dots. Blue is where the assistant's tokens sit with no persona
+// prompt, the model's default; teal is where the persona's sit. The only dots are the tokens being steered, all one
+// colour, so a token's position alone says whether it is in character. Two framings:
+//   set:  the steered tokens start as the assistant, and the move should carry them into the persona region;
+//   hold: they are one prompted persona conversation, 28 in character and 12 slid back toward the assistant,
+//         and a good hold moves only those 12.
+// Readouts still use the full 150-token clouds, so the numbers don't depend on which 40 are drawn.
+const TOK={set:W2.A.slice(0,40),hold:W2.P.slice(0,28).concat(W2.Dr.slice(0,12))};
 const shift=(a,b)=>nrm(sub(a,b))/nrm(W2.d);
-function drawMove(pl,m,{every=4,assist=true}={}){
-  if(assist)W2.A.forEach(p=>pl.dot(p,2.2,A(COL.assist,.24)));
-  W2.P.forEach((p,i)=>{const s=shift(m.Pe[i].h,p);pl.dot(p,2.6,A(COL.persona,.72),s>.01?A(COL.ink,.2+.45*Math.min(1,s/.3)):null,1)});
-  W2.Dr.forEach((p,i)=>{if(shift(m.De[i].h,p)>.01)pl.dot(p,2.3,A(COL.drift,.16))});
-  W2.Dr.forEach((p,i)=>{if(i%every===0&&shift(m.De[i].h,p)>.01)pl.arrow(p,m.De[i].h,A(COL.edit,.7),1.3,6)});
-  m.De.forEach(e=>pl.dot(e.h,2.8,A(COL.drift,.85)));axisLabels(pl)}
+function drawRegions(pl){pl.covEllipse(W2.mA,W2.SigA,2,A(COL.assist,.8),{w:1.5,fill:A(COL.assist,.1)});
+  pl.covEllipse(W2.mP,W2.SigP,2,A(COL.persona,.85),{w:1.5,fill:A(COL.persona,.12)})}
+// edit: h -> {h, on}; framing: 'set' or 'hold'. In 'set' a dashed orange outline marks where the whole cloud ends up.
+function drawSteer(pl,edit,framing){const from=TOK[framing],to=from.map(h=>edit(h).h);
+  if(framing==='set'){const all=W2.A.map(h=>edit(h).h);if(all.some((h,i)=>shift(h,W2.A[i])>.01))pl.covEllipse(meanOf(all),covOf(all),2,COL.edit,{w:1.6,dash:[6,4]})}
+  from.forEach((p,i)=>{if(shift(to[i],p)>.01){pl.dot(p,2.6,null,A(COL.muted,.8),1);pl.arrow(p,to[i],A(COL.edit,.8),1.4,6)}});
+  to.forEach(h=>pl.dot(h,3.3,A(COL.ink,.88)));axisLabels(pl)}
+// readouts for the 'set' framing, over all 150 assistant tokens
+function setMetrics(edit){const E=W2.A.map(edit);return{pos:avg(E.map(e=>sCoord(e.h))),landed:avg(E.map(e=>inside2s(e.h)?1:0)),
+  normCh:avg(E.map((e,i)=>nrm(sub(e.h,ZERO))/nrm(sub(W2.A[i],ZERO))-1)),edited:avg(E.map(e=>e.on?1:0))}}
+const FRAMES=[['set','Set a persona'],['hold','Hold a persona']];
+const FRAME_TXT={set:'Set a persona: the dots start as the assistant, the default with no persona prompt.',
+  hold:'Hold a persona: one prompted conversation, where a few tokens slid back toward the assistant.'};
+const pctSigned=x=>(x>=0?'+':'')+(100*x).toFixed(0)+'%';
 linkRefs();

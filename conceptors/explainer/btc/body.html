@@ -63,13 +63,15 @@
     <p class="lead">The cap puts a floor on the axis at a percentile of the persona tokens' positions. A token below the floor is lifted straight up the axis to the floor, and a token above it is left alone. That is the smallest move that puts the token back on the persona side of one line. The Assistant Axis paper caps a band of late-middle layers at once.</p>
     <pre class="eq">vector:  h′ = h + c·d
 cap:     h′ = h + v̂ · max(0, τ − v̂·h)      v̂ = d/|d|</pre>
-    <p class="try"><b>Try:</b> switch between Vector and Cap. Drag the ringed token below the floor and back. Raise the floor and watch false triggers grow: in-character tokens whose content leans toward the assistant get lifted too, and each one gets a dark ring.</p>
+    <p class="try"><b>Try:</b> switch between Vector and Cap. Drag the ringed token below the floor and back. Raise the floor and watch false triggers grow: in-character tokens whose content leans toward the assistant get lifted too. In Set a persona, the cap lifts the assistant only to the floor: it guards a persona but can't create one.</p>
     <p class="us"><b>In our runs:</b> on SmolLM3 the vector kept 100% of ordinary turns in character and 92% at the pushes, at coherence 62. The one-layer cap kept 90% and 53%, at coherence 85. On OLMo the cap fell to 48% in character, against 89% for the vector. The rest of this page asks what else could do the cap's job.</p>
   </div>
   <div class="fig">
-    <div class="legend plate-key" aria-label="Key"><span><i class="sw" style="background:var(--assist);opacity:.45"></i>assistant token (reference)</span><span><i class="sw" style="background:var(--persona)"></i>persona token, in character</span><span><i class="sw" style="background:var(--drift)"></i>drifted: a persona token that slid toward the assistant</span><span><i class="sw ln" style="background:var(--edit)"></i>where the move sends it</span><span><i class="sw ring"></i>in character, but the move shifts it too</span></div>
+    <div class="legend plate-key" aria-label="Key"><span><i class="sw reg" style="--c:var(--assist)"></i>assistant region: no persona prompt, the default</span><span><i class="sw reg" style="--c:var(--persona)"></i>persona region</span><span><i class="sw" style="background:var(--ink)"></i>steered token (hollow: where it started)</span><span><i class="sw ln" style="background:var(--edit)"></i>the move</span><span><i class="sw dash"></i>where the cloud ends up</span></div>
+    <p class="cap" id="f_cap"></p>
     <canvas id="c1" class="r43" aria-label="Two token clouds with the persona axis, the cap floor and edit arrows"></canvas>
     <div class="controls">
+      <div class="seg" id="s_capf"></div>
       <div class="seg" id="s1"></div>
       <label class="sl" for="r1t">Floor τ: persona percentile <output id="o1t"></output><input id="r1t" type="range" min="2" max="80" value="25"></label>
       <label class="sl" for="r1c">Vector strength c <output id="o1c"></output><input id="r1c" type="range" min="0" max="150" value="100"></label>
@@ -82,7 +84,7 @@ cap:     h′ = h + v̂ · max(0, τ − v̂·h)      v̂ = d/|d|</pre>
 <section class="part" id="sec-move">
   <div class="kicker">The moves</div>
   <h2>How to move a token</h2>
-  <p>Every method ends the same way: it replaces a hidden state <code>h</code> with a new one, <code>h′</code>. The vector and the cap are two such moves. The literature has eight more, and this part puts all ten on the same drifted tokens so you can compare them on one picture. The table under the canvas lists each move with its formula and its paper.</p>
+  <p>Every method ends the same way: it replaces a hidden state <code>h</code> with a new one, <code>h′</code>. The vector and the cap are two such moves. The literature has eight more, and this part puts all ten on the same tokens so you can compare them on one picture. The table under the canvas lists each move with its formula and its paper.</p>
 </section>
 
 <section class="plate stack" id="moves">
@@ -90,7 +92,7 @@ cap:     h′ = h + v̂ · max(0, τ − v̂·h)      v̂ = d/|d|</pre>
     <div class="kicker">Toy · 2D and 3D</div>
     <h3>Ten moves on one canvas, in 2D and 3D</h3>
     <p class="papers"><b>Papers on this canvas:</b> <a data-ref="actadd">ActAdd</a>, <a data-ref="caa">CAA</a>, <a data-ref="axis">Assistant Axis</a>, <a data-ref="liseco">LiSeCo</a>, <a data-ref="arditi">directional ablation</a>, <a data-ref="leace">LEACE</a>, <a data-ref="pass">PaSS</a>, <a data-ref="inlp">INLP</a>, <a data-ref="postmus">conceptor steering</a>, <a data-ref="mimic">MiMiC</a>, <a data-ref="spherical">spherical steering</a>, <a data-ref="angular">angular steering</a>, <a data-ref="hpr">Householder rotation</a>.</p>
-    <p class="lead">Pick a move. Only the drifted tokens (magenta) are drawn moving: each sits where the move sends it, a faint ghost marks where it started, and one in four carries an orange arrow. The in-character tokens (teal) stay put, and a dark ring marks the ones the move would shift too; <b>distortion</b> says how far. "Show the move everywhere" draws the move on a grid instead. The cross near the bottom is the zero vector.</p>
+    <p class="lead">Pick a move and a framing. <b>Set a persona</b> starts the dots as the assistant, the model's default with no persona prompt. <b>Hold a persona</b> makes them one prompted conversation, where a few tokens slid back toward the assistant. The shaded regions are where each cloud's tokens sit, and each arrow runs from where a token started to where the move sends it. "Show the move everywhere" draws the move on a grid instead. The cross near the bottom is the zero vector.</p>
     <p>The 3D view is the same tokens with one more direction, <b>z</b>, standing in for the thousands of other directions a real hidden state has. Both clouds are centred on <code>z = 0</code>, and the assistant spreads along it about twice as much as the persona. The 2D canvas is this space seen straight down the z axis; "Match the 2D view" turns the 3D view to that angle.</p>
     <p>The first six moves change one number per token, its coordinate along a single axis, and leave everything else about the token alone, so in 3D their arrows never leave the persona axis and the spread along z stays the same. They differ only in the rule for the new coordinate, which the chart under the canvases draws. The last four move tokens in every direction, z included.</p>
     <p class="opdesc" id="d_mv"></p>
@@ -100,12 +102,14 @@ cap:     h′ = h + v̂ · max(0, τ − v̂·h)      v̂ = d/|d|</pre>
     <p class="us"><b>For us:</b> our working holds use three of these moves. The vector adds, the cap clamps, and the conceptor shrinks toward a centre, which is why it is the only one of the three that changes the spread along z. None of our runs used a rotation, a transport map or a scaling move.</p>
   </div>
   <div class="fig">
-    <div class="legend plate-key" aria-label="Key"><span><i class="sw" style="background:var(--assist);opacity:.45"></i>assistant token (reference)</span><span><i class="sw" style="background:var(--persona)"></i>persona token, in character</span><span><i class="sw" style="background:var(--drift)"></i>drifted: a persona token that slid toward the assistant</span><span><i class="sw ln" style="background:var(--edit)"></i>where the move sends it</span><span><i class="sw ring"></i>in character, but the move shifts it too</span></div>
+    <div class="legend plate-key" aria-label="Key"><span><i class="sw reg" style="--c:var(--assist)"></i>assistant region: no persona prompt, the default</span><span><i class="sw reg" style="--c:var(--persona)"></i>persona region</span><span><i class="sw" style="background:var(--ink)"></i>steered token (hollow: where it started)</span><span><i class="sw ln" style="background:var(--edit)"></i>the move</span><span><i class="sw dash"></i>where the cloud ends up</span></div>
     <div class="controls">
+      <div class="seg" id="s_mvf"></div>
       <div class="seg" id="s_mv"></div>
       <label class="sl" for="r_mvp"><span id="lbl_mvp">Strength</span> <output id="o_mvp"></output><input id="r_mvp" type="range" min="0" max="100" value="100"></label>
       <label class="chk"><input type="checkbox" id="k_mvf"> Show the move everywhere (2D)</label>
     </div>
+    <p class="cap" id="f_mv"></p>
     <div class="duo">
       <figure>
         <canvas id="c_mv" class="r43" aria-label="One move applied to drifted and in-character tokens, in 2D"></canvas>
@@ -166,7 +170,7 @@ h′ = h + <span class="t-gate">g(h)</span> · <span class="t-move">move</span>(
     <p class="us"><b>For us:</b> our <code>fisher_cap</code> changed only the gate, from the raw floor to the Fisher floor (Appendix B). Our two strongest holds have no hard gate: the conceptor acts on every token.</p>
   </div>
   <div class="fig">
-    <div class="legend plate-key" aria-label="Key"><span><i class="sw" style="background:var(--assist);opacity:.45"></i>assistant token (reference)</span><span><i class="sw" style="background:var(--persona)"></i>persona token, in character</span><span><i class="sw" style="background:var(--drift)"></i>drifted: a persona token that slid toward the assistant</span><span><i class="sw ln" style="background:var(--edit)"></i>where the gated move sends it</span><span><i class="sw ring"></i>in character, but the gate lets the move through</span></div>
+    <div class="legend plate-key" aria-label="Key"><span><i class="sw reg" style="--c:var(--assist)"></i>assistant region: no persona prompt, the default</span><span><i class="sw reg" style="--c:var(--persona)"></i>persona region</span><span><i class="sw" style="background:var(--ink)"></i>token from one persona conversation (hollow: where it started)</span><span><i class="sw ln" style="background:var(--edit)"></i>the move</span></div>
     <canvas id="c_gt" class="r43" aria-label="Tokens shaded by how much each gate lets the move through"></canvas>
     <div class="controls">
       <div class="seg" id="s_gt"></div>
@@ -229,7 +233,7 @@ gated:  h′ = h + π_a(h) · (T(h) − h)     π_a = P(assistant | h)</pre>
     <p class="us"><b>For us:</b> transport is the family here that can set a persona without the prompt, which neither the cap nor the conceptor does well. We haven't run it. The overshoot on half-drifted tokens would need a stopping rule.</p>
   </div>
   <div class="fig">
-    <div class="legend plate-key" aria-label="Key"><span><i class="sw" style="background:var(--assist)"></i>assistant token: Shift and Transport move this cloud; in Gated it stays put</span><span><i class="sw" style="background:var(--persona)"></i>persona token, in character</span><span><i class="sw" style="background:var(--drift)"></i>drifted persona token (Gated)</span><span><i class="sw ln" style="background:var(--edit)"></i>where the map sends a token</span></div>
+    <div class="legend plate-key" aria-label="Key"><span><i class="sw reg" style="--c:var(--assist)"></i>assistant region: no persona prompt, the default</span><span><i class="sw reg" style="--c:var(--persona)"></i>persona region</span><span><i class="sw" style="background:var(--ink)"></i>steered token (hollow: where it started)</span><span><i class="sw ln" style="background:var(--edit)"></i>the move</span><span><i class="sw dash"></i>where the cloud ends up</span></div>
     <canvas id="c5" class="r43" aria-label="Assistant cloud shifted or transported onto the persona cloud"></canvas>
     <div class="controls">
       <div class="seg" id="s5"></div>
@@ -407,7 +411,7 @@ a  = k × median eigenvalue of R</pre>
     <div class="kicker">Toy · 2D · our proposal</div>
     <h3>A better trigger: score tokens the way a classifier would</h3>
     <p>The cap decides with the raw projection on <code>d</code>. Content leaks onto that axis, so some in-character tokens look drifted and some drifted tokens look fine. The Fisher direction <code>w = Σ⁻¹d</code> discounts the directions where tokens vary naturally. It is the line that best separates persona from assistant per unit of within-class spread.</p>
-    <p>Compare the two at the same false-trigger rate: both floors sit at the same percentile of in-character tokens, and the Fisher floor catches more of the drifted ones.</p>
+    <p>Compare the two at the same false-trigger rate: both floors sit at the same percentile of in-character tokens, and the Fisher floor catches more of the drifted ones. A filled dot is a token the selected floor triggers on; a hollow one it leaves alone.</p>
     <h4>The correction matters as much as the trigger</h4>
     <p>Once a token trips the Fisher floor, move it back with the smallest edit in the data's own metric (Mahalanobis). That edit points along <code>d</code>, the same direction the cap uses. A Euclidean edit would push along <code>w</code>, into directions the data rarely visits.</p>
     <pre class="eq">trigger:           w·h &lt; τ_w          w = Σ⁻¹ d
@@ -432,7 +436,7 @@ Euclidean edit:    h′ = h + w (τ_w − w·h)/(wᵀw)</pre>
   <div class="txt">
     <div class="kicker">Toy · 3D · our proposal</div>
     <h3>A region instead of a half-space</h3>
-    <p>Add a third direction, <i>identity</i>: the model starts admitting it's an AI while still sounding like a pirate. That drift (hollow magenta, up) never lowers the persona coordinate, so the cap's plane can't see it. Back-toward-assistant drift (filled magenta, left) is the case the cap was built for.</p>
+    <p>Add a third direction, <i>identity</i>: the model starts admitting it's an AI while still sounding like a pirate. That drift (the dots above the persona region) never lowers the persona coordinate, so the cap's plane can't see it. Back-toward-assistant drift (the dots between the two regions) is the case the cap was built for.</p>
     <p>The region constrains only the coordinates that tell the persona apart, here the Fisher score from the last plate and identity, and leaves content free. In 3D that region is an elliptic cylinder: bounded across, unbounded along content. A token outside is pulled back to the boundary along the line to the centre, measured in the persona's own units. It is close to <a data-ref="liseco">LiSeCo</a>'s band projection, with an identity probe added.</p>
     <pre class="eq">region:  q = (w·h, identity) − mean       discriminative coordinates
          m = √(qᵀ S⁻¹ q)                  S = in-character spread of q

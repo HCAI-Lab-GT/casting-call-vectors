@@ -160,9 +160,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
 /* each canvas keeps its own shape until it reaches the height budget, then grows only in width */
 .slide .btc canvas{height:auto;max-height:var(--cvh,58vh)}
 .slide .btc .duo canvas{--cvh:48vh}
-.slide .btc #moves .duo canvas{--cvh:35vh}
-.slide .btc #cap canvas{--cvh:50vh}
+.slide .btc #moves .duo canvas{--cvh:32vh}
+.slide .btc #cap canvas{--cvh:47vh}
 .slide .btc #gates canvas{--cvh:54vh}
+/* the moves slide's lead paragraph already explains the two framings */
+.slide:not(.appendix) .btc #f_mv{display:none}
+.slide .btc #trigger #bc-c3{--cvh:46vh}
+.slide .btc #trigger #c3h{--cvh:15vh}
 /* square-ish drawings (the globe, the arc) sit left with their controls and readouts beside them, not under them */
 .slide .btc :is(#sphere,#manifold)>.fig{grid-template-columns:minmax(0,1.45fr) minmax(230px,1fr);align-items:start;column-gap:clamp(14px,1.8vw,28px)}
 .slide .btc :is(#sphere,#manifold)>.fig>.side .read{grid-template-columns:1fr 1fr}

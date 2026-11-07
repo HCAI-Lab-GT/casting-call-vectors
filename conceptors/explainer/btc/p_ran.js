@@ -1,17 +1,19 @@
 /* ================= what we ran: vector and cap ================= */
-(function(){let mode='cap',pc=25,c=1;const probe={p:[0.2,-0.9]};
+(function(){let mode='cap',pc=25,c=1,F='hold';const probe={p:[0.2,-0.9]};
   const projP=W2.P.map(h=>dot(h,W2.vhat)).sort((a,b)=>a-b);
   const tau=()=>quantile(projP,pc/100);
   const edit=h=>{if(mode==='none')return{h,on:false};if(mode==='vector')return{h:add(h,scl(W2.d,c)),on:true};
     const p=dot(h,W2.vhat),t=tau();return p<t?{h:add(h,scl(W2.vhat,t-p)),on:true}:{h,on:false}};
   const pl=new Plot2D($('#c1'),BOX2,draw);pl.handles.push({get:()=>probe.p,set:w=>probe.p=w});
-  function draw(){if(!pl.ready())return;loadCols();pl.clear();
+  function draw(){if(!pl.ready())return;loadCols();pl.clear();drawRegions(pl);
     if(mode==='cap'){pl.halfplane(W2.vhat,tau(),A(COL.navy,.06));pl.boundary(W2.vhat,tau(),COL.navy,1.8,null,'floor τ')}
-    drawAxis(pl);const m=metrics(edit);drawMove(pl,m);
+    drawAxis(pl);drawSteer(pl,edit,F);
     const e=edit(probe.p);pl.ring(probe.p);if(e.on)pl.arrow(probe.p,e.h,COL.edit,2.4,9);
-    reads('#m1',[[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)'],[pct(m.caught),'drifted tokens edited'],[pct(m.ftr),'in-character tokens edited']])}
+    if(F==='set'){const s=setMetrics(edit);reads('#m1',[[f2(s.pos),'persona-axis position after (0 = assistant, 1 = persona)'],[pct(s.landed),'tokens landing in the persona region'],[pct(s.edited),'tokens edited']]);return}
+    const m=metrics(edit);reads('#m1',[[pct(m.restore),'restore (drifted)'],[f2(m.dist),'distortion (in character)'],[pct(m.caught),'drifted tokens edited'],[pct(m.ftr),'in-character tokens edited']])}
   seg('#s1',[['none','No steering'],['vector','Vector'],['cap','Cap']],mode,v=>{mode=v;draw()});
   slider('r1t',v=>v+'th',v=>{pc=v;draw()});slider('r1c',v=>(v/100).toFixed(2),v=>{c=v/100;draw()});
+  seg('#s_capf',FRAMES,F,v=>{F=v;$('#f_cap').textContent=FRAME_TXT[F];draw()});$('#f_cap').textContent=FRAME_TXT[F];
 })();
 
 /* ================= what we ran: the aperture, on real SmolLM3 activations ================= */
@@ -85,15 +87,13 @@
     hg.font=`600 12px ${FONT()}`;hg.fillStyle=COL.ink;hg.textBaseline='top';hg.textAlign='left';
     hg.fillText((gate==='fisher'?'Fisher score w·h':'raw score v̂·h')+'   ← assistant-like   persona-like →',pad.l,4);
     hg.fillStyle=COL.muted;hg.textAlign='right';hg.fillText('floor',X(tau)-4,pad.t);hg.strokeStyle=COL.hair;hg.lineWidth=1;hg.beginPath();hg.moveTo(pad.l,H-pad.b);hg.lineTo(W-pad.r,H-pad.b);hg.stroke()}
-  function draw(){if(!pl.ready())return;loadCols();pl.clear();
+  function draw(){if(!pl.ready())return;loadCols();pl.clear();drawRegions(pl);
     const tr=quantile(rawP,pc/100),tf=quantile(fisP,pc/100);
     pl.halfplane(gate==='fisher'?wF:W2.vhat,gate==='fisher'?tf:tr,A(gate==='fisher'?COL.violet:COL.navy,.06));
     pl.boundary(W2.vhat,tr,COL.navy,1.6,[6,4],'raw floor');pl.boundary(wF,tf,COL.violet,2,null,'Fisher floor');
     drawAxis(pl);
     const trig=h=>gate==='fisher'?fis(h)<tf:raw(h)<tr;
-    W2.A.forEach(p=>pl.dot(p,2.2,A(COL.assist,.22)));
-    W2.P.forEach(p=>{const on=trig(p);pl.dot(p,2.6,A(COL.persona,.8),on?COL.ink:null,1.1)});
-    W2.Dr.forEach(p=>{const on=trig(p);on?pl.dot(p,2.7,A(COL.drift,.85)):pl.dot(p,2.7,null,A(COL.drift,.85),1.2)});
+    TOK.hold.forEach(h=>trig(h)?pl.dot(h,3.3,A(COL.ink,.88)):pl.dot(h,3.1,A(COL.paper,.9),A(COL.ink,.8),1.2));
     pl.arrow(W2.mP,add(W2.mP,scl(wFu,1.4)),COL.violet,2,8);pl.text(add(W2.mP,scl(wFu,1.65)),'w',COL.violet,{font:'700 13px',align:'center'});
     axisLabels(pl);const fp=fis(probe.p);pl.ring(probe.p);
     if(fp<tf){const delta=metric==='mahal'?scl(mv(SW,wF),(tf-fp)/dot(wF,mv(SW,wF))):scl(wF,(tf-fp)/dot(wF,wF));pl.arrow(probe.p,add(probe.p,delta),COL.edit,2.6,9)}
@@ -113,7 +113,7 @@
   const tok=mu=>add(mu,add(add(scl(u1,1.15*randn(r)),scl(u2,.25*randn(r))),[0,0,.24*randn(r)]));
   const N=120,P=[],As=[],DA=[],DB=[];for(let i=0;i<N;i++){P.push(tok(muP));As.push(tok(muA))}
   for(let i=0;i<60;i++){DA.push(sub(tok(muP),[4*(.3+.5*r()),0,0]));DB.push(add(tok(muP),[0,0,.9+.9*r()]))}
-  const mP=meanOf(P),mA3=meanOf(As),d3=sub(mP,mA3);const xs=P.map(p=>p[0]).sort((a,b)=>a-b);const tau=quantile(xs,.25);
+  const mP=meanOf(P),mA3=meanOf(As),d3=sub(mP,mA3),SigP4=covOf(P),SigA4=covOf(As),T4=P.slice(0,24).concat(DA.slice(0,10),DB.slice(0,10));const xs=P.map(p=>p[0]).sort((a,b)=>a-b);const tau=quantile(xs,.25);
   const SW3=mscl(madd(covOf(P),covOf(As)),.5),w3=mv(inv(SW3),d3),wd=dot(w3,d3);
   const coords=h=>[dot(w3,h),h[2]];const Q=P.map(coords);const qm=meanOf(Q);const S=covOf(Q),Si=inv(S),Sh=symFn(S,v=>Math.sqrt(Math.max(v,0)));
   const free=unit([-w3[1],w3[0],0]);
@@ -130,12 +130,13 @@
       for(const t of[0,Math.PI/2,Math.PI,3*Math.PI/2])pl.poly([ringAt(-3.4,t),ringAt(3.4,t)],A(COL.navy,.4),1);
       pl.label(12,18,'navy cylinder: the region, unbounded along content',COL.navy)}
     if(mode==='cap')pl.label(12,18,'navy plane: the cap floor on the raw persona axis',COL.navy);
-    const pts=[];As.forEach(p=>pts.push({p,r:2.1,fill:A(COL.assist,.3)}));P.forEach(p=>pts.push({p,r:2.6,fill:A(COL.persona,.8)}));
-    DA.forEach(p=>pts.push({p,r:2.8,fill:A(COL.drift,.8)}));DB.forEach(p=>pts.push({p,r:2.8,fill:A(COL.paper,.9),stroke:COL.drift,lw:1.4}));pl.points(pts);
-    let cA=0,cB=0,fp=0,dd=0;DA.forEach(h=>{const e=edit(h);if(e.on){cA++;pl.arrow(h,e.h,A(COL.edit,.6),1)}});DB.forEach(h=>{const e=edit(h);if(e.on){cB++;pl.arrow(h,e.h,A(COL.edit,.6),1)}});
+    pl.blob(mA3,SigA4,2,A(COL.assist,.8),{fill:A(COL.assist,.08)});pl.blob(mP,SigP4,2,A(COL.persona,.85),{fill:A(COL.persona,.11)});
+    const E4=T4.map(edit),pts=[];T4.forEach((h,i)=>{if(E4[i].on)pts.push({p:h,r:2.6,stroke:A(COL.muted,.8),lw:1})});E4.forEach(e=>pts.push({p:e.h,r:3.1,fill:A(COL.ink,.88)}));pl.points(pts);
+    T4.forEach((h,i)=>{if(E4[i].on)pl.arrow(h,E4[i].h,A(COL.edit,.8),1.4,6)});
+    let cA=0,cB=0,fp=0,dd=0;DA.forEach(h=>{if(edit(h).on)cA++});DB.forEach(h=>{if(edit(h).on)cB++});
     P.forEach(h=>{const e=edit(h);if(e.on){fp++;dd+=dot(sub(e.h,h),sub(e.h,h))}});const spread=Math.sqrt(avg(P.map(h=>dot(sub(h,mP),sub(h,mP)))));
-    pl.text(add(muA,[0,0,-1.2]),'assistant',COL.assist);pl.text(add(mP,[0,0,-1.25]),'persona',COL.persona);
-    reads('#m4',[[pct(cA/DA.length),'back-to-assistant drift edited (filled)'],[pct(cB/DB.length),'identity slips edited (hollow)'],[pct(fp/P.length),'in-character tokens edited'],[f2(Math.sqrt(dd/P.length)/spread),'distortion (in character)']])}
+    pl.text(add(muA,[0,0,-1.2]),'assistant (the default)',COL.assist);pl.text(add(mP,[0,0,-1.25]),'persona',COL.persona);
+    reads('#m4',[[pct(cA/DA.length),'tokens slid toward the assistant, edited'],[pct(cB/DB.length),'tokens slipped off along identity, edited'],[pct(fp/P.length),'in-character tokens edited'],[f2(Math.sqrt(dd/P.length)/spread),'distortion (in character)']])}
   seg('#s4',[['none','No steering'],['cap','Cap'],['region','Region']],mode,v=>{mode=v;draw()});
   slider('r4r',v=>(v/100).toFixed(2),v=>{rad=v/100;draw()});
   $('#b4v').addEventListener('click',()=>{pl.yaw=Math.atan2(free[0],free[1]);pl.pitch=0;draw()});
