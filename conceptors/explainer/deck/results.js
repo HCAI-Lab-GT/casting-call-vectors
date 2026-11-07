@@ -35,7 +35,15 @@ const MORDER=['none','add','cap','cap_aa','add_cap','ctok_cap',  /* region stays
 const CTXS=[['prompt','Prompt + steering'],['steer_only','Steering only'],['prompt_none','Prompt, no pushes'],
   ['prompt_unseen','Prompt, new probe wording']];
 const hasCtx=(p,c)=>JUDGES_OF(p).some(j=>DK.personas[p].hold[j].some(h=>h.context===c));
-const DEFAULT_ON=new Set(['none','add','cap','cap_aa','ctok_cap','conceptor_tok','ctok_tight']);
+/* four lines a room can follow; the method toggles list the main methods, with the aperture sweep, the answer-average
+   fits and the other controls behind "more" */
+const DEFAULT_ON=new Set(['none','add','cap','ctok_tight']);
+const PRIMARY=new Set(['none','add','cap','cap_aa','ctok_cap','conceptor_tok','ctok_tight']);
+function togHTML(ms,on,more,titleOf){
+  const show=more?ms:ms.filter(m=>PRIMARY.has(m)||on.has(m)),rest=ms.length-show.length;
+  return show.map(m=>'<button type="button" data-m="'+m+'" aria-pressed="'+on.has(m)+'"'+(titleOf?' title="'+esc(titleOf(m))+'"':'')+'>'+swatchI(m)+esc(METH[m][0])+'</button>').join('')+
+    (ms.some(m=>!PRIMARY.has(m))?'<button type="button" class="more" data-more="1">'+(more?'fewer':'+'+rest+' more')+'</button>':'');
+}
 const MEASURES=[['fully_rate','In character'],['coherence','Coherence'],['identity_ai_rate','Admits being an AI']];
 const PROBE_KIND={5:'drop the act',13:'drop the act',8:'are you an AI?',16:'are you an AI?'};
 const pct=v=>v==null||!isFinite(v)?'–':Math.round(v*100)+'%';
@@ -122,7 +130,8 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-persona] b
       '<div class="msg bot"><span class="who">'+esc(MODEL(PERS))+', '+esc(EXROLE(PERS))+' prompt, no steering'+(PD().group?' (one example; curves are the average)':'')+'</span>'+esc(base.a)+(base.a.length>=500?' …':'')+'</div>'+
       '<div class="pills">'+pills+'</div>';
   }
-  const ch=LineChart('s2line',{aspect:.56,ml:64,mr:24,xs:XS,yRange:()=>[0,1],yTicks:()=>[0,.5,1],yFmt:pct,xFmt:String,
+  /* capped so the chart, its title and the three notes under it fit above the bar on a 16:9 screen */
+  const ch=LineChart('s2line',{aspect:.56,ml:64,mr:24,canvasOpt:{get maxH(){return Math.round(innerHeight*.4);}},xs:XS,yRange:()=>[0,1],yTicks:()=>[0,.5,1],yFmt:pct,xFmt:String,
     bands:probeBands,selected:()=>turn-1,direct:false,vFmt:v=>pct(v),tipTitle:i=>'turn '+(i+1),
     series:()=>[...JUDGES().map(j=>({name:JNAME[j],color:rgba(COL.muted,.45),width:1.2,values:series(j,'prompt','none','fully_rate')})),
       {name:'Mean of judges',color:COL.ink,width:2.6,dots:true,values:series('mean','prompt','none','fully_rate')},
@@ -139,19 +148,19 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-persona] b
 (function(){
   const cv=$('s9c');if(!cv)return;
   const rows=()=>PD().sweep||[];
-  let on=new Set(['none','add','cap','cap_aa','add_cap','conceptor_tok','add_ctok']);
+  let on=new Set(['none','add','cap','cap_aa','conceptor_tok']),more=false;
   const tog=$('s9tog');
-  function togs(){const ms=MORDER.filter(m=>rows().some(r=>r.method===m));
-    tog.innerHTML=ms.map(m=>'<button type="button" data-m="'+m+'" aria-pressed="'+on.has(m)+'">'+swatchI(m)+esc(METH[m][0])+'</button>').join('');}
-  let pts=[],hover=null,zoom=false;
+  function togs(){tog.innerHTML=togHTML(MORDER.filter(m=>rows().some(r=>r.method===m)),on,more);}
+  /* every method is coherent above 80, so the chart opens on the 60-100 range; "All" shows the full axis */
+  let pts=[],hover=null,zoom=true;
   const f=Canvas('s9c',.68,(c,w,h)=>{
-    const x0=zoom?60:0,M={l:64,r:18,t:16,b:40},X=v=>M.l+(Math.max(x0,v)-x0)/(100-x0)*(w-M.l-M.r),Y=v=>M.t+(1-v)*(h-M.t-M.b);
+    const x0=zoom?60:0,M={l:64,r:18,t:30,b:40},X=v=>M.l+(Math.max(x0,v)-x0)/(100-x0)*(w-M.l-M.r),Y=v=>M.t+(1-v)*(h-M.t-M.b);  /* t leaves room for the labels of methods at 100% */
     c.strokeStyle=COL.grid;c.lineWidth=1;c.font='10px '+MONO;c.fillStyle=COL.muted;
     [0,.25,.5,.75,1].forEach(v=>{c.beginPath();c.moveTo(M.l,Y(v)+.5);c.lineTo(w-M.r,Y(v)+.5);c.stroke();c.textAlign='right';c.textBaseline='middle';c.fillText(pct(v),M.l-8,Y(v));});
     (zoom?[60,70,80,90,100]:[0,25,50,75,100]).forEach(v=>{c.textAlign='center';c.textBaseline='top';c.fillText(String(v),X(v),h-M.b+8);});
     c.textAlign='right';c.textBaseline='bottom';c.fillText('coherence (judge, 0-100) →',w-M.r,h-2);
     c.textAlign='left';c.textBaseline='top';c.fillText('in character ↑',M.l+4,2);
-    pts=[];
+    pts=[];const labels=[];
     MORDER.filter(m=>on.has(m)).forEach(m=>{
       const rs=rows().filter(r=>r.method===m&&r.coherence!=null&&r.fully_rate!=null).sort((a,b)=>a.strength-b.strength);
       if(!rs.length)return;
@@ -162,8 +171,12 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-persona] b
       rs.forEach(r=>{const x=X(r.coherence),y=Y(r.fully_rate);pts.push({x,y,r,m});
         mark(c,x,y,'o',3.6,col,false,true);
         if(sel!=null&&Math.abs(r.strength-sel)<1e-9){c.beginPath();c.arc(x,y,8,0,2*Math.PI);c.lineWidth=1.8;c.strokeStyle=col;c.stroke();}});
-      const last=rs[rs.length-1];text(c,METH[m][1],X(last.coherence)+8,Y(last.fully_rate)-9,{size:10,color:COL.ink});
+      const last=rs[rs.length-1];labels.push({t:METH[m][1],x:X(last.coherence)+8,y:Y(last.fully_rate)-9});
     });
+    /* several methods end near 100% in character, so labels that would overprint step upward */
+    labels.sort((a,b)=>b.y-a.y);
+    for(let i=1;i<labels.length;i++){const p=labels[i-1],q=labels[i];if(Math.abs(q.x-p.x)<70&&p.y-q.y<12)q.y=p.y-12;}
+    labels.forEach(l=>text(c,l.t,l.x,l.y,{size:10,color:COL.ink}));
     if(hover){c.beginPath();c.arc(hover.x,hover.y,6,0,2*Math.PI);c.lineWidth=2;c.strokeStyle=COL.ink;c.stroke();}
   });
   hoverable(cv,(px,py,e)=>{
@@ -177,7 +190,8 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-persona] b
       '<div class="row"><span class="tl">coherence</span>&nbsp;<b>'+num(r.coherence)+'</b></div>'+
       (r.voice_as_rate!=null?'<div class="row"><span class="tl">speaks as the role</span>&nbsp;<b>'+pct(r.voice_as_rate)+'</b></div>':''),e.clientX,e.clientY);
   },()=>{hover=null;f.draw();hideTip();});
-  tog.addEventListener('click',e=>{const b=e.target.closest('button[data-m]');if(!b)return;const m=b.dataset.m;
+  tog.addEventListener('click',e=>{if(e.target.closest('button[data-more]')){more=!more;togs();return;}
+    const b=e.target.closest('button[data-m]');if(!b)return;const m=b.dataset.m;
     on.has(m)?on.delete(m):on.add(m);b.setAttribute('aria-pressed',String(on.has(m)));f.draw();});
   onSeg('s9z',v=>{zoom=v==='zoom';f.draw();});
   function note(){
@@ -229,7 +243,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-persona] b
 /* ---------- slides 11-13: holding over the conversation ---------- */
 document.querySelectorAll('.sbody.hold').forEach(root=>{
   const id=root.dataset.hold,st={measure:root.dataset.measure,ctx:root.dataset.context,judge:'mean',
-    on:new Set(DEFAULT_ON),turn:+(root.dataset.transcript||0)};
+    on:new Set(DEFAULT_ON),more:false,turn:+(root.dataset.transcript||0)};
   const ctxs=CTXS.filter(c=>PERSONAS.some(p=>hasCtx(p,c[0])));
   root.innerHTML='<div class="scol">'+personaSeg(id+'ps')+
     '<div class="ctlrow"><span>Context</span>'+segHTML(id+'c',ctxs,st.ctx)+'</div>'+
@@ -240,15 +254,19 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
     '<div><canvas id="'+id+'cv" role="img" aria-label="Per-turn hold curves for each method"></canvas>'+
     '<p class="note" id="'+id+'pn"></p>'+
     (st.turn?'<div class="chat" id="'+id+'x" style="margin-top:8px;max-height:24vh;overflow:auto"></div>':'')+'</div>';
+  /* the slide's definitions paragraph sits under the chart, where there is room, not under the controls */
+  const right=root.lastElementChild,defs=root.nextElementSibling;
+  if(defs&&defs.classList.contains('defs')){const x=$(id+'x');x?right.insertBefore(defs,x):right.appendChild(defs);}
   const tog=$(id+'t');
   function togs(){
     const ms=methodsIn(st.ctx);
-    tog.innerHTML=ms.map(m=>'<button type="button" data-m="'+m+'" aria-pressed="'+st.on.has(m)+'" title="'+(nOf(st.ctx,m)||'')+' conversations">'+swatchI(m)+esc(METH[m][0])+'</button>').join('');
+    tog.innerHTML=togHTML(ms,st.on,st.more,m=>(nOf(st.ctx,m)||'')+' conversations');
     if(st.judge!=='mean'&&!JUDGES().includes(st.judge))st.judge='mean';
     $(id+'jw').innerHTML=segHTML(id+'j',[['mean','Mean'],...JUDGES().map(j=>[j,JSHORT[j]])],st.judge);
   }
   const yr=()=>st.measure==='coherence'?[0,100]:[0,1];
-  const ch=LineChart(id+'cv',{aspect:st.turn?.42:.58,ml:64,mr:24,direct:false,xs:XS,yRange:yr,yTicks:()=>st.measure==='coherence'?[0,25,50,75,100]:[0,.25,.5,.75,1],
+  /* the chart shares its column with the definitions and, on the identity slide, the transcript */
+  const ch=LineChart(id+'cv',{aspect:st.turn?.42:.58,ml:64,mr:24,direct:false,canvasOpt:{get maxH(){return Math.round(innerHeight*(st.turn?.34:.52));}},xs:XS,yRange:yr,yTicks:()=>st.measure==='coherence'?[0,25,50,75,100]:[0,.25,.5,.75,1],
     yFmt:v=>fmtM(st.measure,v),xFmt:t=>String(t),xTicks:()=>XS().filter(t=>NT()<=12||t===1||t%5===0||probesNow(st.ctx).includes(t)),
     bands:()=>probeBands(st.ctx),selected:()=>st.turn?st.turn-1:-1,
     tipTitle:i=>'turn '+(i+1)+(probesNow(st.ctx).includes(i+1)?' · '+(PROBE_KIND[i+1]||'probe'):''),vFmt:v=>fmtM(st.measure,v),
@@ -282,7 +300,8 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
     else if(box.id===id+'m'){st.measure=b.dataset.v;setSeg(box.id,st.measure);redraw();}
     else if(box.id===id+'j'){st.judge=b.dataset.v;setSeg(box.id,st.judge);redraw();}
   });
-  tog.addEventListener('click',e=>{const b=e.target.closest('button[data-m]');if(!b)return;const m=b.dataset.m;
+  tog.addEventListener('click',e=>{if(e.target.closest('button[data-more]')){st.more=!st.more;togs();return;}
+    const b=e.target.closest('button[data-m]');if(!b)return;const m=b.dataset.m;
     st.on.has(m)?st.on.delete(m):st.on.add(m);b.setAttribute('aria-pressed',String(st.on.has(m)));redraw();});
   personaHooks.push(()=>{if(st.turn)st.turn=Math.min(st.turn,NT());togs();redraw();});
   transcript();note();
@@ -291,7 +310,7 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
 /* ---------- trajectory slide: where each method puts the activations, tied to the outputs ---------- */
 (function(){
   if(!$('stc'))return;
-  const st={ctx:'prompt',turn:8,on:new Set(['none','add','cap','cap_aa','add_cap','conceptor_tok','add_ctok']),view:'mean',layer:'steer'};
+  const st={ctx:'prompt',turn:8,on:new Set(DEFAULT_ON),more:false,view:'mean',layer:'steer'};
   const hasTraj=()=>JUDGES().some(j=>(PD().hold[j]||[]).some(h=>h.per_turn.some(t=>t.x_pre!=null)));
   /* the Assistant Axis cap acts downstream (modules 25-30 on SmolLM3), so it shows only at the read layer */
   const readLayer=()=>st.layer==='read'&&hasTraj();
@@ -305,7 +324,7 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
   $('stvw').innerHTML=segHTML('stvs',[['mean','Mean of conversations'],['conv','Conversation 1']],st.view);
   $('stlw').innerHTML=segHTML('stls',[['steer','Steering layer'],['read','Read layer']],st.layer);
   const tog=$('stt');
-  function togs(){tog.innerHTML=methodsIn(st.ctx).map(m=>'<button type="button" data-m="'+m+'" aria-pressed="'+st.on.has(m)+'">'+swatchI(m)+esc(METH[m][0])+'</button>').join('');}
+  function togs(){tog.innerHTML=togHTML(methodsIn(st.ctx),st.on,st.more);}
   const key=()=>readLayer()?'read_steered':(hasTraj()?'x_post':'readout');
   /* a "before" line only for methods that edit the steering layer (the AA cap and no steering never do) */
   const edits=m=>!readLayer()&&hasTraj()&&XS().some(t=>{const a=val(m,t,'x_pre'),b=val(m,t,'x_post');return a!=null&&b!=null&&Math.abs(a-b)>1e-4;});
@@ -374,7 +393,8 @@ document.querySelectorAll('.sbody.hold').forEach(root=>{
   $('stcw').addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(!b)return;st.ctx=b.dataset.v;setSeg('stcs',st.ctx);togs();redraw();});
   $('stvw').addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(!b)return;st.view=b.dataset.v;setSeg('stvs',st.view);redraw();});
   $('stlw').addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(!b)return;st.layer=b.dataset.v;setSeg('stls',st.layer);redraw();});
-  tog.addEventListener('click',e=>{const b=e.target.closest('button[data-m]');if(!b)return;const m=b.dataset.m;
+  tog.addEventListener('click',e=>{if(e.target.closest('button[data-more]')){st.more=!st.more;togs();return;}
+    const b=e.target.closest('button[data-m]');if(!b)return;const m=b.dataset.m;
     st.on.has(m)?st.on.delete(m):st.on.add(m);b.setAttribute('aria-pressed',String(st.on.has(m)));redraw();});
   personaHooks.push(()=>{st.turn=Math.min(st.turn,NT());togs();redraw();});
   togs();chat();
@@ -511,11 +531,11 @@ fillStats();
     return mean(ps.map(p=>where==='push'?mean([statFor(p,'prompt',m,'t5',key),statFor(p,'prompt',m,'t13',key)]):statFor(p,'prompt',m,where,key)));};
   const kFmt=x=>'×'+Math.round(Math.pow(10,x));
   const fitH={get maxH(){return Math.round(innerHeight*.28);}};
-  const hold=LineChart('sapc',{aspect:.42,ml:64,mr:110,canvasOpt:fitH,xs:XSa,yRange:()=>[0,1],yTicks:()=>[0,.25,.5,.75,1],yFmt:pct,xFmt:kFmt,
+  const hold=LineChart('sapc',{aspect:.42,ml:64,mr:150,canvasOpt:fitH,xs:XSa,yRange:()=>[0,1],yTicks:()=>[0,.25,.5,.75,1],yFmt:pct,xFmt:kFmt,
     tipTitle:i=>'aperture k = '+AP[i][0],vFmt:pct,xTitle:'aperture multiple k →',
     series:()=>[{name:'In character, ordinary turns',short:'ordinary turns',color:COL.pirate,width:2.6,dots:true,values:AP.map(a=>val(a[1],'ordinary','fully_rate'))},
       {name:'In character at "drop the act"',short:'at the pushes',color:COL.pirate,width:2,dash:[6,4],dots:true,values:AP.map(a=>val(a[1],'push','fully_rate'))}]});
-  const coh=LineChart('sapk',{aspect:.3,ml:64,mr:110,canvasOpt:fitH,xs:XSa,yRange:()=>[0,100],yTicks:()=>[0,50,100],yFmt:num,xFmt:kFmt,
+  const coh=LineChart('sapk',{aspect:.3,ml:64,mr:150,canvasOpt:fitH,xs:XSa,yRange:()=>[0,100],yTicks:()=>[0,50,100],yFmt:num,xFmt:kFmt,
     tipTitle:i=>'aperture k = '+AP[i][0],vFmt:num,
     series:()=>[{name:'Coherence',short:'coherence',color:COL.ink,width:2.4,dots:true,values:AP.map(a=>val(a[1],'ordinary','coherence'))}]});
   function note(){

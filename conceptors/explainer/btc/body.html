@@ -3,7 +3,7 @@
   <div class="kicker">Conceptors pilot · persona steering notes</div>
   <h1>Beyond the cap</h1>
   <p class="lede">An activation cap keeps a model in character by guarding one line among its hidden states. This page tours the other ways researchers move hidden states, on toy clouds you can drag and turn. It starts with what a persona looks like inside the model and what a steering vector and a cap do to it. Then it puts the published moves side by side, and takes apart the other choices every method makes: when to act, which direction to use, whether to move tokens one at a time or the whole cloud, and whether to treat the space as flat or curved.</p>
-  <p class="deck">Our 20-turn results are in the lab deck, <a href="https://claude.ai/artifact/VmanHtqYVEzHv6H4VbSFtu" target="_blank" rel="noopener"><b>Holding a Persona</b></a>. Paper names on this page link straight to the paper. Both open in a new tab.</p>
+  <p class="deck">Our 20-turn results are in the lab deck, <a href="https://claude.ai/artifact/VmanHtqYVEzHv6H4VbSFtu" target="_blank" rel="noopener"><b>Staying in Character</b></a>. Paper names on this page link straight to the paper. Both open in a new tab.</p>
   <div class="legend" aria-label="Legend">
     <span><i class="sw" style="background:var(--persona)"></i>persona token, in character</span>
     <span><i class="sw" style="background:var(--drift)"></i>persona token that drifted</span>
@@ -59,11 +59,11 @@
     <div class="kicker">Toy · 2D</div>
     <h3>Zoom in: a vector pushes every token; a cap guards one line</h3>
     <p class="papers"><b>Papers:</b> <a data-ref="actadd"><b>ActAdd</b></a>, <a data-ref="caa"><b>CAA</b></a> and <a data-ref="pv"><b>Persona Vectors</b></a> for the vector; <a data-ref="axis"><b>The Assistant Axis</b></a> for the cap.</p>
-    <p class="lead">Take one persona and the assistant. The persona axis runs from the assistant's mean token to the persona's, <code>d = μ_p − μ_a</code>. A steering vector adds a multiple of <code>d</code> to every token, whatever state it is in, so tokens already in character get pushed past the persona too, and that costs coherence.</p>
-    <p class="lead">The cap puts a floor on the axis at a percentile of the persona tokens' positions. A token below the floor is lifted straight up the axis to the floor, and a token above it is left alone. That is the smallest move that puts the token back on the persona side of one line. The Assistant Axis paper caps a band of late-middle layers at once.</p>
+    <p class="lead">Take one persona and the assistant. The persona axis runs from the assistant's mean token to the persona's, <code>d = μ_p − μ_a</code>. A steering vector adds a multiple of <code>d</code> to every token, so tokens already in character get pushed past the persona too, and that costs coherence. The cap lifts a token up the axis to a floor only if it sits below the floor, and leaves the rest alone: the smallest move that puts a token back on the persona side of one line.</p>
+    <p>The floor is a percentile of the persona tokens' positions. The Assistant Axis paper caps a band of late-middle layers at once.</p>
     <pre class="eq">vector:  h′ = h + c·d
 cap:     h′ = h + v̂ · max(0, τ − v̂·h)      v̂ = d/|d|</pre>
-    <p class="try"><b>Try:</b> switch between Vector and Cap. Drag the ringed token below the floor and back. Raise the floor and watch false triggers grow: in-character tokens whose content leans toward the assistant get lifted too. In Set a persona, the cap lifts the assistant only to the floor: it guards a persona but can't create one.</p>
+    <p class="try"><b>Try:</b> switch between Vector and Cap. Drag the ringed token below the floor and back. Raise the floor and watch false triggers grow: in-character tokens whose content leans toward the assistant get lifted too. In Get into character, the cap lifts the assistant only to the floor: it guards a persona but can't create one.</p>
     <p class="us"><b>In our runs:</b> on SmolLM3 the vector kept 100% of ordinary turns in character and 92% at the pushes, at coherence 62. The one-layer cap kept 90% and 53%, at coherence 85. On OLMo the cap fell to 48% in character, against 89% for the vector. The rest of this page asks what else could do the cap's job.</p>
   </div>
   <div class="fig">
@@ -92,14 +92,14 @@ cap:     h′ = h + v̂ · max(0, τ − v̂·h)      v̂ = d/|d|</pre>
     <div class="kicker">Toy · 2D and 3D</div>
     <h3>Ten moves on one canvas, in 2D and 3D</h3>
     <p class="papers"><b>Papers on this canvas:</b> <a data-ref="actadd">ActAdd</a>, <a data-ref="caa">CAA</a>, <a data-ref="axis">Assistant Axis</a>, <a data-ref="liseco">LiSeCo</a>, <a data-ref="arditi">directional ablation</a>, <a data-ref="leace">LEACE</a>, <a data-ref="pass">PaSS</a>, <a data-ref="inlp">INLP</a>, <a data-ref="postmus">conceptor steering</a>, <a data-ref="mimic">MiMiC</a>, <a data-ref="spherical">spherical steering</a>, <a data-ref="angular">angular steering</a>, <a data-ref="hpr">Householder rotation</a>.</p>
-    <p class="lead">Pick a move and a framing. <b>Set a persona</b> starts the dots as the assistant, the model's default with no persona prompt. <b>Hold a persona</b> makes them one prompted conversation, where a few tokens slid back toward the assistant. The shaded regions are where each cloud's tokens sit, and each arrow runs from where a token started to where the move sends it. "Show the move everywhere" draws the move on a grid instead. The cross near the bottom is the zero vector.</p>
+    <p class="lead">Pick a move and a framing. <b>Get into character</b> starts the dots as the assistant, the model's default with no persona prompt. <b>Stay in character</b> makes them one prompted conversation, where a few tokens slid back toward the assistant. The shaded regions are where each cloud's tokens sit, and each arrow runs from where a token started to where the move sends it. The cross near the bottom is the zero vector.</p>
     <p>The 3D view is the same tokens with one more direction, <b>z</b>, standing in for the thousands of other directions a real hidden state has. Both clouds are centred on <code>z = 0</code>, and the assistant spreads along it about twice as much as the persona. The 2D canvas is this space seen straight down the z axis; "Match the 2D view" turns the 3D view to that angle.</p>
     <p>The first six moves change one number per token, its coordinate along a single axis, and leave everything else about the token alone, so in 3D their arrows never leave the persona axis and the spread along z stays the same. They differ only in the rule for the new coordinate, which the chart under the canvases draws. The last four move tokens in every direction, z included.</p>
     <p class="opdesc" id="d_mv"></p>
     <pre class="eq" id="eq_mv"></pre>
     <p class="src" id="src_mv"></p>
-    <p class="try"><b>Try:</b> compare Erase with Scale. Both measure the persona coordinate from the zero vector. Erase sets it to zero, so every token lands on the dashed navy line (a plane in 3D), and Scale multiplies it, so tokens move away from it. Then compare Add with Rotate at full strength: both reach the persona side, but only Rotate keeps each token's length. In 3D, switch Rotate between the great circle and the fixed plane: only the great circle changes z.</p>
-    <p class="us"><b>For us:</b> our working holds use three of these moves. The vector adds, the cap clamps, and the conceptor shrinks toward a centre, which is why it is the only one of the three that changes the spread along z. None of our runs used a rotation, a transport map or a scaling move.</p>
+    <p class="try"><b>Try:</b> compare Erase with Scale: both measure the persona coordinate from the zero vector, Erase sets it to zero and Scale multiplies it. Then compare Add with Rotate at full strength: both reach the persona side, but only Rotate keeps each token's length.</p>
+    <p class="us"><b>For us:</b> the methods we ran use three of these moves. The vector adds, the cap clamps, and the conceptor shrinks toward a centre, which is why it is the only one of the three that changes the spread along z. None of our runs used a rotation, a transport map or a scaling move.</p>
   </div>
   <div class="fig">
     <div class="legend plate-key" aria-label="Key"><span><i class="sw reg" style="--c:var(--assist)"></i>assistant region: no persona prompt, the default</span><span><i class="sw reg" style="--c:var(--persona)"></i>persona region</span><span><i class="sw" style="background:var(--ink)"></i>steered token (hollow: where it started)</span><span><i class="sw ln" style="background:var(--edit)"></i>the move</span><span><i class="sw dash"></i>where the cloud ends up</span></div>
@@ -185,7 +185,7 @@ h′ = h + <span class="t-gate">g(h)</span> · <span class="t-move">move</span>(
 <section class="part" id="sec-dirs">
   <div class="kicker t-dir">Choice 2 of 4 · the direction</div>
   <h2>Which direction</h2>
-  <p>Every move needs to know which way is "more persona". The obvious answer is the arrow from the assistant's average token to the persona's average token. The catch is that tokens also vary for reasons that have nothing to do with the persona, such as what the sentence is about. That content variation can tilt the arrow, and a tilted arrow pushes tokens partly along content, which changes what they say instead of how they say it. Each estimator on this canvas is a different way to find the persona direction while ignoring content.</p>
+  <p>Every move needs to know which way is "more persona". The obvious answer is the arrow from the assistant's average token to the persona's. But tokens also vary with what the sentence is about, and that content variation tilts the arrow, so it pushes tokens partly along content and changes what they say instead of how they say it. Each estimator here finds the persona direction while ignoring content.</p>
 </section>
 
 <section class="plate" id="directions">
@@ -193,7 +193,7 @@ h′ = h + <span class="t-gate">g(h)</span> · <span class="t-move">move</span>(
     <div class="kicker">Toy · 2D</div>
     <h3>Six ways to find the persona direction</h3>
     <p class="papers"><b>Papers on this canvas:</b> <a data-ref="caa">CAA</a> and <a data-ref="pv">Persona Vectors</a> (mean difference), <a data-ref="inlp">INLP</a> and <a data-ref="pass">PaSS</a> (probe), <a data-ref="ccs">contrastive covariance subspaces</a> (covariance contrast).</p>
-    <p class="lead">How to read the canvas: the dotted grey line is the content direction, and each arrow is one estimator's answer. A good persona direction separates the two clouds well and stays away from content. Two readouts measure that: the <b>AUROC</b>, how well a cut along the arrow tells persona tokens from assistant tokens (1.0 is perfect, 0.5 is chance), and the <b>|cos| with content</b> (0 means the arrow ignores content).</p>
+    <p class="lead">The dotted grey line is the content direction, and each arrow is one estimator's answer. A good persona direction separates the two clouds and stays away from content: <b>AUROC</b> near 1 (a cut along the arrow tells persona tokens from assistant tokens) and <b>|cos| with content</b> near 0.</p>
     <p class="opdesc" id="d_dir"></p>
     <pre class="eq" id="eq_dir"></pre>
     <p class="src" id="src_dir"></p>
@@ -223,11 +223,11 @@ h′ = h + <span class="t-gate">g(h)</span> · <span class="t-move">move</span>(
     <div class="kicker">Toy · 2D</div>
     <h3>Move the whole cloud</h3>
     <p class="papers"><b>Paper:</b> <a data-ref="mimic"><b>MiMiC</b></a>, from Singh et al. 2024, "Representation Surgery: Theory and Practice of Affine Steering".</p>
-    <p class="lead">A vector slides the assistant cloud over without changing its shape. Optimal transport finds the least-effort linear map that turns the assistant distribution into the persona's. It moves the mean and reshapes the spread. For Gaussian clouds it has a closed form, and MiMiC uses this map.</p>
+    <p class="lead">A vector slides the assistant cloud over without changing its shape. Optimal transport finds the least-effort linear map that turns the assistant distribution into the persona's: it moves the mean and reshapes the spread. For Gaussian clouds it has a closed form, and MiMiC uses this map with a gate, so tokens already in character barely move.</p>
     <pre class="eq">T(h) = μ_p + A (h − μ_a)
 A    = Σ_a^-½ (Σ_a^½ Σ_p Σ_a^½)^½ Σ_a^-½
 gated:  h′ = h + π_a(h) · (T(h) − h)     π_a = P(assistant | h)</pre>
-    <p class="lead">Applied to every token, <code>T</code> would wreck tokens already in character. The gate fixes that: it moves a token in proportion to how assistant-like it looks, using the likelihood ratio of the two clouds. MiMiC uses a hard version and maps only states nearer the source mean.</p>
+    <p>Applied to every token, <code>T</code> would wreck tokens already in character. The gate fixes that: it moves a token in proportion to how assistant-like it looks, using the likelihood ratio of the two clouds. MiMiC uses a hard version and maps only states nearer the source mean.</p>
     <p>Three relatives go further. <a data-ref="influence"><b>Influence-weighted transport</b></a> (Dixon et al. 2026) weights each target example by how much it shapes the model's representation of the concept. <a data-ref="dosing"><b>Persona Dosing</b></a> (Jin et al. 2026) learns a flow, <code>dh/dt = v(h, t, trait text)</code>, and sets the strength by how long the flow runs. <a data-ref="cobras"><b>Cobras</b></a> (Dalili et al. 2026) solves a Schrödinger bridge between the two distributions on the sphere of activation directions.</p>
     <p class="try"><b>Try:</b> press Play in Shift and Transport mode, and compare the moved cloud's ellipse with the persona's (teal). Then switch to Gated transport, which runs the same map on a persona conversation's own tokens: each drifted token is carried toward the persona in proportion to how assistant-like it looks, and in-character tokens barely move.</p>
     <p class="us"><b>For us:</b> transport is the family here that can set a persona without the prompt, which neither the cap nor the conceptor does well. We haven't run it. The overshoot on half-drifted tokens would need a stopping rule.</p>
@@ -249,7 +249,7 @@ gated:  h′ = h + π_a(h) · (T(h) − h)     π_a = P(assistant | h)</pre>
 <section class="part" id="sec-curved">
   <div class="kicker">Choice 4 of 4 · flat or curved</div>
   <h2>Curved geometry</h2>
-  <p>Every move so far treats the space as flat: add an arrow, project onto a plane. On flat ground the straight line between two points is the shortest path, and it stays on the ground. On a curved surface, like a globe, the straight line between two cities cuts through the inside, and the shortest path that stays on the surface is an arc. Three lines of work say hidden states behave like the globe in ways that matter. Persona clouds may lie on a curved surface, a hidden state has a length that adding an arrow changes, and the model's behaviour reacts far more sharply to some changes of the steering vector than to others.</p>
+  <p>Every move so far treats the space as flat: add an arrow, project onto a plane. On a curved surface like a globe, the straight line between two cities cuts through the inside, and the shortest path that stays on the surface is an arc. The next plates ask whether hidden states behave like the globe.</p>
 </section>
 
 <section class="plate stack" id="flatcurved">
@@ -257,7 +257,7 @@ gated:  h′ = h + π_a(h) · (T(h) − h)     π_a = P(assistant | h)</pre>
     <div class="kicker">Toy · 3D and 2D · the general idea</div>
     <h3>Flat and curved, in general</h3>
     <p>Bend a sheet of paper into a U and mark a dot near each edge. The straight line between the dots now runs through the air, off the paper, while the shortest path that stays on the paper, the <b>geodesic</b>, follows the bend. Bending changes the straight-line distance between the dots, but not the distance measured along the paper.</p>
-    <p class="lead">Hidden states live in an ordinary flat space, where straight lines are the shortest paths. The states a model actually produces may fill only a thin curved sheet inside that space, like the paper in a room. A steering vector moves a token along a straight line, so on a curved sheet it can carry the token off the sheet, into states the model never produces. A move along the geodesic stays on the sheet. The next three plates apply this idea: to persona clouds, to the length of a hidden state, and to the model's response to the steering vector.</p>
+    <p class="lead">Hidden states live in a flat space, but the states a model actually produces may fill only a thin curved sheet inside it, like the bent paper in a room. A steering vector moves a token along a straight line, so on a curved sheet it can carry the token off the sheet, into states the model never produces. A move along the <b>geodesic</b>, the shortest path that stays on the sheet, doesn't.</p>
     <pre class="eq">straight:  h(t) = (1 − t)·a + t·b                 leaves a curved sheet
 geodesic:  the shortest path that stays on the sheet
 ratio:     length along the sheet / straight length    1 on a flat sheet, more when curved</pre>
@@ -310,7 +310,8 @@ regime test (PersonaManifold):  d_geodesic / d_straight > 1.2</pre>
     <div class="kicker">Toy · 3D</div>
     <h3>Keep the length, turn the direction</h3>
     <p class="papers"><b>Papers:</b> <a data-ref="spherical"><b>Spherical Steering</b></a> (You et al. 2026), <a data-ref="angular"><b>Angular Steering</b></a> (Vu & Nguyen 2025), <a data-ref="hpr"><b>Householder Pseudo-Rotation</b></a> (Pham & Nguyen 2024).</p>
-    <p class="lead">A hidden state has a length and a direction, and adding an arrow changes both. Spherical steering rotates the state along a great circle toward a target direction, keeps its length, and uses a confidence gate to set how far to turn. Its paper reports gains of about 10 points over addition on TruthfulQA, COPA and StoryCloze. Angular steering rotates within one fixed plane that contains the feature direction. Householder pseudo-rotation builds a length-preserving turn from a reflection. <a data-ref="cobras">Cobras</a> moves whole distributions of directions on the sphere.</p>
+    <p class="lead">A hidden state has a length and a direction, and adding an arrow changes both. Spherical steering rotates the state along a great circle toward a target direction and keeps its length; its paper reports gains of about 10 points over addition on TruthfulQA, COPA and StoryCloze. Angular steering rotates within one fixed plane, and Householder pseudo-rotation builds a length-preserving turn from a reflection.</p>
+    <p><a data-ref="cobras">Cobras</a> moves whole distributions of directions on the sphere.</p>
     <pre class="eq">add:     h′ = h + t·d                     length changes
 rotate:  h′ = |h| · slerp(ĥ, p̂; t)         length kept
 slerp(a, b; t) = [sin((1−t)θ)·a + sin(tθ)·b] / sin θ,   θ = angle(a, b)</pre>
@@ -372,7 +373,7 @@ directional curvature:  vᵀHv / |v|²</pre>
 <section class="part" id="sec-ours">
   <div class="kicker">Appendix B</div>
   <h2>Our operators and runs</h2>
-  <p>Four plates about operators we built and what our runs measured. The lab deck, <a href="https://claude.ai/artifact/VmanHtqYVEzHv6H4VbSFtu" target="_blank" rel="noopener">Holding a Persona</a>, covers the same runs turn by turn.</p>
+  <p>Four plates about operators we built and what our runs measured. The lab deck, <a href="https://claude.ai/artifact/VmanHtqYVEzHv6H4VbSFtu" target="_blank" rel="noopener">Staying in Character</a>, covers the same runs turn by turn.</p>
 </section>
 
 <section class="plate" id="aperture">
@@ -458,9 +459,9 @@ Euclidean edit:    h′ = h + w (τ_w − w·h)/(wᵀw)</pre>
 <section class="plate" id="control">
   <div class="txt">
     <div class="kicker">Toy · one coordinate over 20 turns</div>
-    <h3>Holding is control</h3>
+    <h3>Staying in character is control</h3>
     <p class="papers"><b>Papers:</b> <a data-ref="cast">CAST</a> (anticipation), <a data-ref="pid">PID steering</a> (integral action across layers), <a data-ref="cal">CAL</a> (an attractor with memory).</p>
-    <p>In our holds the prompted persona doesn't fade on its own: without the pushes, the prompt alone stays 90-100% in character at turns 17-20 on SmolLM3, and with them it ends at 4-51%. So holding is mostly about surviving the pushes and coming back after them. The toy tracks one number per token, the persona coordinate (1 is the persona). "Drop the act" at turns 5 and 13 and "are you an AI?" at turns 8 and 16 knock it down for that turn, and a break during a push carries over into later turns. Each controller edits the coordinate at every token.</p>
+    <p>In our runs the prompted persona doesn't fade on its own: without the pushes, the prompt alone stays 90-100% in character at turns 17-20 on SmolLM3, and with them it ends at 4-51%. So staying in character is mostly about surviving the pushes and coming back after them. The toy tracks one number per token, the persona coordinate (1 is the persona). "Drop the act" at turns 5 and 13 and "are you an AI?" at turns 8 and 16 knock it down for that turn, and a break during a push carries over into later turns. Each controller edits the coordinate at every token.</p>
     <ul class="try">
       <li><b>Cap:</b> below the floor, jump to the floor.</li>
       <li><b>Partial correction:</b> close a fraction γ of the gap below the floor per token. The cap is the γ = 1 case. Our proposal.</li>
@@ -489,7 +490,7 @@ Euclidean edit:    h′ = h + w (τ_w − w·h)/(wᵀw)</pre>
 </section>
 
 <footer>
-  <p>Lab deck with our 20-turn results: <a href="https://claude.ai/artifact/VmanHtqYVEzHv6H4VbSFtu" target="_blank" rel="noopener">Holding a Persona</a>.</p>
+  <p>Lab deck with our 20-turn results: <a href="https://claude.ai/artifact/VmanHtqYVEzHv6H4VbSFtu" target="_blank" rel="noopener">Staying in Character</a>.</p>
   <p>Toy plates show mechanics only. Real numbers: SmolLM3-3B and OLMo-3-7B 20-turn holds from the lab-deck runs (v2, v3, the overnight screen and the 6 Nov follow-ups), mean of four judges unless noted. The spectrum is refit from <code>runs/smollm3_full</code>. The Fisher-gated cap, the region with an identity probe, partial correction and per-turn integral action are proposals from this project, not published methods. Full notes are in <code>conceptors/docs/lit_review_conceptors.md</code>.</p>
 </footer>
 </div>

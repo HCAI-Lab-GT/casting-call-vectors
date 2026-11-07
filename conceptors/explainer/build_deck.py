@@ -67,7 +67,14 @@ def plate_title(pid: str, html: str) -> str:
     if not m:
         return "A recipe for semantic conceptors on personas"
     t = re.sub(r"<[^>]+>", "", m.group(1)).strip()
-    return t if "<h3>" in html else "Open cells: " + t[0].lower() + t[1:]
+    if "<h3>" in html:
+        return t
+    return "Open cells: three untested ideas" if t.lower().startswith("open cell") else "Open cells: " + t[0].lower() + t[1:]
+
+
+def attr(s: str) -> str:
+    """A title inside a double-quoted attribute: the judge plate's title quotes "in character"."""
+    return s.replace("&", "&amp;").replace('"', "&quot;")
 
 
 def pick(d: dict, keys) -> dict:
@@ -283,7 +290,7 @@ def main():
         raise SystemExit(f"slides name plates the field guide doesn't have: {sorted(missing)}")
     slides = re.sub(r"\{\{plate:([\w-]+)\}\}", lambda m: all_plates[m.group(1)], slides)
     appendix = "\n".join(
-        f'<section class="slide appendix" data-title="{plate_title(pid, html)}" data-part="Appendix">\n'
+        f'<section class="slide appendix" data-title="{attr(plate_title(pid, html))}" data-part="Appendix">\n'
         f'<header class="shead"><div class="kicker">Appendix</div><h2>{plate_title(pid, html)}</h2></header>\n{html}\n</section>'
         for pid, html in all_plates.items() if pid not in used)
     # Beyond the Cap: '{{btc:ID}}' pulls one of its sections; the rest go to the appendix, since its script binds them all
@@ -294,11 +301,13 @@ def main():
     # adjacent placeholders share one wrapper, so a section intro and its plate can be laid out together on the slide
     slides = re.sub(r"(?:\{\{btc:[\w-]+\}\})+", lambda m: '<div class="btc">' + "".join(
         secs[s] for s in re.findall(r"\{\{btc:([\w-]+)\}\}", m.group(0))) + "</div>", slides)
+    # its one-paragraph part intros aren't slides: the slides they introduce say the same thing
+    skip = used_btc | {"legend", "sec-start", "sec-move", "sec-ours", "sec-map"}
     appendix += "\n" + "\n".join(
-        f'<section class="slide appendix" data-title="{sec_title(h)}" data-part="Appendix">\n'
+        f'<section class="slide appendix" data-title="{attr(sec_title(h))}" data-part="Appendix">\n'
         f'<header class="shead"><div class="kicker">Appendix</div><h2>{sec_title(h)}</h2></header>\n'
         f'<div class="btc">{h}</div>\n</section>'
-        for sid, h in secs.items() if sid not in used_btc and sid != "legend")
+        for sid, h in secs.items() if sid not in skip)
 
     try:
         commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=HERE, capture_output=True, text=True).stdout.strip()

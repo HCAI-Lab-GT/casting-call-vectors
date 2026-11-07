@@ -163,7 +163,8 @@ const fig16=Canvas('cStrip',.62,(c,w,h)=>{
   [[0,'assistant mean','right',-4],[1,'pirate mean','left',4]].forEach(([v,l,al,dx])=>{const x=Math.round(X(v))+.5;c.setLineDash([4,4]);c.strokeStyle=COL.muted;c.lineWidth=1;c.beginPath();c.moveTo(x,M16.t-4);c.lineTo(x,h-M16.b);c.stroke();c.setLineDash([]);text(c,l,x+dx,M16.t-12,{size:10,align:al});});
   GROUPS.forEach((g,k)=>{
     const y=Yc(k),info=RINFO[g];
-    text(c,(L<180&&info.short)?info.short:info.label,L-10,y,{size:10,align:'right',color:COL.ink,halo:false});
+    c.font='10px '+MONO;const lab=(info.short&&c.measureText(info.label).width>L-14)?info.short:info.label;  /* the deck scales fonts */
+    text(c,lab,L-10,y,{size:10,align:'right',color:COL.ink,halo:false});
     const vals=G[g].vals,r=rng(1000+k);
     vals.forEach((v,j)=>{const jy=(r()-.5)*Math.min(14,rowH*.6);mark(c,X(v),y+jy,info.shape,info.shape==='tri'?3.2:2.8,COL[info.col],info.hollow,true);});
     const mx=X(G[g].mean);c.strokeStyle=COL.ink;c.lineWidth=2.5;c.beginPath();c.moveTo(mx,y-rowH*.42);c.lineTo(mx,y+rowH*.42);c.stroke();

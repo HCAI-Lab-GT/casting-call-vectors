@@ -6,7 +6,7 @@ const fontDesc=Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototyp
 let FS=1;
 function fit(){
   FS=Math.max(1.1,Math.min(1.55,innerWidth/1100));
-  window.FIG_MAX_H=Math.max(240,Math.round(innerHeight*.6));
+  window.FIG_MAX_H=Math.max(240,Math.round(innerHeight*.68));
 }
 fit();addEventListener('resize',fit);
 if(fontDesc&&fontDesc.set){
@@ -21,7 +21,7 @@ const main=slides.filter(s=>!s.classList.contains('appendix'));
 const nav=document.createElement('nav');nav.className='navbar';nav.setAttribute('aria-label','Slide navigation');
 nav.innerHTML='<span class="where" id="navWhere"></span><button type="button" id="navOver" title="All slides (G)">All slides</button>'+
   '<button type="button" id="navPrev" aria-label="Previous slide">&larr;</button><button type="button" id="navNext" aria-label="Next slide">&rarr;</button>'+
-  '<span class="count" id="navCount"></span>';
+  '<span class="count" id="navCount"></span><span class="scroll" id="navScroll" hidden>scrolls ↓</span>';
 document.body.appendChild(nav);
 const bar=document.createElement('div');bar.className='progress';document.body.appendChild(bar);
 const over=document.createElement('div');over.className='overview';over.hidden=true;over.setAttribute('role','dialog');over.setAttribute('aria-label','All slides');
@@ -29,6 +29,15 @@ over.innerHTML='<h2>All slides</h2><ol></ol>';document.body.appendChild(over);
 const label=(s,i)=>s.classList.contains('appendix')?'A'+(i-main.length+1):String(i+1);
 const esc=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 over.querySelector('ol').innerHTML=slides.map((s,i)=>'<li><button type="button" data-i="'+i+'"><small>'+label(s,i)+' · '+esc(s.dataset.part)+'</small>'+esc(s.dataset.title)+'</button></li>').join('');
+/* the appendix divider lists the appendix slides */
+const al=document.getElementById('appendix-list');
+if(al){al.innerHTML=slides.map((s,i)=>s.classList.contains('appendix')?'<button type="button" data-i="'+i+'"><small>'+label(s,i)+'</small>'+esc(s.dataset.title)+'</button>':'').join('');
+  al.addEventListener('click',e=>{const b=e.target.closest('button[data-i]');if(b)show(+b.dataset.i);});}
+/* a slide taller than the screen scrolls; say so in the bar, since nothing else shows it */
+let scrollTimer=0;
+function scrollHint(s){clearTimeout(scrollTimer);const h=document.getElementById('navScroll');
+  const check=()=>{h.hidden=!(s.classList.contains('on')&&s.scrollHeight>s.clientHeight+4);};
+  check();scrollTimer=setTimeout(check,400);}
 
 let cur=-1;
 function show(i,push){
@@ -45,6 +54,7 @@ function show(i,push){
   const h='slide-'+(i+1);
   if(push!==false&&location.hash!=='#'+h){try{history.replaceState(null,'','#'+h);}catch(e){location.hash=h;}}
   window.dispatchEvent(new CustomEvent('deckslide',{detail:{index:i,slide:s}}));
+  scrollHint(s);
 }
 function fromHash(){const m=/^#slide-(\d+)$/.exec(location.hash);return m?(+m[1]-1):0;}
 addEventListener('hashchange',()=>show(fromHash(),false));

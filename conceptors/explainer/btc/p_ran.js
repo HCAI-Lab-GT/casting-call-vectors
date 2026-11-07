@@ -6,7 +6,7 @@
     const p=dot(h,W2.vhat),t=tau();return p<t?{h:add(h,scl(W2.vhat,t-p)),on:true}:{h,on:false}};
   const pl=new Plot2D($('#c1'),BOX2,draw);pl.handles.push({get:()=>probe.p,set:w=>probe.p=w});
   function draw(){if(!pl.ready())return;loadCols();pl.clear();drawRegions(pl);
-    if(mode==='cap'){pl.halfplane(W2.vhat,tau(),A(COL.navy,.06));pl.boundary(W2.vhat,tau(),COL.navy,1.8,null,'floor τ')}
+    if(mode==='cap'){pl.halfplane(W2.vhat,tau(),A(COL.navy,.035));pl.boundary(W2.vhat,tau(),COL.navy,1.8,null,'floor τ')}
     drawAxis(pl);drawSteer(pl,edit,F);
     const e=edit(probe.p);pl.ring(probe.p);if(e.on)pl.arrow(probe.p,e.h,COL.edit,2.4,9);
     if(F==='set'){const s=setMetrics(edit);reads('#m1',[[f2(s.pos),'persona-axis position after (0 = assistant, 1 = persona)'],[pct(s.landed),'tokens landing in the persona region'],[pct(s.edited),'tokens edited']]);return}
@@ -53,7 +53,7 @@
     g1.font=`600 11px ${font}`;g1.textAlign='right';g1.textBaseline='middle';g1.fillStyle=COL.persona;g1.fillText('axis',pad.l-6,sy1+stripH/2);g1.fillStyle=COL.assist;g1.fillText('gap',pad.l-6,sy2+stripH/2);
     g1.font=`500 11px ${font}`;g1.fillStyle=COL.muted;g1.textAlign='center';g1.textBaseline='top';
     [1,10,100,1000,n].forEach(i=>g1.fillText(i.toLocaleString('en-US'),X(i),sy2+stripH+3));
-    g1.textAlign='left';g1.fillText('direction rank (log)',pad.l,sy2+stripH+16)}
+    g1.textAlign='center';g1.fillText('direction rank (log)',(pad.l+W-pad.r)/2,sy2+stripH+16)}
   function drawHolds(){loadCols();const v=view(sel);const series=[['ord',COL.persona,null],['push',COL.drift,[6,4]],['coh',COL.navy,[2,3]]].map(([key,col,dash])=>({
       pts:KS.map(kk=>{const x=v.at(kk,key);return[kk,x==null?null:(key==='coh'?x:100*x)]}),col,dash,w:2,marker:3.5}));
     lineChart(c2,{title:'Measured 20-turn holds with the persona prompt',x:{min:1,max:100,log:true,ticks:KS,label:'aperture k'},y:{min:0,max:100,ticks:[0,25,50,75,100]},series,vline:clamp(k,1,100)});
@@ -123,7 +123,7 @@
     const q=sub(coords(h),qm);const m=Math.sqrt(dot(q,mv(Si,q)));if(m<=rad)return{h,on:false};return{h:place(h,add(qm,scl(q,rad/m))),on:true}};
   const pl=new Plot3D($('#c4'),draw,{yaw:-.38,pitch:.55,span:5});
   const ALL4=P.concat(As,DA,DB);
-  function draw(){if(!pl.ready())return;loadCols();pl.clear();pl.fit(ALL4);pl.axes3([-4.6,-3.6,-1.6],1.2,['persona axis','content','identity']);
+  function draw(){if(!pl.ready())return;loadCols();pl.clear();pl.fit(ALL4);pl.axes3([-4.6,-3.6,-1.6],1.2,['persona','content','identity']);
     if(mode==='cap'){const y0=-4,y1=4,z0=-1.6,z1=3.2;pl.poly([[tau,y0,z0],[tau,y1,z0],[tau,y1,z1],[tau,y0,z1]],A(COL.navy,.7),1.2,{close:true,fill:A(COL.navy,.07)})}
     if(mode==='region'){const ringAt=(s,t)=>place(add(mP,scl(free,s)),add(qm,mv(Sh,[rad*Math.cos(t),rad*Math.sin(t)])));
       for(const s of[-3.4,-1.7,0,1.7,3.4]){const ring=[];for(let i=0;i<=60;i++)ring.push(ringAt(s,i/60*2*Math.PI));pl.poly(ring,A(COL.navy,.55),1.1)}

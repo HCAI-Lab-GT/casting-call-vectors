@@ -190,9 +190,11 @@ class Plot3D{
     for(let t=0;t<=72;t++){const th=t/72*2*Math.PI,x=o[0]+a[0]*Math.cos(th)*vecs[0][0]+a[1]*Math.sin(th)*vecs[1][0],y=o[1]+a[0]*Math.cos(th)*vecs[0][1]+a[1]*Math.sin(th)*vecs[1][1];t?g.lineTo(x,y):g.moveTo(x,y)}
     g.closePath();if(fill){g.fillStyle=fill;g.fill()}g.strokeStyle=col;g.lineWidth=w;if(dash)g.setLineDash(dash);g.stroke();g.restore()}
   // an orientation key pinned to the bottom-left corner: each arrow is a unit axis as this view projects it
-  axes3(o,len,labels){const g=this.g,ox=30,oy=this.H-30,L=22,p0=this.P([0,0,0]);
+  axes3(o,len,labels){const g=this.g,ox=34,oy=this.H-34,L=26,p0=this.P([0,0,0]);
     [[1,0,0],[0,1,0],[0,0,1]].forEach((v,i)=>{const q=this.P(v),dx=(q[0]-p0[0])/this.s,dy=(q[1]-p0[1])/this.s;
-      arrowPx(g,ox,oy,ox+L*dx,oy+L*dy,A(COL.muted,.85),1.2,5);g.fillStyle=COL.muted;g.font=`500 11px ${FONT()}`;g.textAlign='center';g.textBaseline='middle';g.fillText(labels[i],ox+(L+9)*dx,oy+(L+9)*dy)})}
+      arrowPx(g,ox,oy,ox+L*dx,oy+L*dy,A(COL.muted,.85),1.2,5);g.fillStyle=COL.muted;g.font=`500 11px ${FONT()}`;
+      // each label hangs off its arrow's tip on the side the arrow points to, so three labels don't pile up
+      g.textAlign=dx>.25?'left':dx<-.25?'right':'center';g.textBaseline=dy>.25?'top':dy<-.25?'bottom':'middle';g.fillText(labels[i],ox+(L+5)*dx,oy+(L+5)*dy)})}
 }
 
 /* ================= small line chart (real data and reported numbers) ================= */
@@ -271,8 +273,8 @@ function drawSteer(pl,edit,framing){const from=TOK[framing],to=from.map(h=>edit(
 // readouts for the 'set' framing, over all 150 assistant tokens
 function setMetrics(edit){const E=W2.A.map(edit);return{pos:avg(E.map(e=>sCoord(e.h))),landed:avg(E.map(e=>inside2s(e.h)?1:0)),
   normCh:avg(E.map((e,i)=>nrm(sub(e.h,ZERO))/nrm(sub(W2.A[i],ZERO))-1)),edited:avg(E.map(e=>e.on?1:0))}}
-const FRAMES=[['set','Set a persona'],['hold','Hold a persona']];
-const FRAME_TXT={set:'Set a persona: the dots start as the assistant, the default with no persona prompt.',
-  hold:'Hold a persona: one prompted conversation, where a few tokens slid back toward the assistant.'};
+const FRAMES=[['set','Get into character'],['hold','Stay in character']];
+const FRAME_TXT={set:'Get into character: the dots start as the assistant, the default with no persona prompt.',
+  hold:'Stay in character: one prompted conversation, where a few tokens slid back toward the assistant.'};
 const pctSigned=x=>(x>=0?'+':'')+(100*x).toFixed(0)+'%';
 linkRefs();
