@@ -117,7 +117,7 @@ const fig15=Canvas('cMap',.8,(c,w,h)=>{/* scatter */
     (byRole[r]||[]).forEach(i=>{const p=P[i];mark(c,X(p[0]),Y(p[1]),info.shape,info.small?2.6:info.shape==='tri'?3.6:3.3,COL[info.col],info.hollow,true);});
   });
   if(s15.hover>=0){const p=P[s15.hover];c.beginPath();c.arc(X(p[0]),Y(p[1]),8,0,2*Math.PI);c.lineWidth=2;c.strokeStyle=COL.ink;c.stroke();}
-},{minH:300});
+},{minH:300,get maxH(){return window.FIG_ROOM?Math.min(window.FIG_MAX_H,window.FIG_ROOM(document.getElementById("cMap"),6,innerHeight*.62)):500;}});  /* on a slide, leave room for the caption and the note under it */
 hoverable(fig15.cv,(px,py,e)=>{
   if(!scale15)return;const P=coords15();let best=-1,bd=144;
   P.forEach((p,i)=>{const dx=scale15.X(p[0])-px,dy=scale15.Y(p[1])-py,d=dx*dx+dy*dy;if(d<bd){bd=d;best=i;}});
@@ -171,7 +171,7 @@ const fig16=Canvas('cStrip',.62,(c,w,h)=>{
     text(c,G[g].mean.toFixed(2),w-M16.r+8,y,{size:10,color:COL.ink,halo:false});
   });
   if(s16.hover){const [k,j]=s16.hover,v=G[GROUPS[k]].vals[j];c.beginPath();c.arc(X(v),Yc(k),7.5,0,2*Math.PI);c.lineWidth=2;c.strokeStyle=COL.ink;c.stroke();}
-},{minH:300,get maxH(){return window.FIG_MAX_H?Math.round(innerHeight*.8):500;}});  /* ten rows: on a slide the strip may take 80% of the height */
+},{minH:300,get maxH(){return window.FIG_ROOM?window.FIG_ROOM(document.getElementById('cStrip'),3.2,innerHeight*.8):500;}});  /* ten rows: on a slide the strip takes the height left above the bar */
 hoverable(fig16.cv,(px,py,e)=>{
   if(!scale16)return;const G=D.groups[s16.pool];
   const k=Math.floor((py-M16.t)/scale16.rowH);
@@ -232,6 +232,7 @@ const XCT=(()=>{const mx=Math.max(...XC),st=[8,16,32,64,128,256,512,1024,2048,40
   for(let v=st;v<mx-st/3;v+=st)t.push(v);t.push(mx);return t;})();  // 0.5B run: 2, 16, 32, 48, 64, 71
 const chCover=LineChart('cCover',{aspect:.5,xs:()=>XC,xMin:0,xMax:Math.max(...XC)+1,yRange:()=>[0,1],yTicks:()=>[0,.25,.5,.75,1],yFmt:v=>Math.round(v*100)+'%',
   xTicks:()=>XCT,xTitle:'n training answers',mr:18,direct:false,
+  canvasOpt:{get maxH(){return window.FIG_ROOM?Math.max(200,window.FIG_ROOM(document.getElementById('cCover'),21,innerHeight*.62)):500;}},  /* on a slide, leave room for the bars under it */
   series:()=>[{name:'share inside the span',color:COL.pirate,values:RK.cover.map(c=>c.inside),dots:true}],
   tipTitle:i=>'n = '+XC[i],vFmt:v=>pct1(v)});
 dataTable('cCover','Show the numbers').set(['n','share inside span'],RK.cover.map(c=>[String(c.n),pct1(c.inside)]));

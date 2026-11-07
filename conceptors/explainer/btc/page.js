@@ -319,7 +319,7 @@ linkRefs();
     return{at,judges,ref,model}}
   const c1=$('#c2s'),g1=c1.getContext('2d'),c2=$('#c2h');watch(c1,()=>draw());watch(c2,()=>draw());
   function drawSpectrum(){const r=fitCanvas(c1,g1);if(!r)return;const W=r.width,H=r.height,font=FONT();
-    const pad={l:44,r:14,t:26,b:58},stripH=12;const yTop=pad.t,yBot=H-pad.b;
+    const pad={l:44,r:14,t:26,b:68},stripH=12;const yTop=pad.t,yBot=H-pad.b;   /* room for the axis title once the deck scales fonts */
     const X=i=>pad.l+Math.log10(i)/lgn*(W-pad.l-pad.r),Y=v=>yBot-v*(yBot-yTop);
     g1.font=`500 11px ${font}`;g1.lineWidth=1;
     [0,.25,.5,.75,1].forEach(v=>{g1.strokeStyle=COL.grid;g1.beginPath();g1.moveTo(pad.l,Y(v));g1.lineTo(W-pad.r,Y(v));g1.stroke();g1.fillStyle=COL.muted;g1.textAlign='right';g1.textBaseline='middle';g1.fillText(String(v),pad.l-6,Y(v))});

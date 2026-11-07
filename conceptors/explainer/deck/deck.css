@@ -13,27 +13,30 @@
   --f-mono:ui-monospace,Monaco,Consolas,"Lucida Console",monospace;
   color-scheme:light;
 }
-html{font-size:clamp(14px,1.02vw,24px);height:100%}
+/* --u is 1% of the widest 16:9 box the window holds. Sizes that used to follow the width follow it instead, so a wide,
+   short window (a laptop browser under its bookmarks bar) lays out like a 16:9 screen rather than growing text that
+   no longer fits the height. Small print keeps an 11px floor (max(11px,…)) for those short windows. */
+html{--u:min(1vw,1.7778vh);font-size:clamp(12px,calc(var(--u)*1.02),24px);height:100%}
 body{margin:0;height:100%;overflow:hidden;background:var(--paper);color:var(--ink);font-family:var(--f-body);line-height:1.45}
 body::before{display:none}
 a{color:var(--navy);text-decoration-color:var(--underline,rgba(179,163,105,.65))}
 a:hover{color:var(--navy-hover);text-decoration-color:var(--gold)}
 a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,canvas:focus-visible,summary:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
-.tip{font-size:.78rem;max-width:360px}
+.tip{font-size:max(11px,.78rem);max-width:360px}
 
 /* ---------- slides ---------- */
 .deck{position:fixed;inset:0}
-.slide{position:absolute;inset:0;display:none;flex-direction:column;gap:clamp(10px,1.6vh,22px);overflow:auto;
+.slide{position:absolute;inset:0;display:none;flex-direction:column;gap:clamp(10px,1.6vh,22px);overflow:auto;font-size:1rem;
   padding-top:max(clamp(18px,3.4vh,44px),env(safe-area-inset-top,0px));
   padding-bottom:calc(clamp(52px,7vh,76px) + env(safe-area-inset-bottom,0px));
-  padding-left:max(clamp(20px,4.2vw,84px),env(safe-area-inset-left,0px));
-  padding-right:max(clamp(20px,4.2vw,84px),env(safe-area-inset-right,0px))}
+  padding-left:max(clamp(20px,calc(var(--u)*4.2),84px),env(safe-area-inset-left,0px));
+  padding-right:max(clamp(20px,calc(var(--u)*4.2),84px),env(safe-area-inset-right,0px))}
 .slide.on{display:flex}
 .shead{display:grid;gap:6px;padding-bottom:clamp(8px,1.2vh,16px);border-bottom:1px solid var(--hairline)}
-.kicker{font:600 .74rem/1.2 var(--f-body);letter-spacing:.14em;text-transform:uppercase;color:var(--navy)}
-.slide h2{font-family:var(--f-display);font-weight:600;letter-spacing:-.01em;font-size:clamp(26px,3.05vw,62px);line-height:1.06;margin:0;text-wrap:balance;max-width:34ch}
+.kicker{font:600 max(11px,.74rem)/1.2 var(--f-body);letter-spacing:.14em;text-transform:uppercase;color:var(--navy)}
+.slide h2{font-family:var(--f-display);font-weight:600;letter-spacing:-.01em;font-size:clamp(26px,calc(var(--u)*3.05),62px);line-height:1.06;margin:0;text-wrap:balance;max-width:none}
 .slide .sub{font-size:1.06rem;color:var(--muted);margin:0;max-width:72ch}
-.sbody{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,.86fr) minmax(0,1.5fr);gap:clamp(14px,2.4vh,32px) clamp(20px,3.4vw,64px);align-items:start}
+.sbody{flex:1 0 auto;min-height:auto;display:grid;grid-template-columns:minmax(0,.86fr) minmax(0,1.5fr);gap:clamp(14px,2.4vh,32px) clamp(20px,calc(var(--u)*3.4),64px);align-items:start}
 .sbody.one{grid-template-columns:minmax(0,1fr)}
 .sbody.s2{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}
 .sbody.traj{grid-template-columns:minmax(0,.72fr) minmax(0,1.28fr)}
@@ -41,25 +44,38 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
 .scol{display:grid;gap:clamp(10px,1.6vh,18px);align-content:start;min-width:0}
 .slide p{margin:0;max-width:52ch}
 .big{font-size:1.18rem;line-height:1.42}
-.note{font-size:.82rem;color:var(--muted)}
+.note{font-size:max(11px,.82rem);color:var(--muted)}
 .slide .chart-title{font-family:var(--f-body);font-weight:700;font-size:.86rem;margin:0}
 
 /* field guide plates inside a slide: header comes from the slide, the plate keeps text, controls and figure */
-.slide .plate{flex:1;min-height:0;padding:0;border:0;grid-template-columns:minmax(0,.86fr) minmax(0,1.5fr);gap:clamp(12px,2vh,26px) clamp(20px,3.4vw,64px)}
+.slide .plate{flex:1 0 auto;min-height:auto;padding:0;border:0;grid-template-columns:minmax(0,.86fr) minmax(0,1.5fr);gap:clamp(12px,2vh,26px) clamp(20px,calc(var(--u)*3.4),64px)}
 .slide .plate.wide{grid-template-columns:minmax(0,1fr)}
 .slide .plate .fig{position:static}
 .slide .plate .intro .eyebrow,.slide .plate .intro h3{display:none}
 .slide .plate .intro p{font-size:1.02rem;max-width:46ch}
 .slide .plate .intro p:not(:first-of-type):not(.try){display:none}
 .slide .plate .try{font-size:.9rem;color:var(--muted)}
-.slide .plate figcaption{font-size:.78rem}
+.slide .plate figcaption{font-size:max(11px,.78rem)}
 .try b{color:var(--navy)}
 .seg button[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:var(--on-dark)}
-.seg button{font-size:.8rem}
+.seg button{font-size:max(11px,.8rem)}
+/* a lead paragraph that joins the plate's left column, so the figure starts at the top of the slide body instead of
+   under the paragraph; the definitions run full width underneath (slide 3) */
+.leadplate{flex:1 0 auto;min-height:auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);grid-template-rows:auto auto 1fr auto;
+  gap:clamp(8px,1.4vh,16px) clamp(20px,calc(var(--u)*3.4),64px);align-items:start}
+.leadplate>.big{grid-column:1;grid-row:1;max-width:none}
+.leadplate>.plate{display:contents}
+.leadplate>.plate>.intro{grid-column:1;grid-row:2}
+.leadplate>.plate>.panel{grid-column:1;grid-row:3}
+.leadplate>.plate>.fig{grid-column:2;grid-row:1/4}
+.leadplate>.defs{grid-column:1/-1;grid-row:4}
+.leadplate .legend{display:flex;flex-wrap:wrap;gap:4px 16px}
+.slide .leadplate .intro p{max-width:none}
+.leadplate .panel>.note{display:none}   /* "a cartoon, not a measurement": the kicker and the definitions already say toy */
 
 /* cover and statement slides */
 .slide.cover{justify-content:center;gap:clamp(16px,3vh,36px);background:var(--paper)}
-.slide.cover h1{font-family:var(--f-display);font-weight:600;letter-spacing:-.015em;font-size:clamp(40px,5.6vw,112px);line-height:1.02;margin:0;max-width:16ch;text-wrap:balance;color:var(--ink)}
+.slide.cover h1{font-family:var(--f-display);font-weight:600;letter-spacing:-.015em;font-size:clamp(40px,calc(var(--u)*5.6),112px);line-height:1.02;margin:0;max-width:16ch;text-wrap:balance;color:var(--ink)}
 .slide.cover h1 em{font-style:italic;font-weight:500;color:var(--navy);padding-right:.14em}
 .slide.cover .lede{font-size:1.3rem;max-width:46ch;color:var(--ink)}
 .slide.cover .meta{display:flex;gap:10px 28px;flex-wrap:wrap;font-size:.86rem;color:var(--muted);border-top:1px solid var(--hairline);padding-top:14px;max-width:70ch}
@@ -70,12 +86,12 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
 .slide.navy .note,.slide.navy .sub{color:var(--on-dark-muted)}
 
 /* cards for takeaways and next steps */
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:clamp(12px,1.8vw,28px)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:clamp(12px,calc(var(--u)*1.8),28px)}
 .cards.five{grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr))}  /* five takeaways stay on one row from about 1200px */
 .cards.six{grid-template-columns:repeat(3,minmax(0,1fr))}   /* the plan: two rows of three, so no card sits alone */
 .cards.three{grid-template-columns:repeat(3,minmax(0,1fr))}
-.card{display:grid;gap:8px;align-content:start;padding:clamp(14px,1.6vw,26px);border-top:2px solid var(--gold);background:transparent}
-.card .n{font-family:var(--f-display);font-weight:600;font-size:clamp(34px,3.6vw,72px);line-height:1;letter-spacing:-.02em}
+.card{display:grid;gap:8px;align-content:start;padding:clamp(14px,calc(var(--u)*1.6),26px);border-top:2px solid var(--gold);background:transparent}
+.card .n{font-family:var(--f-display);font-weight:600;font-size:clamp(34px,calc(var(--u)*3.6),72px);line-height:1;letter-spacing:-.02em}
 .card h3{font-family:var(--f-display);font-weight:600;font-size:1.2rem;margin:0;line-height:1.2}
 .card p{font-size:.95rem;max-width:none}
 .slide.navy .card{border-top-color:var(--buzz)}
@@ -83,37 +99,37 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
 
 /* chat transcript */
 .turns{display:flex;flex-wrap:wrap;gap:6px}
-.turns button{font:600 .8rem/1 var(--f-body);min-width:2.4em;padding:8px 10px;border:1px solid var(--hair);border-radius:3px;background:var(--panel);color:var(--ink);cursor:pointer}
+.turns button{font:600 max(11px,.8rem)/1 var(--f-body);min-width:2.4em;padding:8px 10px;border:1px solid var(--hair);border-radius:3px;background:var(--panel);color:var(--ink);cursor:pointer}
 .turns button.probe{border-color:var(--probe);color:var(--probe)}
 .turns button[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:var(--on-dark)}
 .chat{display:grid;gap:10px;align-content:start}
 .msg{padding:12px 14px;border-radius:3px;font-size:.92rem;line-height:1.45;max-width:none}
 .msg.user{background:var(--sunk);justify-self:end;max-width:86%}
 .msg.bot{background:var(--panel);border:1px solid var(--hair);border-left:3px solid var(--pirate)}
-.msg .who{display:block;font:600 .66rem/1.2 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.msg .who{display:block;font:600 max(11px,.66rem)/1.2 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
 .pills{display:flex;flex-wrap:wrap;gap:6px}
-.pill{font:500 .7rem/1 var(--f-body);padding:5px 8px;border-radius:3px;border:1px solid var(--hair);color:var(--ink);background:var(--panel);white-space:nowrap}
+.pill{font:500 max(11px,.7rem)/1 var(--f-body);padding:5px 8px;border-radius:3px;border:1px solid var(--hair);color:var(--ink);background:var(--panel);white-space:nowrap}
 .pill.good{border-color:var(--pirate);color:#00695f}
 .pill.bad{border-color:var(--probe);color:var(--probe)}
 
 /* method toggles with line swatches */
 .mtog{display:flex;flex-wrap:wrap;gap:6px}
-.mtog button{display:inline-flex;align-items:center;gap:7px;font:500 .76rem/1 var(--f-body);padding:7px 10px;border:1px solid var(--hair);border-radius:3px;background:var(--panel);color:var(--ink);cursor:pointer}
+.mtog button{display:inline-flex;align-items:center;gap:7px;font:500 max(11px,.76rem)/1 var(--f-body);padding:7px 10px;border:1px solid var(--hair);border-radius:3px;background:var(--panel);color:var(--ink);cursor:pointer}
 .mtog button[aria-pressed="false"]{opacity:.42}
 .mtog button.more{color:var(--navy);border-style:dashed}   /* opens the aperture sweep and the other controls */
 .mtog i{display:inline-block;width:20px;height:0;border-top:3px solid currentColor}
 .mtog i.dash{border-top-style:dashed}
 .mtog i.dot{border-top-style:dotted}
 .ctlrow{display:grid;gap:6px}
-.ctlrow > span{font:600 .66rem/1.2 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.ctlrow > span{font:600 max(11px,.66rem)/1.2 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 
 /* judge table */
 .jtable{border-collapse:collapse;width:100%;font-size:.86rem}
 .jtable th,.jtable td{padding:9px 10px;border-bottom:1px solid var(--grid);text-align:right;font-variant-numeric:tabular-nums}
 .jtable th:first-child,.jtable td:first-child{text-align:left}
-.jtable thead th{font:600 .66rem/1.2 var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--hairline)}
+.jtable thead th{font:600 max(11px,.66rem)/1.2 var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--hairline)}
 .jtable td.cell{position:relative}
-.hbar{display:grid;grid-template-columns:7.5em minmax(0,1fr) 3.4em;align-items:center;gap:10px;font-size:.84rem}
+.hbar{display:grid;grid-template-columns:7.5em minmax(0,1fr) 3.4em;align-items:center;gap:10px;font-size:max(11px,.84rem)}
 .hbar .track{height:14px;background:var(--grid);border-radius:2px;overflow:hidden}
 .hbar .track i{display:block;height:100%;background:var(--navy)}
 .hbar b{font-variant-numeric:tabular-nums;text-align:right}
@@ -121,10 +137,15 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
 /* navigation chrome */
 .navbar{position:fixed;left:0;right:0;bottom:0;z-index:15;display:flex;align-items:center;gap:12px;
   padding:8px max(16px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
-  font:500 .74rem/1 var(--f-body);color:var(--muted);pointer-events:none}
+  font:500 max(11px,.74rem)/1 var(--f-body);color:var(--muted);pointer-events:none}
 .navbar > *{pointer-events:auto}
+/* the bar is opaque so a slide that scrolls slips under it instead of printing through the slide name and buttons;
+   a hairline marks the edge only while the slide has more below */
+.navbar{background:var(--paper)}
+.navbar.dark{background:var(--navy)}
+.navbar.over{box-shadow:0 -1px 0 var(--hair)}
 .navbar .where{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.navbar button{font:600 .8rem/1 var(--f-body);padding:8px 12px;border:1px solid var(--hair);border-radius:3px;background:var(--panel);color:var(--ink);cursor:pointer}
+.navbar button{font:600 max(11px,.8rem)/1 var(--f-body);padding:8px 12px;border:1px solid var(--hair);border-radius:3px;background:var(--panel);color:var(--ink);cursor:pointer}
 .navbar .count{font-variant-numeric:tabular-nums;min-width:4.5em;text-align:right}
 .navbar.dark{color:var(--on-dark-muted)}
 .progress{position:fixed;left:0;top:0;height:3px;background:var(--gold);z-index:16;transition:width .2s}
@@ -134,30 +155,30 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
 .overview h2{font-family:var(--f-display);font-weight:600;margin:0 0 14px;font-size:1.6rem}
 .overview ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:8px}
 .overview button{width:100%;text-align:left;display:grid;gap:4px;padding:12px;border:1px solid var(--hair);border-radius:3px;background:var(--panel);color:var(--ink);cursor:pointer;font:500 .86rem/1.3 var(--f-body)}
-.overview button small{color:var(--muted);font-size:.7rem;letter-spacing:.08em;text-transform:uppercase}
+.overview button small{color:var(--muted);font-size:max(11px,.7rem);letter-spacing:.08em;text-transform:uppercase}
 .overview button.cur{border-color:var(--navy);box-shadow:inset 3px 0 0 var(--navy)}
 
 @media (max-width:900px){
   .sbody,.slide .plate{grid-template-columns:minmax(0,1fr)}
-  .slide h2{font-size:clamp(24px,6vw,40px)}
+  .slide h2{font-size:clamp(24px,calc(var(--u)*6),40px)}
 }
 
 /* Beyond the Cap plates on slides. The figure gets most of the width and a set height; the text is a narrow column
    beside it, with a section intro (.part) above the plate's own text. Every plate redraws its canvases to the box
    they get, so an explicit height here doesn't distort them. */
-.slide .btc .plate,.slide .btc .plate.stack{grid-template-columns:minmax(230px,28%) minmax(0,1fr)!important;gap:clamp(10px,1.6vh,20px) clamp(16px,2.2vw,36px);padding-block:0;border:0}
-.slide .btc:has(>.part+.plate){display:grid;grid-template-columns:minmax(230px,28%) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:clamp(8px,1.2vh,14px) clamp(16px,2.2vw,36px);align-items:start;min-height:0}
+.slide .btc .plate,.slide .btc .plate.stack{grid-template-columns:minmax(230px,32%) minmax(0,1fr)!important;gap:clamp(10px,1.6vh,20px) clamp(16px,calc(var(--u)*2.2),36px);padding-block:0;border:0}
+.slide .btc:has(>.part+.plate){display:grid;grid-template-columns:minmax(230px,32%) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:clamp(8px,1.2vh,14px) clamp(16px,calc(var(--u)*2.2),36px);align-items:start;min-height:0}
 .slide .btc:has(>.part+.plate)>.plate{display:contents}
 .slide .btc:has(>.part+.plate)>.part{grid-column:1;grid-row:1}
 .slide .btc:has(>.part+.plate)>.plate>.txt{grid-column:1;grid-row:2}
 .slide .btc:has(>.part+.plate)>.plate>.fig{grid-column:2;grid-row:1/3}
 .slide .btc .plate .txt{max-height:64vh;overflow:auto;font-size:.88rem;line-height:1.45;gap:9px}
-.slide .btc .plate .txt .eq{font-size:.72rem;white-space:pre-wrap}
+.slide .btc .plate .txt .eq{font-size:max(10px,.62rem);white-space:pre}   /* a formula keeps its lines; a wrap mid-expression misreads */
 .slide .btc .plate .txt>.kicker,.slide .btc .plate .txt>h3{display:none}
 /* a slide shows a plate's papers line, its lead paragraphs (class "lead" in the plate), the live description and the hint */
 .slide .btc .plate .txt>p:not(.papers,.lead,.opdesc,.src,.try){display:none}
 .slide .btc .part{padding-block:0;border-top:0;gap:4px}
-.slide .btc .part p{font-size:.84rem;line-height:1.45;margin:0;max-width:none}
+.slide .btc .part p{font-size:max(11px,.84rem);line-height:1.45;margin:0;max-width:none}
 .slide .btc .part>.kicker,.slide .btc .part>h2{display:none}
 .slide:not(.appendix) .btc #ops-table-wrap{display:none}
 /* each canvas keeps its own shape until it reaches the height budget, then grows only in width */
@@ -167,39 +188,43 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
 .slide:not(.appendix) .btc #moves .txt{max-height:56vh}
 .slide .btc #cap canvas{--cvh:38vh}
 .slide .btc #sharp canvas{--cvh:50vh}
-.slide .btc #gates canvas{--cvh:44vh}
+.slide .btc #gates canvas{--cvh:38vh}
+.slide .btc #transport canvas{--cvh:46vh}
 /* the moves slide's lead paragraph already explains the two framings */
 .slide:not(.appendix) .btc #f_mv{display:none}
-.slide .btc #trigger #bc-c3{--cvh:46vh}
+.slide .btc #trigger #bc-c3{--cvh:44vh}
 .slide .btc #trigger #c3h{--cvh:15vh}
 /* square-ish drawings (the globe, the arc) sit left with their controls and readouts beside them, not under them */
-.slide .btc :is(#sphere,#manifold)>.fig{grid-template-columns:minmax(0,1.45fr) minmax(230px,1fr);align-items:start;column-gap:clamp(14px,1.8vw,28px)}
+.slide .btc :is(#sphere,#manifold)>.fig{grid-template-columns:minmax(0,1.45fr) minmax(230px,1fr);align-items:start;column-gap:clamp(14px,calc(var(--u)*1.8),28px)}
 .slide .btc :is(#sphere,#manifold)>.fig>.side .read{grid-template-columns:1fr 1fr}
 .slide .btc #sphere #c_sp{aspect-ratio:1/1;--cvh:58vh}
 .slide .btc #manifold #c_mf{aspect-ratio:4/3;--cvh:60vh}
 .slide .btc #manifold #c_mf2{aspect-ratio:16/10;--cvh:30vh}
 .slide .btc #flatcurved .duo{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}
-.slide .btc #flatcurved .duo canvas{--cvh:50vh}
+.slide .btc #flatcurved .duo canvas{--cvh:44vh}
 .slide:not(.appendix) .btc #moves .duo+.duo{display:none}
 .slide .btc .fig{gap:8px}
 .slide .btc .read{grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:4px 14px}
 .slide .btc .read b{font-size:1.15rem}
-.slide .btc .read span{font-size:.76rem;line-height:1.3;display:block}
-.slide .btc .legend.plate-key{font-size:.78rem}
+.slide .btc .read span{font-size:max(11px,.76rem);line-height:1.3;display:block}
+.slide .btc .legend.plate-key{font-size:max(11px,.78rem)}
 /* the aperture chart shares its slide with four readouts and a slider, so it stops short of the bottom bar on 16:9 */
-.slide:not(.appendix) .btc #aperture canvas{--cvh:35vh}
+.slide:not(.appendix) .btc #aperture canvas{--cvh:41vh}
+/* captions under a full-width figure read across it rather than in a 52ch strip down its left side */
+.slide .btc .fig p{max-width:110ch}
 /* the aperture plate on its slide: one chart, full width; the hold chart below it repeats the aperture sweep slide */
-.slide:not(.appendix) .btc #aperture{grid-template-columns:minmax(0,1fr)!important}
+.slide:not(.appendix) .btc #aperture{grid-template-columns:minmax(0,1fr)!important;grid-template-areas:none}
+.slide:not(.appendix) .btc #aperture>.fig{grid-area:auto}   /* the field guide's ".plate" areas would keep an empty first column */
 .slide:not(.appendix) .btc #aperture .txt,.slide:not(.appendix) .btc #aperture #c2h,.slide:not(.appendix) .btc #aperture .fig>.legend,
 .slide:not(.appendix) .btc #aperture .fig>.controls:has(#bc-s2p),.slide:not(.appendix) .btc #aperture #c2note{display:none}
 /* slides whose own cards explain the plate hide the plate's text */
 .slide.explain .plate .intro{display:none}
-.slide.explain .plate{grid-template-columns:minmax(0,1fr) minmax(0,min(48vw,58vh))}
+.slide.explain .plate{grid-template-columns:minmax(0,1fr) minmax(0,min(calc(var(--u)*48),58vh))}
 .slide.explain .cards .card p{font-size:.86rem;line-height:1.4}
 .slide.explain .cards .card h3{font-size:1rem}
-.slide .defs{font-size:.84rem;line-height:1.4;margin-top:4px;max-width:none}   /* a full-width line or two under the plate */
+.slide .defs{font-size:max(11px,.84rem);line-height:1.4;margin-top:4px;max-width:none}   /* a full-width line or two under the plate */
 /* the persona switch carries the two model averages too, so its buttons run a little smaller */
-.slide [data-persona] button{font-size:.76rem;padding-inline:8px}
+.slide [data-persona] button{font-size:max(11px,.76rem);padding-inline:8px}
 
 /* the shape-check slide: the four points and the controls in one column, the circle full height beside them */
 .sbody.explain2{grid-template-columns:minmax(0,.95fr) minmax(0,1.3fr);grid-template-rows:auto minmax(0,1fr)}
@@ -210,30 +235,46 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
 .cards.steps .card{grid-template-columns:auto minmax(0,1fr);gap:0 10px;padding:4px 0;border-top:1px solid var(--hair)}
 .cards.steps .card .n{grid-row:1/3;font-size:1.4rem;line-height:1.1;color:var(--navy)}
 .cards.steps .card h3{font-size:.94rem}
-.cards.steps .card p{font-size:.8rem;line-height:1.34}
+.cards.steps .card p{font-size:max(11px,.8rem);line-height:1.34}
 .sbody.explain2 .panel{gap:8px}
-.sbody.explain2 .panel .status{font-size:.72rem;padding:4px 8px}
+/* the two switches share a row, and so do the two sliders, so the bars and the verdict clear the bottom bar */
+.sbody.explain2 .panel{display:flex;flex-wrap:wrap;gap:8px 16px;align-content:start}
+.sbody.explain2 .panel>*{flex:1 1 100%;min-width:0}
+.sbody.explain2 .panel>.seg,.sbody.explain2 .panel>.btn{flex:0 0 auto}
+.sbody.explain2 .panel>.ctl{flex:1 1 calc(50% - 8px)}
+.sbody.explain2 .panel .status{font-size:max(11px,.72rem);padding:4px 8px}
 /* the judge table has thirteen rows, so its cells run a little tighter than the field guide's */
 .jtable th,.jtable td{padding:6px 10px}
 /* two section intros repeat their plate's lead paragraph, so the slide shows the lead alone */
 .slide .btc :is(#sec-dirs,#sec-dist) p{display:none}
 
 /* the spread slide: the four numbers are the point, so they take the width above the three cards */
-#spread .plate{flex:0 0 auto;grid-template-columns:minmax(0,1fr)}
+#spread .plate{flex:0 0 auto;grid-template-columns:minmax(0,1fr);grid-template-areas:none}
+#spread .plate>.fig{grid-area:auto}   /* the field guide's two-area grid would leave an empty column left of the tiles */
 #spread .plate .intro,#spread .plate .panel{display:none}
-#spread .tiles{grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(12px,1.6vw,24px)}
+#spread .tiles{grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(12px,calc(var(--u)*1.6),24px)}
 #spread .tile{padding:clamp(14px,1.8vh,22px) 18px;gap:8px}
-#spread .tile .val{font-family:var(--f-display);font-weight:600;font-size:clamp(34px,3.4vw,64px);line-height:1;letter-spacing:-.02em}
+#spread .tile .val{font-family:var(--f-display);font-weight:600;font-size:clamp(34px,calc(var(--u)*3.4),64px);line-height:1;letter-spacing:-.02em}
 #spread .tile .lab,#spread .tile .sub{font-size:.92rem}
+/* the four numbers carry the slide: on a wide screen they run larger, and the cards under them read at body size */
+#spread .tile{padding:clamp(16px,2.6vh,30px) 20px}
+#spread .tile .val{font-size:clamp(34px,calc(var(--u)*4.6),84px)}
+#spread .cards .card h3{font-size:1.3rem}
+#spread .cards .card p{font-size:1.04rem;line-height:1.5}
+
+/* the appendix's two long lists run in two columns, so they fit the screen instead of a narrow strip that scrolls */
+.slide ol.recipe,.slide .btc ol.refs{display:block;columns:2;column-gap:clamp(20px,calc(var(--u)*3),48px);max-width:none}   /* columns need a block, not the lists' grid */
+.slide ol.recipe>li,.slide .btc ol.refs>li{break-inside:avoid;margin-bottom:6px}
+.slide .btc ol.refs{font-size:max(11px,.8rem)}
 
 /* the template slide: one formula, four callouts in the colours the next slides use */
 .tmpl-slide{display:grid;gap:clamp(14px,2.6vh,30px);align-content:start}
-.tmpl-slide .formula{font-family:var(--f-display);font-weight:600;font-size:clamp(34px,4.4vw,80px);line-height:1.1;letter-spacing:-.01em;text-align:center;
+.tmpl-slide .formula{font-family:var(--f-display);font-weight:600;font-size:clamp(34px,calc(var(--u)*4.4),80px);line-height:1.1;letter-spacing:-.01em;text-align:center;
   padding:clamp(10px,2.4vh,26px) 0;border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline)}
 .tmpl-slide .t-gate{color:var(--violet)} .tmpl-slide .t-dir{color:var(--navy)} .tmpl-slide .t-move{color:var(--edit-ink)}
-.choices{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(12px,1.8vw,28px)}
+.choices{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(12px,calc(var(--u)*1.8),28px)}
 .choice{display:grid;gap:6px;align-content:start;padding-top:10px;border-top:3px solid var(--muted)}
-.choice .n{font:600 .72rem/1.2 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.choice .n{font:600 max(11px,.72rem)/1.2 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .choice h3{font-family:var(--f-display);font-weight:600;font-size:1.25rem;margin:0;line-height:1.2}
 .choice p{font-size:.95rem;max-width:none}
 .choice.c-gate{border-top-color:var(--violet)} .choice.c-dir{border-top-color:var(--navy)} .choice.c-move{border-top-color:var(--edit-ink)}
@@ -241,14 +282,16 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
 /* the takeaway line: one sentence under the title on every data slide, since the deck is read without a presenter */
 .sowhat{font-size:1.08rem;line-height:1.42;margin:0;max-width:none;padding:2px 0 2px 14px;border-left:3px solid var(--navy);color:var(--ink)}
 .sowhat b{color:var(--navy)}
+/* ".slide p" caps paragraphs at 52ch, which held the takeaway to four lines in the left half; it takes the width instead */
+.slide .sowhat{max-width:min(100%,118ch)}
 .slide.navy .sowhat{border-left-color:var(--buzz);color:var(--on-dark)}
 
 /* the roadmap: four claims, each with the slides that prove it */
-.roadmap{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(14px,2.2vw,32px);align-content:start}
-.roadmap .card .n{font-size:clamp(28px,2.6vw,48px)}
+.roadmap{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(14px,calc(var(--u)*2.2),32px);align-content:start}
+.roadmap .card .n{font-size:clamp(28px,calc(var(--u)*2.6),48px)}
 .roadmap .card h3{font-size:1.3rem}
 .roadmap .card p{font-size:1.02rem;line-height:1.45}
-.roadmap .card .where{font:600 .72rem/1.3 var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.roadmap .card .where{font:600 max(11px,.72rem)/1.3 var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 .roadmap .card .where a{color:var(--navy);text-decoration:none;border-bottom:1px solid var(--hairline)}
 .card p .where{display:block;margin-top:6px}
 .cards .card p a.sl{color:var(--navy);text-decoration:none;border-bottom:1px solid var(--hairline);white-space:nowrap}
@@ -280,7 +323,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
 #judges .jtable{font-size:.86rem}
 #judges .jtable th,#judges .jtable td{padding:4px 10px}
 .cards.steps .card{padding:3px 0}
-.cards.steps .card p{font-size:.78rem;line-height:1.3}
+.cards.steps .card p{font-size:max(11px,.78rem);line-height:1.3}
 .cards.steps .card h3{font-size:.9rem}
 .sbody.explain2 .panel .scale{display:none}   /* the bars carry their own numbers */
 .sbody.explain2 .panel .ctl{gap:2px}
@@ -290,7 +333,15 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,ca
 
 /* the appendix divider lists its slides as buttons */
 .applist{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr));gap:8px}
-.applist button{text-align:left;display:grid;gap:3px;padding:10px 12px;border:1px solid var(--hair);border-radius:3px;background:var(--panel);color:var(--ink);cursor:pointer;font:500 .84rem/1.3 var(--f-body)}
-.applist button small{color:var(--muted);font-size:.68rem;letter-spacing:.08em;text-transform:uppercase}
+.applist button{text-align:left;display:grid;gap:3px;padding:10px 12px;border:1px solid var(--hair);border-radius:3px;background:var(--panel);color:var(--ink);cursor:pointer;font:500 max(11px,.84rem)/1.3 var(--f-body)}
+.applist button small{color:var(--muted);font-size:max(11px,.68rem);letter-spacing:.08em;text-transform:uppercase}
 .applist button:hover{border-color:var(--navy)}
 .navbar .scroll{color:var(--navy);font-weight:600}
+
+/* short windows (a laptop browser under its bookmarks bar and the Dock): buttons and control rows run tighter, so the
+   control columns on the twenty-turn slides still clear the bar */
+@media (max-height:760px){
+  .seg button,.mtog button,.turns button{padding-top:5px;padding-bottom:5px}
+  .slide .btc .seg button{padding-top:6px;padding-bottom:6px}
+  .ctlrow{gap:4px}
+}

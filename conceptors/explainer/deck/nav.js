@@ -1,14 +1,24 @@
 /* Deck navigation, plus two presentation adjustments for the field guide's figures:
-   canvas text scales with the screen (the plates set fonts in px), and figures may grow to 60% of the height. */
+   canvas text scales with the screen (the plates set fonts in px), and figures may grow to 62% of the height.
+   Both follow the widest 16:9 box the window holds, like the CSS unit --u, so a short window gets smaller labels. */
 (function(){
 "use strict";
 const fontDesc=Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype,'font');
 let FS=1;
 function fit(){
-  FS=Math.max(1.1,Math.min(1.55,innerWidth/1100));
+  FS=Math.max(1,Math.min(1.55,Math.min(innerWidth,innerHeight*16/9)/1100));
   window.FIG_MAX_H=Math.max(240,Math.round(innerHeight*.62));
 }
 fit();addEventListener('resize',fit);
+/* the height left between a canvas's top and the slide's bottom padding (where the bar sits), less `belowRem` for
+   whatever sits under the canvas: headers and takeaways vary in height, so a share of the window can't say how tall
+   a figure may be */
+window.FIG_ROOM=(cv,belowRem,fallback)=>{
+  const s=cv&&cv.closest('.slide'),t=cv?cv.getBoundingClientRect().top:0;
+  if(!s||t<=0)return Math.round(fallback);
+  const rem=parseFloat(getComputedStyle(document.documentElement).fontSize)||16,pb=parseFloat(getComputedStyle(s).paddingBottom)||52;
+  return Math.round(innerHeight-t-pb-belowRem*rem);
+};
 if(fontDesc&&fontDesc.set){
   Object.defineProperty(CanvasRenderingContext2D.prototype,'font',{configurable:true,
     get(){return fontDesc.get.call(this);},
@@ -36,7 +46,9 @@ if(al){al.innerHTML=slides.map((s,i)=>s.classList.contains('appendix')?'<button 
 /* a slide taller than the screen scrolls; say so in the bar, since nothing else shows it */
 let scrollTimer=0;
 function scrollHint(s){clearTimeout(scrollTimer);const h=document.getElementById('navScroll');
-  const check=()=>{h.hidden=!(s.classList.contains('on')&&s.scrollHeight>s.clientHeight+4);};
+  /* the bottom padding is room for the bar, so overflow that stays inside it hides nothing */
+  const check=()=>{const room=Math.max(4,(parseFloat(getComputedStyle(s).paddingBottom)||0)-nav.getBoundingClientRect().height);
+    h.hidden=!(s.classList.contains('on')&&s.scrollHeight-s.clientHeight>room);nav.classList.toggle('over',!h.hidden);};
   check();scrollTimer=setTimeout(check,400);}
 
 let cur=-1;

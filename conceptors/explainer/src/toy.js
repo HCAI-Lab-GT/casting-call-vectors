@@ -772,10 +772,10 @@ KINDS41.forEach(k=>{SIM41[k[0]]=sim41(k[0]);});
 const ser41=key=>()=>KINDS41.map(k=>({name:k[1],short:k[2],color:COL[k[3]],dash:k[4],values:SIM41[k[0]][key]}));
 const bands41=()=>ATT41.map(t=>({x0:t-.45,x1:t+.45,color:COL.grid,alpha:1}));
 const chSimP=LineChart('cSimP',{aspect:.72,xs:()=>XS41,yRange:()=>[-1,1.6],yTicks:()=>[-1,-.5,0,.5,1,1.5],yFmt:v=>v.toFixed(1),
-  xTicks:()=>[1,4,8,12,16,20],xFmt:v=>String(v),xTitle:'turn (shaded: attack)',mr:74,bands:bands41,
+  xTicks:()=>[1,4,8,12,16,20],xFmt:v=>String(v),xTitle:'turn (shaded: attack)',mr:88,bands:bands41,
   refs:()=>[{y:1,label:'in character'},{y:0,label:'assistant'},{y:.75,label:'cap floor'}],series:ser41('S'),tipTitle:i=>'turn '+(i+1)+(ATT41.includes(i+1)?' · attack':'')});
 const chSimC=LineChart('cSimC',{aspect:.72,xs:()=>XS41,yRange:()=>[0,1.05],yTicks:()=>[0,.25,.5,.75,1],yFmt:v=>v.toFixed(2),
-  xTicks:()=>[1,4,8,12,16,20],xFmt:v=>String(v),xTitle:'turn',mr:74,bands:bands41,series:ser41('C'),tipTitle:i=>'turn '+(i+1)});
+  xTicks:()=>[1,4,8,12,16,20],xFmt:v=>String(v),xTitle:'turn',mr:88,bands:bands41,series:ser41('C'),tipTitle:i=>'turn '+(i+1)});
 const tab41=dataTable('cSimC','Show the toy\'s numbers');
 function upd41(){
   out('simPull',s41.pull.toFixed(2));out('simMem',s41.mem.toFixed(2));
