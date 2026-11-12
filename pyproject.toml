@@ -1,0 +1,51 @@
+[project]
+name = "casting-call-vectors"
+version = "1.0.0"
+description = "CastVectors: role steering of language models for social simulations"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12,<3.13"
+authors = [{ name = "The Casting Call Vectors authors" }]
+# Pinned to the versions used for the paper's runs.
+dependencies = [
+  "accelerate==1.12.0",
+  "huggingface-hub==0.36.0",
+  "matplotlib==3.10.7",
+  "numpy==2.2.6",
+  "openai==2.9.0",
+  "pandas==2.3.3",
+  "pyarrow==22.0.0",
+  "python-dotenv==1.2.1",
+  "safetensors==0.7.0",
+  "scipy==1.16.3",
+  "tenacity==9.1.2",
+  "torch==2.8.0",
+  "tqdm==4.67.1",
+  "transformers==4.57.3",
+]
+
+[project.urls]
+Paper = "https://arxiv.org/abs/2608.00023"
+Data = "https://huggingface.co/datasets/HCAI-Lab-GT/casting-call-vectors"
+
+[dependency-groups]
+dev = ["pytest>=8.3", "ruff>=0.8"]
+
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pvx"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+# Several modules call load_dotenv() or set up logging before later imports.
+ignore = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
